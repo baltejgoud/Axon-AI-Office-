@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+*.local
+.axon-dev-data/
+.DS_Store
+Thumbs.db
+test-results/
+audit-report.json
+
+*.log
+test-results/
+design-system/**/pages/
