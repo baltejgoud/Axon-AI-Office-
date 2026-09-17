@@ -116,7 +116,7 @@ skillBodies(ids: string[]): { id: string; name: string; source: string; body: st
 
 ### Renderer snapshot
 
-`Snapshot` gains `skills: Skill[]`, `skillSources: SkillSourceInfo[]`, `roles: Role[]`. Bodies and profiles are never sent to the renderer. The catalog is ~300 KB; it rides along with the existing snapshot rather than adding an IPC method, since `snapshot()` is already called on every refresh and the catalog is static.
+`Snapshot` gains `skills: Skill[]`, `skillSources: SkillSourceInfo[]`, `roles: Role[]`. Skill bodies (3.3 MB) are never sent to the renderer. Role profiles are included in `roles` — they are small (~140 KB total) and the picker shows the first line of each. The catalog is ~300 KB; it rides along with the existing snapshot rather than adding an IPC method, since `snapshot()` is already called on every refresh and the catalog is static.
 
 ## 7. Roles catalog
 
