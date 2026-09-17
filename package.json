@@ -14,6 +14,7 @@
     "package:dir": "electron-vite build && electron-builder --dir",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
+    "skills:ingest": "node scripts/skills/ingest.cjs",
     "test:desktop": "electron tests/electron-smoke.cjs",
     "start": "electron-vite preview",
     "format": "prettier --write \"src/renderer/src/**/*.{ts,tsx,css}\"",
