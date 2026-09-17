@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T20:19:33.360Z",
+  "generatedAt": "2026-09-17T20:27:47.519Z",
   "sources": [
     {
       "slug": "ui-ux-pro-max",
@@ -12292,7 +12292,7 @@
       "path": "skills/test-driven-development",
       "name": "test-driven-development",
       "description": "Use when implementing any feature or bugfix, before writing implementation code",
-      "category": "content",
+      "category": "workflow",
       "requires": [],
       "hasScripts": false,
       "supported": true,

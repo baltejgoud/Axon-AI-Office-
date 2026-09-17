@@ -55,7 +55,7 @@ const CATEGORIES = ['design', 'engineering', 'workflow', 'review', 'content', 'i
 // Order matters: first category whose keyword matches wins (spec §5).
 const KEYWORDS = [
   ['review', ['review', 'audit', 'over-engineer', 'debt', 'critique', 'lint']],
-  ['workflow', ['brainstorm', 'plan', 'tdd', 'debug', 'worktree', 'branch', 'subagent', 'agents', 'executing', 'finishing', 'dispatch', 'verification']],
+  ['workflow', ['brainstorm', 'plan', 'tdd', 'test-driven', 'debug', 'worktree', 'branch', 'subagent', 'agents', 'executing', 'finishing', 'dispatch', 'verification']],
   ['design', ['design', 'ui', 'ux', 'brand', 'logo', 'banner', 'slide', 'color', 'typography', 'figma', 'canvas', 'artifact']],
   ['content', ['write', 'writing', 'changelog', 'comms', 'research', 'blog', 'seo', 'copy', 'content', 'document', 'invoice']],
   ['engineering', ['code', 'typescript', 'api', 'service', 'cli', 'sdk', 'test', 'contract', 'ink', 'migration']]
