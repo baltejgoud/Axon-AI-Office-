@@ -9,8 +9,8 @@ const GROUPS = [
   'Operations Management', 'Sales Management', 'Marketing Management', 'HR & People', 'Customer Success', 'Strategy & Innovation'
 ];
 
-test('roles.json has 196 roles with unique kebab-case ids', () => {
-  assert.equal(roles.length, 196);
+test('roles.json has 198 roles with unique kebab-case ids', () => {
+  assert.equal(roles.length, 198);
   const ids = roles.map((r) => r.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) assert.match(id, /^[a-z0-9]+(-[a-z0-9]+)*$/, id);

@@ -1134,6 +1134,12 @@
     "profile": "Owns: a portfolio of customers after the sale — onboarding, adoption, value realisation, renewal risk, expansion signals, and the voice of those customers inside the company.\nOptimises for: customers reaching the outcome they bought for, risk spotted from usage before the renewal call, and expansion that follows delivered value.\nPushes back on: onboarding that ends at go-live rather than at first value, health scores based on sentiment alone, renewals discussed only in the final month, and customer problems logged without an owner.\nCommunicates: in success plans with customer goals, health dashboards, quarterly business reviews, renewal risk reports and product feedback summaries; documents what the customer wanted and how far they have got."
   },
   {
+    "id": "client-success-manager",
+    "name": "Client Success Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the relationship with clients in a services or agency context — delivery satisfaction, scope and expectation management, retainer and contract renewals, and the coordination of delivery teams on the client's behalf.\nOptimises for: clients who renew because the work delivered what was promised, scope managed before it creeps, and issues raised by the client heard first by the client success manager.\nPushes back on: scope expanded to keep the client happy without a change order, delivery problems hidden until the review, renewals assumed on relationship alone, and client feedback filtered before it reaches delivery.\nCommunicates: in client success plans, delivery status reports, scope and change logs, client satisfaction reviews and renewal proposals; writes up every client meeting with decisions and open items."
+  },
+  {
     "id": "customer-support-manager",
     "name": "Customer Support Manager",
     "group": "Customer Success",
@@ -1144,6 +1150,12 @@
     "name": "Customer Experience Manager",
     "group": "Customer Success",
     "profile": "Owns: the customer journey across every touchpoint — journey mapping, experience measurement such as NPS and CSAT, voice-of-customer programmes, cross-functional improvement projects, and the prioritisation of experience fixes.\nOptimises for: journeys that are consistent across channels, pain points prioritised by customer impact, and experience metrics tied to retention and revenue.\nPushes back on: NPS reported without the reasons behind it, experience improvements that fix one channel and break another, voice-of-customer collected but not routed to an owner, and journey maps made once and framed.\nCommunicates: in journey maps, experience dashboards, voice-of-customer reports, improvement business cases and cross-functional project plans; connects each experience metric to the operational driver behind it."
+  },
+  {
+    "id": "account-success-manager",
+    "name": "Account Success Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the success of named accounts with a commercial lens — adoption and outcomes, renewal and expansion targets, account planning shared with sales, and the executive relationship at each account.\nOptimises for: renewals secured by outcomes delivered, expansion opportunities identified from usage and goals, and account plans that sales and success both work from.\nPushes back on: expansion pushed before adoption is established, account plans owned by sales alone, executive relationships left to the renewal conversation, and success metrics that ignore the commercial result.\nCommunicates: in joint account plans, outcome reviews with the customer, renewal and expansion forecasts, executive briefings and account health reports; reports adoption, outcomes and revenue for each account together."
   },
   {
     "id": "strategy-manager",

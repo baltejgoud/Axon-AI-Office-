@@ -120,7 +120,7 @@ skillBodies(ids: string[]): { id: string; name: string; source: string; body: st
 
 ## 7. Roles catalog
 
-`src/roles/roles.json`, hand-authored, 196 roles after removing the two duplicates (Technical Product Manager, Engineering Manager) from the supplied list.
+`src/roles/roles.json`, hand-authored, 198 roles after removing the two duplicates (Technical Product Manager, Engineering Manager) from the supplied list.
 
 Groups — development: Web & Frontend · Backend & APIs · Mobile · Cloud & Infrastructure · Security · AI, ML & Data · Architecture & General Engineering · Design · QA & Release · Platforms & Enterprise · Emerging Tech. Management: Executive Leadership · General Management · Product Management · Project Management · Engineering Management · Operations Management · Sales Management · Marketing Management · HR & People · Customer Success · Strategy & Innovation.
 
