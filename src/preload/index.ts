@@ -8,6 +8,7 @@ const api: PlatformAPI = {
   workspaceSave: invoke('workspaceSave'), workspaceDelete: invoke('workspaceDelete'), agentSave: invoke('agentSave'),
   agentDelete: invoke('agentDelete'), agentExport: invoke('agentExport'), agentImport: invoke('agentImport'),
   settingsSave: invoke('settingsSave'), chatCreate: invoke('chatCreate'), chatRename: invoke('chatRename'),
+  chatSelectionSet: invoke('chatSelectionSet'),
   chatDelete: invoke('chatDelete'), chatSend: invoke('chatSend'), chatStop: invoke('chatStop'), attach: invoke('attach'),
   knowledgeImport: invoke('knowledgeImport'), knowledgeDelete: invoke('knowledgeDelete'), knowledgeSearch: invoke('knowledgeSearch'),
   projectChoose: invoke('projectChoose'), projectList: invoke('projectList'), projectRead: invoke('projectRead'),

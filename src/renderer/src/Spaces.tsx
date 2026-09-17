@@ -30,6 +30,8 @@ const freshWorkspace = (): Workspace => ({
   defaultModelId: null,
   enabledTools: [],
   knowledgeDocIds: [],
+  skillIds: [],
+  roleIds: [],
   fileAccess: { enabled: false, roots: [] },
   createdAt: Date.now(),
   updatedAt: Date.now()
@@ -205,6 +207,8 @@ export function Agents() {
     modelId: null,
     tools: [],
     workspaceId: null,
+    skillIds: [],
+    roleIds: [],
     maxSteps: 1,
     schedule: { kind: 'manual' },
     createdAt: Date.now(),

@@ -10,6 +10,7 @@ export function initialState(): PlatformState {
     workspaces: [{ id: 'code', name: 'Code', description: 'Understand, build, and improve your projects.', icon: '⌘',
       systemPrompt: 'You are a careful software engineering assistant. Explain changes and provide complete code. You cannot execute commands or edit files directly. Ask the user to review changes before applying them.',
       instructions: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [],
+      skillIds: [], roleIds: [],
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
     settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
       streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' } };
