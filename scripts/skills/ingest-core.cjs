@@ -47,4 +47,49 @@ function parseFrontmatter(text) {
   return { data, body: m[2].trim() };
 }
 
-module.exports = { parseFrontmatter };
+const CATEGORIES = ['design', 'engineering', 'workflow', 'review', 'content', 'integration', 'other'];
+
+// Order matters: first category whose keyword matches wins (spec §5).
+const KEYWORDS = [
+  ['review', ['review', 'audit', 'over-engineer', 'debt', 'critique', 'lint']],
+  ['workflow', ['brainstorm', 'plan', 'tdd', 'debug', 'worktree', 'branch', 'subagent', 'agents', 'executing', 'finishing', 'dispatch', 'verification']],
+  ['design', ['design', 'ui', 'ux', 'brand', 'logo', 'banner', 'slide', 'color', 'typography', 'figma', 'canvas', 'artifact']],
+  ['content', ['write', 'writing', 'changelog', 'comms', 'research', 'blog', 'seo', 'copy', 'content', 'document', 'invoice']],
+  ['engineering', ['code', 'typescript', 'api', 'service', 'cli', 'sdk', 'test', 'contract', 'ink', 'migration']]
+];
+
+function categorize(s) {
+  const declared = String(s.category || '').toLowerCase();
+  if (CATEGORIES.includes(declared)) return declared;
+  if (s.requires.some((r) => r.startsWith('mcp:')) || s.path.includes('composio-skills/')) return 'integration';
+  // Name + description only: paths like "skills/x" or ".agents/skills/x" would otherwise match every skill.
+  const hay = `${s.name} ${s.description}`.toLowerCase();
+  for (const [category, words] of KEYWORDS)
+    if (words.some((w) => new RegExp(`\\b${w.replace(/[-]/g, '\\-')}`).test(hay))) return category;
+  return 'other';
+}
+
+function flattenRequires(value) {
+  if (!value || typeof value !== 'object') return [];
+  const out = [];
+  for (const [key, v] of Object.entries(value)) for (const item of Array.isArray(v) ? v : [v]) out.push(`${key}:${item}`);
+  return out;
+}
+
+function pathRank(path) {
+  if (path.startsWith('skills/')) return 0;
+  if (path.startsWith('.claude/skills/')) return 1;
+  return 2;
+}
+
+function dedupe(entries) {
+  const byName = new Map();
+  for (const entry of entries) {
+    const current = byName.get(entry.name);
+    if (!current || pathRank(entry.path) < pathRank(current.path) ||
+      (pathRank(entry.path) === pathRank(current.path) && entry.path.length < current.path.length)) byName.set(entry.name, entry);
+  }
+  return [...byName.values()];
+}
+
+module.exports = { parseFrontmatter, categorize, flattenRequires, dedupe, CATEGORIES };
