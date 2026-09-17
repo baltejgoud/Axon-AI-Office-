@@ -1,6 +1,9 @@
 // Pure ingest helpers. No git, no network, no Electron. Used by ingest.cjs and by tests.
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 function unquote(v) {
   return v.replace(/^["']|["']$/g, '');
 }
@@ -92,4 +95,61 @@ function dedupe(entries) {
   return [...byName.values()];
 }
 
-module.exports = { parseFrontmatter, categorize, flattenRequires, dedupe, CATEGORIES };
+const MAX_BODY = 64000;
+const SKIP_DIRS = new Set(['node_modules', '.git']);
+const SCRIPT_EXT = /\.(py|sh|cjs|mjs|js|ts)$/i;
+
+function findSkillFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name === 'SKILL.md') out.push(full);
+    }
+  };
+  walk(root);
+  return out.sort();
+}
+
+function hasScripts(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).some(
+    (e) => (e.isDirectory() && e.name === 'scripts') || (e.isFile() && SCRIPT_EXT.test(e.name))
+  );
+}
+
+function buildCatalog(root, slug) {
+  const parsed = [];
+  for (const file of findSkillFiles(root)) {
+    const fm = parseFrontmatter(fs.readFileSync(file, 'utf8'));
+    if (!fm || typeof fm.data.name !== 'string' || !fm.data.name.trim()) continue;
+    const dir = path.dirname(file);
+    const rel = path.relative(root, dir).split(path.sep).join('/');
+    if (fm.body.length > MAX_BODY) throw new Error(`${slug}/${fm.data.name}: body exceeds ${MAX_BODY} characters (${fm.body.length})`);
+    parsed.push({
+      name: fm.data.name.trim(),
+      description: String(fm.data.description || '').trim(),
+      path: rel,
+      category: fm.data.category,
+      requires: flattenRequires(fm.data.requires),
+      hasScripts: hasScripts(dir),
+      body: fm.body
+    });
+  }
+  const skills = [];
+  const bodies = {};
+  for (const s of dedupe(parsed).sort((a, b) => a.name.localeCompare(b.name))) {
+    const id = `${slug}/${s.name}`;
+    if (bodies[id] !== undefined) throw new Error(`Duplicate skill id after dedupe: ${id}`);
+    bodies[id] = s.body;
+    skills.push({
+      id, source: slug, path: s.path, name: s.name, description: s.description,
+      category: categorize(s), requires: s.requires, hasScripts: s.hasScripts,
+      supported: s.requires.length === 0 && !s.hasScripts, bytes: s.body.length
+    });
+  }
+  return { skills, bodies };
+}
+
+module.exports = { parseFrontmatter, categorize, flattenRequires, dedupe, buildCatalog, CATEGORIES, MAX_BODY };

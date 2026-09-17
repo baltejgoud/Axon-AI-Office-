@@ -65,3 +65,31 @@ test('dedupe keeps one skill per name, preferring skills/ then .claude/skills/',
 test('CATEGORIES lists the seven categories with integration before other', () => {
   assert.deepEqual(CATEGORIES, ['design', 'engineering', 'workflow', 'review', 'content', 'integration', 'other']);
 });
+
+const path = require('node:path');
+const { buildCatalog, MAX_BODY } = require('../scripts/skills/ingest-core.cjs');
+const fixture = path.join(__dirname, 'fixtures', 'skills-repo');
+
+test('buildCatalog walks a repo, dedupes, categorizes and flags scripts', () => {
+  const { skills, bodies } = buildCatalog(fixture, 'fx');
+  assert.deepEqual(skills.map((s) => s.id), ['fx/alpha', 'fx/beta-automation']);
+  const alpha = skills[0];
+  assert.equal(alpha.path, 'skills/alpha');
+  assert.equal(alpha.category, 'review');
+  assert.equal(alpha.hasScripts, true);
+  assert.equal(alpha.supported, false);
+  assert.equal(alpha.bytes, bodies['fx/alpha'].length);
+  assert.equal(bodies['fx/alpha'], '# Alpha\nCanonical body.');
+  const beta = skills[1];
+  assert.deepEqual(beta.requires, ['mcp:rube']);
+  assert.equal(beta.category, 'integration');
+  assert.equal(beta.supported, false);
+});
+
+test('buildCatalog rejects a body over MAX_BODY', () => {
+  const os = require('node:os'); const fs = require('node:fs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-skill-'));
+  fs.mkdirSync(path.join(dir, 'skills', 'big'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'skills', 'big', 'SKILL.md'), `---\nname: big\ndescription: d\n---\n${'x'.repeat(MAX_BODY + 1)}`);
+  assert.throws(() => buildCatalog(dir, 'fx'), /exceeds 64000/);
+});
