@@ -225,6 +225,8 @@ export class Service {
     if (choice.canceled) return;
     const raw = await readFile(choice.filePaths[0], 'utf8'); text(raw, 100000);
     const parsed = JSON.parse(raw); if (parsed.schema !== 'axon.profile.v1') throw new Error('Unsupported profile schema.');
-    await this.agentSave({ ...parsed.agent, id: this.repo.id(), tools: [], schedule: { kind: 'manual' }, providerId: null, modelId: null, workspaceId: null, skillIds: [], roleIds: [] });
+    const skillIds = (Array.isArray(parsed.agent.skillIds) ? parsed.agent.skillIds : []).filter((id: unknown) => typeof id === 'string' && hasSkill(id));
+    const roleIds = (Array.isArray(parsed.agent.roleIds) ? parsed.agent.roleIds : []).filter((id: unknown) => typeof id === 'string' && hasRole(id));
+    await this.agentSave({ ...parsed.agent, id: this.repo.id(), tools: [], schedule: { kind: 'manual' }, providerId: null, modelId: null, workspaceId: null, skillIds, roleIds });
   }
 }
