@@ -119,6 +119,7 @@ export class Service {
     const chat = this.state.conversations.find(c => c.id === id);
     if (!chat) throw new Error('Conversation not found.');
     Object.assign(chat, this.selection(selection));
+    chat.updatedAt = Date.now();
     await this.repo.save();
   }
   async chatRename(id: string, title: string): Promise<void> {
