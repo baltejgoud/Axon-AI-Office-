@@ -13,7 +13,7 @@ fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
 fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify({
   version: 1, providers: [{ id: 'seed', name: 'Seed', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1234/v1',
     models: [{ id: 'first', displayName: 'First' }, { id: 'workspace', displayName: 'Workspace default' }], enabled: true, createdAt: now, hasApiKey: false }],
-  workspaces: [{ id: 'research', name: 'Research test', systemPrompt: 'Research carefully.', defaultProviderId: 'seed', defaultModelId: 'workspace', enabledTools: [], knowledgeDocIds: [], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
+  workspaces: [{ id: 'research', name: 'Research test', systemPrompt: 'Research carefully.', defaultProviderId: 'seed', defaultModelId: 'workspace', enabledTools: [], knowledgeDocIds: [], roleIds: ['backend-developer'], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
   conversations: [], messages: [], agents: [], documents: [], chunks: [],
   settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
 }));
@@ -57,7 +57,7 @@ app.on('web-contents-created', (_, contents) => {
         if (document.querySelector('select[aria-label="AI model"]').value !== 'seed::workspace') throw new Error('Workspace default model was not selected');
         const id = crypto.randomUUID();
         await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
-        const chat = await window.axon.chatCreate(id, 'mock-model', null, undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
+        const chat = await window.axon.chatCreate(id, 'mock-model', 'research', undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
         await window.axon.chatSend(chat.id, 'Say hello', []);
         const after = await window.axon.snapshot();
         const assistant = after.messages.find(m => m.conversationId === chat.id && m.role === 'assistant');
@@ -109,7 +109,9 @@ app.on('web-contents-created', (_, contents) => {
       const system = sent.messages.find((m) => m.role === 'system')?.content || '';
       const r = system.indexOf('<roles>'), s = system.indexOf('<skills>');
       if (r < 0 || s < 0 || r > s) throw new Error('Roles/skills blocks missing or misordered in system prompt');
-      if (!system.includes('## Frontend Developer') || !system.includes('## Skill: brainstorming (superpowers)')) throw new Error('Selected role/skill not injected');
+      const backendIdx = system.indexOf('## Backend Developer'), frontendIdx = system.indexOf('## Frontend Developer');
+      if (backendIdx < 0 || frontendIdx < 0 || backendIdx > frontendIdx) throw new Error('Workspace roles did not precede conversation roles in system prompt');
+      if (!system.includes('## Skill: brainstorming (superpowers)')) throw new Error('Selected skill not injected');
       console.log('SMOKE_PASS', JSON.stringify(result));
       const image = await contents.capturePage();
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
