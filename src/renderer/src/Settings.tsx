@@ -28,7 +28,7 @@ const blank = (): ProviderConfig => ({
   createdAt: Date.now(),
   hasApiKey: false
 });
-const tabs = ['Providers', 'Appearance', 'Security & data'] as const;
+const tabs = ['Providers', 'Appearance', 'Skills & roles', 'Security & data'] as const;
 type Tab = (typeof tabs)[number];
 
 export function SettingsPanel() {
@@ -215,6 +215,43 @@ export function SettingsPanel() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {tab === 'Skills & roles' && (
+          <div className="card stack" style={{ maxWidth: 720 }}>
+            <h2>Skills &amp; roles</h2>
+            <p className="text-small text-secondary">
+              Bundled with this version of Axon. Choose them from the composer, or set defaults on a workspace
+              or agent profile. Selected skills are added to the system prompt; scripts and tool servers they
+              mention do not run here.
+            </p>
+            <div>
+              <h3 className="section-title">Skill sources</h3>
+              <div className="document-list">
+                {data!.skillSources.map((s) => (
+                  <div className="document-row" key={s.slug}>
+                    <span className="file-badge">{s.skillCount}</span>
+                    <div>
+                      <strong className="text-small">{s.slug}</strong>
+                      <p className="text-caption">
+                        {s.url} · {s.license} · {s.commit.slice(0, 7)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="section-title">Roles</h3>
+              <p className="text-caption">
+                {data!.roles.length} roles in {new Set(data!.roles.map((r) => r.group)).size} groups, authored
+                for Axon. Edit <code>src/roles/roles.json</code> to change them.
+              </p>
+            </div>
+            <p className="text-caption">
+              License texts for each source are in <code>src/skills/LICENSES.md</code>.
+            </p>
           </div>
         )}
 
