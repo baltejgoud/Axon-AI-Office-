@@ -24,12 +24,13 @@ Add a provider in Settings, enter its API base URL and exact model IDs, and opti
 - PDF/DOCX/text/Markdown/Excel/CSV and individual code-file ingestion; chunking and BM25 search. Workspace retrieval includes source-labelled passages.
 - Project folder selection, bounded file listing/content search, text editor, file creation/updates with native confirmation. Explicit opt-in sharing of the current editor buffer.
 - Dark/light/system themes, keyboard shortcuts and local data/security information.
+- Bundled skills (from public Agent-Skills repositories, see `skills.sources.json`) and 198 authored roles, selectable per conversation, workspace, or agent profile and injected into the system prompt. Regenerate skills with `npm run skills:ingest`. Scripts and tool servers referenced by a skill do not run.
 
 ## Validation
 
 ```powershell
 npm run typecheck
-npm test        # 11 tests: core + repository hardening
+npm test        # 31 tests: core + repository hardening
 npm run build
 npm run test:desktop
 npm run package:dir
@@ -51,6 +52,7 @@ Unit tests use Node's test runner and the installed TypeScript compiler. Protoco
 - `D:\Baltej IDE\src\preload\index.ts`: explicit IPC facade.
 - `D:\Baltej IDE\src\renderer\src`: React views and Zustand state. No Node or provider HTTP access.
 - `D:\Baltej IDE\src\renderer\src\tokens.css` and `src\renderer\src\ui\index.tsx`: design tokens (primitive > semantic > component) and the shared Button/Icon/Kbd/Modal/Field/PageHeader/EmptyState primitives. The spec is `design-system\axon\MASTER.md`.
+- `D:\Baltej IDE\src\main\skills.ts`, `src\main\roles.ts`, `src\main\prompt.ts`: bundled catalogs and system-prompt block assembly (80k-character skill budget).
 
 One versioned JSON document is persisted with serialized replacement writes, serving reads from RAM, with corruption quarantine and rolling pre-write backups. This is bounded local storage, not a scalable database. Production needs transactional SQLite with migrations and indexed/paged queries. Parsing already runs in isolated utilityProcess workers, and the renderer consumes streaming events incrementally rather than via snapshot refreshes.
 

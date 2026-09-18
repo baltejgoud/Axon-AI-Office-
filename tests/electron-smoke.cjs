@@ -20,9 +20,12 @@ fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify(
 app.setPath('userData', profile);
 // Loopback-only mock provider. Rejects requests without the expected Bearer key.
 let lastAuth = '';
+let lastBody = '';
 const mock = http.createServer((request, response) => {
-  request.on('data', () => undefined);
+  const chunks = [];
+  request.on('data', (c) => chunks.push(c));
   request.on('end', () => {
+    lastBody = Buffer.concat(chunks).toString('utf8');
     lastAuth = String(request.headers.authorization || '');
     if (lastAuth !== 'Bearer smoke-key-123') { response.writeHead(401); response.end(); return; }
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -44,6 +47,7 @@ app.on('web-contents-created', (_, contents) => {
         if (!window.axon) throw new Error('Missing preload bridge');
         const state = await window.axon.snapshot();
         if (state.version !== 1) throw new Error('Invalid snapshot');
+        if (!(state.skills.length > 800) || state.roles.length !== 198) throw new Error('Catalogs missing from snapshot');
         if (typeof require !== 'undefined' || typeof process !== 'undefined') throw new Error('Node exposed in renderer');
         if (!document.querySelector('.welcome')) throw new Error('Welcome view did not render');
         const workspaceButton = [...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('Research test'));
@@ -53,7 +57,7 @@ app.on('web-contents-created', (_, contents) => {
         if (document.querySelector('select[aria-label="AI model"]').value !== 'seed::workspace') throw new Error('Workspace default model was not selected');
         const id = crypto.randomUUID();
         await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
-        const chat = await window.axon.chatCreate(id, 'mock-model', null);
+        const chat = await window.axon.chatCreate(id, 'mock-model', null, undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
         await window.axon.chatSend(chat.id, 'Say hello', []);
         const after = await window.axon.snapshot();
         const assistant = after.messages.find(m => m.conversationId === chat.id && m.role === 'assistant');
@@ -62,9 +66,14 @@ app.on('web-contents-created', (_, contents) => {
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
         await window.axon.chatDelete(chat.id); await window.axon.providerDelete(id);
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, title: document.title };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, selection: true, title: document.title };
       })()`);
       if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
+      const sent = JSON.parse(lastBody);
+      const system = sent.messages.find((m) => m.role === 'system')?.content || '';
+      const r = system.indexOf('<roles>'), s = system.indexOf('<skills>');
+      if (r < 0 || s < 0 || r > s) throw new Error('Roles/skills blocks missing or misordered in system prompt');
+      if (!system.includes('## Frontend Developer') || !system.includes('## Skill: brainstorming (superpowers)')) throw new Error('Selected role/skill not injected');
       console.log('SMOKE_PASS', JSON.stringify(result));
       const image = await contents.capturePage();
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
