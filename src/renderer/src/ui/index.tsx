@@ -74,6 +74,16 @@ export function Kbd({ keys }: { keys: string }) {
 }
 
 /* ---------- Modal ---------- */
+const escapeStack: (() => void)[] = [];
+let escapeBound = false;
+function bindEscape() {
+  if (escapeBound) return;
+  escapeBound = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') escapeStack[escapeStack.length - 1]?.();
+  });
+}
+
 export function Modal({
   title,
   onClose,
@@ -93,11 +103,11 @@ export function Modal({
   useEffect(() => {
     const first = form.current?.querySelector<HTMLElement>('input, select, textarea');
     first?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+    bindEscape();
+    escapeStack.push(onClose);
+    return () => {
+      escapeStack.splice(escapeStack.lastIndexOf(onClose), 1);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const submit = (event: FormEvent) => {
     event.preventDefault();

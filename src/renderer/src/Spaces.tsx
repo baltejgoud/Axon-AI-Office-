@@ -8,16 +8,65 @@ import {
   FolderOpen,
   Library,
   Plus,
+  Puzzle,
   RotateCcw,
   Save,
   Search,
   Trash2,
   Upload
 } from 'lucide-react';
-import type { Workspace, Agent } from '../../shared/types';
+import type { Workspace, Agent, Selection } from '../../shared/types';
 import { useApp, perform } from './state';
 import { Chat, ModelSelect } from './Chat';
 import { Button, EmptyState, Field, Icon, Modal, PageHeader } from './ui';
+import { RolePicker, SkillPicker, SelectionChips } from './ui/CatalogPicker';
+
+/** "Roles" and "Skills" rows for a modal. Holds no state of its own; the parent owns the selection. */
+function SelectionFields({ value, onChange }: { value: Selection; onChange: (next: Selection) => void }) {
+  const [picker, setPicker] = useState<'skills' | 'roles' | null>(null);
+  return (
+    <div className="stack" style={{ gap: 'var(--space-2)' }}>
+      <div className="row">
+        <Button size="sm" icon={Bot} onClick={() => setPicker('roles')}>
+          Roles · {value.roleIds.length}
+        </Button>
+        <Button size="sm" icon={Puzzle} onClick={() => setPicker('skills')}>
+          Skills · {value.skillIds.length}
+        </Button>
+      </div>
+      <SelectionChips
+        selection={value}
+        onRemove={(kind, id) =>
+          onChange(
+            kind === 'skill'
+              ? { ...value, skillIds: value.skillIds.filter((x) => x !== id) }
+              : { ...value, roleIds: value.roleIds.filter((x) => x !== id) }
+          )
+        }
+      />
+      {picker === 'skills' && (
+        <SkillPicker
+          selected={value.skillIds}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            onChange({ ...value, skillIds: ids });
+            setPicker(null);
+          }}
+        />
+      )}
+      {picker === 'roles' && (
+        <RolePicker
+          selected={value.roleIds}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            onChange({ ...value, roleIds: ids });
+            setPicker(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 /* ---------- Workspaces ---------- */
 const freshWorkspace = (): Workspace => ({
@@ -160,6 +209,16 @@ export function Workspaces() {
               onChange={(e) => setEdit({ ...edit, instructions: e.target.value })}
             />
           </Field>
+          <div>
+            <h3 className="section-title">Roles and skills</h3>
+            <p className="text-caption" style={{ marginBottom: 'var(--space-2)' }}>
+              Applied to every conversation in this workspace.
+            </p>
+            <SelectionFields
+              value={{ skillIds: edit.skillIds, roleIds: edit.roleIds }}
+              onChange={(s) => setEdit({ ...edit, ...s })}
+            />
+          </div>
           <div>
             <h3 className="section-title">Knowledge sources</h3>
             {!data!.documents.length && (
@@ -356,6 +415,16 @@ export function Agents() {
               ))}
             </select>
           </Field>
+          <div>
+            <h3 className="section-title">Roles and skills</h3>
+            <p className="text-caption" style={{ marginBottom: 'var(--space-2)' }}>
+              Copied onto each conversation started from this profile.
+            </p>
+            <SelectionFields
+              value={{ skillIds: edit.skillIds, roleIds: edit.roleIds }}
+              onChange={(s) => setEdit({ ...edit, ...s })}
+            />
+          </div>
         </Modal>
       )}
     </div>
