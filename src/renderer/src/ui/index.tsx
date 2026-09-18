@@ -100,15 +100,18 @@ export function Modal({
   children: ReactNode;
 }) {
   const form = useRef<HTMLFormElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const first = form.current?.querySelector<HTMLElement>('input, select, textarea');
     first?.focus();
     bindEscape();
-    escapeStack.push(onClose);
+    const entry = () => closeRef.current();
+    escapeStack.push(entry);
     return () => {
-      escapeStack.splice(escapeStack.lastIndexOf(onClose), 1);
+      escapeStack.splice(escapeStack.lastIndexOf(entry), 1);
     };
-  }, [onClose]);
+  }, []);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit();
