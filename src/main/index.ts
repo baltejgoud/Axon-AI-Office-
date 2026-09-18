@@ -11,7 +11,7 @@ let service: Service;
 let quitting = false;
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'snapshot', 'providerSave', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
-  'settingsSave', 'chatCreate', 'chatRename', 'chatDelete', 'chatSend', 'chatStop', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
+  'settingsSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectList', 'projectRead', 'projectWrite', 'projectSearch'
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');

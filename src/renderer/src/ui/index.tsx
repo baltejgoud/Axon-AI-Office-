@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X, type LucideIcon } from 'lucide-react';
 
 /* ---------- Icon ---------- */
@@ -74,6 +75,16 @@ export function Kbd({ keys }: { keys: string }) {
 }
 
 /* ---------- Modal ---------- */
+const escapeStack: (() => void)[] = [];
+let escapeBound = false;
+function bindEscape() {
+  if (escapeBound) return;
+  escapeBound = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') escapeStack[escapeStack.length - 1]?.();
+  });
+}
+
 export function Modal({
   title,
   onClose,
@@ -90,31 +101,36 @@ export function Modal({
   children: ReactNode;
 }) {
   const form = useRef<HTMLFormElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const titleId = useId();
   useEffect(() => {
     const first = form.current?.querySelector<HTMLElement>('input, select, textarea');
     first?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+    bindEscape();
+    const entry = () => closeRef.current();
+    escapeStack.push(entry);
+    return () => {
+      escapeStack.splice(escapeStack.lastIndexOf(entry), 1);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     onSubmit();
   };
-  return (
+  return createPortal(
     <div className="overlay-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <form
         ref={form}
         className="overlay"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
         onSubmit={submit}
       >
         <div className="overlay-header">
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <Button variant="ghost" size="sm" icon={X} iconOnly aria-label="Close" onClick={onClose} />
         </div>
         <div className="overlay-body">{children}</div>
@@ -127,7 +143,8 @@ export function Modal({
           </Button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 

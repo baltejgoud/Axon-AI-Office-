@@ -1,4 +1,4 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection } from './types';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -10,7 +10,12 @@ export interface PlatformState {
   chunks: KnowledgeChunk[];
   settings: Settings;
 }
-export interface Snapshot extends Omit<PlatformState, 'chunks'> { dataPath: string }
+export interface Snapshot extends Omit<PlatformState, 'chunks'> {
+  dataPath: string;
+  skills: Skill[];
+  skillSources: SkillSourceInfo[];
+  roles: Role[];
+}
 export interface PlatformAPI {
   snapshot(): Promise<Snapshot>;
   providerSave(provider: ProviderConfig, key?: string): Promise<void>;
@@ -22,8 +27,9 @@ export interface PlatformAPI {
   agentExport(id: string): Promise<void>;
   agentImport(): Promise<void>;
   settingsSave(settings: Settings): Promise<void>;
-  chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string): Promise<Conversation>;
+  chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection): Promise<Conversation>;
   chatRename(id: string, title: string): Promise<void>;
+  chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
   chatDelete(id: string): Promise<void>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;
   chatStop(id: string): Promise<void>;

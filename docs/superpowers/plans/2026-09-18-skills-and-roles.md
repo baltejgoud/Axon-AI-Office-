@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a bundled catalog of skills (from five public Agent-Skills repos) and an authored catalog of 196 roles, selectable per conversation / workspace / agent profile, and injected into the system prompt.
+**Goal:** Ship a bundled catalog of skills (from five public Agent-Skills repos) and an authored catalog of 198 roles, selectable per conversation / workspace / agent profile, and injected into the system prompt.
 
 **Architecture:** A dev-time ingest script turns cloned repos into two committed JSON files (`catalog.json`, `bodies.json`); roles are a hand-authored JSON. The Electron main process imports the JSON, validates selections, and assembles `<roles>` and `<skills>` blocks in `chatSend`. The renderer gets the catalogs in the existing `snapshot()` and uses one `CatalogPicker` component for both.
 
@@ -34,7 +34,7 @@
 | `scripts/skills/ingest-core.cjs` (new) | Pure functions: frontmatter parsing, categorization, dedupe, directory → catalog. No git, no network. |
 | `scripts/skills/ingest.cjs` (new) | CLI: clone sources, call core, write `src/skills/*` and `LICENSES.md`. |
 | `src/skills/catalog.json`, `src/skills/bodies.json`, `src/skills/LICENSES.md` (generated, committed) | The bundled skill catalog. |
-| `src/roles/roles.json` (new, authored) | The 196 roles. |
+| `src/roles/roles.json` (new, authored) | The 198 roles. |
 | `src/shared/types.ts` (modify) | `Skill`, `SkillSourceInfo`, `Role`, `Selection`; `skillIds`/`roleIds` on Conversation/Workspace/Agent. |
 | `src/shared/platform.ts` (modify) | Snapshot gains catalogs; `chatCreate` gains `selection`; new `chatSelectionSet`. |
 | `src/main/skills.ts` (new) | Loads catalog + bodies; `catalog()`, `skillBodies(ids)`. |
@@ -632,7 +632,7 @@ git commit -m "feat(skills): ingest CLI and bundled skill catalog"
 **Files:**
 - Create: `src/roles/roles.json`
 - Test: `tests/roles.test.cjs`
-- Modify: `docs/superpowers/specs/2026-09-18-skills-and-roles-design.md` (§7: "~203" → "196")
+- Modify: `docs/superpowers/specs/2026-09-18-skills-and-roles-design.md` (§7: "~203" → "198")
 
 **Interfaces:**
 - Produces: `src/roles/roles.json` = `Role[]`, `Role = { id, name, group, profile }`
@@ -653,8 +653,8 @@ const GROUPS = [
   'Operations Management', 'Sales Management', 'Marketing Management', 'HR & People', 'Customer Success', 'Strategy & Innovation'
 ];
 
-test('roles.json has 196 roles with unique kebab-case ids', () => {
-  assert.equal(roles.length, 196);
+test('roles.json has 198 roles with unique kebab-case ids', () => {
+  assert.equal(roles.length, 198);
   const ids = roles.map((r) => r.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) assert.match(id, /^[a-z0-9]+(-[a-z0-9]+)*$/, id);
@@ -687,7 +687,7 @@ Expected: FAIL — `Cannot find module '../src/roles/roles.json'`
 
 - [ ] **Step 3: Author `src/roles/roles.json`**
 
-An array of 196 objects. **Every id below must appear exactly once**, with the listed `name` and `group`. Author each `profile` as one string with the four labelled parts separated by `\n`, 80–120 words, present tense, second person avoided (describe the role, not "you"). Three complete examples to match in tone and length:
+An array of 198 objects. **Every id below must appear exactly once**, with the listed `name` and `group`. Author each `profile` as one string with the four labelled parts separated by `\n`, 80–120 words, present tense, second person avoided (describe the role, not "you"). Three complete examples to match in tone and length:
 
 ```json
 {
@@ -771,13 +771,13 @@ Expected: 3 passing. If the word-count check fails for a role, edit that profile
 
 - [ ] **Step 5: Correct the spec count**
 
-In `docs/superpowers/specs/2026-09-18-skills-and-roles-design.md` §7, replace `~203 roles after removing the two duplicates` with `196 roles after removing the two duplicates`.
+In `docs/superpowers/specs/2026-09-18-skills-and-roles-design.md` §7, the count must read `198 roles after removing the two duplicates`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add src/roles/roles.json tests/roles.test.cjs docs/superpowers/specs/2026-09-18-skills-and-roles-design.md
-git commit -m "feat(roles): authored catalog of 196 roles"
+git commit -m "feat(roles): authored catalog of 198 roles"
 ```
 
 ---
@@ -949,7 +949,7 @@ test('bundled catalogs load and resolve ids', () => {
   assert.equal(b.name, 'brainstorming');
   assert.ok(b.body.length > 100);
   assert.equal(skillBodies(['nope/missing']).length, 0);
-  assert.equal(roles().length, 196);
+  assert.equal(roles().length, 198);
   assert.ok(hasRole('frontend-developer'));
   assert.equal(roleProfiles(['frontend-developer', 'nope'])[0].name, 'Frontend Developer');
 });
@@ -1894,7 +1894,7 @@ const mock = http.createServer((request, response) => {
 Inside the `executeJavaScript` block, after `if (state.version !== 1) …` add:
 
 ```js
-        if (!(state.skills.length > 800) || state.roles.length !== 196) throw new Error('Catalogs missing from snapshot');
+        if (!(state.skills.length > 800) || state.roles.length !== 198) throw new Error('Catalogs missing from snapshot');
 ```
 
 Change the `chatCreate` call to pass a selection:
@@ -1922,7 +1922,7 @@ Expected: `SMOKE_PASS {…,"selection":true,…}`.
 
 In `README.md` "Implemented", add a bullet:
 
-`- Bundled skills (from public Agent-Skills repositories, see \`skills.sources.json\`) and 196 authored roles, selectable per conversation, workspace, or agent profile and injected into the system prompt. Regenerate skills with \`npm run skills:ingest\`. Scripts and tool servers referenced by a skill do not run.`
+`- Bundled skills (from public Agent-Skills repositories, see \`skills.sources.json\`) and 198 authored roles, selectable per conversation, workspace, or agent profile and injected into the system prompt. Regenerate skills with \`npm run skills:ingest\`. Scripts and tool servers referenced by a skill do not run.`
 
 In "Architecture", add:
 

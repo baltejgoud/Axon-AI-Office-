@@ -85,6 +85,8 @@ export interface Conversation {
   workspaceId: ID | null;
   providerId: ID;
   modelId: string;
+  skillIds: string[];
+  roleIds: string[];
   createdAt: number;
   updatedAt: number;
   pinned?: boolean;
@@ -110,6 +112,8 @@ export interface Workspace {
   defaultModelId: string | null;
   enabledTools: string[];
   knowledgeDocIds: ID[];
+  skillIds: string[];
+  roleIds: string[];
   fileAccess: FileAccessPolicy;
   createdAt: number;
   updatedAt: number;
@@ -138,6 +142,8 @@ export interface Agent {
   systemPrompt: string;
   tools: string[];
   workspaceId: ID | null;
+  skillIds: string[];
+  roleIds: string[];
   maxSteps: number;
   schedule: AgentSchedule;
   createdAt: number;
@@ -265,6 +271,43 @@ export interface FileNode {
   kind: 'file' | 'directory';
   children?: FileNode[];
   size?: number;
+}
+
+/* --------------------------------- Skills & roles ------------------------------- */
+
+export type SkillCategory = 'design' | 'engineering' | 'workflow' | 'review' | 'content' | 'integration' | 'other';
+
+export interface Skill {
+  id: string;
+  source: string;
+  path: string;
+  name: string;
+  description: string;
+  category: SkillCategory;
+  requires: string[];
+  hasScripts: boolean;
+  supported: boolean;
+  bytes: number;
+}
+
+export interface SkillSourceInfo {
+  slug: string;
+  url: string;
+  license: string;
+  commit: string;
+  skillCount: number;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  group: string;
+  profile: string;
+}
+
+export interface Selection {
+  skillIds: string[];
+  roleIds: string[];
 }
 
 export interface CodeSearchHit {

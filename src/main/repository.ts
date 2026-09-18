@@ -10,6 +10,7 @@ export function initialState(): PlatformState {
     workspaces: [{ id: 'code', name: 'Code', description: 'Understand, build, and improve your projects.', icon: '⌘',
       systemPrompt: 'You are a careful software engineering assistant. Explain changes and provide complete code. You cannot execute commands or edit files directly. Ask the user to review changes before applying them.',
       instructions: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [],
+      skillIds: [], roleIds: [],
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
     settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
       streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' } };
@@ -53,8 +54,9 @@ export class Repository {
 
   /** Migration seam: convert older schemas in place before validation. */
   private migrate(state: PlatformState): void {
-    // v1 is the first schema version; future bumps add transformations here.
-    void state;
+    // v1 gained skillIds/roleIds on conversations, workspaces and agents (2026-09). Default them.
+    for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds?: string[]; roleIds?: string[] }[][])
+      for (const item of list ?? []) { item.skillIds ??= []; item.roleIds ??= []; }
   }
 
   private validate(state: PlatformState): void {
@@ -64,6 +66,9 @@ export class Repository {
     if (new Set(providerIds).size !== providerIds.length) throw new Error('Saved data failed validation.');
     for (const message of state.messages)
       if (typeof message.id !== 'string' || typeof message.content !== 'string' || !['system', 'user', 'assistant', 'tool'].includes(message.role)) throw new Error('Saved data failed validation.');
+    const isIdList = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+    for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds: unknown; roleIds: unknown }[][])
+      for (const item of list) if (!isIdList(item.skillIds) || !isIdList(item.roleIds)) throw new Error('Saved data failed validation.');
   }
 
   /** Rolling pre-write backup of the previous good state (keeps BACKUPS_KEPT). */

@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import {
   ArrowUp,
+  Bot,
   ClipboardList,
   Code,
   Compass,
@@ -12,6 +13,7 @@ import {
   Paperclip,
   Pencil,
   PenLine,
+  Puzzle,
   Sparkles,
   Square,
   Trash2,
@@ -20,6 +22,8 @@ import {
 } from 'lucide-react';
 import { useApp, perform } from './state';
 import { Button, Icon } from './ui';
+import { RolePicker, SkillPicker, SelectionChips } from './ui/CatalogPicker';
+import type { Selection } from '../../shared/types';
 
 export function ModelSelect({
   value,
@@ -77,12 +81,13 @@ const suggestions = [
 ];
 
 export function Chat({ codeContext }: { codeContext?: { path: string; text: string } }) {
-  const { data, chatId, workspaceId, model, patch } = useApp();
+  const { data, chatId, workspaceId, model, patch, pendingSelection } = useApp();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<{ id: string; name: string }[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState('');
+  const [picker, setPicker] = useState<'skills' | 'roles' | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
 
@@ -90,6 +95,18 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
   const workspace = data!.workspaces.find((w) => w.id === (codeContext ? 'code' : workspaceId));
   const messages = data!.messages.filter((m) => m.conversationId === chatId && m.role !== 'system');
   const busy = sending || messages.some((m) => m.streaming);
+  const selection: Selection = chat ? { skillIds: chat.skillIds, roleIds: chat.roleIds } : pendingSelection;
+  const inherited: Selection = { skillIds: workspace?.skillIds ?? [], roleIds: workspace?.roleIds ?? [] };
+  const applySelection = (next: Selection) => {
+    if (chat) void perform(() => window.axon.chatSelectionSet(chat.id, next));
+    else patch({ pendingSelection: next });
+  };
+  const removeOne = (kind: 'skill' | 'role', id: string) =>
+    applySelection(
+      kind === 'skill'
+        ? { ...selection, skillIds: selection.skillIds.filter((x) => x !== id) }
+        : { ...selection, roleIds: selection.roleIds.filter((x) => x !== id) }
+    );
 
   useEffect(() => {
     if (follow.current) bottom.current?.scrollIntoView({ behavior: 'auto' });
@@ -99,6 +116,7 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
     setInput('');
     setAttachments([]);
     follow.current = true;
+    if (!chatId) patch({ pendingSelection: { skillIds: [], roleIds: [] } });
   }, [chatId, workspaceId]);
 
   async function send(): Promise<void> {
@@ -111,10 +129,12 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
         const created = await window.axon.chatCreate(
           provider,
           rest.join('::'),
-          codeContext ? 'code' : workspaceId
+          codeContext ? 'code' : workspaceId,
+          undefined,
+          pendingSelection
         );
         id = created.id;
-        patch({ chatId: id });
+        patch({ chatId: id, pendingSelection: { skillIds: [], roleIds: [] } });
       }
       const context = codeContext?.path
         ? `\n\nCurrent editor file: ${codeContext.path}\n\`\`\`\n${codeContext.text.slice(0, 30000)}\n\`\`\``
@@ -325,6 +345,7 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
               ))}
             </div>
           )}
+          <SelectionChips selection={selection} inherited={inherited} onRemove={removeOne} />
           <div className="composer-bar">
             <Button
               variant="ghost"
@@ -337,6 +358,18 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
               }
             >
               Attach
+            </Button>
+            <Button variant="ghost" size="sm" icon={Bot} onClick={() => setPicker('roles')}>
+              Roles
+              {selection.roleIds.length + inherited.roleIds.length
+                ? ` · ${new Set([...inherited.roleIds, ...selection.roleIds]).size}`
+                : ''}
+            </Button>
+            <Button variant="ghost" size="sm" icon={Puzzle} onClick={() => setPicker('skills')}>
+              Skills
+              {selection.skillIds.length + inherited.skillIds.length
+                ? ` · ${new Set([...inherited.skillIds, ...selection.skillIds]).size}`
+                : ''}
             </Button>
             <span className="composer-hint">{hint}</span>
             {busy ? (
@@ -363,6 +396,26 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
           Messages and selected content are sent to your chosen provider. Check important answers.
         </p>
       </div>
+      {picker === 'skills' && (
+        <SkillPicker
+          selected={selection.skillIds}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            applySelection({ ...selection, skillIds: ids });
+            setPicker(null);
+          }}
+        />
+      )}
+      {picker === 'roles' && (
+        <RolePicker
+          selected={selection.roleIds}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            applySelection({ ...selection, roleIds: ids });
+            setPicker(null);
+          }}
+        />
+      )}
     </section>
   );
 }

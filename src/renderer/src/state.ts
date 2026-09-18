@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Snapshot } from '../../shared/platform';
+import type { Selection } from '../../shared/types';
 interface UIState {
   data: Snapshot | null;
   page: string;
@@ -7,6 +8,8 @@ interface UIState {
   workspaceId: string | null;
   model: string;
   error: string;
+  /** Selection for a conversation that doesn't exist yet. */
+  pendingSelection: Selection;
   refresh(): Promise<void>;
   patch(value: Partial<UIState>): void;
 }
@@ -17,6 +20,7 @@ export const useApp = create<UIState>((set, get) => ({
   workspaceId: null,
   model: '',
   error: '',
+  pendingSelection: { skillIds: [], roleIds: [] },
   patch: (value) => set(value),
   refresh: async () => {
     const data = await window.axon.snapshot();

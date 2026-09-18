@@ -13,16 +13,19 @@ fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
 fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify({
   version: 1, providers: [{ id: 'seed', name: 'Seed', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1234/v1',
     models: [{ id: 'first', displayName: 'First' }, { id: 'workspace', displayName: 'Workspace default' }], enabled: true, createdAt: now, hasApiKey: false }],
-  workspaces: [{ id: 'research', name: 'Research test', systemPrompt: 'Research carefully.', defaultProviderId: 'seed', defaultModelId: 'workspace', enabledTools: [], knowledgeDocIds: [], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
+  workspaces: [{ id: 'research', name: 'Research test', systemPrompt: 'Research carefully.', defaultProviderId: 'seed', defaultModelId: 'workspace', enabledTools: [], knowledgeDocIds: [], roleIds: ['backend-developer'], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
   conversations: [], messages: [], agents: [], documents: [], chunks: [],
   settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
 }));
 app.setPath('userData', profile);
 // Loopback-only mock provider. Rejects requests without the expected Bearer key.
 let lastAuth = '';
+let lastBody = '';
 const mock = http.createServer((request, response) => {
-  request.on('data', () => undefined);
+  const chunks = [];
+  request.on('data', (c) => chunks.push(c));
   request.on('end', () => {
+    lastBody = Buffer.concat(chunks).toString('utf8');
     lastAuth = String(request.headers.authorization || '');
     if (lastAuth !== 'Bearer smoke-key-123') { response.writeHead(401); response.end(); return; }
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -44,6 +47,7 @@ app.on('web-contents-created', (_, contents) => {
         if (!window.axon) throw new Error('Missing preload bridge');
         const state = await window.axon.snapshot();
         if (state.version !== 1) throw new Error('Invalid snapshot');
+        if (!(state.skills.length > 800) || state.roles.length !== 198) throw new Error('Catalogs missing from snapshot');
         if (typeof require !== 'undefined' || typeof process !== 'undefined') throw new Error('Node exposed in renderer');
         if (!document.querySelector('.welcome')) throw new Error('Welcome view did not render');
         const workspaceButton = [...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('Research test'));
@@ -53,7 +57,7 @@ app.on('web-contents-created', (_, contents) => {
         if (document.querySelector('select[aria-label="AI model"]').value !== 'seed::workspace') throw new Error('Workspace default model was not selected');
         const id = crypto.randomUUID();
         await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
-        const chat = await window.axon.chatCreate(id, 'mock-model', null);
+        const chat = await window.axon.chatCreate(id, 'mock-model', 'research', undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
         await window.axon.chatSend(chat.id, 'Say hello', []);
         const after = await window.axon.snapshot();
         const assistant = after.messages.find(m => m.conversationId === chat.id && m.role === 'assistant');
@@ -61,10 +65,53 @@ app.on('web-contents-created', (_, contents) => {
         if (assistant.usage?.promptTokens !== 7 || assistant.usage?.completionTokens !== 4) throw new Error('Usage not captured: ' + JSON.stringify(assistant.usage));
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
+        // Nested Modal Apply: a picker Modal (SkillPicker/RolePicker) nested inside the workspace/agent
+        // Modal must not have its submit swallowed by the outer form. Drive it through the real UI.
+        const createWorkspaceBtn = document.querySelector('button[aria-label="Create workspace"]');
+        if (!createWorkspaceBtn) throw new Error('Create workspace button missing');
+        createWorkspaceBtn.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const configureBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Configure');
+        if (!configureBtn) throw new Error('Configure button missing');
+        configureBtn.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        let dialogs = [...document.querySelectorAll('[role=dialog]')];
+        const outerDialog = dialogs[dialogs.length - 1];
+        const rolesBtn = outerDialog && [...outerDialog.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Roles'));
+        if (!rolesBtn) throw new Error('Roles button missing in workspace modal');
+        rolesBtn.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        dialogs = [...document.querySelectorAll('[role=dialog]')];
+        const pickerDialog = dialogs[dialogs.length - 1];
+        const firstRow = pickerDialog && pickerDialog.querySelector('.picker-row input');
+        if (!firstRow) throw new Error('No role rows in picker');
+        firstRow.click();
+        const primaryButtons = pickerDialog.querySelectorAll('.btn-primary');
+        const applyBtn = primaryButtons[primaryButtons.length - 1];
+        if (!applyBtn) throw new Error('Apply button missing in role picker');
+        applyBtn.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        dialogs = [...document.querySelectorAll('[role=dialog]')];
+        const remaining = dialogs[0];
+        const chip = remaining && [...remaining.querySelectorAll('.chip')].find(c => c.textContent.trim().length > 0);
+        if (dialogs.length !== 1 || !chip) throw new Error('Nested picker Apply failed');
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const chatNavBtn = [...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.trim().startsWith('Chat'));
+        if (!chatNavBtn) throw new Error('Chat nav button missing');
+        chatNavBtn.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
         await window.axon.chatDelete(chat.id); await window.axon.providerDelete(id);
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, title: document.title };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, selection: true, nestedPicker: true, title: document.title };
       })()`);
       if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
+      const sent = JSON.parse(lastBody);
+      const system = sent.messages.find((m) => m.role === 'system')?.content || '';
+      const r = system.indexOf('<roles>'), s = system.indexOf('<skills>');
+      if (r < 0 || s < 0 || r > s) throw new Error('Roles/skills blocks missing or misordered in system prompt');
+      const backendIdx = system.indexOf('## Backend Developer'), frontendIdx = system.indexOf('## Frontend Developer');
+      if (backendIdx < 0 || frontendIdx < 0 || backendIdx > frontendIdx) throw new Error('Workspace roles did not precede conversation roles in system prompt');
+      if (!system.includes('## Skill: brainstorming (superpowers)')) throw new Error('Selected skill not injected');
       console.log('SMOKE_PASS', JSON.stringify(result));
       const image = await contents.capturePage();
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });

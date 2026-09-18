@@ -104,6 +104,8 @@ Lucide, `strokeWidth 1.75`. `--icon-sm` 14 (inside sm buttons, captions) · `--i
 | `.composer` | `layout.css` | — | focus-within | Textarea + chips + bar (Attach · hint · send/stop). |
 | `.message` | `layout.css` | `user` `assistant` | streaming, error | Avatar 28px; assistant avatar uses accent-soft. |
 | `.suggestion` | `layout.css` | — | hover | Only on the empty chat. |
+| `CatalogPicker` (`SkillPicker`, `RolePicker`) | `ui/CatalogPicker.tsx` | skills / roles | search, group tab, source filter | Built on `Modal`; rows are `<label>` with a checkbox; unsupported skills show a **Needs tools** badge. |
+| `SelectionChips` | `ui/CatalogPicker.tsx` | role (accent) / skill (neutral) / locked | — | Locked = inherited from the workspace; removable chips are buttons with `aria-label`. |
 
 ---
 

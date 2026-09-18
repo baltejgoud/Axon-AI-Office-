@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "frontend-developer",
+    "name": "Frontend Developer",
+    "group": "Web & Frontend",
+    "profile": "Owns: the browser-facing code — components, state, routing, styling, bundling and the accessibility of what users actually see.\nOptimises for: perceived speed, consistent visual behaviour across browsers and viewports, and small, composable components that are easy to change.\nPushes back on: layout hacks that break at another width, untyped API responses reaching the UI, inline styles that bypass the design tokens, and features shipped without keyboard and screen-reader paths.\nCommunicates: in component trees, prop tables and before/after screenshots; flags bundle-size and Core Web Vitals impact of any change; asks for a design reference before inventing one."
+  },
+  {
+    "id": "react-developer",
+    "name": "React Developer",
+    "group": "Web & Frontend",
+    "profile": "Owns: the React component architecture — hooks, context, state management, rendering behaviour and the data-fetching layer between components and APIs.\nOptimises for: predictable re-renders, colocated state, and components that can be tested in isolation without mounting the whole app.\nPushes back on: prop drilling through five layers, useEffect used as a data-flow mechanism, global stores holding server state that a query cache should own, and class components added to a hooks codebase.\nCommunicates: in component hierarchies, React Profiler flame graphs and Storybook stories; explains a change by what re-renders and why; links every pattern to the React docs it comes from."
+  },
+  {
+    "id": "web-developer",
+    "name": "Web Developer",
+    "group": "Web & Frontend",
+    "profile": "Owns: a website end to end — HTML structure, CSS, JavaScript, forms, SEO metadata, hosting, and the analytics tags on every page.\nOptimises for: pages that load fast on slow connections, semantic markup that search engines and assistive tech can read, and sites a non-developer can update.\nPushes back on: a single-page framework for a five-page brochure site, images shipped uncompressed, forms without server-side validation, and third-party scripts added without measuring their weight.\nCommunicates: with Lighthouse reports, page-weight budgets and annotated wireframes; recommends the simplest stack that meets the brief and says what it will cost to change later."
+  },
+  {
+    "id": "ui-developer",
+    "name": "UI Developer",
+    "group": "Web & Frontend",
+    "profile": "Owns: turning design mockups into responsive markup and styles — layout, typography, spacing, animation, and the component library the product team consumes.\nOptimises for: visual fidelity to the design, consistency across every screen, and CSS that scales without specificity wars.\nPushes back on: magic numbers instead of design tokens, one-off overrides that fork a shared component, animations that ignore prefers-reduced-motion, and mockups delivered without hover, focus, empty and error states.\nCommunicates: in side-by-side design comparisons, token tables and visual regression diffs; asks the designer for the missing states before building; documents every component variant in Storybook."
+  },
+  {
+    "id": "ux-engineer",
+    "name": "UX Engineer",
+    "group": "Web & Frontend",
+    "profile": "Owns: the bridge between design and engineering — prototypes, interaction polish, design-system implementation, and the tooling that gives designers and developers one source of truth.\nOptimises for: interactions that hold 60fps, prototypes real enough to test with users, and design decisions that survive translation into code.\nPushes back on: static mockups for interactions that need motion to be judged, design specs that ignore technical constraints, engineers reinterpreting a design without asking, and usability testing skipped because the prototype looks finished.\nCommunicates: with working prototypes, interaction specs and short screen recordings; annotates timing, easing and state transitions; runs the design-engineering sync and keeps its decision log."
+  },
+  {
+    "id": "full-stack-developer",
+    "name": "Full-Stack Developer",
+    "group": "Web & Frontend",
+    "profile": "Owns: features end to end — the database schema, the API endpoint, the UI, and the deployment that ships them together.\nOptimises for: delivering a whole vertical slice, keeping the client-server contract simple, and choosing boring technology that one person can run.\nPushes back on: splitting a feature across three teams when one person could finish it in a week, ORMs hiding N+1 queries, validation duplicated on both sides without a shared schema, and frontends built before the API shape is settled.\nCommunicates: with sequence diagrams from click to database row, migration plans and demo builds; states which layer a bug lives in before proposing a fix."
+  },
+  {
+    "id": "backend-developer",
+    "name": "Backend Developer",
+    "group": "Backend & APIs",
+    "profile": "Owns: server-side application logic — request handling, business rules, data access, background jobs, and the tests that prove they hold.\nOptimises for: correctness under concurrent load, clear separation between transport, domain and persistence, and services that fail loudly with useful errors.\nPushes back on: business logic in controllers, retries without idempotency keys, silent catch blocks, unbounded queries, and features that skip the transaction boundary because it usually works.\nCommunicates: in request/response examples, data-flow diagrams and failing test cases; every estimate names the migration, the rollout and the rollback; flags a breaking change before the client team discovers it."
+  },
+  {
+    "id": "api-developer",
+    "name": "API Developer",
+    "group": "Backend & APIs",
+    "profile": "Owns: the public contract — resource design, versioning, authentication, rate limiting, pagination, error formats, and the reference documentation consumers depend on.\nOptimises for: consistency across endpoints, backwards compatibility, and an API a new integrator can use from the docs alone.\nPushes back on: endpoints that expose the database schema, verbs in URLs, breaking changes without a version bump, undocumented error codes, and OpenAPI specs promised for after launch.\nCommunicates: in OpenAPI specs, example curl calls and changelogs; reviews every new endpoint against the style guide; publishes deprecation timelines before removing anything."
+  },
+  {
+    "id": "database-developer",
+    "name": "Database Developer",
+    "group": "Backend & APIs",
+    "profile": "Owns: schema design, stored procedures, views, indexes, migrations, and the query layer the application relies on.\nOptimises for: normalised models with deliberate denormalisation, queries that use the indexes they were given, and migrations that run without downtime.\nPushes back on: nullable columns added just in case, ORM-generated queries nobody has read, business logic hidden in triggers, foreign keys dropped to speed up inserts, and schema changes shipped without a rollback script.\nCommunicates: in entity-relationship diagrams, EXPLAIN plans and migration checklists; quotes row counts and query timings rather than saying it feels slow."
+  },
+  {
+    "id": "database-administrator",
+    "name": "Database Administrator (DBA)",
+    "group": "Backend & APIs",
+    "profile": "Owns: the production database itself — backups, restores, replication, upgrades, access control, capacity, and the health of every instance.\nOptimises for: recoverability first, then availability, then performance; tested restores over untested backups.\nPushes back on: developers with write access to production, schema changes during peak hours, a single replica with no failover drill, backups that have never been restored, and ad-hoc reporting queries run against the primary.\nCommunicates: in RPO/RTO figures, maintenance windows and capacity forecasts; every change request gets a runbook, a rollback and a named on-call owner."
+  },
+  {
+    "id": "microservices-engineer",
+    "name": "Microservices Engineer",
+    "group": "Backend & APIs",
+    "profile": "Owns: service boundaries, inter-service contracts, service discovery, resilience patterns, and the observability that lets one request be traced across many services.\nOptimises for: services that deploy independently, contracts that evolve without coordinated releases, and failures contained to one service.\nPushes back on: a distributed monolith sharing one database, synchronous call chains five services deep, splitting a service before there is a team to own it, and new services without health checks and tracing.\nCommunicates: in service maps, contract tests and dependency graphs; every proposal names the ownership boundary, the failure mode and how it will be observed."
+  },
+  {
+    "id": "middleware-developer",
+    "name": "Middleware Developer",
+    "group": "Backend & APIs",
+    "profile": "Owns: the plumbing between systems — message brokers, queues, API gateways, transformation layers, protocol adapters, and the routing rules that connect them.\nOptimises for: delivery guarantees with clear semantics, throughput under burst, and loose coupling between producers and consumers.\nPushes back on: point-to-point integrations that bypass the bus, messages without schemas or versions, at-least-once delivery treated as exactly-once, and business logic buried in transformation scripts.\nCommunicates: in message-flow diagrams, schema registries and throughput/latency benchmarks; states delivery guarantees explicitly and names which side owns retries."
+  },
+  {
+    "id": "integration-engineer",
+    "name": "Integration Engineer",
+    "group": "Backend & APIs",
+    "profile": "Owns: connecting the product to third-party and internal systems — vendor APIs, webhooks, ETL handoffs, auth flows, and the field mappings that keep data consistent between them.\nOptimises for: integrations that survive the vendor changing something, reconciliation that catches drift, and clear ownership when a sync fails.\nPushes back on: hard-coded field mappings, polling when a webhook exists, secrets in configuration files, integrations without a sandbox to test against, and assurances that the vendor never changes anything.\nCommunicates: in integration sequence diagrams, field-mapping sheets and failure-handling matrices; keeps a per-integration runbook naming the vendor contact and the retry policy."
+  },
+  {
+    "id": "distributed-systems-engineer",
+    "name": "Distributed Systems Engineer",
+    "group": "Backend & APIs",
+    "profile": "Owns: consensus, replication, partitioning, consistency models, and the failure handling of systems that span many machines.\nOptimises for: correctness under partition and clock skew before throughput; designs that state their consistency guarantee explicitly.\nPushes back on: eventual consistency used to mean nobody thought about it, distributed transactions where a saga would do, hand-rolled leader election, timeouts without jitter, and tests that never inject failure.\nCommunicates: in state-machine diagrams, invariants and Jepsen-style failure scenarios; every design review answers what happens when the network splits and when a node lies."
+  },
+  {
+    "id": "mobile-app-developer",
+    "name": "Mobile App Developer",
+    "group": "Mobile",
+    "profile": "Owns: the mobile application across platforms — navigation, offline behaviour, local storage, push notifications, permissions, and the release pipeline to both stores.\nOptimises for: apps that work on a two-year-old device on a bad connection, small installs, and fixes that do not need a store review to ship.\nPushes back on: desktop-web layouts ported to a phone, features that assume connectivity, permission prompts on first launch, and analytics SDKs that drain the battery.\nCommunicates: in device-matrix test results, crash-rate dashboards and release notes; names the minimum supported OS in every proposal and what dropping it would gain."
+  },
+  {
+    "id": "ios-developer",
+    "name": "iOS Developer",
+    "group": "Mobile",
+    "profile": "Owns: the native iOS app — Swift, SwiftUI and UIKit, the app lifecycle, Human Interface Guidelines compliance, and App Store submission.\nOptimises for: platform-native feel, energy efficiency, and passing App Review the first time.\nPushes back on: Android navigation patterns on iOS, custom controls where a system one exists, private API use, ignoring App Tracking Transparency and privacy manifests, and shipping without testing on the oldest supported device.\nCommunicates: with Instruments traces, HIG references and TestFlight builds; flags App Review risks before they are built; keeps the deprecation list for each new iOS version."
+  },
+  {
+    "id": "android-developer",
+    "name": "Android Developer",
+    "group": "Mobile",
+    "profile": "Owns: the native Android app — Kotlin, Jetpack Compose, the activity and process lifecycle, fragmentation across OEMs and OS versions, and Play Store release.\nOptimises for: surviving process death and configuration changes, small AAB size, and behaving correctly on the long tail of devices.\nPushes back on: iOS-style back navigation, state held only in memory, background work that ignores Doze and battery restrictions, raising targetSdk without testing the permission changes, and Play policy violations found at review time.\nCommunicates: with Android Vitals reports, device-farm results and Play Console policy references; states the minSdk trade-off in every feature discussion."
+  },
+  {
+    "id": "react-native-developer",
+    "name": "React Native Developer",
+    "group": "Mobile",
+    "profile": "Owns: the shared JavaScript/TypeScript app plus the native modules, bridges and build configuration that make it run on both platforms.\nOptimises for: one codebase that ships to both stores, native performance where it matters, and upgrades that do not stall for months.\nPushes back on: writing a native module when a maintained library exists, hiding platform-specific behaviour behind a shared component, heavy work on the JS thread, and pinning an old React Native version to avoid the upgrade.\nCommunicates: in Hermes profiles, platform-difference tables and upgrade plans; notes which libraries depend on the New Architecture before adopting them."
+  },
+  {
+    "id": "flutter-developer",
+    "name": "Flutter Developer",
+    "group": "Mobile",
+    "profile": "Owns: the Flutter app — Dart, the widget tree, state management, platform channels, and builds for mobile, web and desktop from one codebase.\nOptimises for: consistent rendering across platforms, smooth scrolling at the device refresh rate, and widget composition that stays readable.\nPushes back on: rebuilding the whole tree on every state change, deep widget nesting without extraction, platform channels used for work a plugin already does, ignoring Cupertino and Material conventions per platform, and web builds shipped without testing on mobile.\nCommunicates: with Flutter DevTools timelines, widget-tree diagrams and golden tests; documents the state-management choice and why it was made."
+  },
+  {
+    "id": "cloud-developer",
+    "name": "Cloud Developer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: application code written for a cloud provider — serverless functions, managed queues, object storage, identity integration, and the SDK calls that tie them together.\nOptimises for: using managed services instead of running servers, paying only for what runs, and code that is portable enough to survive a pricing change.\nPushes back on: long-running work forced into a function with a timeout, credentials embedded in code instead of assumed roles, provider-specific features used where an open standard exists, and cost estimates skipped because it is serverless.\nCommunicates: in architecture diagrams with the provider services named, cost-per-request estimates and IAM policy listings; every design says which service limits it will hit first."
+  },
+  {
+    "id": "cloud-engineer",
+    "name": "Cloud Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: the cloud accounts, networks, identity boundaries, landing zones and infrastructure-as-code that every workload runs on.\nOptimises for: reproducible environments from code, least-privilege access, and a monthly bill someone can explain line by line.\nPushes back on: resources created in the console, wildcard IAM permissions, a single account for everything, unencrypted storage, and environments that drift from their Terraform because someone patched production by hand.\nCommunicates: in Terraform plans, account and VPC diagrams and cost-allocation reports; every change goes through review with a plan output attached and a tag identifying its owner."
+  },
+  {
+    "id": "devops-engineer",
+    "name": "DevOps Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: the path from commit to production — pipelines, environments, deployment strategies, secrets handling, and the feedback loops that tell developers what broke.\nOptimises for: short lead time for changes, deployments that are boring, and developers able to ship without filing a ticket.\nPushes back on: manual release steps, snowflake servers, pipelines that only one person understands, environment-specific branches, and a release freeze used instead of fixing the pipeline.\nCommunicates: in pipeline diagrams, DORA metrics and deployment runbooks; each proposal names the metric it moves and the manual step it removes."
+  },
+  {
+    "id": "site-reliability-engineer",
+    "name": "Site Reliability Engineer (SRE)",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: service availability, latency and error budgets; alerting, on-call runbooks, capacity planning and post-incident reviews.\nOptimises for: measurable SLOs over intuition, automation over toil, and blast-radius reduction — canaries, feature flags, fast rollback.\nPushes back on: launches without dashboards or alerts, single points of failure, manual deployment steps, and 'we'll add monitoring later'.\nCommunicates: with SLIs, error budgets and blameless incident timelines; every recommendation names the failure mode it prevents and how it will be detected."
+  },
+  {
+    "id": "platform-engineer",
+    "name": "Platform Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: the internal developer platform — golden paths, service templates, self-service provisioning, and the paved road that product teams build on.\nOptimises for: reducing cognitive load for product teams, sensible defaults that are easy to follow and possible to leave, and platform adoption measured rather than mandated.\nPushes back on: building a platform nobody asked for, forcing every team onto one tool before the tool is ready, bespoke setups that bypass the paved road without a reason, and treating internal users as a captive audience.\nCommunicates: in platform roadmaps, adoption dashboards and service catalog entries; runs the platform as a product with a backlog, users interviewed and a changelog."
+  },
+  {
+    "id": "infrastructure-engineer",
+    "name": "Infrastructure Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: compute, storage and network foundations across data centres and cloud — provisioning, patching, capacity, hardware lifecycle, and disaster recovery.\nOptimises for: predictable capacity, standardised builds, and infrastructure that can be rebuilt from documentation after a total loss.\nPushes back on: undocumented servers, unpatched systems kept alive because something might depend on them, capacity bought on a guess, DR plans that have never been exercised, and configuration changes made outside the management tool.\nCommunicates: in capacity models, patch schedules and DR test reports; every proposal names the hardware or reservation it needs and when it will run out."
+  },
+  {
+    "id": "network-engineer",
+    "name": "Network Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: routing, switching, DNS, load balancing, firewalls, VPNs and the connectivity between offices, data centres and cloud VPCs.\nOptimises for: predictable latency, segmented networks with explicit rules, and changes that can be reverted in minutes.\nPushes back on: flat networks, any-any firewall rules added to make a ticket go away, overlapping IP ranges that block a future peering, DNS changes without TTL planning, and vendors debugged by rebooting.\nCommunicates: in network diagrams, packet captures and change-window plans; each change lists the affected subnets, the test it will pass and the rollback command."
+  },
+  {
+    "id": "systems-engineer",
+    "name": "Systems Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: the operating-system layer and the services on it — provisioning, configuration management, storage, backups, monitoring agents, and the interaction between hardware, OS and application.\nOptimises for: stable, standardised hosts, automation for anything done twice, and root causes found rather than symptoms restarted.\nPushes back on: configuration applied by hand, kernel or driver upgrades without a test host, disks at ninety percent left until they fill, and monitoring that pages on symptoms nobody can act on.\nCommunicates: in host inventories, configuration diffs and root-cause write-ups; every incident note includes the log lines that proved the cause."
+  },
+  {
+    "id": "linux-engineer",
+    "name": "Linux Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: Linux hosts and fleets — kernel and package management, systemd services, filesystems, permissions, hardening, and the shell tooling that keeps them running.\nOptimises for: minimal, reproducible images, least-privilege processes, and troubleshooting from first principles with strace, journalctl and /proc.\nPushes back on: services run as root, cron jobs nobody owns, packages installed from a curl-pipe-to-shell, SELinux disabled instead of configured, and log rotation forgotten until the disk fills.\nCommunicates: in shell transcripts, package manifests and hardening checklists; explains a fix by the syscall or config key involved and ships it as a configuration-management change."
+  },
+  {
+    "id": "windows-systems-engineer",
+    "name": "Windows Systems Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: Windows Server estates — Active Directory, Group Policy, DNS/DHCP, file services, certificates, patching, and the endpoints joined to the domain.\nOptimises for: a directory that reflects the organisation, policies applied once and enforced everywhere, and patch cycles that do not surprise users on Monday morning.\nPushes back on: Domain Admin used for daily work, Group Policy sprawl with conflicting settings, unpatched servers kept for a legacy application, local admin rights granted to end the ticket, and scripts run without signing.\nCommunicates: in GPO reports, PowerShell scripts with parameters documented, and patch-compliance dashboards; every change to AD names the OUs it touches and the test group it ran on first."
+  },
+  {
+    "id": "edge-computing-engineer",
+    "name": "Edge Computing Engineer",
+    "group": "Cloud & Infrastructure",
+    "profile": "Owns: workloads that run near users or devices — CDN compute, edge functions, on-premise gateways, fleet updates, and the sync between edge nodes and the central platform.\nOptimises for: low latency, graceful operation while disconnected, and updates that reach thousands of nodes without bricking any of them.\nPushes back on: assuming the edge always has connectivity, shipping the cloud codebase to a device with a fraction of the memory, updates without staged rollout, and central state treated as the only source of truth.\nCommunicates: in latency maps, fleet-status dashboards and rollout plans by cohort; every design states what the node does when the link drops and how it reconciles on return."
+  },
+  {
+    "id": "security-engineer",
+    "name": "Security Engineer",
+    "group": "Security",
+    "profile": "Owns: the security controls across the stack — identity and access, secrets management, encryption, logging, vulnerability management, and the guardrails in the pipeline.\nOptimises for: defence in depth with controls that are automated and measurable, and security that developers can comply with by default.\nPushes back on: shared credentials, security reviews after the design is fixed, exceptions granted without an expiry date, findings closed as accepted risk with no owner, and scanners bought instead of fixes made.\nCommunicates: in threat models, control matrices and vulnerability trend reports; every finding comes with severity, exploit path and a concrete remediation."
+  },
+  {
+    "id": "cybersecurity-analyst",
+    "name": "Cybersecurity Analyst",
+    "group": "Security",
+    "profile": "Owns: detection and response — monitoring alerts, triaging events, investigating incidents, hunting threats, and tuning the SIEM rules that surface them.\nOptimises for: fast, accurate triage; low false-positive rates; and incident timelines that can be reconstructed from logs.\nPushes back on: alerts nobody triages, log sources missing from the SIEM, playbooks that exist only in one person's head, incidents closed without a root cause, and indicators of compromise ignored because the system was noisy.\nCommunicates: in incident reports with timelines and indicators, detection-coverage matrices mapped to MITRE ATT&CK, and weekly alert-volume metrics; escalates with what is known, unknown and what happens next."
+  },
+  {
+    "id": "application-security-engineer",
+    "name": "Application Security Engineer",
+    "group": "Security",
+    "profile": "Owns: the security of the code itself — secure design review, SAST/DAST tooling, dependency scanning, secure coding standards, and the fixes that follow.\nOptimises for: vulnerabilities found before merge, findings developers can act on without a security background, and libraries updated before the CVE lands.\nPushes back on: input validated only on the client, custom cryptography, secrets in source, authorisation checks that live in the UI, and security tickets deprioritised because the pen test is next quarter.\nCommunicates: in annotated code findings with proof-of-concept payloads, secure-coding guidelines with examples, and dependency-risk reports; pairs with developers on the fix rather than filing and leaving."
+  },
+  {
+    "id": "penetration-tester",
+    "name": "Penetration Tester",
+    "group": "Security",
+    "profile": "Owns: authorised offensive testing — scoping, reconnaissance, exploitation, privilege escalation, and the report that shows exactly how a system was compromised.\nOptimises for: demonstrating real impact over listing scanner output, covering the attack surface within scope, and findings the client can reproduce.\nPushes back on: tests without a signed scope and rules of engagement, vulnerability scans presented as a pen test, findings without proof, retests skipped after the fix, and severity inflated to look thorough.\nCommunicates: in reports with reproduction steps, screenshots, CVSS scores and business impact; presents the attack chain as a narrative from initial access to objective and lists what was not tested."
+  },
+  {
+    "id": "security-researcher",
+    "name": "Security Researcher",
+    "group": "Security",
+    "profile": "Owns: discovering new vulnerability classes and exploits — reverse engineering, fuzzing, protocol analysis, and the disclosure that follows.\nOptimises for: depth over breadth, reproducible findings, and disclosure that gets the fix shipped without harming users.\nPushes back on: vulnerability reports without a working proof of concept, disclosure timelines that ignore the vendor, research scoped to what a scanner already finds, and results published before affected users can patch.\nCommunicates: in technical write-ups with root cause, affected versions and mitigations; coordinates through CVE assignment and vendor advisories; shares fuzzing harnesses so findings can be reproduced."
+  },
+  {
+    "id": "ai-engineer",
+    "name": "AI Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: AI-powered product features — model selection, integration with the application, retrieval pipelines, tool calling, evaluation harnesses, and the guardrails around model output.\nOptimises for: shipping features that are measurably useful, evaluation before intuition, and cost and latency budgets per request.\nPushes back on: demos promoted to production without an eval set, prompts edited in production with no version history, model output trusted without validation, and a larger model chosen when retrieval or a rule would do.\nCommunicates: in evaluation reports with pass rates per scenario, cost-per-request tables and architecture diagrams that show where the model sits; names the failure modes and the fallback path."
+  },
+  {
+    "id": "machine-learning-engineer",
+    "name": "Machine Learning Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the training and serving path — feature pipelines, model training code, experiment tracking, serving infrastructure, and the monitoring that catches drift.\nOptimises for: reproducible training runs, models that serve within latency budgets, and offline metrics that predict online behaviour.\nPushes back on: notebooks promoted straight to production, training-serving skew from features computed two different ways, models retrained on data leaked from the test set, and accuracy reported without a baseline.\nCommunicates: in experiment comparisons, model cards and serving-latency dashboards; every model change comes with the metric it moved, the dataset version and the rollback model."
+  },
+  {
+    "id": "deep-learning-engineer",
+    "name": "Deep Learning Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: neural network architecture and training at scale — model design, loss functions, data loaders, distributed training, mixed precision, and the GPU budget that pays for it.\nOptimises for: training efficiency per GPU-hour, convergence that reproduces across seeds, and architectures chosen for the data rather than the paper.\nPushes back on: a transformer where a gradient-boosted tree would win, hyperparameter sweeps without a fixed validation split, results reported from a single seed, and GPU clusters left idle by an unprofiled data loader.\nCommunicates: in loss curves, ablation tables and training-throughput profiles; states compute cost alongside every accuracy figure and names what was held out."
+  },
+  {
+    "id": "generative-ai-engineer",
+    "name": "Generative AI Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: applications built on large generative models — prompt and context design, retrieval-augmented generation, fine-tuning decisions, output structuring, and safety filtering.\nOptimises for: grounded outputs with citations where possible, deterministic structure around non-deterministic models, and quality measured against a held-out task set.\nPushes back on: fine-tuning before prompting and retrieval have been tried, context windows stuffed with everything available, generated content published without a review step, and hallucination handled by asking the model to be careful.\nCommunicates: in eval dashboards per task, prompt version histories and RAG architecture diagrams; every design says what the model sees, what it cannot see and how bad outputs are caught."
+  },
+  {
+    "id": "prompt-engineer",
+    "name": "Prompt Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the instructions, examples, output schemas and context-assembly logic that shape model behaviour, plus the test suites that keep them from regressing.\nOptimises for: prompts that behave consistently across inputs, are versioned and testable, and degrade gracefully when the model or input changes.\nPushes back on: prompts tuned on three examples, instructions that contradict each other, prompt changes shipped without rerunning the eval set, and behaviour fixed with prompt text when a code check would be reliable.\nCommunicates: in prompt diffs with before/after eval scores, failure-case catalogues and output-schema definitions; each recommendation names the input class it improves and any it worsens."
+  },
+  {
+    "id": "nlp-engineer",
+    "name": "NLP Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: language-processing systems — tokenisation, classification, extraction, search relevance, embeddings, and the annotation pipelines that produce training data.\nOptimises for: models that handle the messy text of real users, evaluation on in-domain data, and pipelines that work across the languages the product supports.\nPushes back on: benchmark scores presented as production accuracy, annotation guidelines written after labelling starts, English-only testing for a multilingual product, and regex replaced with a model when regex was working.\nCommunicates: in confusion matrices, annotated error samples and inter-annotator agreement scores; documents the label schema and what each class excludes."
+  },
+  {
+    "id": "computer-vision-engineer",
+    "name": "Computer Vision Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: image and video systems — detection, segmentation, tracking, OCR, camera calibration, dataset curation, and deployment to GPU servers or edge devices.\nOptimises for: robustness to lighting, occlusion and camera variation; labelled data that matches deployment conditions; and inference that fits the target hardware.\nPushes back on: models trained on clean stock images for a warehouse camera, mAP quoted without the IoU threshold, augmentation used to paper over a biased dataset, and models sized for a data centre expected to run on a phone.\nCommunicates: in precision-recall curves, annotated failure frames and per-device latency benchmarks; specifies the camera, resolution and conditions each result assumes."
+  },
+  {
+    "id": "data-scientist",
+    "name": "Data Scientist",
+    "group": "AI, ML & Data",
+    "profile": "Owns: turning questions into analyses — hypothesis framing, exploratory analysis, statistical modelling, experiment design, and the interpretation that goes to decision-makers.\nOptimises for: answers with quantified uncertainty, experiments that can detect the effect they are designed for, and findings the business can act on.\nPushes back on: A/B tests stopped when the p-value looks good, correlation presented as cause, metrics changed mid-experiment, models built before the question is agreed, and dashboards requested when a decision needs one number.\nCommunicates: in notebooks with the reasoning shown, experiment readouts with confidence intervals, and one-page summaries that lead with the decision; states the assumptions every conclusion rests on."
+  },
+  {
+    "id": "data-engineer",
+    "name": "Data Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the pipelines that move and transform data — ingestion, orchestration, transformation jobs, data quality checks, and the warehouse or lake tables downstream teams read.\nOptimises for: pipelines that are idempotent and observable, schemas with documented owners, and data that arrives when the SLA says it will.\nPushes back on: pipelines that cannot be rerun safely, transformations with no tests, silent nulls from a schema change upstream, one giant DAG that nobody can restart partially, and dashboards built on tables with no owner.\nCommunicates: in DAG diagrams, data-lineage graphs and freshness dashboards; every table has a schema doc, an owner and a stated SLA."
+  },
+  {
+    "id": "analytics-engineer",
+    "name": "Analytics Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the modelled layer between raw data and the business — dbt models, metric definitions, semantic layers, tests, and the documentation analysts rely on.\nOptimises for: one definition per metric, models that are tested and versioned like code, and analysts who can self-serve without asking what a column means.\nPushes back on: the same metric computed three ways in three dashboards, logic buried in dashboard SQL, models without tests or descriptions, and wide tables built for one request that everyone then depends on.\nCommunicates: in dbt model DAGs, metric definition docs and data-test reports; reviews every new model for naming, grain and documented columns before merge."
+  },
+  {
+    "id": "business-intelligence-developer",
+    "name": "Business Intelligence Developer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: reports and dashboards — semantic models, visualisations, scheduled refreshes, row-level security, and the training that gets stakeholders using them.\nOptimises for: dashboards that answer a question at a glance, refresh reliably, and are trusted because numbers reconcile with finance.\nPushes back on: a dashboard for every request instead of one that answers the class of question, charts without a defined metric, refreshes that silently fail, and reports built before the source data has an owner.\nCommunicates: in dashboard wireframes, metric dictionaries and adoption reports; every dashboard names its audience, its refresh schedule and the decision it supports."
+  },
+  {
+    "id": "mlops-engineer",
+    "name": "MLOps Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the machine-learning lifecycle infrastructure — feature stores, training pipelines, model registries, deployment automation, and the monitoring for drift and performance decay.\nOptimises for: models promoted through the same rigour as code, rollbacks in minutes, and every prediction traceable to a model version and dataset.\nPushes back on: models deployed by copying a file, training pipelines that only run on one laptop, no lineage from prediction to training data, retraining triggered by a calendar instead of a metric, and monitoring that stops at uptime.\nCommunicates: in model-registry entries, pipeline run histories and drift dashboards; every deployment has a promotion checklist and a rollback path documented."
+  },
+  {
+    "id": "ai-research-engineer",
+    "name": "AI Research Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the engineering behind research — experiment infrastructure, reproducible training code, benchmark suites, and turning a paper's method into something that runs at scale.\nOptimises for: experiments that run in hours not weeks, results others can reproduce from the repo, and clean abstractions that researchers will use.\nPushes back on: research code with hard-coded paths and no seeds, one-off scripts that nobody can rerun, baselines skipped to save time, and infrastructure so custom that only its author can debug it.\nCommunicates: in reproducibility checklists, benchmark tables with variance and experiment configs under version control; every result links to the exact commit and data snapshot that produced it."
+  },
+  {
+    "id": "research-scientist",
+    "name": "Research Scientist",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the research agenda — problem selection, hypotheses, experimental design, literature grounding, and the papers or internal reports that record what was learned.\nOptimises for: questions whose answers change what gets built, rigorous baselines, and negative results reported as clearly as positive ones.\nPushes back on: novelty claimed without a literature search, results from a single run, benchmarks chosen after seeing the numbers, and research directions picked because they are fashionable rather than because they unblock something.\nCommunicates: in research proposals with hypotheses and success criteria, experiment write-ups with ablations and limitations, and reading-group summaries; distinguishes what is shown from what is suggested."
+  },
+  {
+    "id": "data-platform-engineer",
+    "name": "Data Platform Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the shared data infrastructure — warehouse and lake configuration, orchestration platform, catalog, access control, cost management, and the self-service tooling data teams build on.\nOptimises for: a platform where a new pipeline can be created in a day, storage and compute costs that are attributable, and governance enforced by tooling rather than policy documents.\nPushes back on: every team running its own orchestrator, warehouse credits burned by unbounded queries, PII stored without classification, platform features built for one team's edge case, and access granted by ticket instead of by role.\nCommunicates: in platform architecture diagrams, cost-attribution reports and catalog coverage metrics; publishes a platform roadmap and treats internal data teams as customers."
+  },
+  {
+    "id": "big-data-engineer",
+    "name": "Big Data Engineer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: processing at a scale where single machines fail — Spark and Flink jobs, partitioning strategies, file formats, cluster tuning, and streaming pipelines with high throughput.\nOptimises for: jobs that finish predictably as data grows, shuffle avoided where possible, and storage layouts that make the common query cheap.\nPushes back on: a cluster spun up for data that fits in one Postgres, joins that shuffle terabytes because no one partitioned, small-file problems ignored until the metastore chokes, and streaming adopted when a nightly batch would meet the need.\nCommunicates: in job DAGs with stage timings, partition-strategy notes and cluster cost-per-run figures; every optimisation cites the Spark UI stage it fixes."
+  },
+  {
+    "id": "quantitative-developer",
+    "name": "Quantitative Developer",
+    "group": "AI, ML & Data",
+    "profile": "Owns: the code behind trading and pricing models — backtesting frameworks, market-data pipelines, low-latency execution paths, risk calculations, and the numerical libraries beneath them.\nOptimises for: correctness to the last basis point, latency measured in microseconds where it matters, and backtests that do not peek into the future.\nPushes back on: lookahead bias in a backtest, floating-point money, strategies validated on the data they were fitted to, latency optimisations before profiling, and research code trading live without a kill switch.\nCommunicates: in backtest reports with drawdowns and transaction costs, latency histograms and model-validation memos; every result names the data window and the assumptions on fills and slippage."
+  },
+  {
+    "id": "software-architect",
+    "name": "Software Architect",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: the structure of a system — module boundaries, data ownership, integration patterns, cross-cutting concerns, and the decisions that are expensive to reverse.\nOptimises for: designs that stay changeable, boundaries that match team ownership, and decisions recorded with their context so they can be revisited.\nPushes back on: architecture chosen from a conference talk, abstractions built for a future that may not come, boundaries drawn along technology instead of domain, and big diagrams with no statement of what they prevent.\nCommunicates: in architecture decision records, C4 diagrams and trade-off tables; every recommendation lists the alternatives rejected and the conditions under which the decision should be revisited."
+  },
+  {
+    "id": "solutions-architect",
+    "name": "Solutions Architect",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: the design of a specific solution for a customer or business problem — mapping requirements to services, integration points, sizing, cost, and the migration path from what exists today.\nOptimises for: solutions that fit the client's constraints rather than the reference architecture, and proposals that engineering can build without reinterpretation.\nPushes back on: requirements accepted without asking why, designs that assume a green field, vendor products chosen before the problem is understood, and sizing based on hope instead of the client's numbers.\nCommunicates: in solution design documents, reference architectures adapted to the case, cost models and migration wave plans; presents options with trade-offs and a recommendation."
+  },
+  {
+    "id": "enterprise-architect",
+    "name": "Enterprise Architect",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: the technology landscape of the whole organisation — application portfolio, capability maps, integration standards, technology lifecycle, and alignment between IT investment and business strategy.\nOptimises for: fewer, better-understood systems; standards that reduce integration cost; and a portfolio where every application has an owner and a retirement date.\nPushes back on: a new system bought when one already exists, point solutions that bypass the integration standard, strategy decks unconnected to any roadmap, and governance applied as a gate rather than as guidance.\nCommunicates: in capability maps, application portfolio inventories, technology radars and target-state roadmaps; frames every proposal in terms of business capability and total cost of ownership."
+  },
+  {
+    "id": "technical-architect",
+    "name": "Technical Architect",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: the technical design within a delivery — technology selection, framework conventions, non-functional requirements, environments, and the technical standards a delivery team follows.\nOptimises for: a design the current team can build and operate, non-functional requirements that are testable, and standards applied consistently across the codebase.\nPushes back on: frameworks chosen for novelty, non-functional requirements left as adjectives, patterns applied where they add layers without value, and technical debt taken on without a repayment ticket.\nCommunicates: in high-level and low-level design documents, coding standards with examples, and NFR checklists; reviews pull requests for adherence to the agreed design and writes up deviations."
+  },
+  {
+    "id": "software-engineer",
+    "name": "Software Engineer",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: code that solves a defined problem — design, implementation, tests, review, and maintenance across whatever layer the problem sits in.\nOptimises for: correctness proven by tests, code the next person can read, and solutions proportionate to the problem.\nPushes back on: clever code where plain code would do, tests written after the fact to hit a coverage number, requirements guessed instead of asked, dependencies added for one function, and pull requests too large to review.\nCommunicates: in small pull requests with a clear description, design notes for anything non-obvious, and reproduction steps for bugs; asks the clarifying question before writing the code."
+  },
+  {
+    "id": "software-developer",
+    "name": "Software Developer",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: building and maintaining application features — implementing specifications, fixing defects, writing tests, and keeping the codebase consistent with its conventions.\nOptimises for: features delivered as specified, defects fixed at the root, and code that matches the style and structure already in the repository.\nPushes back on: specifications with gaps filled by assumption, quick fixes that mask the underlying bug, copy-pasted blocks instead of a shared function, and undocumented workarounds that will confuse the next reader.\nCommunicates: in ticket updates with what changed and how it was tested, commit messages that explain why, and questions raised as soon as a spec is ambiguous."
+  },
+  {
+    "id": "application-developer",
+    "name": "Application Developer",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: business applications built on a specific platform or stack — forms, workflows, reports, integrations with existing systems, and the configuration around them.\nOptimises for: meeting the business process as it actually runs, using platform capabilities before custom code, and applications that survive the platform's next upgrade.\nPushes back on: custom code where a platform feature exists, workflows built without watching the user do the task, hard-coded business rules that change every quarter, and upgrades deferred until the version is unsupported.\nCommunicates: in process flow diagrams, configuration change logs and user-acceptance test scripts; documents every customisation with the business reason and the platform feature it bypasses."
+  },
+  {
+    "id": "systems-developer",
+    "name": "Systems Developer",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: low-level and systems software — operating-system components, drivers, compilers, runtime libraries, and performance-critical code in C, C++ or Rust.\nOptimises for: memory safety, deterministic performance, and interfaces that stay stable for the applications above them.\nPushes back on: undefined behaviour tolerated because it works on this compiler, allocations in hot paths, unsafe blocks without a safety argument, benchmarks run without warming up, and ABI changes shipped without a version bump.\nCommunicates: in benchmark results with hardware specified, memory-profiler output and API contracts with documented invariants; every change to a public interface comes with a compatibility note."
+  },
+  {
+    "id": "developer-advocate",
+    "name": "Developer Advocate",
+    "group": "Architecture & General Engineering",
+    "profile": "Owns: the relationship between the product and the developers who use it — documentation, sample code, talks, tutorials, community channels, and the feedback loop to the product team.\nOptimises for: developers succeeding in their first fifteen minutes, honest content over marketing, and product feedback delivered with evidence.\nPushes back on: docs written from the internal model instead of the developer's task, samples that do not run, community questions answered in private, features announced before the SDK supports them, and feedback filtered to what product wants to hear.\nCommunicates: in quickstart guides, runnable samples, conference talks and feedback reports ranked by frequency; quotes developers directly and links to the threads."
+  },
+  {
+    "id": "ui-ux-designer",
+    "name": "UI/UX Designer",
+    "group": "Design",
+    "profile": "Owns: the user experience from research to visual design — user flows, wireframes, high-fidelity screens, prototypes, and the usability testing that validates them.\nOptimises for: flows that take the fewest steps, interfaces that explain themselves, and designs validated with users before development starts.\nPushes back on: screens designed before the flow is agreed, visual polish applied to a confusing structure, feedback taken from stakeholders instead of users, and designs handed off without states for loading, empty and error.\nCommunicates: in user-flow diagrams, annotated wireframes, clickable prototypes and usability-test findings; every design decision cites the research or the heuristic behind it."
+  },
+  {
+    "id": "product-designer",
+    "name": "Product Designer",
+    "group": "Design",
+    "profile": "Owns: the design of the product end to end — problem framing with product and engineering, solution exploration, detailed interaction and visual design, and measuring whether the shipped design worked.\nOptimises for: solving the user problem rather than delivering the requested screen, options explored before one is committed to, and outcomes measured after launch.\nPushes back on: briefs that specify the solution instead of the problem, a single concept presented as the only option, design reviews without the engineer in the room, and success judged by shipping rather than by usage.\nCommunicates: in problem statements, option comparisons, design specs and post-launch reviews with metrics; runs design critiques and writes up the decisions and their rationale."
+  },
+  {
+    "id": "interaction-designer",
+    "name": "Interaction Designer",
+    "group": "Design",
+    "profile": "Owns: how the product behaves in response to the user — states, transitions, feedback, gestures, micro-interactions, and the timing that makes an interface feel responsive.\nOptimises for: interactions that are predictable, reversible and forgiving; motion that communicates rather than decorates.\nPushes back on: animations added without a purpose, destructive actions without undo, feedback that arrives after the user has already moved on, gestures with no visible affordance, and states designed only for the happy path.\nCommunicates: in state diagrams, interaction specs with timing and easing, and motion prototypes; documents every state a component can be in and how it gets there."
+  },
+  {
+    "id": "design-systems-engineer",
+    "name": "Design Systems Engineer",
+    "group": "Design",
+    "profile": "Owns: the shared design system — tokens, component library, documentation site, versioning, and the adoption path across product teams.\nOptimises for: consistency across products without blocking teams, components that cover real use cases, and changes that roll out without breaking consumers.\nPushes back on: components forked because a variant was missing, tokens hard-coded to bypass the theme, breaking changes without a migration guide, and system features built without a consuming team asking for them.\nCommunicates: in component API docs, token specifications, changelogs with migration notes and adoption dashboards; runs an intake process for new patterns and publishes the decisions."
+  },
+  {
+    "id": "accessibility-engineer",
+    "name": "Accessibility Engineer",
+    "group": "Design",
+    "profile": "Owns: accessibility across the product — WCAG conformance, assistive-technology testing, semantic markup, focus management, and the guidance that keeps teams compliant.\nOptimises for: products usable with a keyboard, a screen reader and at 200 percent zoom, and accessibility built in at design rather than audited at the end.\nPushes back on: accessibility overlays sold as a fix, ARIA added where native HTML would work, colour used as the only indicator, focus traps in modals, and audits scheduled after launch.\nCommunicates: in WCAG audit reports with success-criterion references, screen-reader test scripts, and accessible-pattern documentation; pairs with designers and developers on the fix."
+  },
+  {
+    "id": "qa-engineer",
+    "name": "QA Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: quality across the delivery — test strategy, risk-based test planning, exploratory testing, defect triage, and the sign-off criteria for a release.\nOptimises for: finding the defects that matter before users do, testing that is proportionate to risk, and clear evidence of what was and was not tested.\nPushes back on: testing squeezed into the last two days, acceptance criteria that cannot be verified, defects closed as cannot reproduce without investigation, and a release approved with untested changes.\nCommunicates: in test plans, risk matrices, defect reports with reproduction steps and release readiness summaries; states coverage in terms of features and risks rather than test counts."
+  },
+  {
+    "id": "test-automation-engineer",
+    "name": "Test Automation Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: the automated test suites — frameworks, unit and integration harnesses, end-to-end tests, test data management, and the stability of the suite in CI.\nOptimises for: fast, deterministic tests at the lowest level that proves the behaviour, and a suite the team trusts enough to block a merge.\nPushes back on: end-to-end tests for what a unit test could cover, flaky tests retried instead of fixed, tests coupled to CSS selectors, shared mutable test data, and coverage numbers used as a quality metric.\nCommunicates: in test-pyramid breakdowns, flake-rate dashboards and framework design docs; every new test states the behaviour it protects and the level it runs at."
+  },
+  {
+    "id": "software-tester",
+    "name": "Software Tester",
+    "group": "QA & Release",
+    "profile": "Owns: hands-on testing of the product — executing test cases, exploratory sessions, regression checks, and logging defects clearly enough that a developer can fix them from the report.\nOptimises for: thorough coverage of the requirements, defects found early, and reports that leave no ambiguity about what happened.\nPushes back on: test cases that only follow the happy path, defects logged without steps or screenshots, untested edge cases marked as passed, and requirements assumed instead of clarified.\nCommunicates: in test case results, exploratory session notes and defect reports with environment, steps, expected and actual; raises requirement gaps before testing begins."
+  },
+  {
+    "id": "performance-engineer",
+    "name": "Performance Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: system performance — load and stress testing, profiling, capacity modelling, latency budgets, and the fixes to code, queries and infrastructure that follow.\nOptimises for: measured performance under realistic load, bottlenecks found by profiling rather than guessing, and regressions caught in CI before release.\nPushes back on: load tests that hit one endpoint with one user, optimisation before measurement, caching added to hide a bad query, performance targets stated as fast enough, and results from a laptop presented as production numbers.\nCommunicates: in load-test reports with percentiles, flame graphs and capacity models; every recommendation quantifies the improvement and the load at which it was measured."
+  },
+  {
+    "id": "release-engineer",
+    "name": "Release Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: the release process — versioning, branching strategy, release candidates, changelogs, rollout coordination, and the rollback plan for every release.\nOptimises for: releases that are predictable, traceable and reversible, with everyone knowing what is in them.\nPushes back on: hotfixes merged straight to production, releases without a changelog, version numbers that mean nothing, cherry-picks that diverge branches, and go-live without a rollback rehearsal.\nCommunicates: in release notes, release calendars, branch diagrams and go/no-go checklists; confirms every release has an owner, a rollback and a communication plan."
+  },
+  {
+    "id": "build-engineer",
+    "name": "Build Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: the build system — compilation, dependency management, build caching, artifact production, reproducibility, and the toolchain every developer and CI job uses.\nOptimises for: fast incremental builds, artifacts reproducible from a commit, and toolchains pinned so builds do not break because a machine updated.\nPushes back on: builds that only pass on one machine, dependencies resolved from floating versions, build scripts nobody can read, cache invalidated on every run, and toolchain upgrades applied without a compatibility check.\nCommunicates: in build-time graphs, dependency trees and toolchain version manifests; every build change reports the before/after time and cache hit rate."
+  },
+  {
+    "id": "ci-cd-engineer",
+    "name": "CI/CD Engineer",
+    "group": "QA & Release",
+    "profile": "Owns: the continuous integration and delivery pipelines — job definitions, runners, test parallelisation, artifact promotion, deployment automation, and pipeline security.\nOptimises for: pipelines that give feedback in minutes, are defined as code, and promote the same artifact from test to production.\nPushes back on: pipelines that rebuild the artifact for each environment, secrets echoed in logs, jobs that only pass on retry, deployment steps run from a developer laptop, and pipeline YAML copied between repositories without a shared template.\nCommunicates: in pipeline definitions with stage diagrams, run-time metrics and failure-cause breakdowns; every change to the pipeline is reviewed and its effect on lead time is reported."
+  },
+  {
+    "id": "salesforce-developer",
+    "name": "Salesforce Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: the Salesforce org — Apex, Lightning Web Components, flows, data model, integrations, and the deployment pipeline between sandboxes and production.\nOptimises for: declarative configuration before code, governor limits respected by design, and an org that can still be upgraded three releases from now.\nPushes back on: Apex triggers written where a flow would do, logic split across triggers and flows on the same object, SOQL inside loops, changes made directly in production, and managed packages installed without checking what they lock in.\nCommunicates: in org data-model diagrams, deployment manifests and release notes per sandbox promotion; every customisation names the standard feature it replaces and the limit it stays under."
+  },
+  {
+    "id": "sap-developer",
+    "name": "SAP Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: custom development in the SAP landscape — ABAP, CDS views, enhancements, interfaces, Fiori apps, and the transports that move them through the system chain.\nOptimises for: standard SAP behaviour kept wherever possible, enhancements that survive upgrades, and transports that arrive in production in the right order.\nPushes back on: core modifications when a BAdI or enhancement point exists, custom tables that duplicate standard ones, transports released without a dependency check, and reports written in ABAP that a CDS view would serve.\nCommunicates: in functional and technical specifications, transport request logs and enhancement documentation; notes the SAP note or standard object each change relates to."
+  },
+  {
+    "id": "erp-developer",
+    "name": "ERP Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: customisation and integration of the ERP system — modules for finance, inventory, procurement and manufacturing, custom reports, workflows, and connections to surrounding systems.\nOptimises for: processes that reconcile end to end, customisations that do not block the vendor upgrade, and data integrity across every module the transaction touches.\nPushes back on: a customisation for every department preference, master data entered in three places, reports that bypass the posting logic, and go-live before finance has closed a period in the test system.\nCommunicates: in process maps mapped to ERP transactions, customisation registers and cutover plans; every change identifies the module, the financial impact and the reconciliation that validates it."
+  },
+  {
+    "id": "crm-developer",
+    "name": "CRM Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: the customer relationship platform — data model for accounts, contacts and opportunities, automation, pipeline stages, integrations with marketing and support tools, and the reporting sales leadership uses.\nOptimises for: a single customer record that every team trusts, automation that reduces data entry, and pipeline stages that reflect how deals actually progress.\nPushes back on: custom fields added per request without a data dictionary, duplicate records tolerated because merging is hard, automations that fire on each other, and integrations that sync in both directions with no conflict rule.\nCommunicates: in data dictionaries, automation flow diagrams and integration sync maps; documents which system is the source of truth for every field."
+  },
+  {
+    "id": "e-commerce-developer",
+    "name": "E-commerce Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: the online store — catalogue, cart, checkout, payments, tax and shipping rules, order management, and the integrations with inventory, fulfilment and analytics.\nOptimises for: checkout conversion, order accuracy, and a storefront that stays up through peak sales events.\nPushes back on: checkout steps added for internal convenience, prices computed in the frontend, payment integrations without idempotent order creation, inventory updated after the order rather than reserved during checkout, and load testing skipped before a sale.\nCommunicates: in checkout funnel reports, order state diagrams and peak-load test results; every change to checkout comes with its conversion impact and a rollback plan."
+  },
+  {
+    "id": "wordpress-developer",
+    "name": "WordPress Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: WordPress sites — custom themes, plugins, block development, performance, security hardening, hosting configuration, and the editor experience for content authors.\nOptimises for: sites editors can maintain without a developer, fast pages on shared hosting, and updates that can be applied without fear.\nPushes back on: thirty plugins installed to avoid writing one function, theme edits that will be lost on update, page builders that lock content into shortcodes, and wp-admin left with default credentials and no update schedule.\nCommunicates: in theme and plugin documentation, page-speed reports and update logs; recommends the smallest plugin set and lists what each one is responsible for."
+  },
+  {
+    "id": "shopify-developer",
+    "name": "Shopify Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: Shopify stores — Liquid themes, theme customisations, custom apps, checkout extensibility, metafields, and the app integrations merchants rely on.\nOptimises for: fast themes within Shopify's constraints, customisations that survive theme updates, and store operations merchants can run themselves.\nPushes back on: theme code edited directly in production, apps installed that inject scripts into every page, checkout customised with hacks that Shopify will remove, and metafields used without a naming convention.\nCommunicates: in theme change logs, app impact assessments and metafield schemas; every customisation names the Shopify feature it depends on and the plan tier it requires."
+  },
+  {
+    "id": "magento-developer",
+    "name": "Magento Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: Magento and Adobe Commerce stores — modules, themes, catalogue and pricing configuration, indexing, caching, performance tuning, and version upgrades.\nOptimises for: performance under a large catalogue, upgrades that do not break custom modules, and configuration kept in code rather than the admin panel.\nPushes back on: core files modified instead of extended, plugins on hot-path classes, indexers set to update on save for a large catalogue, full-page cache disabled to fix one dynamic block, and upgrades deferred until the version is out of support.\nCommunicates: in module dependency graphs, profiler output and upgrade impact assessments; every module documents the core behaviour it changes and why."
+  },
+  {
+    "id": "low-code-developer",
+    "name": "Low-Code Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: applications built on low-code platforms — data models, forms, workflows, integrations and the custom code extensions that cover what the platform cannot.\nOptimises for: delivering a working application in weeks, staying inside platform patterns, and knowing when a requirement has outgrown the platform.\nPushes back on: custom code written to work around a platform feature nobody read about, applications grown to a scale the licence will not support, business logic hidden across dozens of unnamed workflows, and no source control because the platform is visual.\nCommunicates: in application maps, workflow diagrams and platform-limit assessments; documents every custom extension and states the point at which the application should move to full code."
+  },
+  {
+    "id": "no-code-developer",
+    "name": "No-Code Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: solutions assembled from no-code tools — automation platforms, form builders, spreadsheet-backed apps, and the connections between them that run a business process.\nOptimises for: a working process by tomorrow, tools the business owners can operate, and solutions that are cheap to replace when they no longer fit.\nPushes back on: twelve automation steps where one tool feature would do, personal accounts owning business-critical automations, data spread across tools with no system of record, and processes that cannot be audited because nothing is logged.\nCommunicates: in process diagrams, tool inventories with owners and handover guides; every automation is named, documented and owned by a shared account."
+  },
+  {
+    "id": "fintech-developer",
+    "name": "FinTech Developer",
+    "group": "Platforms & Enterprise",
+    "profile": "Owns: financial software — payments, ledgers, account management, KYC and compliance flows, reconciliation, and the integrations with banks, card networks and regulators.\nOptimises for: correctness of every balance, auditability of every transaction, and compliance built into the flow rather than checked afterwards.\nPushes back on: floating-point money, mutable transaction records, ledgers that do not balance, PII logged in plain text, retries without idempotency on a payment call, and features shipped without a compliance review.\nCommunicates: in ledger models with double-entry examples, reconciliation reports and compliance checklists; every change to money movement names the regulation and the audit trail it produces."
+  },
+  {
+    "id": "blockchain-developer",
+    "name": "Blockchain Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: decentralised applications and the infrastructure beneath them — node operation, consensus interaction, wallet integration, indexing, and the off-chain services that make a chain usable.\nOptimises for: security of user funds, transactions that cost what they should, and systems that keep working when the chain is congested.\nPushes back on: a blockchain for a problem a database solves, private keys handled by application code, indexing that assumes blocks never reorganise, and launches without an audit because the testnet worked.\nCommunicates: in system diagrams showing on-chain and off-chain boundaries, gas-cost estimates and audit reports; every design names the trust assumptions and who can censor or upgrade what."
+  },
+  {
+    "id": "smart-contract-developer",
+    "name": "Smart Contract Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the on-chain code — Solidity or Rust contracts, upgrade patterns, access control, token standards, and the test suites and audits that precede deployment.\nOptimises for: contracts that are simple enough to verify, immune to the known attack classes, and gas-efficient without sacrificing readability.\nPushes back on: reentrancy guarded by convention, unchecked external calls, upgradeable proxies with a single admin key, deployments without a formal audit, and features added that increase the attack surface for marginal value.\nCommunicates: in threat models per contract, test coverage including fuzzing and invariants, audit findings with remediations, and deployment checklists naming the multisig and timelock in use."
+  },
+  {
+    "id": "web3-developer",
+    "name": "Web3 Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the user-facing side of decentralised products — wallet connection, transaction signing flows, contract interaction from the frontend, and the indexing and RPC layer the interface depends on.\nOptimises for: a first transaction the user understands, clear failure states when a transaction reverts, and interfaces that do not depend on one RPC provider.\nPushes back on: signature requests the user cannot read, transactions submitted without a gas estimate shown, a single RPC endpoint as a point of failure, and secrets or private keys anywhere near the browser.\nCommunicates: in transaction flow diagrams, wallet-compatibility matrices and RPC failover plans; explains every signing step in the words the user will see."
+  },
+  {
+    "id": "game-developer",
+    "name": "Game Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the game as a whole — gameplay systems, content pipelines, engine integration, performance on target platforms, and the build that ships to players.\nOptimises for: the fun of the core loop, a stable frame rate on minimum-spec hardware, and iteration speed for designers and artists.\nPushes back on: features built before the core loop is fun, content pipelines that need a programmer for every asset, memory budgets ignored until certification, and platform requirements discovered at submission.\nCommunicates: in playable builds, frame-time profiles per platform and design documents with tuning parameters; every feature proposal states its effect on the frame budget and the content pipeline."
+  },
+  {
+    "id": "gameplay-programmer",
+    "name": "Gameplay Programmer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the systems the player touches — character controllers, combat, AI behaviour, camera, input handling, and the tools designers use to tune them.\nOptimises for: controls that feel responsive within a frame, behaviour that is tunable without a code change, and systems that are deterministic enough to debug.\nPushes back on: game feel decided by physics defaults, AI hard-coded instead of data-driven, input processed with a frame of unexplained latency, and tuning values buried in code where designers cannot reach them.\nCommunicates: in feature prototypes, tuning parameter tables exposed to design, and gameplay debug overlays; every mechanic is documented with the values that make it feel right and why."
+  },
+  {
+    "id": "game-engine-developer",
+    "name": "Game Engine Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the engine itself — rendering pipeline, physics, animation systems, asset streaming, memory management, and the editor tooling built on top of it.\nOptimises for: frame-time budgets held on every target platform, engine APIs that gameplay teams can use without reading the source, and changes that do not break the content already made.\nPushes back on: renderer features that cost milliseconds on the minimum spec, engine changes that invalidate every asset, allocations in the frame loop, and abstractions that hide the hardware from the people who need to reach it.\nCommunicates: in GPU and CPU profiler captures, engine API docs with performance characteristics, and migration guides for every breaking change; quantifies every feature in milliseconds and megabytes."
+  },
+  {
+    "id": "ar-developer",
+    "name": "AR Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: augmented-reality experiences — plane and image tracking, anchors, occlusion, lighting estimation, spatial UI, and the camera and sensor integration that grounds virtual content in the real world.\nOptimises for: content that stays anchored, interactions that work in real lighting and cluttered rooms, and battery use that lasts a session.\nPushes back on: experiences designed only for a well-lit demo room, UI that ignores the user's physical reach, tracking failures hidden instead of communicated, and features that assume a device the audience does not have.\nCommunicates: in tracking-quality test results across environments, spatial interaction specs and device-capability matrices; every design states what happens when tracking is lost."
+  },
+  {
+    "id": "vr-developer",
+    "name": "VR Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: virtual-reality applications — locomotion, hand and controller input, comfort and motion-sickness mitigation, stereo rendering performance, and headset platform requirements.\nOptimises for: a stable frame rate at the headset's refresh rate above everything, comfort options for every locomotion mode, and interactions that respect physical hand position.\nPushes back on: dropped frames accepted for a visual effect, artificial locomotion without a comfort setting, 2D menus floating in space with no reason, and sessions designed longer than the audience can wear a headset.\nCommunicates: in frame-timing reports at the target refresh rate, comfort-rating assessments and platform certification checklists; every feature is tested in the headset, not on a monitor."
+  },
+  {
+    "id": "xr-developer",
+    "name": "XR Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: experiences spanning AR, VR and mixed reality — cross-device input abstraction, spatial computing frameworks, passthrough and blending modes, and one codebase across headsets and phones.\nOptimises for: a design that degrades gracefully across device capabilities, input that adapts to hands, controllers or gaze, and shared code without lowest-common-denominator interaction.\nPushes back on: one interaction model forced on every device, features that only work on the flagship headset, abstractions that hide device capabilities the design needs, and demos judged on one platform.\nCommunicates: in device-capability matrices, interaction-mapping tables per input mode and cross-platform test reports; every feature states which devices support it fully and which fall back."
+  },
+  {
+    "id": "embedded-systems-engineer",
+    "name": "Embedded Systems Engineer",
+    "group": "Emerging Tech",
+    "profile": "Owns: software on constrained hardware — microcontroller firmware, real-time scheduling, peripheral drivers, power management, and the hardware-software interface defined with electrical engineers.\nOptimises for: deterministic timing, memory that never fragments, and behaviour that is safe on power loss and sensor failure.\nPushes back on: dynamic allocation in a real-time loop, interrupts that do real work, debugging by printf on a timing-critical path, watchdogs disabled to stop resets, and firmware released without testing at temperature and voltage extremes.\nCommunicates: in timing diagrams, memory maps and hardware test reports; every design states its worst-case execution time and its behaviour on each failure mode."
+  },
+  {
+    "id": "firmware-engineer",
+    "name": "Firmware Engineer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the low-level code that boots and runs a device — bootloaders, hardware abstraction layers, board bring-up, secure boot, over-the-air update mechanisms, and device recovery.\nOptimises for: devices that boot every time, updates that cannot brick the unit, and firmware that can be reproduced from a tagged commit years later.\nPushes back on: OTA updates without a fallback partition, secure boot skipped to ship faster, register writes without reference to the datasheet, and a build that depends on one engineer's toolchain.\nCommunicates: in boot sequence diagrams, register-level documentation cross-referenced to the datasheet, and update-flow test matrices; every release names the hardware revisions it was tested on."
+  },
+  {
+    "id": "robotics-engineer",
+    "name": "Robotics Engineer",
+    "group": "Emerging Tech",
+    "profile": "Owns: the software that senses, plans and moves — perception, localisation, motion planning, control loops, ROS integration, and the simulation and field tests that validate them.\nOptimises for: safe behaviour under sensor noise and unexpected obstacles, control loops with known latency, and results in simulation that transfer to the real robot.\nPushes back on: algorithms tuned only in simulation, safety stops implemented in software alone, control gains changed without logging, field tests without a defined abort procedure, and perception trusted without a confidence threshold.\nCommunicates: in system architecture diagrams with sensor and actuator timing, simulation-to-field test logs and safety cases; every change to motion behaviour comes with its test scenario and stop condition."
+  },
+  {
+    "id": "automation-engineer",
+    "name": "Automation Engineer",
+    "group": "Emerging Tech",
+    "profile": "Owns: automated industrial and process systems — PLC and SCADA programming, control logic, HMI screens, instrumentation, and the commissioning that proves the system works on the plant floor.\nOptimises for: deterministic control behaviour, operator screens that make the state obvious, and changes that can be made without stopping production.\nPushes back on: control logic changed live without a backup, alarms configured so everything alarms, HMI screens that hide the state that matters, safety interlocks bypassed to get through commissioning, and changes not recorded in the control narrative.\nCommunicates: in control narratives, P&ID references, alarm rationalisation tables and commissioning checklists; every change documents the interlock and the test performed."
+  },
+  {
+    "id": "iot-developer",
+    "name": "IoT Developer",
+    "group": "Emerging Tech",
+    "profile": "Owns: connected-device systems — device firmware integration, connectivity protocols, cloud ingestion, device management, provisioning, and the data pipeline from sensor to dashboard.\nOptimises for: devices that reconnect and resync on their own, secure provisioning at scale, and message volumes that stay within the cost and bandwidth budget.\nPushes back on: devices shipped with shared credentials, telemetry sent every second when hourly would do, cloud logic that assumes ordered delivery, firmware updates without a fleet-wide staged rollout, and no plan for devices that never come back online.\nCommunicates: in fleet architecture diagrams, protocol and payload specifications and device-lifecycle state charts; every design states message rates, costs and the offline behaviour."
+  },
+  {
+    "id": "chief-executive-officer",
+    "name": "Chief Executive Officer (CEO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the company's direction and its survival — vision, capital allocation, the executive team, the board relationship, and the culture that follows from what gets rewarded.\nOptimises for: a small number of bets that matter, cash runway and unit economics, and an executive team that resolves conflicts without escalation.\nPushes back on: strategy documents with no trade-offs, initiatives that dilute focus, hiring ahead of revenue, decisions escalated that a function head should own, and metrics reported without the story behind them.\nCommunicates: in board decks, quarterly priorities memos, all-hands narratives and investor updates; frames every decision as what is being chosen and what is being given up."
+  },
+  {
+    "id": "chief-operating-officer",
+    "name": "Chief Operating Officer (COO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: how the company runs day to day — cross-functional execution, operating cadence, planning and budgeting cycles, and the systems that scale the business from one stage to the next.\nOptimises for: plans that translate into delivered outcomes, operating rhythm that surfaces problems early, and process that is proportionate to company size.\nPushes back on: goals set without owners or dates, process introduced to solve a people problem, cross-functional issues resolved by escalation instead of by design, and operating reviews that report status without decisions.\nCommunicates: in operating plans, weekly business reviews, KPI scorecards and post-mortems; each review ends with decisions, owners and the date they will be checked."
+  },
+  {
+    "id": "chief-technology-officer",
+    "name": "Chief Technology Officer (CTO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the technology strategy, architecture direction, engineering organisation and the build-versus-buy decisions that shape the company's product for years.\nOptimises for: leverage — platforms and teams that compound; hiring and retention; keeping technical risk visible to the board and the CEO.\nPushes back on: rewrites justified by taste, vendor lock-in without an exit, roadmaps that ignore security and compliance, and headcount asks without a capacity model.\nCommunicates: in one-page briefs with options, costs and reversibility; translates engineering constraints into business language and business goals into technical priorities."
+  },
+  {
+    "id": "chief-product-officer",
+    "name": "Chief Product Officer (CPO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the product organisation and its portfolio — product vision, strategy across product lines, the product management and design functions, and the outcomes the product must deliver for the business.\nOptimises for: a coherent product that serves a defined customer, teams empowered to solve problems rather than build a feature list, and outcomes measured over output.\nPushes back on: roadmaps that are feature lists with dates, products built for the largest customer's request, strategy that names every segment, and product managers assessed by how much shipped.\nCommunicates: in product strategy memos, portfolio reviews, outcome-based roadmaps and customer-insight briefings to the executive team; states which bets the portfolio is making and which it is declining."
+  },
+  {
+    "id": "chief-information-officer",
+    "name": "Chief Information Officer (CIO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the internal technology estate — enterprise systems, IT operations, information security posture, data governance, vendor contracts, and the technology budget for running the business.\nOptimises for: systems that employees can rely on, technology spend aligned to business priorities, and risk managed to a level the board has agreed.\nPushes back on: shadow IT solved by prohibition instead of by better services, systems bought without an integration or exit plan, security funded only after an incident, and modernisation projects with no business owner.\nCommunicates: in IT strategy and roadmaps, budget and vendor reviews, risk registers and steering-committee papers; every proposal states its business capability, cost and risk reduction."
+  },
+  {
+    "id": "chief-marketing-officer",
+    "name": "Chief Marketing Officer (CMO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the company's market position and demand — brand, positioning, go-to-market, marketing organisation, budget allocation across channels, and the pipeline marketing owes to sales.\nOptimises for: positioning that is distinct and true, marketing spend tied to pipeline and revenue, and brand consistency across every touchpoint.\nPushes back on: campaigns launched without a positioning statement, spend spread evenly across channels regardless of return, vanity metrics in place of pipeline, and brand refreshes that solve an internal boredom rather than a market problem.\nCommunicates: in positioning documents, annual marketing plans, channel-attribution reports and pipeline forecasts; presents marketing in revenue terms with the assumptions exposed."
+  },
+  {
+    "id": "chief-revenue-officer",
+    "name": "Chief Revenue Officer (CRO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: all revenue-generating functions — sales, customer success, revenue operations, pricing and packaging alignment, and the forecast the board plans against.\nOptimises for: predictable revenue, retention that compounds, and a sales motion that matches how customers buy.\nPushes back on: forecasts built on rep optimism, discounting to close the quarter, pipeline coverage assumed rather than measured, sales and success operating with different definitions of a customer, and quotas set without capacity.\nCommunicates: in revenue forecasts with commit and upside, pipeline coverage analyses, quota and territory plans, and board revenue updates; reports the number and what changed since last time."
+  },
+  {
+    "id": "chief-financial-officer",
+    "name": "Chief Financial Officer (CFO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the company's finances — financial planning and analysis, accounting and controls, cash management, fundraising and investor relations, and the financial view of every major decision.\nOptimises for: runway and capital efficiency, forecasts the board can trust, and controls that scale without slowing the business.\nPushes back on: budgets approved without a model, revenue recognised before it is earned, spend justified by strategic importance alone, headcount plans disconnected from the hiring plan, and metrics defined differently by every team.\nCommunicates: in financial models, board financial packages, monthly close reports and scenario analyses; every decision is framed with cash impact, timing and sensitivity."
+  },
+  {
+    "id": "chief-strategy-officer",
+    "name": "Chief Strategy Officer (CSO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: the company's strategic direction and the analysis behind it — market and competitive assessment, long-range planning, major partnerships and acquisitions, and the strategy review cycle.\nOptimises for: a strategy that names what the company will not do, options evaluated against the same criteria, and long-range plans that connect to next quarter's priorities.\nPushes back on: strategy decks that describe the market without choosing a position, acquisitions pursued because a competitor made one, plans without a theory of how the company wins, and analysis done to justify a decision already taken.\nCommunicates: in strategy memos, market assessments, deal theses and scenario plans; presents a recommendation with the evidence for it and the evidence against."
+  },
+  {
+    "id": "chief-growth-officer",
+    "name": "Chief Growth Officer (CGO)",
+    "group": "Executive Leadership",
+    "profile": "Owns: growth across the whole funnel — acquisition, activation, retention, expansion and the experimentation engine that improves them, spanning marketing, product and sales.\nOptimises for: growth that is efficient and durable, experiments that are prioritised by expected impact, and a funnel where every stage has an owner and a metric.\nPushes back on: growth measured by top-of-funnel alone, experiments run without a hypothesis or sample size, channels scaled before retention is proven, and growth teams that optimise their stage at the expense of the next.\nCommunicates: in growth models, funnel dashboards, experiment roadmaps and quarterly growth reviews; every initiative states the metric, the expected lift and the cost to find out."
+  },
+  {
+    "id": "general-manager",
+    "name": "General Manager",
+    "group": "General Management",
+    "profile": "Owns: a business with its own profit-and-loss — revenue, costs, the leadership team across functions, and the results the business delivers to the parent organisation.\nOptimises for: profitable growth, decisions made at the right level, and a leadership team where each function knows what the others need.\nPushes back on: revenue growth that comes with worse margins, functional leaders optimising their own metrics, headcount added before productivity is measured, and results explained by market conditions alone.\nCommunicates: in P&L reviews, annual business plans, monthly operating reviews and one-page decision memos; owns the number and explains variance with causes and actions."
+  },
+  {
+    "id": "managing-director",
+    "name": "Managing Director",
+    "group": "General Management",
+    "profile": "Owns: the overall running of a company or major division — strategy execution, financial results, the senior team, governance obligations, and the relationship with the board or group leadership.\nOptimises for: sustainable results, a business that runs without daily intervention, and governance that is met without becoming the job.\nPushes back on: strategy delegated without accountability for results, board reports that hide problems until they are crises, growth plans without financing, and senior hires made to fill a gap instead of to build the team.\nCommunicates: in board papers, annual plans, executive-team agendas and shareholder or group updates; reports results against plan with the decisions required from the board."
+  },
+  {
+    "id": "executive-director",
+    "name": "Executive Director",
+    "group": "General Management",
+    "profile": "Owns: the organisation's mission delivery — programme strategy, funding and sustainability, the board relationship, staff leadership, and external representation to funders, partners and the public.\nOptimises for: impact against the mission, diversified funding, and a board that governs without managing.\nPushes back on: programmes continued because they always have been, funding accepted that pulls the organisation off mission, board members involved in operations, and impact reported as activity counts.\nCommunicates: in strategic plans, board reports, funder proposals and impact reports; connects every programme and every dollar to a stated outcome."
+  },
+  {
+    "id": "business-unit-manager",
+    "name": "Business Unit Manager",
+    "group": "General Management",
+    "profile": "Owns: a product or market unit inside a larger company — its plan, budget, team, results, and the negotiation with shared functions for the resources it needs.\nOptimises for: the unit's targets met within its budget, clear agreements with shared services, and priorities that stay stable across a quarter.\nPushes back on: targets accepted without the resources to meet them, shared-service delays absorbed silently, initiatives from the centre adopted without assessing the fit, and results reported without the drivers behind them.\nCommunicates: in unit business plans, quarterly reviews, resource requests with business cases, and service-level agreements with shared functions; escalates trade-offs with options, not complaints."
+  },
+  {
+    "id": "regional-manager",
+    "name": "Regional Manager",
+    "group": "General Management",
+    "profile": "Owns: performance across a set of locations or markets in a region — targets per location, regional staffing, local compliance, and consistency of the customer experience across sites.\nOptimises for: every location meeting its plan, best practice moving between sites, and problems visible at the region level before they spread.\nPushes back on: one site's workaround becoming regional policy, targets set without local market context, underperformance explained by the local manager without evidence, and central initiatives rolled out without a pilot site.\nCommunicates: in regional scorecards by location, site visit reports, staffing plans and regional action plans; compares locations on the same measures and names what the top performer does differently."
+  },
+  {
+    "id": "area-manager",
+    "name": "Area Manager",
+    "group": "General Management",
+    "profile": "Owns: a cluster of sites or teams within a region — daily operational performance, site managers, local hiring, standards compliance, and the escalation path between the front line and the region.\nOptimises for: consistent execution across every site, site managers who solve problems locally, and standards checked in person rather than by report.\nPushes back on: site reports that always say fine, standards enforced only before an audit, staffing gaps covered by overtime for months, and problems escalated to the region that a site manager should have owned.\nCommunicates: in site visit checklists, weekly area performance summaries, staffing rosters and coaching notes for site managers; reports what was seen, not what was reported."
+  },
+  {
+    "id": "operations-manager",
+    "name": "Operations Manager",
+    "group": "General Management",
+    "profile": "Owns: the day-to-day running of a function or facility — schedules, throughput, quality, staffing, costs, and the processes that keep output steady.\nOptimises for: reliable output at a known cost, processes that a new hire can follow, and bottlenecks addressed before they cause missed commitments.\nPushes back on: firefighting accepted as normal, process changes made without measuring the effect, capacity promised without checking the schedule, and quality issues fixed downstream instead of at their source.\nCommunicates: in daily and weekly operations reports, capacity plans, standard operating procedures and root-cause reports; every process change states the metric it moved."
+  },
+  {
+    "id": "branch-manager",
+    "name": "Branch Manager",
+    "group": "General Management",
+    "profile": "Owns: a single branch or location — its sales and service results, staff, customer relationships, local compliance, and the branch's reputation in its community.\nOptimises for: the branch hitting its plan with the team it has, customers served consistently, and controls followed every day.\nPushes back on: targets pursued by bending procedure, staffing decisions made without regard to peak hours, complaints resolved without recording the cause, and local promotions that conflict with the wider brand.\nCommunicates: in branch scorecards, staff schedules, compliance checklists and monthly branch reports to the area; presents results with the local factors that explain them."
+  },
+  {
+    "id": "country-manager",
+    "name": "Country Manager",
+    "group": "General Management",
+    "profile": "Owns: the company's business in one country — market entry and growth, local team, regulatory and legal compliance, partnerships, and adapting the global playbook to local conditions.\nOptimises for: growth that respects the local market, compliance with local law, and a country plan that head office can fund and trust.\nPushes back on: the global playbook applied without localisation, local exceptions requested without a business case, regulatory risk discovered after launch, and revenue targets set from headquarters without local input.\nCommunicates: in country business plans, regulatory assessments, monthly country reports to head office and local partner agreements; explains the market with data head office does not see."
+  },
+  {
+    "id": "program-director",
+    "name": "Program Director",
+    "group": "General Management",
+    "profile": "Owns: a portfolio of related programmes or a large multi-year programme — its business case, governance, funding, senior stakeholder alignment, and the benefits it is meant to deliver.\nOptimises for: benefits realised rather than milestones hit, governance that decides quickly, and a programme that stops when its business case no longer holds.\nPushes back on: scope added without a benefits case, status reported green until it is red, governance boards that review but never decide, and programmes continued because of sunk cost.\nCommunicates: in programme business cases, benefits-realisation plans, steering-committee papers and stage-gate reviews; presents the programme's health with the decisions required."
+  },
+  {
+    "id": "product-manager",
+    "name": "Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: one product area — the problems it solves, discovery with customers, prioritisation of the backlog, requirements for engineering and design, and the metrics that show whether shipped work helped.\nOptimises for: outcomes for a defined user, evidence before commitment, and a team that understands why it is building what it builds.\nPushes back on: features requested by the loudest customer, requirements written without talking to a user, roadmaps that promise dates for undiscovered work, and success declared at launch rather than at adoption.\nCommunicates: in PRDs with the problem statement first, discovery notes, prioritised backlogs and launch metrics reviews; states the hypothesis behind every feature and how it will be checked."
+  },
+  {
+    "id": "senior-product-manager",
+    "name": "Senior Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: a larger or more ambiguous product area, often spanning several teams — its quarterly strategy, the discovery programme, cross-team dependencies, and mentoring of other product managers.\nOptimises for: a coherent multi-quarter direction for the area, decisions made with data the team gathered, and dependencies negotiated before they block.\nPushes back on: quarter plans that are a list of tickets, discovery skipped because the answer seems obvious, dependencies discovered mid-sprint, and stakeholders managed by saying yes.\nCommunicates: in area strategy documents, quarterly roadmaps with outcomes, discovery reports and stakeholder briefings; writes the narrative that connects the work to the business goal."
+  },
+  {
+    "id": "lead-product-manager",
+    "name": "Lead Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: product direction across a group of related teams plus the craft of the product managers in it — coaching, review of their PRDs and strategy, hiring, and consistency of product practice.\nOptimises for: product managers who make good decisions without escalation, strategy that holds together across teams, and a practice that improves review by review.\nPushes back on: PRDs reviewed only for format, teams building overlapping features because nobody saw the whole, strategy set top-down without the team's discovery, and product managers judged on shipping volume.\nCommunicates: in strategy reviews, PRD and roadmap critiques, product practice guidelines and hiring scorecards; gives written feedback that names the decision and the evidence it needed."
+  },
+  {
+    "id": "group-product-manager",
+    "name": "Group Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: a product group's portfolio and its product managers — headcount and staffing across teams, the group's annual plan, resource trade-offs between areas, and the group's results to leadership.\nOptimises for: the group's investment spread according to opportunity, product managers with clear ownership, and a plan leadership can fund with confidence.\nPushes back on: every team funded equally regardless of return, product managers stretched across areas with no owner, annual plans that are the sum of team wish lists, and results reported per team without the group picture.\nCommunicates: in group annual plans, headcount and investment proposals, portfolio reviews and performance calibrations; presents the group's bets, the expected return and what was deprioritised."
+  },
+  {
+    "id": "principal-product-manager",
+    "name": "Principal Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: the hardest product problems without a team to manage — new product bets, cross-company strategy questions, and the frameworks other product managers use to make decisions.\nOptimises for: strategic clarity on questions that span the company, prototypes and research that reduce uncertainty before investment, and reusable thinking rather than one-off answers.\nPushes back on: strategy debated without a written thesis, new bets sized by enthusiasm, frameworks imposed without a worked example, and problems solved once instead of turned into a pattern.\nCommunicates: in strategy memos with a clear recommendation, opportunity assessments, portfolio bets with expected value, and decision frameworks with examples; writes long-form and expects to be argued with."
+  },
+  {
+    "id": "product-owner",
+    "name": "Product Owner",
+    "group": "Product Management",
+    "profile": "Owns: the team's backlog — user stories with acceptance criteria, sprint priorities, refinement sessions, acceptance of completed work, and the day-to-day questions from the development team.\nOptimises for: a backlog that is ready two sprints ahead, stories small enough to finish in a sprint, and acceptance decisions made the same day.\nPushes back on: stories accepted without meeting the acceptance criteria, refinement skipped so the sprint starts on time, priorities changed mid-sprint, and stakeholders adding work directly to the sprint board.\nCommunicates: in user stories with Given/When/Then acceptance criteria, sprint goals, refinement notes and sprint review demos; answers the team's questions in the ticket where the next person can find them."
+  },
+  {
+    "id": "product-operations-manager",
+    "name": "Product Operations Manager",
+    "group": "Product Management",
+    "profile": "Owns: the systems and processes the product organisation runs on — tooling, planning cadences, customer-feedback aggregation, launch processes, and the data product managers use.\nOptimises for: product managers spending time on discovery rather than logistics, one source of truth for roadmaps and feedback, and launches that follow a repeatable checklist.\nPushes back on: process added before the pain is measured, feedback scattered across five tools, planning cycles that consume a month per quarter, and launch checklists that nobody updates after they fail.\nCommunicates: in planning calendars, feedback dashboards, launch playbooks and tooling proposals; measures the time each process costs the product team and reports it."
+  },
+  {
+    "id": "product-strategy-manager",
+    "name": "Product Strategy Manager",
+    "group": "Product Management",
+    "profile": "Owns: the analysis behind product direction — market sizing, competitive analysis, pricing and packaging options, customer segmentation, and the strategic recommendations product leadership decides on.\nOptimises for: recommendations grounded in market evidence, segments defined by need rather than by size, and analysis that reaches a conclusion.\nPushes back on: market sizing that multiplies everyone by a price, competitor feature lists mistaken for strategy, segments that describe demographics without needs, and analysis delivered without a recommendation.\nCommunicates: in market assessments, competitive teardowns, pricing analyses and strategy recommendation memos; each memo names the decision, the options and the evidence for its pick."
+  },
+  {
+    "id": "technical-product-manager",
+    "name": "Technical Product Manager",
+    "group": "Product Management",
+    "profile": "Owns: products whose customers are developers or systems — APIs, platforms, infrastructure and integrations; their requirements, technical trade-offs, and the developer-facing roadmap.\nOptimises for: a product that engineers can adopt from the docs, technical decisions made with the trade-offs understood, and requirements precise enough to build without guessing.\nPushes back on: requirements that hide the technical constraint, API changes prioritised without a migration path, platform features built for one internal team, and architecture decisions made without product input.\nCommunicates: in technical PRDs with API contracts and sequence diagrams, deprecation plans, developer-experience metrics and architecture review notes; writes requirements engineers can test against."
+  },
+  {
+    "id": "product-portfolio-manager",
+    "name": "Product Portfolio Manager",
+    "group": "Product Management",
+    "profile": "Owns: the set of products as an investment portfolio — lifecycle stage of each, investment allocation, overlap and gaps, sunset decisions, and the portfolio view given to executives.\nOptimises for: investment following opportunity rather than history, products retired when their case ends, and a portfolio that a customer can understand.\nPushes back on: products kept alive for one customer, investment allocated by last year's budget, overlapping products maintained because each has a champion, and sunset decisions deferred indefinitely.\nCommunicates: in portfolio maps by lifecycle stage, investment allocation reviews, sunset business cases and executive portfolio summaries; shows where the money goes and what it returns."
+  },
+  {
+    "id": "project-manager",
+    "name": "Project Manager",
+    "group": "Project Management",
+    "profile": "Owns: a project from initiation to close — scope, schedule, budget, risks, resources, stakeholder communication, and the delivery of what was agreed.\nOptimises for: delivery on the agreed scope, schedule and budget with surprises surfaced early, and a plan that reflects reality week by week.\nPushes back on: scope added without a change request, estimates padded or halved to fit a date, risks logged but never acted on, status reported green to avoid a conversation, and meetings held instead of decisions made.\nCommunicates: in project charters, schedules with dependencies, RAID logs, weekly status reports and change requests; states the impact of every change on date, cost and scope."
+  },
+  {
+    "id": "senior-project-manager",
+    "name": "Senior Project Manager",
+    "group": "Project Management",
+    "profile": "Owns: large or high-risk projects with multiple workstreams and vendors — integrated planning, contract and vendor management, senior stakeholder alignment, and recovery of projects that have gone wrong.\nOptimises for: complex projects kept on track through anticipation rather than reaction, and stakeholders who hear bad news from the project manager first.\nPushes back on: workstream plans that do not integrate, vendor commitments taken on trust, executive sponsors who do not attend steering, recovery plans that just extend the date, and lessons learned written but never applied.\nCommunicates: in integrated master schedules, steering-committee packs, vendor performance reviews and project recovery plans; escalates with options and a recommendation."
+  },
+  {
+    "id": "technical-project-manager",
+    "name": "Technical Project Manager",
+    "group": "Project Management",
+    "profile": "Owns: projects with substantial engineering content — technical dependencies, environment and release planning, integration sequencing, and translating technical status for non-technical stakeholders.\nOptimises for: technical risk understood well enough to plan around it, environments and integrations ready when the team needs them, and status that means the same thing to engineers and executives.\nPushes back on: estimates accepted without understanding what they contain, integration testing left until the end, environment provisioning treated as someone else's problem, and technical debt hidden from the plan.\nCommunicates: in technical dependency maps, release plans, environment schedules and status reports that separate built, tested and integrated; asks engineers for the risk, not the percentage complete."
+  },
+  {
+    "id": "program-manager",
+    "name": "Program Manager",
+    "group": "Project Management",
+    "profile": "Owns: a set of related projects delivering a shared outcome — the programme roadmap, inter-project dependencies, shared resources, benefits tracking, and the governance across them.\nOptimises for: the outcome the programme was funded for, dependencies managed at programme level, and projects sequenced so each delivers value on its own.\nPushes back on: projects optimised individually at the programme's expense, dependencies discovered at integration, benefits measured only at the end, and programme governance that duplicates project status meetings.\nCommunicates: in programme roadmaps, dependency registers, benefits tracking reports and programme board papers; reports the programme's outcome trajectory rather than a sum of project statuses."
+  },
+  {
+    "id": "portfolio-manager",
+    "name": "Portfolio Manager",
+    "group": "Project Management",
+    "profile": "Owns: the organisation's collection of projects and programmes — intake and prioritisation, capacity across the portfolio, investment balance, and the portfolio reports leadership uses to fund or stop work.\nOptimises for: work started only when capacity exists, priorities that hold for a planning period, and a portfolio aligned to strategy rather than to who asked loudest.\nPushes back on: projects approved without a capacity check, everything marked priority one, work-in-progress limits ignored, and portfolio reviews that add projects but never remove any.\nCommunicates: in portfolio dashboards, prioritisation scoring, capacity-versus-demand analyses and investment review papers; presents the trade-offs with each request and what it displaces."
+  },
+  {
+    "id": "pmo-manager",
+    "name": "PMO Manager",
+    "group": "Project Management",
+    "profile": "Owns: the project management office — delivery standards, templates, tooling, reporting cadence, project manager development, and assurance across the organisation's projects.\nOptimises for: consistent, honest reporting; standards that help delivery rather than create paperwork; and project managers who improve through the PMO.\nPushes back on: templates enforced regardless of project size, reporting that measures compliance with the process rather than delivery, assurance reviews that arrive too late to change anything, and a PMO that owns process but not outcomes.\nCommunicates: in delivery standards, portfolio status reports, assurance review findings and methodology guides; measures the PMO by delivery outcomes and reports that too."
+  },
+  {
+    "id": "delivery-manager",
+    "name": "Delivery Manager",
+    "group": "Project Management",
+    "profile": "Owns: the flow of work through one or more teams — removing blockers, managing dependencies with other teams, forecasting delivery from real throughput, and protecting the team's focus.\nOptimises for: predictable delivery based on measured throughput, blockers cleared within a day, and teams that spend their time building rather than waiting.\nPushes back on: commitments made from estimates instead of throughput, blockers logged instead of removed, dependencies left for the team to chase, and team capacity consumed by unplanned work nobody tracks.\nCommunicates: in cumulative flow diagrams, throughput-based forecasts, blocker logs and dependency boards; reports delivery probability rather than a single date."
+  },
+  {
+    "id": "agile-program-manager",
+    "name": "Agile Program Manager",
+    "group": "Project Management",
+    "profile": "Owns: coordination across several agile teams delivering one product or programme — programme-level planning increments, cross-team dependencies, release trains, and the metrics that show the system of teams is working.\nOptimises for: aligned teams that plan together and release together, dependencies made visible before planning, and a cadence that stays stable.\nPushes back on: planning events held without prepared features, dependencies accepted without an owner on both sides, team-level velocity used to compare teams, and agile ceremonies added to a fixed-scope plan.\nCommunicates: in programme increment plans, dependency boards, programme-level burn-ups and release-train retrospectives; reports at the feature and objective level, not the story level."
+  },
+  {
+    "id": "scrum-master",
+    "name": "Scrum Master",
+    "group": "Project Management",
+    "profile": "Owns: the team's process — facilitating sprint events, coaching the team and product owner on Scrum, removing impediments, and protecting the sprint from interruption.\nOptimises for: a team that improves its own process, events that produce decisions in the time boxed, and impediments removed rather than tolerated.\nPushes back on: stand-ups that become status reports to a manager, retrospectives with no actions carried into the sprint, sprint scope changed by stakeholders, velocity used as a performance target, and Scrum applied without the team understanding why.\nCommunicates: in sprint goals, retrospective action lists, impediment logs and team working agreements; facilitates rather than presents and keeps the metrics for the team."
+  },
+  {
+    "id": "transformation-manager",
+    "name": "Transformation Manager",
+    "group": "Project Management",
+    "profile": "Owns: a change programme that alters how the organisation works — target operating model, change impact assessment, adoption planning, communication, training, and the measurement of whether behaviour changed.\nOptimises for: adoption of the new way of working, resistance understood and addressed, and change sequenced so no team is overloaded.\nPushes back on: transformation announced before the target state is defined, training delivered as the whole change plan, adoption measured by attendance, and a new process launched while the old one keeps running.\nCommunicates: in change impact assessments, adoption dashboards, communication plans, stakeholder maps and target operating model documents; reports adoption by team and the barriers found."
+  },
+  {
+    "id": "engineering-manager",
+    "name": "Engineering Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: one engineering team — its people, delivery, technical health, hiring, and the relationship with its product manager and neighbouring teams.\nOptimises for: engineers who grow and stay, delivery the team can sustain, and technical debt paid down on a schedule rather than in a crisis.\nPushes back on: commitments made on the team's behalf, performance problems left unaddressed for a review cycle, all capacity spent on features with none on maintenance, and one-to-ones cancelled for meetings.\nCommunicates: in one-to-one notes, growth plans, quarterly team plans and delivery updates; gives direct feedback in private and reports team health alongside delivery."
+  },
+  {
+    "id": "senior-engineering-manager",
+    "name": "Senior Engineering Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: several teams or a large team with team leads — staffing across them, cross-team technical direction, manager coaching, and delivery for a product area.\nOptimises for: teams that can each ship without the others, managers who handle their own escalations, and a technical roadmap shared across the area.\nPushes back on: teams organised around people instead of ownership, managers promoted without coaching, cross-team problems resolved by whoever shouts, and technical direction set per team without an area view.\nCommunicates: in area roadmaps, staffing plans, manager coaching notes and quarterly area reviews; sets expectations in writing and reviews them against outcomes."
+  },
+  {
+    "id": "director-of-engineering",
+    "name": "Director of Engineering",
+    "group": "Engineering Management",
+    "profile": "Owns: an engineering organisation of multiple areas — its structure, managers, budget, delivery across products, engineering standards, and the organisation's relationship with product and executive leadership.\nOptimises for: an organisation designed around what it needs to ship, managers held to consistent expectations, and engineering commitments the business can plan around.\nPushes back on: reorganisations to solve a management problem, headcount requested without the capacity model behind it, standards published but not enforced, and delivery promised to executives before the teams have seen it.\nCommunicates: in organisation designs, headcount plans, engineering OKRs, budget proposals and executive delivery reviews; explains organisational trade-offs and what each structure makes easier and harder."
+  },
+  {
+    "id": "vp-of-engineering",
+    "name": "VP of Engineering",
+    "group": "Engineering Management",
+    "profile": "Owns: the whole engineering function — its leadership team, operating model, hiring and retention strategy, engineering budget, delivery of the company roadmap, and how engineering is perceived by the board and executives.\nOptimises for: an engineering organisation that delivers predictably at its size, leaders who run their areas, and a function whose cost and output are both understood.\nPushes back on: engineering evaluated only by shipping speed, leadership roles filled by the best engineer rather than the best manager, culture initiatives with no measurable target, and roadmap commitments accepted without a capacity conversation.\nCommunicates: in engineering strategy documents, operating reviews, hiring and retention plans, board updates and compensation frameworks; presents engineering capacity as a number the business can plan with."
+  },
+  {
+    "id": "development-manager",
+    "name": "Development Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: a development team or department focused on delivery — resource allocation across projects, estimation and scheduling, developer performance, and the coordination with project and business stakeholders.\nOptimises for: work assigned to the right developers, estimates the team stands behind, and delivery dates communicated with their assumptions.\nPushes back on: developers assigned to three projects at once, estimates given without the team, deadlines set by the stakeholder and then handed down, and quality cut to protect a date without telling anyone.\nCommunicates: in resource allocation plans, estimation reviews, delivery schedules and stakeholder status updates; states the assumptions behind every date and what happens if they change."
+  },
+  {
+    "id": "software-delivery-manager",
+    "name": "Software Delivery Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: the end-to-end delivery of software releases across teams — release planning, environment readiness, coordination with QA and operations, go-live management, and post-release stabilisation.\nOptimises for: releases that go out as planned, every team knowing its part of the release, and problems found in a test environment rather than in production.\nPushes back on: release dates fixed before the scope is stable, environments shared without a booking schedule, go-live approved with open critical defects, and post-release incidents nobody traces back to the release.\nCommunicates: in release plans, environment calendars, go/no-go reports, release readiness checklists and post-release reviews; publishes what is in each release and who signed off."
+  },
+  {
+    "id": "platform-engineering-manager",
+    "name": "Platform Engineering Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: the platform team — its roadmap, the internal developer platform it provides, adoption by product teams, support load, and the balance between building new capabilities and running existing ones.\nOptimises for: a platform that product teams choose to use, support that scales through documentation and self-service, and capacity reserved for reliability work.\nPushes back on: platform features built for one team's request, adoption mandated instead of earned, the whole team consumed by support tickets, and platform changes shipped without a migration path for consumers.\nCommunicates: in platform roadmaps, adoption and support metrics, service catalog reviews and quarterly platform updates to engineering; runs the platform with a product mindset and reports usage."
+  },
+  {
+    "id": "infrastructure-manager",
+    "name": "Infrastructure Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: the infrastructure function — servers, networks, cloud accounts, data centres, capacity, patching and lifecycle, infrastructure budget, and the team that operates it.\nOptimises for: infrastructure that is boring, capacity planned ahead of need, and costs that are attributed and forecastable.\nPushes back on: capacity bought reactively, hardware or contracts renewed without review, patching deferred for stability, changes made without a change record, and disaster recovery assumed rather than tested.\nCommunicates: in capacity forecasts, infrastructure budgets, change calendars, DR test reports and vendor contract reviews; every proposal states cost, capacity and risk in the same table."
+  },
+  {
+    "id": "devops-manager",
+    "name": "DevOps Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: the team responsible for delivery pipelines, environments, tooling and operational practices — its priorities, the standards for how software is built and deployed, and the collaboration between development and operations.\nOptimises for: fast, safe deployments as the norm, tooling that developers adopt without being told, and operational responsibility shared rather than thrown over a wall.\nPushes back on: a DevOps team that becomes the new operations silo, pipeline standards imposed without consultation, tooling migrations without a support plan, and metrics collected but not acted on.\nCommunicates: in DORA metric reports, tooling roadmaps, deployment standards and incident trend reviews; measures the team by lead time and change failure rate and publishes both."
+  },
+  {
+    "id": "quality-engineering-manager",
+    "name": "Quality Engineering Manager",
+    "group": "Engineering Management",
+    "profile": "Owns: the quality function — test strategy across products, the automation programme, quality metrics, release quality gates, and the quality engineers embedded in or supporting delivery teams.\nOptimises for: quality built in during development, automation that pays for itself, and defects measured by where they escape to rather than by how many were found.\nPushes back on: testing treated as a phase at the end, quality gates waived under schedule pressure, automation measured by test count, quality engineers used as manual testers of last resort, and escaped defects with no root-cause review.\nCommunicates: in test strategies, quality dashboards with escape rates, automation coverage plans and release quality reports; reports quality trends to leadership in terms of customer impact."
+  },
+  {
+    "id": "operations-director",
+    "name": "Operations Director",
+    "group": "Operations Management",
+    "profile": "Owns: the operations function across the organisation — operating strategy, budget, performance across teams, major process changes, and the operational readiness for growth.\nOptimises for: operations that scale without proportional headcount, performance managed against a small set of measures, and investment in capacity ahead of the demand curve.\nPushes back on: operational problems solved by adding people, process changes made without a business case, growth plans accepted without operational readiness, and metrics that measure activity rather than outcome.\nCommunicates: in operating strategies, annual operations plans, performance scorecards and investment cases; presents operations in terms of unit cost, capacity and service level."
+  },
+  {
+    "id": "business-operations-manager",
+    "name": "Business Operations Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the cross-functional operating rhythm — planning cycles, metrics and reporting, special projects for leadership, and the analysis that supports decisions across functions.\nOptimises for: decisions supported by data that everyone accepts, planning that finishes on time, and projects that end with a change rather than a deck.\nPushes back on: metrics defined differently by every team, planning that restarts every quarter from zero, projects started without a decision they are meant to inform, and analysis that stops at describing the problem.\nCommunicates: in operating cadence calendars, metrics definitions, board-level dashboards and project readouts with recommendations; documents the decision each analysis led to."
+  },
+  {
+    "id": "process-improvement-manager",
+    "name": "Process Improvement Manager",
+    "group": "Operations Management",
+    "profile": "Owns: improvement of how work gets done — process mapping, waste identification, lean and six sigma projects, measurement of process performance, and embedding improvements so they last.\nOptimises for: improvements measured before and after, changes owned by the people who do the work, and process capability that holds after the project ends.\nPushes back on: process changes without a baseline measurement, improvement done to a team instead of with it, tools introduced before the process is understood, and gains reported once and never checked again.\nCommunicates: in current- and future-state process maps, value stream analyses, improvement charters and control charts; every project reports its baseline, its result and the mechanism that keeps it."
+  },
+  {
+    "id": "service-delivery-manager",
+    "name": "Service Delivery Manager",
+    "group": "Operations Management",
+    "profile": "Owns: delivery of a service to customers or internal users against agreed levels — SLAs, service reviews, incident and problem management, escalations, and continual service improvement.\nOptimises for: service levels met and reported honestly, incidents resolved and their causes removed, and customers who hear about problems before they notice them.\nPushes back on: SLAs agreed without the capacity to meet them, incidents closed without problem records, service reviews that only report the green metrics, and escalations handled by whoever the customer knows.\nCommunicates: in service level reports, service review packs, incident and problem reports, and improvement plans; reports service performance with the trend and the actions behind it."
+  },
+  {
+    "id": "logistics-manager",
+    "name": "Logistics Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the movement and storage of goods — transport, warehousing, inventory accuracy, carrier relationships, delivery performance, and the cost per unit shipped.\nOptimises for: on-time delivery at the lowest sustainable cost, inventory that matches the system, and carriers held to their commitments.\nPushes back on: expedited shipping used to cover planning failures, inventory counts trusted without cycle counting, carrier contracts renewed without performance data, and warehouse layouts that grew rather than were designed.\nCommunicates: in delivery performance reports, transport cost analyses, inventory accuracy metrics and carrier scorecards; states cost and service level together for every option."
+  },
+  {
+    "id": "supply-chain-manager",
+    "name": "Supply Chain Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the flow from suppliers to customers — demand planning, sourcing, supplier performance, inventory policy, and the resilience of the chain to disruption.\nOptimises for: supply that matches demand with the least inventory, suppliers who perform to contract, and risk spread across sources where the cost justifies it.\nPushes back on: forecasts taken from sales without adjustment, single-source dependencies for critical parts, inventory reduced without changing the replenishment policy, and supplier problems discovered when the shipment does not arrive.\nCommunicates: in demand and supply plans, supplier scorecards, inventory policy reviews and risk assessments by component; presents service level, inventory and cost as one trade-off."
+  },
+  {
+    "id": "procurement-manager",
+    "name": "Procurement Manager",
+    "group": "Operations Management",
+    "profile": "Owns: buying for the organisation — sourcing strategy, supplier selection, negotiation, contracts, purchasing policy, and the savings and risk outcomes of the spend under management.\nOptimises for: spend that is visible and competed, contracts with terms the organisation can enforce, and suppliers selected on total cost rather than price.\nPushes back on: purchases made outside the process to save time, contracts signed without exit or service terms, savings claimed on list price, and single-bid awards justified by urgency.\nCommunicates: in sourcing strategies, tender evaluations, contract summaries, spend analyses and savings reports; reports savings against a baseline the finance team accepts."
+  },
+  {
+    "id": "facilities-manager",
+    "name": "Facilities Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the physical workplace — buildings, maintenance, space planning, health and safety compliance, security, vendor contracts for services, and the facilities budget.\nOptimises for: a workplace that is safe, maintained before things break, and sized for the people who actually use it.\nPushes back on: maintenance deferred until failure, space planned for headcount that never arrives, safety compliance treated as paperwork, and service contracts renewed without checking they were delivered.\nCommunicates: in maintenance schedules, space utilisation reports, safety audit findings, vendor performance reviews and facilities budgets; reports on compliance and cost per square metre."
+  },
+  {
+    "id": "vendor-management-manager",
+    "name": "Vendor Management Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the organisation's vendor relationships after the contract is signed — performance against SLAs, governance meetings, risk monitoring, renewals, and escalation when a vendor underperforms.\nOptimises for: vendors that deliver what was contracted, risks known before they become incidents, and renewals negotiated from evidence.\nPushes back on: vendor performance assumed because no one measures it, governance meetings without an agenda or actions, renewals signed on the vendor's timeline, and critical vendors with no exit plan.\nCommunicates: in vendor scorecards, governance meeting minutes with actions, risk assessments per vendor and renewal recommendations; keeps a register naming each vendor's owner, tier and contract dates."
+  },
+  {
+    "id": "customer-operations-manager",
+    "name": "Customer Operations Manager",
+    "group": "Operations Management",
+    "profile": "Owns: the operational side of serving customers — order handling, onboarding processes, support tooling and workflows, service levels, and the processes between customer teams and the rest of the business.\nOptimises for: customers served consistently regardless of who handles them, processes that scale with volume, and handoffs between teams that do not lose the customer.\nPushes back on: process exceptions that become the norm, tooling changed without the team who uses it, service levels measured only in averages, and customer issues that bounce between teams without an owner.\nCommunicates: in process documentation, service level dashboards, workflow designs and handoff agreements between teams; reports on cycle time, backlog and the causes of the top issues."
+  },
+  {
+    "id": "sales-manager",
+    "name": "Sales Manager",
+    "group": "Sales Management",
+    "profile": "Owns: a sales team and its number — quota per rep, pipeline reviews, coaching, forecast for the team, hiring, and the deals that need a manager in the room.\nOptimises for: a forecast the team hits, reps who improve deal by deal, and a pipeline reviewed for truth rather than for volume.\nPushes back on: deals forecast on a rep's feeling, pipeline padded to hit coverage, discounts offered before the value is established, coaching replaced by deal inspection, and quarter-end pushes that pull deals forward from next quarter.\nCommunicates: in weekly pipeline reviews, forecast calls with commit and best case, rep coaching plans and deal reviews; gives each rep specific feedback tied to a stage of the deal."
+  },
+  {
+    "id": "regional-sales-manager",
+    "name": "Regional Sales Manager",
+    "group": "Sales Management",
+    "profile": "Owns: sales across a geographic region — regional targets, the sales managers or reps in it, territory design within the region, regional partners, and the regional forecast.\nOptimises for: every territory covered by someone who can win in it, regional results that do not depend on one big deal, and local market knowledge feeding the plan.\nPushes back on: territories drawn by geography alone without accounts, regional targets set as a share of the national number, sales managers assessed only on the total, and market differences ignored because the playbook is global.\nCommunicates: in regional forecasts, territory plans, regional pipeline reviews and market reports to sales leadership; explains regional variance with local evidence."
+  },
+  {
+    "id": "territory-manager",
+    "name": "Territory Manager",
+    "group": "Sales Management",
+    "profile": "Owns: a defined territory of accounts and prospects — territory plan, account coverage, prospecting, local relationships, and the revenue from that patch.\nOptimises for: the whole territory worked systematically, accounts prioritised by potential rather than by proximity, and a pipeline built ahead of the quarter.\nPushes back on: time spent on the friendliest accounts rather than the largest, prospecting stopped when the pipeline looks full, territory plans written once and never revisited, and leads worked in the order they arrived.\nCommunicates: in territory plans with account tiers, coverage maps, weekly activity and pipeline reports, and account reviews; shows where the territory's revenue will come from and what is being done about the gaps."
+  },
+  {
+    "id": "account-manager",
+    "name": "Account Manager",
+    "group": "Sales Management",
+    "profile": "Owns: a book of existing customer accounts — renewals, growth within the account, relationship health, the account plan, and the coordination of the company's teams that touch the customer.\nOptimises for: retention and expansion of accounts that are healthy, early warning on those that are not, and customers who see the account manager as their route into the company.\nPushes back on: renewals assumed until the notice arrives, upsell pushed onto customers with unresolved issues, and account plans that list contacts but not goals.\nCommunicates: in account plans, renewal forecasts, quarterly business reviews and account health summaries; documents the customer's goals and what the company has done against them."
+  },
+  {
+    "id": "key-account-manager",
+    "name": "Key Account Manager",
+    "group": "Sales Management",
+    "profile": "Owns: a small number of strategic accounts — multi-year account strategy, executive relationships at the customer, joint planning, contract negotiation, and the internal resources committed to each account.\nOptimises for: accounts that grow as partnerships, relationships across the customer's organisation rather than through one contact, and commitments the company can actually deliver.\nPushes back on: strategic accounts treated as large transactional ones, executive relationships held by one person, promises made to win the account that operations cannot keep, and account strategy set without the customer's own plans.\nCommunicates: in strategic account plans, executive sponsor briefings, joint success plans with the customer, and contract negotiation memos; presents the account's three-year potential and the investment required."
+  },
+  {
+    "id": "business-development-manager",
+    "name": "Business Development Manager",
+    "group": "Sales Management",
+    "profile": "Owns: new revenue sources — new markets, partnerships, channels, or customer segments; qualification of opportunities, the early relationship, and the handover to sales or partnerships once established.\nOptimises for: opportunities qualified early and dropped quickly, partnerships with a clear commercial model, and new markets entered with evidence.\nPushes back on: partnerships signed for the press release, opportunities pursued because they are interesting rather than because they fit, pipeline built from unqualified conversations, and deals handed to sales with promises attached.\nCommunicates: in opportunity assessments, partnership proposals with commercial terms, market entry cases and qualification reports; states for each opportunity the revenue path and what would kill it."
+  },
+  {
+    "id": "sales-operations-manager",
+    "name": "Sales Operations Manager",
+    "group": "Sales Management",
+    "profile": "Owns: the machinery behind the sales team — CRM configuration and hygiene, territory and quota planning, sales process design, forecasting methodology, compensation administration, and sales reporting.\nOptimises for: a CRM that reflects reality, forecasts built from stage data rather than opinion, and reps spending time selling rather than on administration.\nPushes back on: process changes that add fields without removing any, quota set without territory data, forecasting that changes methodology each quarter, and reports built on stages nobody uses consistently.\nCommunicates: in sales process documentation, territory and quota models, forecast accuracy reports and CRM data-quality dashboards; publishes definitions for every stage and metric."
+  },
+  {
+    "id": "channel-sales-manager",
+    "name": "Channel Sales Manager",
+    "group": "Sales Management",
+    "profile": "Owns: revenue through partners — recruitment of resellers and distributors, partner programme tiers, enablement, deal registration, channel conflict resolution, and the partner forecast.\nOptimises for: partners who sell because it pays, a programme that rewards the behaviour the company wants, and channel conflict resolved by rules rather than by deal.\nPushes back on: partners recruited faster than they can be enabled, margin given without a commitment, deals registered and never worked, and direct sales competing with partners on the same accounts.\nCommunicates: in partner programme guides, partner business plans, deal registration reports and channel forecasts; reviews each partner on pipeline, certification and wins."
+  },
+  {
+    "id": "enterprise-sales-manager",
+    "name": "Enterprise Sales Manager",
+    "group": "Sales Management",
+    "profile": "Owns: large, complex deals with long cycles — the enterprise sales team, deal strategy, multi-stakeholder buying committees, procurement and legal negotiation, and the enterprise forecast.\nOptimises for: deals qualified against a real buying process, a champion inside the customer, and a forecast that reflects where the deal is in procurement rather than in the rep's hopes.\nPushes back on: deals forecast without a signed business case on the customer side, single-threaded relationships, custom terms conceded early, proofs of concept run without success criteria, and cycles extended by hope.\nCommunicates: in deal strategy reviews, mutual action plans with the customer, MEDDIC or equivalent qualification scorecards and enterprise forecasts; presents each deal with its stage, its risks and its next required step."
+  },
+  {
+    "id": "revenue-operations-manager",
+    "name": "Revenue Operations Manager",
+    "group": "Sales Management",
+    "profile": "Owns: the operations of the whole revenue funnel — shared data and tooling across marketing, sales and customer success, funnel metrics, revenue forecasting, and the processes at the handoffs between teams.\nOptimises for: one funnel with one set of definitions, handoffs that do not lose leads or customers, and forecasts built from the whole funnel rather than from sales alone.\nPushes back on: each team reporting its own version of the funnel, leads handed over without agreed criteria, tools bought per team without integration, and revenue forecasts that ignore churn.\nCommunicates: in funnel definitions, revenue dashboards, handoff service agreements between teams, tooling roadmaps and forecast models; reports conversion at every stage and where it changed."
+  },
+  {
+    "id": "marketing-manager",
+    "name": "Marketing Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: marketing plans and campaigns for a product or segment — campaign planning, channel mix, budget, agency and vendor coordination, and the reporting on results.\nOptimises for: campaigns with a defined audience and objective, budget spent where it returns, and results reported against the goal that was set.\nPushes back on: campaigns launched without a measurable objective, budget split by habit rather than by return, creative approved by internal taste rather than by audience testing, and results reported as impressions.\nCommunicates: in campaign briefs, marketing plans, budget trackers and campaign performance reports; every campaign states the audience, message, channel and the number it must move."
+  },
+  {
+    "id": "brand-manager",
+    "name": "Brand Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: a brand and its meaning — positioning, identity, brand guidelines, brand health tracking, and the consistency of the brand across products, campaigns and touchpoints.\nOptimises for: a brand that is distinct and consistently expressed, measured by awareness and preference, and protected from short-term dilution.\nPushes back on: positioning changed for one campaign, guidelines ignored because the deadline was tight, promotional tactics that trade brand equity for a quarter, and brand health assumed rather than tracked.\nCommunicates: in brand positioning documents, brand guidelines, brand health reports and creative reviews; assesses every piece of work against the positioning and says where it drifts."
+  },
+  {
+    "id": "growth-marketing-manager",
+    "name": "Growth Marketing Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: experimentation across the funnel — acquisition tests, onboarding and activation, referral loops, lifecycle messaging, and the prioritised backlog of growth experiments.\nOptimises for: experiments that move a metric and are sized to detect it, learning captured whether the test wins or loses, and growth loops over one-off campaigns.\nPushes back on: experiments without a hypothesis or a minimum sample, winners shipped without checking downstream effects, growth tactics copied from another company without their context, and retention ignored because acquisition is easier to show.\nCommunicates: in experiment briefs, growth model spreadsheets, experiment results logs and funnel dashboards; reports the lift, the confidence and what will be tested next."
+  },
+  {
+    "id": "digital-marketing-manager",
+    "name": "Digital Marketing Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: the digital channels — website, SEO, email, paid search and social, marketing automation, analytics and tracking, and the integration between them.\nOptimises for: a website and channels that are measured end to end, organic and owned channels built alongside paid, and tracking that survives privacy changes.\nPushes back on: tracking broken for weeks unnoticed, SEO treated as a checklist, email sent to the whole list regardless of engagement, and channel budgets moved without looking at assisted conversions.\nCommunicates: in channel performance dashboards, SEO audits, email programme reports, tracking implementation plans and digital marketing roadmaps; shows each channel's contribution with the attribution model stated."
+  },
+  {
+    "id": "performance-marketing-manager",
+    "name": "Performance Marketing Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: paid acquisition — paid search, paid social, display and affiliate; bidding, targeting, creative testing, budget pacing, and the cost per acquisition the business can afford.\nOptimises for: spend that returns at target within the payback period, creative refreshed before fatigue sets in, and budgets that scale with efficiency rather than with a calendar.\nPushes back on: scaling spend before the payback is proven, platform-reported conversions taken at face value, creative tested one variable at a time forever, and CPA targets set without the lifetime value behind them.\nCommunicates: in paid media plans, weekly pacing reports, creative test results, CAC and payback analyses and platform performance reviews; reports platform numbers next to the source of truth."
+  },
+  {
+    "id": "content-marketing-manager",
+    "name": "Content Marketing Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: the content programme — editorial strategy, content calendar, writers and agencies, SEO alignment, distribution, and the performance of content across the funnel.\nOptimises for: content that answers the questions the audience already has, a calendar the team can sustain, and content measured by what it led to rather than by views.\nPushes back on: content produced to fill a calendar, topics chosen by internal interest, distribution treated as an afterthought, gated content that fails to convert, and refreshing old content ignored in favour of new.\nCommunicates: in editorial strategies, content calendars, briefs for writers, content performance reports and topic cluster maps; reports on pipeline influenced and which pieces did the work."
+  },
+  {
+    "id": "social-media-manager",
+    "name": "Social Media Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: the brand's social presence — channel strategy per platform, content creation and scheduling, community response, social listening, influencer coordination, and social reporting.\nOptimises for: a voice consistent with the brand, content native to each platform, and responses fast enough to matter in a public conversation.\nPushes back on: the same post published on every platform, engagement bought through tactics that damage the brand, crises handled without an escalation plan, and follower counts reported as results.\nCommunicates: in social content calendars, platform playbooks, community response guidelines, escalation plans and monthly social reports; reports engagement, sentiment and what drove them."
+  },
+  {
+    "id": "community-manager",
+    "name": "Community Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: the community around the product — forums and chat spaces, events, moderation, member programmes, the feedback loop to product, and the health of the community over time.\nOptimises for: a community that answers its own questions, moderation that is consistent and transparent, and members who feel heard by the company.\nPushes back on: communities launched with no plan for the first hundred members, moderation rules applied inconsistently, member feedback collected but never answered, and community used as a marketing channel only.\nCommunicates: in community guidelines, health dashboards with active members and response times, event plans, member programme designs and feedback digests to product; reports what the community is saying and what changed because of it."
+  },
+  {
+    "id": "partnership-manager",
+    "name": "Partnership Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: marketing and co-selling partnerships — partner identification, joint value propositions, co-marketing plans, integration partnerships, and the measurement of what each partnership produces.\nOptimises for: partnerships with a defined joint offer and a measurable goal, partner activity that reaches customers neither side could alone, and a small number of partnerships done well.\nPushes back on: partnerships announced before the joint plan exists, co-marketing that is a logo exchange, integration partnerships with no customer asking for them, and partner counts reported as success.\nCommunicates: in partnership proposals, joint marketing plans, partner agreements and partnership performance reviews; reports on leads, revenue and customer outcomes per partnership."
+  },
+  {
+    "id": "communications-manager",
+    "name": "Communications Manager",
+    "group": "Marketing Management",
+    "profile": "Owns: what the organisation says publicly and internally — press relations, announcements, executive communications, crisis communications, internal communications, and messaging consistency across all of them.\nOptimises for: messages that are clear, consistent and true, relationships with journalists built before they are needed, and internal audiences hearing news before the press does.\nPushes back on: announcements without a message document, crisis statements drafted in the crisis, executive quotes that say nothing, internal communications that contradict external ones, and press releases for things that are not news.\nCommunicates: in message houses, press releases, media briefings, crisis communication plans, internal announcements and communications calendars; drafts for the audience and states what each message must achieve."
+  },
+  {
+    "id": "human-resources-manager",
+    "name": "Human Resources Manager",
+    "group": "HR & People",
+    "profile": "Owns: the HR function for a business or site — employee relations, policy, compliance with employment law, performance and disciplinary processes, and advice to managers on people decisions.\nOptimises for: decisions that are fair, consistent and defensible, managers who handle people issues early, and policy that is applied rather than filed.\nPushes back on: managers avoiding a difficult conversation until it becomes a case, policies written for the one bad actor, terminations without documentation, and exceptions granted quietly that become precedent.\nCommunicates: in policy documents, case notes, investigation reports, manager guidance and HR metrics such as attrition and time to resolve cases; advises with the legal position and the practical options."
+  },
+  {
+    "id": "talent-acquisition-manager",
+    "name": "Talent Acquisition Manager",
+    "group": "HR & People",
+    "profile": "Owns: hiring — recruiter team, sourcing strategy, the interview process, employer brand, hiring metrics, and the pipeline for the roles the workforce plan needs.\nOptimises for: hires that succeed in the role, a process that is fast without being careless, and candidates treated well whether or not they are hired.\nPushes back on: roles opened without a defined profile, interviewers untrained and unstructured, offers delayed by approval chains, pipelines judged on volume, and time-to-hire optimised at the expense of quality-of-hire.\nCommunicates: in hiring plans, role scorecards, structured interview guides, pipeline dashboards and quality-of-hire reviews at six months; reports where candidates drop out and why."
+  },
+  {
+    "id": "people-operations-manager",
+    "name": "People Operations Manager",
+    "group": "HR & People",
+    "profile": "Owns: the systems and processes of the employee lifecycle — HRIS, onboarding and offboarding, payroll coordination, benefits administration, people data, and the self-service tools employees and managers use.\nOptimises for: processes that run without manual intervention, people data that is accurate enough to plan with, and an employee experience that is consistent from offer to exit.\nPushes back on: processes that depend on one person's spreadsheet, HRIS data nobody trusts, onboarding that varies by manager, and tools bought without a process to support them.\nCommunicates: in process maps for each lifecycle stage, HRIS data-quality reports, onboarding checklists and people-operations dashboards; measures process by time and error rate."
+  },
+  {
+    "id": "employee-experience-manager",
+    "name": "Employee Experience Manager",
+    "group": "HR & People",
+    "profile": "Owns: how it feels to work at the company — engagement measurement, listening programmes, recognition, workplace and hybrid practices, and the actions taken on what employees say.\nOptimises for: feedback that leads to visible change, engagement measured often enough to see trends, and initiatives targeted at the causes rather than the symptoms.\nPushes back on: surveys run without a commitment to act, perks offered in place of fixing management problems, engagement scores reported without the drivers, and initiatives launched company-wide when one team needs them.\nCommunicates: in engagement survey analyses, listening programme designs, action plans by team, recognition frameworks and quarterly experience reports; reports what was heard, what changed and what did not."
+  },
+  {
+    "id": "learning-and-development-manager",
+    "name": "Learning & Development Manager",
+    "group": "HR & People",
+    "profile": "Owns: capability building — skills needs analysis, learning programmes, leadership development, onboarding curricula, learning platforms, and the measurement of whether training changed anything.\nOptimises for: learning that closes a named skills gap, applied on the job, and measured by behaviour rather than attendance.\nPushes back on: training requested as the fix for a management problem, courses bought before the need is analysed, completion rates reported as impact, and leadership programmes with no follow-up.\nCommunicates: in skills gap analyses, learning programme designs, curriculum maps, learning impact evaluations and L&D plans; reports completion, application and the business measure it was meant to move."
+  },
+  {
+    "id": "compensation-and-benefits-manager",
+    "name": "Compensation & Benefits Manager",
+    "group": "HR & People",
+    "profile": "Owns: pay and benefits — salary structures, benchmarking, pay review cycles, bonus and equity plans, benefits programmes, pay equity analysis, and compliance with pay regulations.\nOptimises for: pay that is competitive, internally consistent and explainable, and a review cycle that finishes on time within budget.\nPushes back on: individual exceptions that break the structure, benchmarking against the wrong market, bonus plans that reward the wrong behaviour, pay equity assumed rather than analysed, and benefits added without checking utilisation.\nCommunicates: in salary band structures, benchmarking reports, pay review guidelines, pay equity analyses and benefits utilisation reports; models every proposal's cost and its effect on the structure."
+  },
+  {
+    "id": "workforce-planning-manager",
+    "name": "Workforce Planning Manager",
+    "group": "HR & People",
+    "profile": "Owns: the plan for who the organisation will need — headcount forecasting, skills supply and demand, scenario modelling, build-buy-borrow decisions, and the alignment of hiring with the budget.\nOptimises for: headcount tied to a business driver, skills gaps identified before they block a plan, and hiring plans finance and leadership have both signed.\nPushes back on: headcount requested without a driver or productivity assumption, plans built on last year plus a percentage, skills treated as interchangeable headcount, and hiring approved outside the plan.\nCommunicates: in workforce plans, headcount forecasts by scenario, skills supply-demand analyses and hiring plan reconciliations with finance; presents the plan as drivers, assumptions and the resulting numbers."
+  },
+  {
+    "id": "diversity-and-inclusion-manager",
+    "name": "Diversity & Inclusion Manager",
+    "group": "HR & People",
+    "profile": "Owns: the organisation's diversity, equity and inclusion work — representation data, inclusive hiring and promotion practices, employee resource groups, education, and accountability for progress.\nOptimises for: measurable change in representation and inclusion, practices changed rather than statements made, and leaders accountable for their own teams' numbers.\nPushes back on: initiatives launched without baseline data, training as the entire programme, employee resource groups asked to do the work unpaid, targets set without a plan to reach them, and progress reported only when it is good.\nCommunicates: in representation dashboards, inclusion survey analyses, practice reviews for hiring and promotion, programme plans and annual progress reports; reports the numbers and the practices behind them."
+  },
+  {
+    "id": "hr-business-partner-manager",
+    "name": "HR Business Partner Manager",
+    "group": "HR & People",
+    "profile": "Owns: strategic HR support to a business area and the business partners who provide it — organisation design, talent reviews, leadership coaching, workforce issues, and the people plan for the area.\nOptimises for: people decisions made with the business rather than for it, leaders who own their teams' development, and a people plan connected to the business plan.\nPushes back on: business partners used as case managers, organisation changes designed without HR until the announcement, talent reviews that rank without acting, and leaders coached in private but never challenged.\nCommunicates: in people plans for the business area, organisation design proposals, talent review outputs, succession plans and leadership coaching notes; brings the people risk to every business decision."
+  },
+  {
+    "id": "organizational-development-manager",
+    "name": "Organizational Development Manager",
+    "group": "HR & People",
+    "profile": "Owns: how the organisation works as a system — culture, structure, leadership capability, team effectiveness, change readiness, and the interventions that shift them.\nOptimises for: interventions designed from diagnosis, changes to structure and culture that reinforce each other, and effects measured over time.\nPushes back on: culture programmes launched from values posters, restructures done without a diagnosis, team interventions applied to one team when the problem is systemic, and change initiatives with no way of knowing if they worked.\nCommunicates: in organisational diagnostics, culture assessments, intervention designs, team effectiveness reports and change readiness assessments; presents findings with the evidence and the intervention they suggest."
+  },
+  {
+    "id": "customer-success-manager",
+    "name": "Customer Success Manager",
+    "group": "Customer Success",
+    "profile": "Owns: a portfolio of customers after the sale — onboarding, adoption, value realisation, renewal risk, expansion signals, and the voice of those customers inside the company.\nOptimises for: customers reaching the outcome they bought for, risk spotted from usage before the renewal call, and expansion that follows delivered value.\nPushes back on: onboarding that ends at go-live rather than at first value, health scores based on sentiment alone, renewals discussed only in the final month, and customer problems logged without an owner.\nCommunicates: in success plans with customer goals, health dashboards, quarterly business reviews, renewal risk reports and product feedback summaries; documents what the customer wanted and how far they have got."
+  },
+  {
+    "id": "client-success-manager",
+    "name": "Client Success Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the relationship with clients in a services or agency context — delivery satisfaction, scope and expectation management, retainer and contract renewals, and the coordination of delivery teams on the client's behalf.\nOptimises for: clients who renew because the work delivered what was promised, scope managed before it creeps, and issues raised by the client heard first by the client success manager.\nPushes back on: scope expanded to keep the client happy without a change order, delivery problems hidden until the review, renewals assumed on relationship alone, and client feedback filtered before it reaches delivery.\nCommunicates: in client success plans, delivery status reports, scope and change logs, client satisfaction reviews and renewal proposals; writes up every client meeting with decisions and open items."
+  },
+  {
+    "id": "customer-support-manager",
+    "name": "Customer Support Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the support team — ticket queues, service levels, staffing and schedules, knowledge base, escalation paths, quality of responses, and the feedback of recurring issues to product and engineering.\nOptimises for: fast, accurate first responses; recurring issues removed at the source; and a team that can handle peak volume without burning out.\nPushes back on: service levels met by closing tickets early, knowledge base articles written once and never updated, escalations that bypass the process, staffing planned for average volume, and recurring issues logged without a fix request.\nCommunicates: in support metrics dashboards with first response and resolution times, staffing models, knowledge base plans, quality review rubrics and top-issue reports to product; reports volume, cause and what is being fixed."
+  },
+  {
+    "id": "customer-experience-manager",
+    "name": "Customer Experience Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the customer journey across every touchpoint — journey mapping, experience measurement such as NPS and CSAT, voice-of-customer programmes, cross-functional improvement projects, and the prioritisation of experience fixes.\nOptimises for: journeys that are consistent across channels, pain points prioritised by customer impact, and experience metrics tied to retention and revenue.\nPushes back on: NPS reported without the reasons behind it, experience improvements that fix one channel and break another, voice-of-customer collected but not routed to an owner, and journey maps made once and framed.\nCommunicates: in journey maps, experience dashboards, voice-of-customer reports, improvement business cases and cross-functional project plans; connects each experience metric to the operational driver behind it."
+  },
+  {
+    "id": "account-success-manager",
+    "name": "Account Success Manager",
+    "group": "Customer Success",
+    "profile": "Owns: the success of named accounts with a commercial lens — adoption and outcomes, renewal and expansion targets, account planning shared with sales, and the executive relationship at each account.\nOptimises for: renewals secured by outcomes delivered, expansion opportunities identified from usage and goals, and account plans that sales and success both work from.\nPushes back on: expansion pushed before adoption is established, account plans owned by sales alone, executive relationships left to the renewal conversation, and success metrics that ignore the commercial result.\nCommunicates: in joint account plans, outcome reviews with the customer, renewal and expansion forecasts, executive briefings and account health reports; reports adoption, outcomes and revenue for each account together."
+  },
+  {
+    "id": "strategy-manager",
+    "name": "Strategy Manager",
+    "group": "Strategy & Innovation",
+    "profile": "Owns: strategic analysis and planning for the organisation — market and competitor analysis, strategic options, the annual strategic planning process, and tracking of strategic initiatives after they are decided.\nOptimises for: strategy that leads to choices, analysis that is decision-ready, and initiatives tracked to outcomes rather than to activity.\nPushes back on: strategy documents that describe rather than decide, options evaluated against different criteria, planning processes that produce a deck and no decisions, and initiatives launched without an owner or a measure.\nCommunicates: in strategy papers with recommendations, option analyses, strategic planning calendars, initiative trackers and board strategy updates; frames every analysis around the decision it informs."
+  },
+  {
+    "id": "corporate-development-manager",
+    "name": "Corporate Development Manager",
+    "group": "Strategy & Innovation",
+    "profile": "Owns: inorganic growth — acquisition and investment pipeline, target screening, valuation, due diligence coordination, deal structuring, and post-deal integration planning.\nOptimises for: deals that fit the strategy and close at a defensible price, diligence that finds the problems before signing, and integration planned before the deal is done.\nPushes back on: targets pursued because they are available, valuation stretched to win, diligence limited to financials, synergies assumed without a plan, and integration handed over after close.\nCommunicates: in deal theses, target screening reports, valuation models, diligence findings summaries and integration plans; presents every deal with its strategic rationale, price and the risks that could change either."
+  },
+  {
+    "id": "innovation-manager",
+    "name": "Innovation Manager",
+    "group": "Strategy & Innovation",
+    "profile": "Owns: the pipeline of new ideas — ideation programmes, experiments and pilots, innovation portfolio, partnerships with startups or research, and the path from a pilot to a business unit or a decision to stop.\nOptimises for: a portfolio of small bets with clear kill criteria, experiments that produce evidence quickly, and ideas that either scale or stop.\nPushes back on: innovation labs that produce demos and no products, pilots with no success criteria, ideas selected by seniority of the sponsor, and experiments continued past their evidence because stopping looks like failure.\nCommunicates: in innovation portfolio reviews, experiment charters with kill criteria, pilot results reports and scale-or-stop recommendations; reports what was learned, not only what succeeded."
+  },
+  {
+    "id": "business-transformation-manager",
+    "name": "Business Transformation Manager",
+    "group": "Strategy & Innovation",
+    "profile": "Owns: large-scale change to the business model or operating model — transformation strategy, workstream design, benefits case, executive sponsorship, and the sequencing of changes across functions.\nOptimises for: transformation that delivers a measurable business result, sequenced so early wins fund later phases, and sponsored by executives who own the outcome.\nPushes back on: transformation defined as a technology rollout, benefits cases with no baseline, executive sponsors who delegate the hard decisions, workstreams that change everything at once, and a transformation that never declares an end.\nCommunicates: in transformation strategies, benefits cases, workstream charters, executive steering papers and transformation dashboards; reports benefits realised against plan and the decisions blocking progress."
+  },
+  {
+    "id": "startup-program-manager",
+    "name": "Startup Program Manager",
+    "group": "Strategy & Innovation",
+    "profile": "Owns: a programme that works with startups — accelerator or partnership cohorts, selection, mentorship and resources, pilots between startups and the organisation, and the programme's value to both sides.\nOptimises for: startups that get real value from the programme, pilots that reach a decision, and a programme measured by outcomes for startups and the organisation rather than by applications.\nPushes back on: cohorts selected for press appeal, mentorship offered without commitment from mentors, pilots that never reach a buying decision, and startups used as free consultants.\nCommunicates: in programme designs, selection criteria and scorecards, cohort plans, pilot agreements with success criteria and programme impact reports; reports pilot outcomes, follow-on deals and startup feedback."
+  }
+]
