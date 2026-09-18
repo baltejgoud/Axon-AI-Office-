@@ -10,7 +10,6 @@ interface Item {
   description: string;
   group: string;
   meta?: ReactNode;
-  size?: number;
 }
 interface Group {
   id: string;
@@ -138,20 +137,22 @@ export function SkillPicker({
   onClose: () => void;
 }) {
   const data = useApp((s) => s.data)!;
-  const items: Item[] = data.skills.map((s) => ({
-    id: s.id,
-    name: s.name,
-    description: s.description,
-    group: s.category,
-    size: s.bytes,
-    meta: (
-      <>
-        {!s.supported && <span className="badge">Needs tools</span>}
-        <span>{kb(s.bytes)}</span>
-      </>
-    )
-  }));
-  const bySize = new Map(data.skills.map((s) => [s.id, s.bytes]));
+  const { items, bySize } = useMemo(() => {
+    const items: Item[] = data.skills.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      group: s.category,
+      meta: (
+        <>
+          {!s.supported && <span className="badge">Needs tools</span>}
+          <span>{kb(s.bytes)}</span>
+        </>
+      )
+    }));
+    const bySize = new Map(data.skills.map((s) => [s.id, s.bytes]));
+    return { items, bySize };
+  }, [data.skills]);
   return (
     <CatalogPicker
       title="Skills"
@@ -179,13 +180,16 @@ export function RolePicker({
   onClose: () => void;
 }) {
   const data = useApp((s) => s.data)!;
-  const groups = [...new Set(data.roles.map((r) => r.group))].map((g) => ({ id: g, label: g }));
-  const items: Item[] = data.roles.map((r) => ({
-    id: r.id,
-    name: r.name,
-    group: r.group,
-    description: r.profile.split('\n')[0].replace(/^Owns:\s*/, '')
-  }));
+  const { items, groups } = useMemo(() => {
+    const groups = [...new Set(data.roles.map((r) => r.group))].map((g) => ({ id: g, label: g }));
+    const items: Item[] = data.roles.map((r) => ({
+      id: r.id,
+      name: r.name,
+      group: r.group,
+      description: r.profile.split('\n')[0].replace(/^Owns:\s*/, '')
+    }));
+    return { items, groups };
+  }, [data.roles]);
   return (
     <CatalogPicker
       title="Roles"

@@ -246,7 +246,7 @@ export function SettingsPanel() {
               <h3 className="section-title">Roles</h3>
               <p className="text-caption">
                 {data!.roles.length} roles in {new Set(data!.roles.map((r) => r.group)).size} groups, authored
-                for Axon. Edit <code>src/roles/roles.json</code> to change them.
+                for Axon. Roles are bundled with the app.
               </p>
             </div>
             <p className="text-caption">
