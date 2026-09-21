@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import {
+  ArrowLeftRight,
   ArrowUpRight,
   Bot,
+  ChevronDown,
+  ChevronRight,
   Download,
   FileCode,
   Folder,
@@ -15,11 +18,13 @@ import {
   Trash2,
   Upload
 } from 'lucide-react';
+import hljs from 'highlight.js';
 import type { Workspace, Agent, Selection } from '../../shared/types';
 import { useApp, perform } from './state';
 import { Chat, ModelSelect } from './Chat';
 import { Button, EmptyState, Field, Icon, Modal, PageHeader } from './ui';
 import { RolePicker, SkillPicker, SelectionChips } from './ui/CatalogPicker';
+import { DiffViewer } from './ui/DiffViewer';
 
 /** "Roles" and "Skills" rows for a modal. Holds no state of its own; the parent owns the selection. */
 function SelectionFields({ value, onChange }: { value: Selection; onChange: (next: Selection) => void }) {
@@ -93,7 +98,7 @@ export function Workspaces() {
     void perform(async () => {
       await window.axon.workspaceSave(edit!);
       setEdit(null);
-    });
+    }, 'Workspace saved');
   return (
     <div className="page">
       <div className="page-inner">
@@ -148,7 +153,7 @@ export function Workspaces() {
                     aria-label={`Remove ${w.name}`}
                     onClick={() => {
                       if (confirm(`Remove "${w.name}"? Its conversations are kept.`))
-                        void perform(() => window.axon.workspaceDelete(w.id));
+                        void perform(() => window.axon.workspaceDelete(w.id), 'Workspace deleted');
                     }}
                   />
                 )}
@@ -268,7 +273,7 @@ export function Agents() {
     workspaceId: null,
     skillIds: [],
     roleIds: [],
-    maxSteps: 1,
+    maxSteps: 10,
     schedule: { kind: 'manual' },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -277,16 +282,16 @@ export function Agents() {
     void perform(async () => {
       await window.axon.agentSave(edit!);
       setEdit(null);
-    });
+    }, 'Agent profile saved');
   return (
     <div className="page">
       <div className="page-inner">
         <PageHeader
           title="Agent profiles"
-          description="Reusable assistants with their own system prompt and model. Runs are manual — no autonomous tools."
+          description="Autonomous assistants and reusable agents with their own system prompt, tools, steps, and background schedules."
           actions={
             <>
-              <Button icon={Upload} onClick={() => void perform(() => window.axon.agentImport())}>
+              <Button icon={Upload} onClick={() => void perform(() => window.axon.agentImport(), 'Profile imported')}>
                 Import
               </Button>
               <Button variant="primary" icon={Plus} onClick={() => setEdit(create())}>
@@ -303,6 +308,9 @@ export function Agents() {
                   <span className="icon-tile">
                     <Icon icon={Bot} size="lg" />
                   </span>
+                  {a.schedule?.kind === 'interval' && (
+                    <span className="badge badge-accent">Every {a.schedule.intervalMinutes}m</span>
+                  )}
                 </div>
                 <h3 className="card-title">{a.name}</h3>
                 <p className="text-small text-secondary">{a.description || 'No description.'}</p>
@@ -329,7 +337,7 @@ export function Agents() {
                   <Button
                     size="sm"
                     icon={Download}
-                    onClick={() => void perform(() => window.axon.agentExport(a.id))}
+                    onClick={() => void perform(() => window.axon.agentExport(a.id), 'Profile exported')}
                   >
                     Export
                   </Button>
@@ -340,7 +348,8 @@ export function Agents() {
                     iconOnly
                     aria-label={`Delete ${a.name}`}
                     onClick={() => {
-                      if (confirm(`Delete "${a.name}"?`)) void perform(() => window.axon.agentDelete(a.id));
+                      if (confirm(`Delete "${a.name}"?`))
+                        void perform(() => window.axon.agentDelete(a.id), 'Profile deleted');
                     }}
                   />
                 </div>
@@ -415,6 +424,78 @@ export function Agents() {
               ))}
             </select>
           </Field>
+          <Field
+            label="Max tool execution steps"
+            hint="Maximum autonomous tool loop turns per user message (1 - 30)."
+          >
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={30}
+              value={edit.maxSteps ?? 10}
+              onChange={(e) =>
+                setEdit({ ...edit, maxSteps: Math.max(1, Math.min(30, Number(e.target.value) || 10)) })
+              }
+            />
+          </Field>
+          <Field label="Execution schedule">
+            <select
+              className="select"
+              value={edit.schedule?.kind || 'manual'}
+              onChange={(e) =>
+                setEdit({
+                  ...edit,
+                  schedule: {
+                    ...edit.schedule,
+                    kind: e.target.value as 'manual' | 'interval',
+                    intervalMinutes: edit.schedule?.intervalMinutes || 15
+                  }
+                })
+              }
+            >
+              <option value="manual">Manual trigger only</option>
+              <option value="interval">Periodic interval (background)</option>
+            </select>
+          </Field>
+          {edit.schedule?.kind === 'interval' && (
+            <>
+              <Field label="Interval (minutes)" hint="How often this agent automatically runs.">
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={edit.schedule.intervalMinutes || 15}
+                  onChange={(e) =>
+                    setEdit({
+                      ...edit,
+                      schedule: {
+                        ...edit.schedule,
+                        intervalMinutes: Math.max(1, Number(e.target.value) || 15)
+                      }
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Scheduled prompt" hint="Prompt supplied to the agent on each run.">
+                <input
+                  className="input"
+                  placeholder="Check git status and report any failing tests or dirty changes."
+                  value={edit.schedule.input || ''}
+                  onChange={(e) =>
+                    setEdit({
+                      ...edit,
+                      schedule: {
+                        ...edit.schedule,
+                        input: e.target.value
+                      }
+                    })
+                  }
+                />
+              </Field>
+            </>
+          )}
           <div>
             <h3 className="section-title">Roles and skills</h3>
             <p className="text-caption" style={{ marginBottom: 'var(--space-2)' }}>
@@ -439,7 +520,7 @@ export function Knowledge() {
   const [hits, setHits] = useState<{ docName: string; text: string; score: number }[]>([]);
   const importDocs = () => {
     setBusy(true);
-    void perform(() => window.axon.knowledgeImport()).finally(() => setBusy(false));
+    void perform(() => window.axon.knowledgeImport(), 'Documents imported').finally(() => setBusy(false));
   };
   return (
     <div className="page">
@@ -510,7 +591,7 @@ export function Knowledge() {
                       void perform(async () => {
                         await window.axon.knowledgeDelete(d.id);
                         setHits([]);
-                      });
+                      }, 'Document removed');
                   }}
                 />
               </div>
@@ -533,6 +614,202 @@ export function Knowledge() {
   );
 }
 
+interface FileTreeNodeData {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children: FileTreeNodeData[];
+}
+
+function buildFileTree(files: string[]): FileTreeNodeData[] {
+  const root: FileTreeNodeData = { name: '', path: '', isDir: true, children: [] };
+  for (const f of files) {
+    const parts = f.split('/');
+    let curr = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isDir = i < parts.length - 1;
+      const subPath = parts.slice(0, i + 1).join('/');
+      let child = curr.children.find((c) => c.name === part);
+      if (!child) {
+        child = { name: part, path: subPath, isDir, children: [] };
+        curr.children.push(child);
+      }
+      curr = child;
+    }
+  }
+  function sortNodes(nodes: FileTreeNodeData[]): FileTreeNodeData[] {
+    nodes.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const n of nodes) {
+      if (n.isDir) sortNodes(n.children);
+    }
+    return nodes;
+  }
+  return sortNodes(root.children);
+}
+
+function FileTreeNodeItem({
+  node,
+  depth,
+  activePath,
+  collapsed,
+  onToggle,
+  onOpen
+}: {
+  node: FileTreeNodeData;
+  depth: number;
+  activePath: string;
+  collapsed: Set<string>;
+  onToggle: (dirPath: string) => void;
+  onOpen: (filePath: string) => void;
+}) {
+  const isCollapsed = collapsed.has(node.path);
+
+  if (node.isDir) {
+    return (
+      <div className="file-tree-branch">
+        <button
+          className="file-item file-item-dir"
+          style={{ paddingLeft: `${depth * 14 + 6}px` }}
+          onClick={() => onToggle(node.path)}
+        >
+          <Icon icon={isCollapsed ? ChevronRight : ChevronDown} size="sm" />
+          <Icon icon={isCollapsed ? Folder : FolderOpen} size="sm" />
+          <span>{node.name}</span>
+        </button>
+        {!isCollapsed && (
+          <div className="file-tree-sub">
+            {node.children.map((child) => (
+              <FileTreeNodeItem
+                key={child.path}
+                node={child}
+                depth={depth + 1}
+                activePath={activePath}
+                collapsed={collapsed}
+                onToggle={onToggle}
+                onOpen={onOpen}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className="file-item"
+      aria-current={node.path === activePath ? 'true' : undefined}
+      style={{ paddingLeft: `${depth * 14 + 18}px` }}
+      onClick={() => onOpen(node.path)}
+    >
+      <Icon icon={FileCode} size="sm" />
+      <span>{node.name}</span>
+    </button>
+  );
+}
+
+function getCodeLanguage(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    json: 'json',
+    css: 'css',
+    html: 'html',
+    md: 'markdown',
+    py: 'python',
+    rs: 'rust',
+    go: 'go',
+    sh: 'bash',
+    bash: 'bash',
+    sql: 'sql',
+    yaml: 'yaml',
+    yml: 'yaml'
+  };
+  return langMap[ext] || 'plaintext';
+}
+
+function CodeEditorView({
+  filePath,
+  content,
+  disabled,
+  onChange
+}: {
+  filePath: string;
+  content: string;
+  disabled: boolean;
+  onChange: (val: string) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+
+  const lang = useMemo(() => getCodeLanguage(filePath), [filePath]);
+  const lines = useMemo(() => content.split('\n'), [content]);
+
+  const highlighted = useMemo(() => {
+    if (!content) return '';
+    try {
+      if (hljs.getLanguage(lang)) {
+        return hljs.highlight(content, { language: lang, ignoreIllegals: true }).value;
+      }
+      return hljs.highlightAuto(content).value;
+    } catch {
+      return content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+  }, [content, lang]);
+
+  const handleScroll = () => {
+    if (textareaRef.current && preRef.current) {
+      preRef.current.scrollTop = textareaRef.current.scrollTop;
+      preRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+    if (textareaRef.current && gutterRef.current) {
+      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
+  return (
+    <div className="code-editor-viewport">
+      <div className="code-editor-gutter" ref={gutterRef}>
+        {lines.map((_, i) => (
+          <div key={i} className="line-num">
+            {i + 1}
+          </div>
+        ))}
+      </div>
+      <div className="code-editor-pane">
+        <pre className="code-editor-pre" ref={preRef} aria-hidden="true">
+          <code
+            className={`hljs language-${lang}`}
+            dangerouslySetInnerHTML={{ __html: (highlighted || (disabled ? 'No file selected' : '')) + '\n' }}
+          />
+        </pre>
+        <textarea
+          ref={textareaRef}
+          className="code-editor-textarea"
+          aria-label="Project file editor"
+          spellCheck={false}
+          disabled={disabled}
+          value={content}
+          onChange={(e) => onChange(e.target.value)}
+          onScroll={handleScroll}
+          wrap="off"
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Code ---------- */
 export function Code() {
   const [root, setRoot] = useState<string | null>(null);
@@ -544,8 +821,27 @@ export function Code() {
   const [newPath, setNewPath] = useState('');
   const [share, setShare] = useState(false);
   const [hits, setHits] = useState<{ path: string; line: number; text: string }[]>([]);
+  const [showFiles, setShowFiles] = useState(true);
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
   const { data, chatId } = useApp();
   const dirty = content !== saved;
+  const [showDiff, setShowDiff] = useState(false);
+
+  const toggleDir = (dirPath: string) => {
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) next.delete(dirPath);
+      else next.add(dirPath);
+      return next;
+    });
+  };
+
+  const fileTree = useMemo(() => {
+    const filtered = filter.trim()
+      ? files.filter((f) => f.toLowerCase().includes(filter.toLowerCase()))
+      : files;
+    return buildFileTree(filtered);
+  }, [files, filter]);
 
   const lastAssistant = data
     ? [...data.messages]
@@ -569,6 +865,25 @@ export function Code() {
     });
   };
 
+  const saveFile = () =>
+    void perform(async () => {
+      await window.axon.projectWrite(path, content);
+      setSaved(content);
+      setFiles(await window.axon.projectList());
+      setShowDiff(false);
+    }, 'File saved');
+
+  // Ctrl/Cmd+S saves the open file, matching every other editor.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key !== 's') return;
+      event.preventDefault();
+      if (path && dirty) saveFile();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [path, content, dirty]);
+
   return (
     <div className="code-layout">
       <section className="project-panel">
@@ -577,101 +892,128 @@ export function Code() {
             <Icon icon={FolderOpen} />
             Project
           </strong>
-          <Button
-            size="sm"
-            onClick={() => {
-              if (dirty && !confirm('Discard unsaved changes?')) return;
-              void perform(async () => {
-                const next = await window.axon.projectChoose();
-                if (next) {
-                  setRoot(next);
-                  setFiles(await window.axon.projectList());
-                  setPath('');
-                  setContent('');
-                  setSaved('');
-                  setShare(false);
-                }
-              });
-            }}
-          >
-            Open folder
-          </Button>
+          <div className="row" style={{ gap: 'var(--space-2)' }}>
+            {root && (
+              <Button size="sm" variant="ghost" onClick={() => setShowFiles((v) => !v)}>
+                {showFiles ? 'Hide files' : `Files (${files.length})`}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (dirty && !confirm('Discard unsaved changes?')) return;
+                void perform(async () => {
+                  const next = await window.axon.projectChoose();
+                  if (next) {
+                    setRoot(next);
+                    setFiles(await window.axon.projectList());
+                    setPath('');
+                    setContent('');
+                    setSaved('');
+                    setShare(false);
+                  }
+                });
+              }}
+            >
+              Open folder
+            </Button>
+          </div>
         </header>
         <p className="project-root">
           {root || 'Choose a local folder. Nothing is shared with the model automatically.'}
         </p>
 
-        <form
-          className="inline-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void perform(async () => setHits(await window.axon.projectSearch(filter)));
-          }}
-        >
-          <input
-            className="input"
-            aria-label="Filter or search project"
-            placeholder="Filter files or search contents"
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setHits([]);
-            }}
-          />
-          <Button type="submit" icon={Search} iconOnly aria-label="Search project contents" />
-        </form>
+        {showFiles && (
+          <>
+            <form
+              className="inline-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void perform(async () => setHits(await window.axon.projectSearch(filter)));
+              }}
+            >
+              <input
+                className="input"
+                aria-label="Filter or search project"
+                placeholder="Filter files or search contents"
+                value={filter}
+                onChange={(e) => {
+                  setFilter(e.target.value);
+                  setHits([]);
+                }}
+              />
+              <Button type="submit" icon={Search} iconOnly aria-label="Search project contents" />
+            </form>
 
-        <div className="file-list">
-          {hits.length
-            ? hits.map((h, i) => (
-                <button key={i} className="file-item" onClick={() => open(h.path)}>
-                  {h.path}:{h.line} — {h.text}
-                </button>
-              ))
-            : files
-                .filter((f) => f.toLowerCase().includes(filter.toLowerCase()))
-                .map((f) => (
-                  <button
-                    className="file-item"
-                    aria-current={f === path ? 'true' : undefined}
-                    key={f}
-                    onClick={() => open(f)}
-                  >
-                    {f}
+            <div className="file-list">
+              {hits.length ? (
+                hits.map((h, i) => (
+                  <button key={i} className="file-item" onClick={() => open(h.path)}>
+                    {h.path}:{h.line} — {h.text}
                   </button>
-                ))}
-        </div>
+                ))
+              ) : fileTree.length > 0 ? (
+                fileTree.map((node) => (
+                  <FileTreeNodeItem
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    activePath={path}
+                    collapsed={collapsedDirs}
+                    onToggle={toggleDir}
+                    onOpen={open}
+                  />
+                ))
+              ) : (
+                <p className="text-caption" style={{ padding: 'var(--space-2)' }}>
+                  {root ? (filter ? 'No matching files.' : 'Empty directory.') : 'No folder opened.'}
+                </p>
+              )}
+            </div>
 
-        <form
-          className="inline-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (dirty && !confirm('Discard unsaved changes?')) return;
-            setPath(newPath);
-            setContent('');
-            setSaved('');
-            setShare(false);
-            setNewPath('');
-          }}
-        >
-          <input
-            className="input"
-            aria-label="New relative file path"
-            placeholder="New file, e.g. src/example.ts"
-            value={newPath}
-            onChange={(e) => setNewPath(e.target.value)}
-          />
-          <Button type="submit" disabled={!root || !newPath.trim()}>
-            Create
-          </Button>
-        </form>
+            <form
+              className="inline-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (dirty && !confirm('Discard unsaved changes?')) return;
+                setPath(newPath);
+                setContent('');
+                setSaved('');
+                setShare(false);
+                setNewPath('');
+              }}
+            >
+              <input
+                className="input"
+                aria-label="New relative file path"
+                placeholder="New file, e.g. src/example.ts"
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+              />
+              <Button type="submit" disabled={!root || !newPath.trim()}>
+                Create
+              </Button>
+            </form>
+          </>
+        )}
 
         <div className="editor-title">
           <strong>
-            {path || 'No file selected'}
-            {dirty ? ' •' : ''}
+            <span className="editor-path">{path || 'No file selected'}</span>
+            {dirty && <span className="dirty-dot" title="Unsaved changes — Ctrl+S to save" />}
           </strong>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
+            {dirty && (
+              <Button
+                size="sm"
+                variant={showDiff ? 'primary' : 'ghost'}
+                icon={ArrowLeftRight}
+                title="Toggle visual diff review"
+                onClick={() => setShowDiff((v) => !v)}
+              >
+                {showDiff ? 'Editor' : 'Diff'}
+              </Button>
+            )}
             <Button
               size="sm"
               icon={Download}
@@ -695,27 +1037,35 @@ export function Code() {
               size="sm"
               icon={Save}
               disabled={!path}
-              onClick={() =>
-                void perform(async () => {
-                  await window.axon.projectWrite(path, content);
-                  setSaved(content);
-                  setFiles(await window.axon.projectList());
-                })
-              }
+              title="Save the open file (Ctrl+S)"
+              onClick={saveFile}
             >
               Save
             </Button>
           </div>
         </div>
 
-        <textarea
-          className="textarea code-editor"
-          aria-label="Project file editor"
-          spellCheck={false}
-          disabled={!path}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-        />
+        {showDiff && dirty ? (
+          <div style={{ height: '350px', margin: 'var(--space-2) 0' }}>
+            <DiffViewer
+              oldText={saved}
+              newText={content}
+              fileName={path}
+              onAccept={saveFile}
+              onReject={() => {
+                setContent(saved);
+                setShowDiff(false);
+              }}
+            />
+          </div>
+        ) : (
+          <CodeEditorView
+            filePath={path}
+            content={content}
+            disabled={!path}
+            onChange={setContent}
+          />
+        )}
 
         <label className="checkbox">
           <input

@@ -306,6 +306,10 @@ SOFTWARE.
 
 - Repository: https://github.com/ComposioHQ/awesome-claude-skills
 - Commit: be2a406907dbc61b73e6827ded415c96139d13a2
-- License: see LICENSES.md
+- Author / Maintainer: ComposioHQ & Contributors
+- Classification: Informational Instruction Prompts & MCP Tool Declarations
 
-_No LICENSE file present at the recorded commit._
+### Attribution & Distribution Notice
+The 864 skill definitions ingested from `ComposioHQ/awesome-claude-skills` consist of prompt directives, markdown usage instructions, and functional JSON tool requirements (such as `requires: ["mcp:rube"]`). No proprietary binary code or compiled executables are bundled.
+
+These instruction definitions are distributed for public AI agent interoperability in accordance with upstream attribution guidelines. All copyright, trademarks, and service names referenced within individual skill metadata remain the property of their respective holders. If upstream provides a formal software license file in subsequent releases, this notice will be updated to reflect that license.

@@ -138,21 +138,49 @@ export function SkillPicker({
 }) {
   const data = useApp((s) => s.data)!;
   const { items, bySize } = useMemo(() => {
-    const items: Item[] = data.skills.map((s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      group: s.category,
-      meta: (
-        <>
-          {!s.supported && <span className="badge">Needs tools</span>}
-          <span>{kb(s.bytes)}</span>
-        </>
-      )
-    }));
+    const mcpServers = data.mcpServers || [];
+    const items: Item[] = data.skills.map((s) => {
+      let mcpMatch: string | null = null;
+      if (!s.supported && s.requires?.length) {
+        for (const req of s.requires) {
+          if (req.startsWith('mcp:')) {
+            const needed = req.slice(4).toLowerCase();
+            const matching = mcpServers.find(
+              (srv) =>
+                srv.enabled &&
+                (srv.name.toLowerCase().includes(needed) || srv.id.toLowerCase().includes(needed))
+            );
+            if (matching) {
+              mcpMatch = matching.name;
+              break;
+            }
+          }
+        }
+      }
+
+      return {
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        group: s.category,
+        meta: (
+          <>
+            {!s.supported &&
+              (mcpMatch ? (
+                <span className="badge badge-accent" title={`Provided by active MCP server: ${mcpMatch}`}>
+                  Available via {mcpMatch}
+                </span>
+              ) : (
+                <span className="badge">Needs tools</span>
+              ))}
+            <span>{kb(s.bytes)}</span>
+          </>
+        )
+      };
+    });
     const bySize = new Map(data.skills.map((s) => [s.id, s.bytes]));
     return { items, bySize };
-  }, [data.skills]);
+  }, [data.skills, data.mcpServers]);
   return (
     <CatalogPicker
       title="Skills"

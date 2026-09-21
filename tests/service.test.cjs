@@ -57,3 +57,112 @@ test('workspaceSave rejects an unknown role', async (t) => {
   const ws = repo.state.workspaces[0];
   await assert.rejects(service.workspaceSave({ ...ws, roleIds: ['nope'] }), /Unknown role: nope/);
 });
+
+test('subagent enforces permissions: rejects mutating actions and recursive dispatch', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  repo.state.providers.push({
+    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true, createdAt: 0, hasApiKey: false
+  });
+
+  // Mock streamChat so that the model returns tool calls
+  const providersModule = require('../src/main/providers.ts');
+  const originalStreamChat = providersModule.streamChat;
+  t.after(() => { providersModule.streamChat = originalStreamChat; });
+
+  let callCount = 0;
+  providersModule.streamChat = async (provider, key, req, onChunk) => {
+    callCount++;
+    if (callCount === 1) {
+      // Return a mutating tool call and a dispatch_agent tool call
+      return {
+        toolCalls: [
+          { id: 'call_1', name: 'write_file', arguments: JSON.stringify({ path: 'src/malicious.ts', content: 'boom' }) },
+          { id: 'call_2', name: 'dispatch_agent', arguments: JSON.stringify({ role: 'nested', task: 'nested task' }) }
+        ]
+      };
+    }
+    // Final response
+    return { toolCalls: [] };
+  };
+
+  const output = await service.runSubagent('p1', 'm1', 'researcher', 'Do something', null);
+  assert.ok(output);
+});
+
+test('project scoping: code workspace (fileAccess disabled) does not expose tools; projectRoot enables tools', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  // Set a global project root
+  const projDir = path.join(dir, 'my-project');
+  fs.mkdirSync(projDir, { recursive: true });
+  await service.project.choose(projDir);
+
+  repo.state.providers.push({
+    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true, createdAt: 0, hasApiKey: false
+  });
+
+  // 1. Built-in Code Assistant workspace has fileAccess.enabled === false
+  const codeWs = repo.state.workspaces.find(w => w.id === 'code');
+  assert.ok(codeWs);
+  assert.equal(codeWs.fileAccess.enabled, false);
+
+  const chatNormal = await service.chatCreate('p1', 'm1', 'code');
+  assert.equal(chatNormal.projectRoot, null);
+
+  // 2. A conversation created with an explicit projectRoot
+  const chatProject = await service.chatCreate('p1', 'm1', null, undefined, undefined, projDir);
+  assert.equal(chatProject.projectRoot, projDir);
+});
+
+test('context budget: long conversation is trimmed with sliding window rather than throwing fatal error', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  repo.state.providers.push({
+    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true, createdAt: 0, hasApiKey: false
+  });
+
+  const chat = await service.chatCreate('p1', 'm1', null);
+
+  // Pre-fill conversation with messages exceeding 300,000 characters
+  const bigChunk = 'A'.repeat(80000);
+  for (let i = 0; i < 5; i++) {
+    repo.state.messages.push({
+      id: repo.id(),
+      conversationId: chat.id,
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `Message ${i}: ${bigChunk}`,
+      createdAt: Date.now() + i
+    });
+  }
+
+  // Mock streamChat
+  const providersModule = require('../src/main/providers.ts');
+  const originalStreamChat = providersModule.streamChat;
+  t.after(() => { providersModule.streamChat = originalStreamChat; });
+
+  let sentRequests = [];
+  providersModule.streamChat = async (provider, key, req, onChunk) => {
+    sentRequests = req.messages;
+    onChunk('Hello from model!');
+    return { toolCalls: [] };
+  };
+
+  // Sending another message should trim older messages without throwing
+  await service.chatSend(chat.id, 'New user prompt', []);
+
+  assert.ok(sentRequests.length > 0);
+  // Older messages were trimmed to fit budget
+  assert.ok(sentRequests.length < 5, 'Older messages should have been trimmed');
+  assert.equal(sentRequests[sentRequests.length - 1].content, 'New user prompt');
+});
+

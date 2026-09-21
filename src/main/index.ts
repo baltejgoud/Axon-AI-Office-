@@ -11,7 +11,7 @@ let service: Service;
 let quitting = false;
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'snapshot', 'providerSave', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
-  'settingsSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
+  'settingsSave', 'mcpServerSave', 'mcpServerDelete', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectList', 'projectRead', 'projectWrite', 'projectSearch'
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');
@@ -36,8 +36,10 @@ else {
     service = new Service(repo, new Vault(paths.secrets), paths.root, event => {
       if (window && !window.isDestroyed()) window.webContents.send('platform:stream', event);
     }, join(__dirname, 'parse-worker.js'));
-    session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-    session.defaultSession.setPermissionCheckHandler(() => false);
+    // Copy buttons need clipboard writes; every other web permission stays denied.
+    const allowed = new Set(['clipboard-sanitized-write']);
+    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(allowed.has(permission)));
+    session.defaultSession.setPermissionCheckHandler((_contents, permission) => allowed.has(permission));
     for (const method of methods) ipcMain.handle(`platform:${method}`, (event, ...args: unknown[]) => {
       const expected = !app.isPackaged && process.env.ELECTRON_RENDERER_URL ? process.env.ELECTRON_RENDERER_URL : pathToFileURL(rendererFile).href;
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url.split('#')[0] !== expected.replace(/\/$/, '') && event.senderFrame.url.split('#')[0] !== `${expected.replace(/\/$/, '')}/`) throw new Error('Untrusted IPC sender.');

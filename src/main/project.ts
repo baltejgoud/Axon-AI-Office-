@@ -1,5 +1,6 @@
 import { lstat, realpath, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, extname } from 'node:path';
+import { execFile } from 'node:child_process';
 const excluded = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.next', 'vendor', '.venv', '.ssh', '.aws']);
 export function allowedName(name: string): boolean {
   return !excluded.has(name) && !/^\.env($|\.)/i.test(name) && !/\.(pem|key|pfx|p12|exe|dll|zip|png|jpg|jpeg|gif|ico|mp4|pdf|docx|xlsx)$/i.test(name);
@@ -65,5 +66,73 @@ export class Project {
       if (hits.length >= 150) break;
     }
     return hits;
+  }
+  async getGitContext(): Promise<string> {
+    if (!this.root) return '';
+    const execGit = (args: string[]): Promise<string> =>
+      new Promise((resolvePromise) => {
+        execFile('git', args, { cwd: this.root!, timeout: 5000 }, (err, stdout) => {
+          if (err) resolvePromise('');
+          else resolvePromise(stdout.trim());
+        });
+      });
+
+    try {
+      const branch = await execGit(['branch', '--show-current']);
+      const status = await execGit(['status', '--short']);
+      const diffStat = await execGit(['diff', '--stat']);
+
+      if (!branch && !status && !diffStat) return '';
+
+      return [
+        '### Git Context',
+        branch ? `Branch: ${branch}` : '',
+        status ? `Status:\n${status.slice(0, 1000)}` : '',
+        diffStat ? `Diff:\n${diffStat.slice(0, 1000)}` : ''
+      ].filter(Boolean).join('\n');
+    } catch {
+      return '';
+    }
+  }
+  async getProjectMap(): Promise<string> {
+    if (!this.root) return '';
+    const files = await this.list();
+    const sample = files.slice(0, 100).join('\n');
+    const totalFiles = files.length;
+    return `### Project Structure (${totalFiles} files)\n\`\`\`\n${sample}${totalFiles > 100 ? `\n... and ${totalFiles - 100} more files` : ''}\n\`\`\``;
+  }
+  async getProjectContext(): Promise<string> {
+    if (!this.root) return '';
+    const parts: string[] = [`## Open Project: ${this.root}`];
+
+    for (const manifest of ['package.json', 'Cargo.toml', 'pyproject.toml']) {
+      try {
+        const content = await this.read(manifest);
+        parts.push(`### ${manifest}\n\`\`\`\n${content.slice(0, 3000)}\n\`\`\``);
+        break;
+      } catch {}
+    }
+
+    for (const directive of ['AGENTS.md', 'CLAUDE.md', '.cursorrules']) {
+      try {
+        const content = await this.read(directive);
+        parts.push(`### Directives (${directive})\n${content.slice(0, 6000)}`);
+      } catch {}
+    }
+
+    try {
+      const memory = await this.read('.axon/MEMORY.md');
+      if (memory.trim()) {
+        parts.push(`### Persistent Project Memory (.axon/MEMORY.md)\n${memory.slice(0, 6000)}`);
+      }
+    } catch {}
+
+    const git = await this.getGitContext();
+    if (git) parts.push(git);
+
+    const map = await this.getProjectMap();
+    if (map) parts.push(map);
+
+    return parts.join('\n\n');
   }
 }

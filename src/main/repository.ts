@@ -7,13 +7,15 @@ import { join } from 'node:path';
 export function initialState(): PlatformState {
   const now = Date.now();
   return { version: 1, providers: [], conversations: [], messages: [], agents: [], documents: [], chunks: [],
-    workspaces: [{ id: 'code', name: 'Code', description: 'Understand, build, and improve your projects.', icon: '⌘',
+    workspaces: [{ id: 'code', name: 'Code Assistant', description: 'Understand, build, and improve your projects with a conversational engineering assistant.', icon: '⌘',
       systemPrompt: 'You are a careful software engineering assistant. Explain changes and provide complete code. You cannot execute commands or edit files directly. Ask the user to review changes before applying them.',
       instructions: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [],
       skillIds: [], roleIds: [],
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
     settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
-      streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' } };
+      streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' },
+    mcpServers: []
+  };
 }
 
 const BACKUPS_KEPT = 10;
@@ -57,6 +59,11 @@ export class Repository {
     // v1 gained skillIds/roleIds on conversations, workspaces and agents (2026-09). Default them.
     for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds?: string[]; roleIds?: string[] }[][])
       for (const item of list ?? []) { item.skillIds ??= []; item.roleIds ??= []; }
+    state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
+    const codeWs = state.workspaces?.find(w => w.id === 'code');
+    if (codeWs && codeWs.name === 'Code') {
+      codeWs.name = 'Code Assistant';
+    }
   }
 
   private validate(state: PlatformState): void {

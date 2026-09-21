@@ -67,11 +67,13 @@ export interface Message {
   conversationId: ID;
   role: MessageRole;
   content: string;
+  thought?: string;
   createdAt: number;
   providerId?: ID;
   modelId?: string;
   attachments?: Attachment[];
   toolCalls?: ToolCall[];
+  toolCallId?: string;
   error?: string;
   /** Reported provider usage for assistant responses. */
   usage?: ChatUsage;
@@ -87,6 +89,8 @@ export interface Conversation {
   modelId: string;
   skillIds: string[];
   roleIds: string[];
+  agentId?: ID;
+  projectRoot?: string | null;
   createdAt: number;
   updatedAt: number;
   pinned?: boolean;
@@ -195,6 +199,21 @@ export interface Settings {
   dataDirectoryNote: string;
 }
 
+/* ------------------------------------ MCP ------------------------------------- */
+
+export interface MCPServerConfig {
+  id: ID;
+  name: string;
+  transport: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  apiKey?: string;
+  enabled: boolean;
+}
+
 /* ------------------------------ Provider runtime ------------------------------ */
 
 export interface ChatRequestMessage {
@@ -204,6 +223,7 @@ export interface ChatRequestMessage {
   /** For role === 'tool'. */
   name?: string;
   toolCallId?: string;
+  toolCalls?: ToolCall[];
 }
 
 export interface ToolDefinition {
@@ -235,8 +255,29 @@ export interface ChatResponse {
 
 export type StreamDelta =
   | { type: 'text'; text: string }
+  | { type: 'thought'; text: string }
   | { type: 'tool_call'; id: string; name: string; arguments: string }
   | { type: 'usage'; usage: ChatUsage };
+
+export interface ToolApprovalRequest {
+  id: string;
+  conversationId: ID;
+  messageId: ID;
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, any>;
+  preview?: {
+    type: 'diff' | 'command' | 'generic';
+    content: string;
+    path?: string;
+  };
+}
+
+export interface ToolApprovalDecision {
+  requestId: string;
+  approved: boolean;
+  alwaysAllowSession?: boolean;
+}
 
 /* --------------------------------- Streaming ---------------------------------- */
 
@@ -247,10 +288,15 @@ export type StreamEvent =
       messageId: ID;
       /** Full accumulated assistant text at the time of the event. */
       contentSoFar?: string;
+      delta?: string;
+      thoughtDelta?: string;
+      thoughtSoFar?: string;
       error?: string;
       usage?: ChatUsage;
       streaming?: boolean;
       done: boolean;
+      toolCall?: ToolCall;
+      approvalRequired?: ToolApprovalRequest;
     }
   | {
       channel: 'agent';

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X, type LucideIcon } from 'lucide-react';
+import { Check, X, type LucideIcon } from 'lucide-react';
+import { useApp } from '../state';
 
 /* ---------- Icon ---------- */
 const iconSizes = { sm: 14, md: 16, lg: 20, xl: 32 } as const;
@@ -10,11 +11,13 @@ export type IconSize = keyof typeof iconSizes;
 export function Icon({
   icon: Glyph,
   size = 'md',
-  label
+  label,
+  className = ''
 }: {
   icon: LucideIcon;
   size?: IconSize;
   label?: string;
+  className?: string;
 }) {
   return (
     <Glyph
@@ -23,7 +26,35 @@ export function Icon({
       aria-hidden={label ? undefined : true}
       aria-label={label}
       role={label ? 'img' : undefined}
+      className={className}
     />
+  );
+}
+
+/* ---------- Axon Logo ---------- */
+export function AxonLogo({ size = 20, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M8 8L16 16M16 16L24 10M16 16L8 24M16 16L24 22"
+        stroke="currentColor"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <circle cx="8" cy="8" r="3.5" fill="currentColor" />
+      <circle cx="24" cy="10" r="3.5" fill="currentColor" />
+      <circle cx="8" cy="24" r="3.5" fill="currentColor" />
+      <circle cx="24" cy="22" r="3.5" fill="currentColor" />
+      <circle cx="16" cy="16" r="3" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -177,6 +208,24 @@ export function PageHeader({
       </div>
       {actions && <div className="row">{actions}</div>}
     </header>
+  );
+}
+
+/* ---------- ToastStack ---------- */
+/** Transient confirmations for save/delete/copy actions. Mount once at the app root. */
+export function ToastStack() {
+  const { toasts, dismissToast } = useApp();
+  if (!toasts.length) return null;
+  return createPortal(
+    <div className="toast-stack" role="status" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast toast-${t.tone}`} onClick={() => dismissToast(t.id)}>
+          <Icon icon={t.tone === 'error' ? X : Check} size="sm" />
+          <span>{t.message}</span>
+        </div>
+      ))}
+    </div>,
+    document.body
   );
 }
 

@@ -136,34 +136,43 @@
   --inset-page: clamp(var(--space-6), 4vw, var(--space-12));
   --page-max-width: 1120px;
   --reading-max-width: 800px;
+  --axon-bg: #f7f8fa;
+  --axon-surface: #ffffff;
+  --axon-surface-alt: #f1f4f8;
+  --axon-text-primary: #111827;
+  --axon-text-secondary: #667085;
+  --axon-accent-green: #10a37f;
+  --axon-accent-mint: #ddf7f0;
+  --axon-border: #e5e7eb;
+  --axon-focus: #7c3aed;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --surface-app: var(--slate-50);
-  --surface-sidebar: var(--slate-100);
+  --surface-app: #f7f8fa;
+  --surface-sidebar: #ffffff;
   --surface-panel: #ffffff;
   --surface-raised: #ffffff;
-  --surface-hover: var(--slate-200);
-  --surface-active: var(--slate-300);
-  --surface-code: var(--slate-900);
-  --surface-scrim: rgb(15 23 42 / 0.45);
+  --surface-hover: #f1f4f8;
+  --surface-active: #e2e8f0;
+  --surface-code: #111827;
+  --surface-scrim: rgb(17 24 39 / 0.45);
 
-  --border-subtle: var(--slate-200);
-  --border-default: var(--slate-300);
-  --border-strong: var(--slate-400);
+  --border-subtle: #e5e7eb;
+  --border-default: #e5e7eb;
+  --border-strong: #d1d5db;
 
-  --text-primary: var(--slate-900);
-  --text-secondary: var(--slate-600);
-  --text-tertiary: var(--slate-500);
+  --text-primary: #111827;
+  --text-secondary: #667085;
+  --text-tertiary: #9ca3af;
   --text-on-accent: #ffffff;
-  --text-code: var(--slate-200);
+  --text-code: #f1f4f8;
 
-  --accent: var(--green-700);
-  --accent-hover: var(--green-600);
-  --accent-text: var(--green-700);
-  --accent-soft: rgb(21 128 61 / 0.1);
+  --accent: #10a37f;
+  --accent-hover: #0e8c6d;
+  --accent-text: #10a37f;
+  --accent-soft: #ddf7f0;
 
   --danger: var(--red-700);
   --danger-text: var(--red-700);
@@ -171,7 +180,8 @@
 
   --warning-text: var(--amber-600);
 
-  --ring: var(--green-600);
-  --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.06);
-  --shadow-overlay: 0 24px 64px rgb(15 23 42 / 0.18);
+  --ring: #7c3aed;
+  --shadow-panel: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.06);
 }
+
