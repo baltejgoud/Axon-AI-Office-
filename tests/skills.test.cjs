@@ -89,7 +89,9 @@ test('buildCatalog walks a repo, dedupes, categorizes and flags scripts', () => 
 test('buildCatalog rejects a body over MAX_BODY', () => {
   const os = require('node:os'); const fs = require('node:fs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-skill-'));
-  fs.mkdirSync(path.join(dir, 'skills', 'big'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'skills', 'big', 'SKILL.md'), `---\nname: big\ndescription: d\n---\n${'x'.repeat(MAX_BODY + 1)}`);
-  assert.throws(() => buildCatalog(dir, 'fx'), /exceeds 64000/);
+  try {
+    fs.mkdirSync(path.join(dir, 'skills', 'big'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'skills', 'big', 'SKILL.md'), `---\nname: big\ndescription: d\n---\n${'x'.repeat(MAX_BODY + 1)}`);
+    assert.throws(() => buildCatalog(dir, 'fx'), /exceeds 64000/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

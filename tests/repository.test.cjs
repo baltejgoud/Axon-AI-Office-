@@ -72,23 +72,25 @@ test('each save writes a rolling backup and prunes to ten', async () => {
 
 test('migrate defaults skillIds/roleIds on old data and validate rejects non-arrays', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-repo-'));
-  const db = path.join(dir, 'db'); fs.mkdirSync(db);
-  const now = Date.now();
-  const legacy = {
-    version: 1, providers: [], messages: [], agents: [{ id: 'a', name: 'A', systemPrompt: 's', providerId: null, modelId: null, tools: [], workspaceId: null, maxSteps: 1, schedule: { kind: 'manual' }, createdAt: now, updatedAt: now }],
-    documents: [], chunks: [],
-    conversations: [{ id: 'c', title: 't', providerId: 'p', modelId: 'm', workspaceId: null, createdAt: now, updatedAt: now }],
-    workspaces: [{ id: 'w', name: 'W', systemPrompt: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
-    settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
-  };
-  fs.writeFileSync(path.join(db, 'platform-v1.json'), JSON.stringify(legacy));
-  const repo = new Repository(db, path.join(dir, 'backups'));
-  assert.deepEqual(repo.state.conversations[0].skillIds, []);
-  assert.deepEqual(repo.state.workspaces[0].roleIds, []);
-  assert.deepEqual(repo.state.agents[0].skillIds, []);
+  try {
+    const db = path.join(dir, 'db'); fs.mkdirSync(db);
+    const now = Date.now();
+    const legacy = {
+      version: 1, providers: [], messages: [], agents: [{ id: 'a', name: 'A', systemPrompt: 's', providerId: null, modelId: null, tools: [], workspaceId: null, maxSteps: 1, schedule: { kind: 'manual' }, createdAt: now, updatedAt: now }],
+      documents: [], chunks: [],
+      conversations: [{ id: 'c', title: 't', providerId: 'p', modelId: 'm', workspaceId: null, createdAt: now, updatedAt: now }],
+      workspaces: [{ id: 'w', name: 'W', systemPrompt: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
+      settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
+    };
+    fs.writeFileSync(path.join(db, 'platform-v1.json'), JSON.stringify(legacy));
+    const repo = new Repository(db, path.join(dir, 'backups'));
+    assert.deepEqual(repo.state.conversations[0].skillIds, []);
+    assert.deepEqual(repo.state.workspaces[0].roleIds, []);
+    assert.deepEqual(repo.state.agents[0].skillIds, []);
 
-  const bad = { ...legacy, conversations: [{ ...legacy.conversations[0], skillIds: 'nope' }] };
-  fs.writeFileSync(path.join(db, 'platform-v1.json'), JSON.stringify(bad));
-  const fresh = new Repository(db, path.join(dir, 'backups'));
-  assert.equal(fresh.state.conversations.length, 0, 'invalid file is quarantined and replaced');
+    const bad = { ...legacy, conversations: [{ ...legacy.conversations[0], skillIds: 'nope' }] };
+    fs.writeFileSync(path.join(db, 'platform-v1.json'), JSON.stringify(bad));
+    const fresh = new Repository(db, path.join(dir, 'backups'));
+    assert.equal(fresh.state.conversations.length, 0, 'invalid file is quarantined and replaced');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
