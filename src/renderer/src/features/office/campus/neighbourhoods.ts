@@ -5,7 +5,6 @@ import { boardKind, decorateDepartment } from './decor';
 
 const FACE_FRONT = 0;
 const FACE_BACK = Math.PI;
-const FACE_LEFT = -Math.PI / 2;
 
 /** Pod pitch: a 3.2 x 1.6 pod plus chairs, with at least 1.6 m of aisle on every side. */
 const POD_PITCH_X = 4.8;
@@ -160,16 +159,23 @@ function packLeadership(b: LayoutBuilder, district: District, members: string[])
       const index = row * cols + col;
       const left = minX + col * width;
       const cx = left + width / 2;
-      b.wall(`exec-back-${index}`, 'glass', left, top, left + width, top);
+      // The back row backs onto the campus wall: panelled and hung with art. The front row stays glass.
+      b.wall(`exec-back-${index}`, row === 0 ? 'solid' : 'glass', left, top, left + width, top);
       b.wall(`exec-front-${index}-a`, 'glass', left, bottom, cx - 0.6, bottom);
       b.wall(`exec-front-${index}-b`, 'glass', cx + 0.6, bottom, left + width, bottom);
 
       const id = `desk-exec-${index}`;
-      b.rug(`rug-exec-${index}`, cx, top + 3.6, width - 0.8, 5.2);
-      b.item(`exec-desk-${index}`, 'desk', cx, top + 2.9, 1.7, 0.8);
-      b.deskSeat(id, 'agents', cx, top + 2.15, FACE_FRONT, 'office-chair', tags);
+      b.item(`exec-rug-${index}`, 'exec-rug', cx, top + 3.9, 3.2, 5.4, { blocks: false });
+      if (row === 0) b.item(`exec-art-${index}`, 'wall-art', cx, top + 0.1, width - 0.1, 0.04, { blocks: false });
+      else b.item(`exec-art-${index}`, 'ledge-art', cx, top + 0.12, width - 0.4, 0.12, { blocks: false });
+      b.item(`exec-credenza-${index}`, 'exec-credenza', cx, top + 0.4, 1.6, 0.45);
+      b.item(`exec-desk-${index}`, 'exec-desk', cx, top + 2.9, 1.8, 0.85);
+      b.deskSeat(id, 'agents', cx, top + 2.15, FACE_FRONT, 'exec-chair', tags);
       b.visit(id, cx, top + 3.9);
-      b.item(`exec-armchair-${index}`, 'armchair', cx + 1.05, top + 5.7, 0.85, 0.85, { rotation: FACE_LEFT });
+      // A pair of armchairs across a low table, clear of the walk from the door to the desk.
+      b.item(`exec-armchair-${index}-1`, 'armchair', cx + 1.25, top + 4.45, 0.85, 0.85);
+      b.item(`exec-armchair-${index}-2`, 'armchair', cx + 1.25, top + 6.15, 0.85, 0.85, { rotation: FACE_BACK });
+      b.item(`exec-table-${index}`, 'coffee-table', cx + 1.25, top + 5.3, 0.6, 0.6, { round: true });
       b.plant(`plant-exec-${index}`, left + 0.45, top + 0.45, true);
       b.setup({
         poiId: id,

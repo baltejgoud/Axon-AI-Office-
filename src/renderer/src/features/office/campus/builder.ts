@@ -61,7 +61,13 @@ export type FurnitureKind =
   | 'bike-rack'
   | 'coat-rack'
   | 'pendant-lamp'
-  | 'coffee-station';
+  | 'coffee-station'
+  | 'exec-desk'
+  | 'exec-chair'
+  | 'exec-credenza'
+  | 'wall-art'
+  | 'ledge-art'
+  | 'exec-rug';
 
 export interface FurnitureItem {
   id: string;
@@ -109,6 +115,7 @@ const HEIGHTS: Record<WallKind, number> = { solid: 2.7, glass: 2.3, low: 0.32 };
 
 const SEAT_FOOTPRINT: Partial<Record<FurnitureKind, number>> = {
   'office-chair': 0.56,
+  'exec-chair': 0.62,
   'meeting-chair': 0.54,
   armchair: 0.85,
   stool: 0.4,

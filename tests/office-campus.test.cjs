@@ -138,6 +138,23 @@ test('the nearest coffee is the café for the Commons and a station far away', (
   assert.notEqual(pick, 'cafe');
 });
 
+test('each executive office is furnished', () => {
+  for (let i = 0; i < 10; i++) {
+    for (const kind of ['exec-desk', 'exec-credenza', 'exec-rug'])
+      assert.ok(layout.FURNITURE.some((f) => f.kind === kind && f.id.endsWith(`-${i}`)), `${kind} ${i}`);
+    assert.equal(
+      layout.FURNITURE.filter((f) => f.kind === 'armchair' && f.id.startsWith(`exec-armchair-${i}-`)).length,
+      2
+    );
+    assert.equal(layout.FURNITURE.find((f) => f.id === `desk-exec-${i}-seat`).kind, 'exec-chair');
+  }
+  const art = layout.FURNITURE.filter((f) => f.kind === 'wall-art' || f.kind === 'ledge-art');
+  assert.equal(art.length, 10);
+  const backRow = layout.WALLS.filter((w) => /^exec-back-[0-4]$/.test(w.id));
+  assert.equal(backRow.length, 5);
+  assert.ok(backRow.every((w) => w.kind === 'solid'));
+});
+
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });

@@ -14,6 +14,7 @@ import {
   type ScreenFlavor
 } from './materials';
 import * as commons from './commonsProps';
+import * as exec from './executive';
 import * as props from './props';
 import { bookshelf, coffeeMachine, group, largePlant, plant, seeded, type CoffeeMachine } from './kit';
 
@@ -498,6 +499,18 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       const built = cafeCounter(itemDef);
       return { object: built.group, light: built.light, steam: built.steam };
     }
+    case 'exec-desk':
+      return { object: exec.execDesk(itemDef) };
+    case 'exec-chair':
+      return { object: exec.execChair() };
+    case 'exec-credenza':
+      return { object: exec.execCredenza(itemDef) };
+    case 'wall-art':
+      return { object: exec.wallArt(itemDef) };
+    case 'ledge-art':
+      return { object: exec.ledgeArt(itemDef) };
+    case 'exec-rug':
+      return { object: exec.execRug(itemDef) };
     case 'coffee-station': {
       const built = commons.coffeeStation(itemDef);
       return { object: built.group, light: built.light, steam: built.steam };
@@ -574,6 +587,7 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
 /** Seat height by furniture kind, so people sit on the cushion rather than float or sink. */
 export const SEAT_HEIGHT: Partial<Record<FurnitureItem['kind'], number>> = {
   'office-chair': 0.5,
+  'exec-chair': 0.5,
   'meeting-chair': 0.49,
   armchair: 0.47,
   stool: 0.75,
