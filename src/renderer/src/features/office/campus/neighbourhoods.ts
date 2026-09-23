@@ -166,7 +166,8 @@ function packLeadership(b: LayoutBuilder, district: District, members: string[])
 
       const id = `desk-exec-${index}`;
       b.item(`exec-rug-${index}`, 'exec-rug', cx, top + 3.9, 3.2, 5.4, { blocks: false });
-      if (row === 0) b.item(`exec-art-${index}`, 'wall-art', cx, top + 0.1, width - 0.1, 0.04, { blocks: false });
+      if (row === 0)
+        b.item(`exec-art-${index}`, 'wall-art', cx, top + 0.1, width - 0.1, 0.04, { blocks: false });
       else b.item(`exec-art-${index}`, 'ledge-art', cx, top + 0.12, width - 0.4, 0.12, { blocks: false });
       b.item(`exec-credenza-${index}`, 'exec-credenza', cx, top + 0.4, 1.6, 0.45);
       b.item(`exec-desk-${index}`, 'exec-desk', cx, top + 2.9, 1.8, 0.85);
@@ -174,7 +175,9 @@ function packLeadership(b: LayoutBuilder, district: District, members: string[])
       b.visit(id, cx, top + 3.9);
       // A pair of armchairs across a low table, clear of the walk from the door to the desk.
       b.item(`exec-armchair-${index}-1`, 'armchair', cx + 1.25, top + 4.45, 0.85, 0.85);
-      b.item(`exec-armchair-${index}-2`, 'armchair', cx + 1.25, top + 6.15, 0.85, 0.85, { rotation: FACE_BACK });
+      b.item(`exec-armchair-${index}-2`, 'armchair', cx + 1.25, top + 6.15, 0.85, 0.85, {
+        rotation: FACE_BACK
+      });
       b.item(`exec-table-${index}`, 'coffee-table', cx + 1.25, top + 5.3, 0.6, 0.6, { round: true });
       b.plant(`plant-exec-${index}`, left + 0.45, top + 0.45, true);
       b.setup({

@@ -598,7 +598,8 @@
   background: #1c9e72;
 }
 .activity-composer {
-  padding: 16px;
+  container-type: inline-size;
+  padding: 12px;
   border-top: 1px solid var(--office-border);
   flex: none;
   background: var(--office-paper);
@@ -643,21 +644,26 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-content: space-between;
-  padding-top: 6px;
+  padding-top: 8px;
 }
 .composer-actions-row .btn-icon-subtle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
   color: var(--office-muted);
 }
 .composer-hint {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--office-muted);
 }
 .composer-btn-send {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 50%;
   color: #fff;
@@ -881,14 +887,30 @@ sized for the side panel. */
   flex: none;
 }
 
-/* Composer: model pill and the no-model call to action. */
-.composer-actions-row .model-select-pill-container {
-  min-width: 0;
-  max-width: 55%;
+/* Composer: model chip, the hint that always shows, and the no-model call to action. */
+.composer-actions-row .model-chip {
+  flex: 0 1 auto;
+  max-width: 50%;
 }
 .composer-actions-row .composer-hint {
   margin-left: auto;
   white-space: nowrap;
+}
+/* In a narrow panel the hint takes its own line under the buttons rather than disappearing. */
+@container (max-width: 360px) {
+  .composer-actions-row {
+    flex-wrap: wrap;
+  }
+  .composer-actions-row .composer-hint {
+    order: 5;
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: right;
+  }
+  .composer-actions-row .composer-btn-send,
+  .composer-actions-row .composer-connect {
+    margin-left: auto;
+  }
 }
 .composer-connect {
   border: 0;
@@ -923,11 +945,6 @@ sized for the side panel. */
   .activity-menu,
   .office-thread .message {
     animation: none;
-  }
-}
-@media (max-width: 1300px) {
-  .composer-actions-row .composer-hint {
-    display: none;
   }
 }
 @keyframes office-pulse {

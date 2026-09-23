@@ -199,6 +199,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           </button>
 
           <ModelSelect
+            compact
             size="sm"
             value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
             disabled={Boolean(conversation) || isBusy}
@@ -208,7 +209,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             onChange={(value) => patch({ model: value })}
           />
 
-          <span className="composer-hint">Shift+Enter for newline</span>
+          <span className="composer-hint">Shift+Enter for a new line</span>
 
           {needsModel ? (
             <button

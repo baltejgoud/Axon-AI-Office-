@@ -142,25 +142,27 @@ const roomSigns: SignSpec[] = (Object.keys(ROOM_SIGN_POINTS) as Exclude<ZoneId, 
 });
 
 /** Each executive's title on the glass beside their office door (the door is 4.85 m in front of the chair). */
-const nameplates: SignSpec[] = OFFICE_AGENTS.filter((agent) => agent.district === 'leadership').map((agent) => {
-  const desk = HOME_DESKS[agent.id];
-  const seat = poiById(desk).position;
-  return {
-    id: `nameplate:${desk}`,
-    kind: 'nameplate',
-    target: desk,
-    title: titleAbbreviation(agent.name),
-    color: districtById('leadership').color,
-    x: seat.x + 1.15,
-    y: 1.42,
-    z: seat.z + 4.85 + 0.03,
-    width: 0.5,
-    height: 0.16,
-    letter: 0.08,
-    hanging: false,
-    faceCamera: false,
-    maxScale: 1
-  };
-});
+const nameplates: SignSpec[] = OFFICE_AGENTS.filter((agent) => agent.district === 'leadership').map(
+  (agent) => {
+    const desk = HOME_DESKS[agent.id];
+    const seat = poiById(desk).position;
+    return {
+      id: `nameplate:${desk}`,
+      kind: 'nameplate',
+      target: desk,
+      title: titleAbbreviation(agent.name),
+      color: districtById('leadership').color,
+      x: seat.x + 1.15,
+      y: 1.42,
+      z: seat.z + 4.85 + 0.03,
+      width: 0.5,
+      height: 0.16,
+      letter: 0.08,
+      hanging: false,
+      faceCamera: false,
+      maxScale: 1
+    };
+  }
+);
 
 export const SIGNS: readonly SignSpec[] = [...districtSigns, ...departmentSigns, ...roomSigns, ...nameplates];

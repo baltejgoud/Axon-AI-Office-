@@ -192,7 +192,12 @@ export class OfficeScene {
         focus: (x, z, span) => this.cameraRig.focus({ x, z }, span),
         signs: () => this.signs.info(),
         signPoint: (id) =>
-          this.signs.screenPoint(id, this.cameraRig.camera, this.container.clientWidth, this.container.clientHeight),
+          this.signs.screenPoint(
+            id,
+            this.cameraRig.camera,
+            this.container.clientWidth,
+            this.container.clientHeight
+          ),
         view: () => ({
           bounds: this.cameraRig.viewBounds(),
           target: this.cameraRig.target(),

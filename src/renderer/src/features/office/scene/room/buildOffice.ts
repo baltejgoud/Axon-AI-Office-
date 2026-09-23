@@ -324,7 +324,9 @@ export function buildOffice(): OfficeRoom {
       for (const { spots, mesh, steam } of lights) {
         const inUse = spots.some(busy);
         const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = inUse ? 0.9 + Math.sin(elapsed * (spots[0] === 'printer' ? 9 : 4)) * 0.6 : 0.35;
+        material.emissiveIntensity = inUse
+          ? 0.9 + Math.sin(elapsed * (spots[0] === 'printer' ? 9 : 4)) * 0.6
+          : 0.35;
         if (steam) animateSteam(steam, inUse, elapsed);
       }
     },

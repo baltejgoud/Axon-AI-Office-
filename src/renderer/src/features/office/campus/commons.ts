@@ -47,7 +47,9 @@ export const COMMONS_ROOM_NAMES: Readonly<Record<ZoneId, string>> = {
 };
 
 /** Where each room's sign hangs: the bottom centre of the panel, just outside its door. */
-export const ROOM_SIGN_POINTS: Readonly<Record<Exclude<ZoneId, 'agents'>, { x: number; y: number; z: number }>> = {
+export const ROOM_SIGN_POINTS: Readonly<
+  Record<Exclude<ZoneId, 'agents'>, { x: number; y: number; z: number }>
+> = {
   chat: { x: -15.2, y: 2.45, z: -5.7 },
   workspaces: { x: -4.6, y: 2.45, z: -5.7 },
   knowledge: { x: 6.7, y: 2.45, z: -5.7 },
@@ -130,10 +132,40 @@ function buildPlanning(b: LayoutBuilder): void {
   b.plant('plant-meeting', -5.1, -14.45, true);
   for (const [index, x] of [-8.75, -7.8, -6.85].entries()) {
     const n = index + 1;
-    b.seat(`meeting-n${n}`, 'meeting', 'workspaces', x, -11.95, FACE_FRONT, { x, z: -12.55 }, 'meeting-chair', 'meeting-room');
-    b.seat(`meeting-s${n}`, 'meeting', 'workspaces', x, -9.85, FACE_BACK, { x, z: -9.25 }, 'meeting-chair', 'meeting-room');
+    b.seat(
+      `meeting-n${n}`,
+      'meeting',
+      'workspaces',
+      x,
+      -11.95,
+      FACE_FRONT,
+      { x, z: -12.55 },
+      'meeting-chair',
+      'meeting-room'
+    );
+    b.seat(
+      `meeting-s${n}`,
+      'meeting',
+      'workspaces',
+      x,
+      -9.85,
+      FACE_BACK,
+      { x, z: -9.25 },
+      'meeting-chair',
+      'meeting-room'
+    );
   }
-  b.seat('meeting-w', 'meeting', 'workspaces', -9.6, -10.9, FACE_RIGHT, { x: -10.25, z: -10.9 }, 'meeting-chair', 'meeting-room');
+  b.seat(
+    'meeting-w',
+    'meeting',
+    'workspaces',
+    -9.6,
+    -10.9,
+    FACE_RIGHT,
+    { x: -10.25, z: -10.9 },
+    'meeting-chair',
+    'meeting-room'
+  );
   b.deskSeat('desk-product', 'workspaces', -6.0, -10.9, FACE_LEFT, 'meeting-chair');
   b.spot('meeting-wb', 'whiteboard', 'workspaces', -9.9, -13.85, FACE_BACK);
 
@@ -145,8 +177,28 @@ function buildPlanning(b: LayoutBuilder): void {
   b.plant('plant-planning', -4.1, -14.45);
   for (const [index, x] of [-2.4, -1.6, -0.8].entries()) {
     const n = index + 1;
-    b.seat(`planning-n${n}`, 'meeting', 'workspaces', x, -11.95, FACE_FRONT, { x, z: -12.55 }, 'meeting-chair', 'planning-room');
-    b.seat(`planning-s${n}`, 'meeting', 'workspaces', x, -9.85, FACE_BACK, { x, z: -9.25 }, 'meeting-chair', 'planning-room');
+    b.seat(
+      `planning-n${n}`,
+      'meeting',
+      'workspaces',
+      x,
+      -11.95,
+      FACE_FRONT,
+      { x, z: -12.55 },
+      'meeting-chair',
+      'planning-room'
+    );
+    b.seat(
+      `planning-s${n}`,
+      'meeting',
+      'workspaces',
+      x,
+      -9.85,
+      FACE_BACK,
+      { x, z: -9.25 },
+      'meeting-chair',
+      'planning-room'
+    );
   }
 }
 
@@ -250,8 +302,26 @@ function buildCafe(b: LayoutBuilder): void {
       const id = `cafe-t${++table}`;
       b.item(`cafe-table-${table}`, 'cafe-table', x, z, 0.9, 0.9, { round: true });
       b.item(`cafe-pendant-${table}`, 'pendant-lamp', x, z, 0.3, 0.3, { round: true, blocks: false });
-      b.seat(`${id}-a`, 'cafe-seat', 'cafe', x - 0.75, z, FACE_RIGHT, { x: x - 0.75, z: z - 0.75 }, 'cafe-chair');
-      b.seat(`${id}-b`, 'cafe-seat', 'cafe', x + 0.75, z, FACE_LEFT, { x: x + 0.75, z: z - 0.75 }, 'cafe-chair');
+      b.seat(
+        `${id}-a`,
+        'cafe-seat',
+        'cafe',
+        x - 0.75,
+        z,
+        FACE_RIGHT,
+        { x: x - 0.75, z: z - 0.75 },
+        'cafe-chair'
+      );
+      b.seat(
+        `${id}-b`,
+        'cafe-seat',
+        'cafe',
+        x + 0.75,
+        z,
+        FACE_LEFT,
+        { x: x + 0.75, z: z - 0.75 },
+        'cafe-chair'
+      );
     }
   b.item('cafe-communal', 'meeting-table', 18.3, 1.8, 4.4, 1.0, { rotation: HALF_PI });
   for (const [index, z] of [0.4, 1.4, 2.4, 3.4].entries())

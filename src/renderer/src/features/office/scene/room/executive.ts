@@ -97,7 +97,11 @@ function artwork(width: number, height: number, seed: number): THREE.Group {
     const bh = (0.2 + random() * 0.5) * (height - 0.1);
     const x = (random() - 0.5) * (width - 0.1 - bw);
     const y = (random() - 0.5) * (height - 0.1 - bh);
-    const block = box(ART_PALETTE[Math.floor(random() * ART_PALETTE.length)], [bw, bh, 0.004], [x, y, 0.025 + i * 0.001]);
+    const block = box(
+      ART_PALETTE[Math.floor(random() * ART_PALETTE.length)],
+      [bw, bh, 0.004],
+      [x, y, 0.025 + i * 0.001]
+    );
     block.castShadow = false;
     g.add(block);
   }
@@ -190,7 +194,13 @@ function rugMaterial(palette: number): THREE.MeshStandardMaterial {
 /** A patterned rug, its palette chosen by where it lies. */
 export function execRug(item: FurnitureItem): THREE.Mesh {
   const palette = Math.abs(Math.round(item.x * 3 + item.z)) % RUGS.length;
-  const mesh = part(GEOMETRY.plane, rugMaterial(palette), [item.w, item.d, 1], [0, 0.012, 0], [-Math.PI / 2, 0, 0]);
+  const mesh = part(
+    GEOMETRY.plane,
+    rugMaterial(palette),
+    [item.w, item.d, 1],
+    [0, 0.012, 0],
+    [-Math.PI / 2, 0, 0]
+  );
   mesh.castShadow = false;
   return mesh;
 }

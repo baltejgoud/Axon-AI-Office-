@@ -132,7 +132,12 @@ export class SignLayer {
   }
 
   /** Where a sign's face appears on screen, in CSS pixels (for automated checks). */
-  screenPoint(id: string, camera: THREE.Camera, width: number, height: number): { x: number; y: number } | null {
+  screenPoint(
+    id: string,
+    camera: THREE.Camera,
+    width: number,
+    height: number
+  ): { x: number; y: number } | null {
     const sign = this.signs.find((item) => item.id === id);
     if (!sign) return null;
     const frame = this.frame(sign);
@@ -224,13 +229,16 @@ export class SignLayer {
     let size = (sign.letter / sign.height) * slot.h * (text.length > 1 ? 0.78 : 1);
     const fit = (weight: number, value: string, px: number) => {
       ctx.font = `${weight} ${px}px ${FONT}`;
-      while (px > 10 && ctx.measureText(value).width > w - pad * 2) ctx.font = `${weight} ${(px -= 2)}px ${FONT}`;
+      while (px > 10 && ctx.measureText(value).width > w - pad * 2)
+        ctx.font = `${weight} ${(px -= 2)}px ${FONT}`;
       return px;
     };
     for (const line of text) size = Math.min(size, fit(650, line, size));
     ctx.font = `650 ${size}px ${FONT}`;
     const centre = y + h / 2 - (sign.subtitle ? h * 0.13 : 0);
-    text.forEach((line, i) => ctx.fillText(line, x + w / 2, centre + (i - (text.length - 1) / 2) * size * 1.08));
+    text.forEach((line, i) =>
+      ctx.fillText(line, x + w / 2, centre + (i - (text.length - 1) / 2) * size * 1.08)
+    );
     if (sign.subtitle) {
       const small = fit(550, sign.subtitle, size * 0.55);
       ctx.font = `500 ${small}px ${FONT}`;
@@ -288,7 +296,15 @@ export class SignLayer {
       const position = layer.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
       const array = position.array as Float32Array;
       let offset = 0;
-      const quad = (sign: SignSpec, scale: number, u0: number, u1: number, h0: number, h1: number, n: number) => {
+      const quad = (
+        sign: SignSpec,
+        scale: number,
+        u0: number,
+        u1: number,
+        h0: number,
+        h1: number,
+        n: number
+      ) => {
         const { along, up, normal } = this.frame(sign);
         for (const [u, h] of [
           [u0, h0],

@@ -22,10 +22,12 @@ export function bookshelfTall(item: FurnitureItem): THREE.Group {
   const x = -w / 2 + 0.6 + random() * (w - 1.2);
   const ladder = group();
   const rise = 2.4;
-  for (const side of [-0.2, 0.2])
-    ladder.add(box(PALETTE.woodDark, [0.04, rise, 0.04], [side, rise / 2, 0]));
+  for (const side of [-0.2, 0.2]) ladder.add(box(PALETTE.woodDark, [0.04, rise, 0.04], [side, rise / 2, 0]));
   for (let i = 0; i < 7; i++) ladder.add(box(PALETTE.woodDark, [0.4, 0.025, 0.035], [0, 0.3 + i * 0.3, 0]));
-  ladder.add(cylinder(PALETTE.darkMetal, 0.03, 0.03, [-0.2, 0.02, 0]), cylinder(PALETTE.darkMetal, 0.03, 0.03, [0.2, 0.02, 0]));
+  ladder.add(
+    cylinder(PALETTE.darkMetal, 0.03, 0.03, [-0.2, 0.02, 0]),
+    cylinder(PALETTE.darkMetal, 0.03, 0.03, [0.2, 0.02, 0])
+  );
   ladder.position.set(x, 0, d / 2 + 0.42);
   ladder.rotation.x = -0.17;
   g.add(ladder);
@@ -51,9 +53,16 @@ export function cabinetWall(item: FurnitureItem): THREE.Group {
     for (let r = 0; r < rows; r++) {
       const y = 0.12 + drawer * (r + 0.5);
       g.add(box('#cfc9be', [unitWidth - 0.04, 0.01, 0.01], [x, y + drawer / 2 - 0.01, d / 2 + 0.005]));
-      g.add(box(PALETTE.metal, [0.14, 0.025, 0.03], [x, y + 0.08, d / 2 + 0.02], { metalness: 0.4, roughness: 0.4 }));
+      g.add(
+        box(PALETTE.metal, [0.14, 0.025, 0.03], [x, y + 0.08, d / 2 + 0.02], {
+          metalness: 0.4,
+          roughness: 0.4
+        })
+      );
       if ((u + r) % 2 === 0)
-        g.add(box(random() < 0.3 ? '#fce9b8' : PALETTE.paper, [0.16, 0.06, 0.005], [x, y - 0.06, d / 2 + 0.008]));
+        g.add(
+          box(random() < 0.3 ? '#fce9b8' : PALETTE.paper, [0.16, 0.06, 0.005], [x, y - 0.06, d / 2 + 0.008])
+        );
     }
   }
   return g;
@@ -99,7 +108,8 @@ export function sortingTable(item: FurnitureItem): THREE.Group {
   const { w, d } = item;
   const g = group(box(PALETTE.woodLight, [w, 0.05, d], [0, 0.74, 0]));
   for (const x of [-w / 2 + 0.08, w / 2 - 0.08])
-    for (const z of [-d / 2 + 0.08, d / 2 - 0.08]) g.add(box(PALETTE.white, [0.04, 0.72, 0.04], [x, 0.36, z]));
+    for (const z of [-d / 2 + 0.08, d / 2 - 0.08])
+      g.add(box(PALETTE.white, [0.04, 0.72, 0.04], [x, 0.36, z]));
   for (const [x, z, count] of [
     [-0.45, -0.1, 5],
     [0.05, 0.12, 3],
@@ -163,8 +173,20 @@ export function coatRack(): THREE.Group {
     );
   }
   g.add(
-    part(GEOMETRY.cone, mat('#6b7a8f', { roughness: 0.95 }), [0.34, 0.85, 0.2], [0.1, 1.28, 0.02], [0, 0, -0.08]),
-    part(GEOMETRY.cone, mat('#b0764a', { roughness: 0.95 }), [0.3, 0.7, 0.18], [-0.08, 1.35, -0.05], [0, 0, 0.1]),
+    part(
+      GEOMETRY.cone,
+      mat('#6b7a8f', { roughness: 0.95 }),
+      [0.34, 0.85, 0.2],
+      [0.1, 1.28, 0.02],
+      [0, 0, -0.08]
+    ),
+    part(
+      GEOMETRY.cone,
+      mat('#b0764a', { roughness: 0.95 }),
+      [0.3, 0.7, 0.18],
+      [-0.08, 1.35, -0.05],
+      [0, 0, 0.1]
+    ),
     box('#d9534f', [0.06, 0.5, 0.03], [0.02, 1.4, 0.12])
   );
   return g;
@@ -194,7 +216,10 @@ export function coffeeStation(item: FurnitureItem): CoffeeMachine {
   machine.group.position.set(0, 0.93, -0.08);
   g.add(machine.group);
   for (let i = 0; i < 4; i++) g.add(cylinder(PALETTE.white, 0.04, 0.025, [-0.55, 0.945 + i * 0.026, 0.05]));
-  g.add(cylinder('#e8b04a', 0.04, 0.1, [-0.35, 0.98, 0.12]), cylinder(PALETTE.white, 0.04, 0.1, [0.4, 0.98, 0.14]));
+  g.add(
+    cylinder('#e8b04a', 0.04, 0.1, [-0.35, 0.98, 0.12]),
+    cylinder(PALETTE.white, 0.04, 0.1, [0.4, 0.98, 0.14])
+  );
   const herb = plant(0.4, PALETTE.white, Math.abs(item.x * 13 + item.z));
   herb.position.set(0.62, 0.93, -0.06);
   g.add(herb);

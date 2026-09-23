@@ -1,10 +1,44 @@
 /* Office chrome: district chips, department menu, zoom-tier labels, minimap, roster by district. */
 
 .office-district-chips {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+/* Measures every chip off screen, so the row knows how many fit. */
+.office-district-chips-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
-  min-width: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.office-chip-more {
+  position: relative;
+  flex: none;
+}
+.office-chip-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: var(--office-paper);
+  box-shadow: 0 12px 30px #223d7026;
+}
+.office-chip-menu button {
+  justify-content: flex-start;
 }
 .office-district-chips button {
   display: flex;
@@ -255,7 +289,6 @@
   font-size: 13px;
   font-weight: 650;
 }
-
 
 [data-theme='dark'] .office-minimap {
   background: #172239ee;
