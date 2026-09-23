@@ -13,7 +13,8 @@ import {
   RotateCcw,
   Users,
   ZoomIn,
-  Map
+  Map,
+  Library
 } from 'lucide-react';
 
 import { OfficeScene } from './scene/OfficeScene';
@@ -25,8 +26,6 @@ import { OFFICE_AGENTS, agentsForWing, type AgentStatus } from './data/officeAge
 import { OFFICE_ZONES } from './data/officeZones';
 
 import { AgentPortrait } from './AgentPortrait';
-
-import { useApp } from '../../state';
 
 const zoneIcons = {
   chat: MessageCircle,
@@ -102,10 +101,9 @@ export function OfficeCanvas() {
     is3dEnabled,
     selectAgent,
     focusZone,
-    toggle3d
+    toggle3d,
+    openOverlay
   } = useOfficeStore();
-
-  const { patch } = useApp();
 
   const visibleAgents = useMemo(() => agentsForWing(activeWing), [activeWing]);
 
@@ -252,11 +250,11 @@ export function OfficeCanvas() {
         </div>
 
         <div className="office-view-controls">
-          <button
-            onClick={() => patch({ page: 'settings' })}
-            title="Office settings"
-            aria-label="Office settings"
-          >
+          <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
+            <Library size={16} />
+          </button>
+
+          <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
             <Settings size={16} />
           </button>
 

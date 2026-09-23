@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { KeyRound, Plus, Trash2, Server } from 'lucide-react';
 import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared/types';
 import { useApp, perform } from './state';
-import { Button, EmptyState, Field, Icon, Kbd, Modal, PageHeader } from './ui';
+import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
 
 interface PresetInfo {
   kind: ProviderKind;
@@ -150,7 +150,10 @@ export function SettingsPanel() {
       useApp.getState().pushToast('Provider saved');
       close();
     } catch (err: any) {
-      const msg = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(err);
+      const msg =
+        err instanceof Error
+          ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+          : String(err);
       setProviderError(msg);
     }
   };
@@ -217,16 +220,17 @@ export function SettingsPanel() {
       useApp.getState().pushToast('MCP server saved');
       closeMcp();
     } catch (err: any) {
-      const msg = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(err);
+      const msg =
+        err instanceof Error
+          ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+          : String(err);
       setMcpError(msg);
     }
   };
 
   return (
-    <div className="page">
-      <div className="page-inner">
-        <PageHeader title="Settings" description="Providers, appearance and local data." />
-
+    <div className="settings-sheet">
+      <div className="settings-sheet-inner">
         <div className="tabs" role="tablist">
           {tabs.map((t) => (
             <button key={t} role="tab" className="tab" aria-selected={t === tab} onClick={() => setTab(t)}>
@@ -308,7 +312,8 @@ export function SettingsPanel() {
               />
             )}
             <p className="text-caption">
-              Union Alpha (Custom Enterprise) connects to internal or self-hosted OpenAI-compatible gateways. Provide your custom endpoint URL and model IDs.
+              Union Alpha (Custom Enterprise) connects to internal or self-hosted OpenAI-compatible gateways.
+              Provide your custom endpoint URL and model IDs.
             </p>
           </>
         )}
@@ -354,9 +359,12 @@ export function SettingsPanel() {
                       <Button
                         size="sm"
                         onClick={() =>
-                          void perform(async () => {
-                            await window.axon.mcpServerSave({ ...s, enabled: !s.enabled });
-                          }, s.enabled ? 'MCP server disabled' : 'MCP server enabled')
+                          void perform(
+                            async () => {
+                              await window.axon.mcpServerSave({ ...s, enabled: !s.enabled });
+                            },
+                            s.enabled ? 'MCP server disabled' : 'MCP server enabled'
+                          )
                         }
                       >
                         {s.enabled ? 'Disable' : 'Enable'}
@@ -499,8 +507,8 @@ export function SettingsPanel() {
             <div>
               <h3 className="section-title">Skills</h3>
               <p className="text-caption">
-                {data!.skills.length} skills in {new Set(data!.skills.map((s) => s.category)).size} categories.
-                Bundled with Axon under open licenses; prompt injection protections apply.
+                {data!.skills.length} skills in {new Set(data!.skills.map((s) => s.category)).size}{' '}
+                categories. Bundled with Axon under open licenses; prompt injection protections apply.
               </p>
             </div>
             <div>
@@ -530,7 +538,8 @@ export function SettingsPanel() {
                 provider.
               </li>
               <li>
-                No telemetry or third-party tracking. Shell execution is disabled by default and requires explicit confirmation. Background agents run locally on scheduled intervals.
+                No telemetry or third-party tracking. Shell execution is disabled by default and requires
+                explicit confirmation. Background agents run locally on scheduled intervals.
               </li>
               <li>
                 Project writes require a native confirmation. Sensitive filenames and symbolic links are
@@ -593,7 +602,9 @@ export function SettingsPanel() {
                 Choose a template
               </option>
               {Object.keys(presets).map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </select>
           </Field>

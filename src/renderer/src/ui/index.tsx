@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ButtonHTMLAttributes, type FormEvent, ty
 import { createPortal } from 'react-dom';
 import { Check, X, type LucideIcon } from 'lucide-react';
 import { useApp } from '../state';
+import { useEscape } from './escape';
 
 /* ---------- Icon ---------- */
 const iconSizes = { sm: 14, md: 16, lg: 20, xl: 32 } as const;
@@ -106,16 +107,6 @@ export function Kbd({ keys }: { keys: string }) {
 }
 
 /* ---------- Modal ---------- */
-const escapeStack: (() => void)[] = [];
-let escapeBound = false;
-function bindEscape() {
-  if (escapeBound) return;
-  escapeBound = true;
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') escapeStack[escapeStack.length - 1]?.();
-  });
-}
-
 export function Modal({
   title,
   onClose,
@@ -132,18 +123,10 @@ export function Modal({
   children: ReactNode;
 }) {
   const form = useRef<HTMLFormElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
   const titleId = useId();
+  useEscape(onClose);
   useEffect(() => {
-    const first = form.current?.querySelector<HTMLElement>('input, select, textarea');
-    first?.focus();
-    bindEscape();
-    const entry = () => closeRef.current();
-    escapeStack.push(entry);
-    return () => {
-      escapeStack.splice(escapeStack.lastIndexOf(entry), 1);
-    };
+    form.current?.querySelector<HTMLElement>('input, select, textarea')?.focus();
   }, []);
   const submit = (event: FormEvent) => {
     event.preventDefault();

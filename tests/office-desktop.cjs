@@ -125,6 +125,63 @@ app.on('web-contents-created', (_, contents) => {
       );
       const result = await evaluate('window.axon.snapshot()');
       assert.ok(result.conversations.some((c) => c.agentId === 'research-analyst'));
+      assert.match(
+        await evaluate('document.querySelector(".office-thread .message.user").textContent'),
+        /Confirm the office provider connection/
+      );
+      // The office is the only screen.
+      assert.equal(await evaluate('document.querySelector(".return-to-office, .sidebar, .chat-view")'), null);
+      // The model is fixed once a conversation exists.
+      assert.equal(
+        await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').disabled`),
+        true
+      );
+      // A fresh conversation empties the thread and the next task starts a second conversation.
+      await evaluate(`document.querySelector('[aria-label="Conversation options"]').click()`);
+      await pause(60);
+      await evaluate(
+        `[...document.querySelectorAll('.activity-menu [role="menuitem"]')].find(b => b.textContent.includes('New conversation')).click()`
+      );
+      await pause(80);
+      assert.equal(await evaluate('document.querySelector(".office-thread")'), null);
+      assert.equal(
+        await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').disabled`),
+        false
+      );
+      await evaluate(`(() => {
+        const input = document.querySelector('.composer-textarea');
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Second thread.');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await pause(70);
+      await evaluate('document.querySelector(".composer-btn-send").click()');
+      await waitFor('document.querySelector(".status-badge.completed")', 'second thread completion');
+      assert.equal(
+        (await evaluate('window.axon.snapshot()')).conversations.filter((c) => c.agentId === 'research-analyst')
+          .length,
+        2
+      );
+      // Settings and the library open as sheets over the office; Esc closes the top layer only.
+      await evaluate(`document.querySelector('[aria-label="Office settings"]').click()`);
+      await waitFor('document.querySelector(".office-overlay [role=dialog]")', 'settings overlay');
+      assert.equal(await evaluate('document.querySelector(".office-overlay h2").textContent'), 'Settings');
+      await pause(400);
+      await snap('office-settings.png');
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await pause(80);
+      assert.equal(await evaluate('document.querySelector(".office-overlay")'), null);
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true }))`);
+      await waitFor('document.querySelector(".office-overlay")', 'settings shortcut');
+      await evaluate(`document.querySelector('.office-overlay-close').click()`);
+      await pause(80);
+      await evaluate(`document.querySelector('[aria-label="Open library"]').click()`);
+      await waitFor('document.querySelector(".office-overlay h2")', 'library overlay');
+      assert.equal(await evaluate('document.querySelector(".office-overlay h2").textContent'), 'Library');
+      await pause(400);
+      await snap('office-library.png');
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await pause(80);
+      assert.equal(await evaluate('document.querySelector(".office-overlay")'), null);
       assert.equal(await evaluate('typeof window.require'), 'undefined');
       win.setContentSize(1600, 960);
       await pause(400);

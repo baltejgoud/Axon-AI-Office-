@@ -1,15 +1,12 @@
 import { useEffect } from 'react';
-import { Building2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useApp, perform } from './state';
-import { Chat } from './Chat';
-import { SettingsPanel } from './Settings';
-import { Workspaces, Agents, Knowledge, Code as CodeWorkspace } from './Spaces';
 import { AxonLogo, Button, ToastStack } from './ui';
 import { OfficePage } from './features/office/OfficePage';
 import { useOfficeStore } from './features/office/store/officeStore';
 
 export function App() {
-  const { data, page, error, patch, refresh } = useApp();
+  const { data, error, patch, refresh } = useApp();
 
   useEffect(() => {
     void perform(refresh);
@@ -113,13 +110,9 @@ export function App() {
 
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
-      if (event.key === 'n') {
-        event.preventDefault();
-        patch({ page: 'office', chatId: null });
-      }
       if (event.key === 'k') {
         event.preventDefault();
-        patch({ page: 'office' });
+        useOfficeStore.getState().openOverlay(null);
         setTimeout(
           () => document.querySelector<HTMLInputElement>('[aria-label="Find a coworker"]')?.focus(),
           50
@@ -127,7 +120,7 @@ export function App() {
       }
       if (event.key === ',') {
         event.preventDefault();
-        patch({ page: 'settings' });
+        useOfficeStore.getState().openOverlay('settings');
       }
     };
     window.addEventListener('keydown', onKey);
@@ -155,7 +148,7 @@ export function App() {
     );
 
   return (
-    <div className={`app-shell ${page === 'office' ? 'office-shell' : ''}`}>
+    <div className="app-shell office-shell">
       <main className="main-area">
         {error && (
           <div className="banner-error" role="alert">
@@ -170,18 +163,7 @@ export function App() {
             />
           </div>
         )}
-        {page === 'office' && <OfficePage />}
-        {page !== 'office' && (
-          <button className="return-to-office" onClick={() => patch({ page: 'office' })}>
-            <Building2 size={16} /> Back to your office
-          </button>
-        )}
-        {page === 'chat' && <Chat />}
-        {page === 'settings' && <SettingsPanel />}
-        {page === 'workspaces' && <Workspaces />}
-        {page === 'agents' && <Agents />}
-        {page === 'knowledge' && <Knowledge />}
-        {page === 'code' && <CodeWorkspace />}
+        <OfficePage />
       </main>
       <ToastStack />
     </div>

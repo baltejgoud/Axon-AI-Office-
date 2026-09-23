@@ -1237,19 +1237,6 @@
   outline: 2px solid var(--office-blue);
   outline-offset: 2px;
 }
-.return-to-office {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: 10px;
-  margin: 12px 20px 0;
-  padding: 10px 14px;
-  cursor: pointer;
-}
 @media (max-width: 1250px) {
   .office-container {
     padding: 14px;
@@ -1395,4 +1382,111 @@
 }
 .office-person-label {
   background: var(--office-paper);
+}
+
+/* Settings and Library sheets over the office. */
+.office-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: #0f172a47;
+  backdrop-filter: blur(3px);
+  animation: office-fade 0.16s ease-out;
+}
+.office-overlay-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 64px);
+  border-radius: 22px;
+  border: 1px solid var(--office-border);
+  background: var(--office-paper);
+  box-shadow: 0 30px 80px #0f1d3a33;
+  outline: none;
+  animation: office-sheet 0.2s ease-out;
+}
+.office-overlay-panel.wide {
+  width: min(960px, 100%);
+}
+.office-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--office-border);
+  flex: none;
+}
+.office-overlay-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.4px;
+}
+.office-overlay-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--office-border);
+  background: var(--office-paper);
+  color: var(--office-muted);
+}
+.office-overlay-close:hover {
+  color: var(--office-ink);
+  background: var(--office-soft);
+}
+.office-overlay-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 26px;
+  scrollbar-width: thin;
+}
+.settings-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.knowledge-library-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.knowledge-library-intro p {
+  margin: 0;
+  max-width: 560px;
+  color: var(--office-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.knowledge-library-intro .btn {
+  flex: none;
+}
+@keyframes office-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes office-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-overlay,
+  .office-overlay-panel {
+    animation: none;
+  }
+}
+@media (max-width: 720px) {
+  .knowledge-library-intro {
+    flex-direction: column;
+  }
 }

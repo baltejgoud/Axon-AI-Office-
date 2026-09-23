@@ -10,6 +10,7 @@ import { AgentPortrait } from '../AgentPortrait';
 import { Conversation } from './Conversation';
 import { activeThread, agentThreads } from './thread';
 import { LIBRARY_RESIDENTS } from '../library';
+import { useEscape } from '../../../ui/escape';
 
 const FEED_PREVIEW = 3;
 
@@ -193,20 +194,14 @@ function ConversationMenu({
   items: MenuItem[];
 }) {
   const root = useRef<HTMLDivElement>(null);
+  useEscape(() => onToggle(false), open);
   useEffect(() => {
     if (!open) return;
     const onDown = (event: MouseEvent) => {
       if (!root.current?.contains(event.target as Node)) onToggle(false);
     };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onToggle(false);
-    };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open, onToggle]);
   const actions = items.filter((item) => item.icon);
   const history = items.filter((item) => !item.icon);

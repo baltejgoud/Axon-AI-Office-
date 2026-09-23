@@ -8,7 +8,6 @@ export interface Toast {
 }
 interface UIState {
   data: Snapshot | null;
-  page: string;
   chatId: string | null;
   workspaceId: string | null;
   model: string;
@@ -24,7 +23,6 @@ interface UIState {
 }
 export const useApp = create<UIState>((set, get) => ({
   data: null,
-  page: 'office',
   chatId: null,
   workspaceId: null,
   model: '',
