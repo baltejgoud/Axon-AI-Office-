@@ -1,0 +1,355 @@
+/* Office chrome: district chips, department menu, zoom-tier labels, minimap, roster by district. */
+
+.office-district-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.office-district-chips button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--office-muted);
+  transition:
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s;
+}
+.office-district-chips button svg {
+  color: var(--district-color);
+  opacity: 0.85;
+}
+.office-district-chips button:hover {
+  color: var(--office-ink);
+  background: var(--office-paper);
+  border-color: var(--office-border);
+}
+.office-district-chips button.active {
+  color: var(--office-ink);
+  background: var(--office-paper);
+  border-color: color-mix(in srgb, var(--district-color) 45%, var(--office-border));
+  box-shadow:
+    0 3px 10px #223d700d,
+    inset 0 -2px 0 var(--district-color);
+}
+
+/* Go to department… */
+.office-department-menu {
+  position: relative;
+  flex: 0 1 290px;
+  min-width: 0;
+}
+.office-department-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  font-size: 13px;
+  text-align: left;
+}
+.office-department-trigger > svg:first-child {
+  color: var(--office-blue);
+  flex: none;
+}
+.office-department-trigger > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-department-trigger > svg:last-child {
+  color: var(--office-muted);
+  flex: none;
+  transition: transform 0.18s;
+}
+.office-department-trigger[aria-expanded='true'] > svg:last-child {
+  transform: rotate(180deg);
+}
+.office-department-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, 90vw);
+  z-index: 30;
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  background: var(--office-paper);
+  box-shadow: 0 18px 44px #16233b26;
+  overflow: hidden;
+  animation: office-pop 0.14s ease-out;
+}
+.office-department-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--office-border);
+  color: var(--office-muted);
+}
+.office-department-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--office-ink);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.office-department-list {
+  max-height: min(430px, 60vh);
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+}
+.office-department-heading {
+  padding: 10px 8px 4px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--district-color);
+}
+.office-department-group [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--office-ink);
+  font-size: 12.5px;
+  text-align: left;
+}
+.office-department-group [role='option']:hover,
+.office-department-group [role='option'][aria-selected='true'] {
+  background: var(--office-soft);
+}
+.office-department-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--district-color);
+  flex: none;
+}
+.office-department-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-department-group small {
+  color: var(--office-muted);
+  font-size: 11px;
+}
+.office-department-empty {
+  padding: 14px 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--office-muted);
+}
+
+/* Labels over the campus */
+.office-district-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--district-color);
+  flex: none;
+}
+.office-district-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #fff;
+  border-radius: 13px;
+  background: #fffffff2;
+  box-shadow:
+    0 6px 22px #263c7022,
+    inset 0 -3px 0 var(--district-color);
+  backdrop-filter: blur(8px);
+  color: var(--office-ink);
+  text-align: left;
+  transition: transform 0.16s;
+}
+.office-district-card:hover {
+  transform: translate(-50%, -50%) scale(1.04) !important;
+}
+.office-district-card .office-district-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+.office-district-card strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+.office-district-card small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--office-muted);
+}
+.office-department-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  background: #fffffff0;
+  box-shadow: 0 3px 12px #23385824;
+  color: var(--office-ink);
+  font-size: 11px;
+  font-weight: 550;
+}
+.office-department-label:hover {
+  border-color: var(--district-color);
+}
+.office-scene-labels .office-zone-label {
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 9px;
+}
+.office-scene-labels .office-zone-label strong {
+  font-size: 11px;
+}
+
+/* Minimap */
+.office-minimap {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 204px;
+  padding: 7px;
+  border: 1px solid #ffffff;
+  border-radius: 14px;
+  background: #ffffffe8;
+  box-shadow: 0 8px 26px #223d7022;
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+.office-minimap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+.office-minimap-floor {
+  fill: #f4f1ec;
+  stroke: #d9dde4;
+  stroke-width: 0.5;
+}
+.office-minimap-view {
+  fill: #3867f626;
+  stroke: var(--office-blue);
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+.office-minimap-working {
+  fill: #3867f6;
+  animation: office-pulse 1.4s infinite;
+}
+.office-minimap-selected {
+  fill: #fff;
+  stroke: var(--office-ink);
+  stroke-width: 0.8;
+}
+.office-minimap-hide,
+.office-minimap-toggle {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--office-border);
+  background: var(--office-paper);
+  color: var(--office-muted);
+}
+.office-minimap-hide {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px #223d7018;
+}
+.office-minimap-toggle {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  z-index: 5;
+  box-shadow: 0 6px 18px #223d7018;
+}
+
+/* Roster fallback, grouped by district */
+.roster-district h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 4px 10px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+[data-theme='dark'] .office-district-card,
+[data-theme='dark'] .office-department-label,
+[data-theme='dark'] .office-minimap {
+  background: #172239ee;
+  border-color: #31405c;
+}
+[data-theme='dark'] .office-minimap-floor {
+  fill: #1e2d47;
+  stroke: #31405c;
+}
+
+@media (max-width: 1250px) {
+  .office-district-chips button {
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+  .office-district-chips button svg {
+    display: none;
+  }
+  .office-minimap {
+    width: 160px;
+  }
+}
+@media (max-width: 960px) {
+  .office-department-menu {
+    flex: 1 1 180px;
+  }
+  .office-minimap {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-department-popover,
+  .office-minimap-working {
+    animation: none;
+  }
+}

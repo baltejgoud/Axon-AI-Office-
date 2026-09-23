@@ -71,39 +71,77 @@ app.on('web-contents-created', (_, contents) => {
         fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
       await snap('office-desktop.png');
       assert.equal(await evaluate('document.querySelector(".sidebar")'), null);
-      const ids = await evaluate(
-        '[...document.querySelectorAll(".office-person-label")].map(b => b.getAttribute("aria-label"))'
+      assert.equal(await evaluate('document.querySelectorAll(".office-district-chips button").length'), 8);
+      assert.equal(
+        await evaluate('document.querySelector(".office-district-chips button.active").textContent'),
+        'Commons'
       );
-      assert.equal(ids.length, 16);
-      for (let index = 0; index < 16; index++) {
-        await evaluate(`document.querySelectorAll(".office-person-label")[${index}].click()`);
-        await pause(60);
+      assert.ok(
+        await evaluate('document.querySelectorAll(".office-department-label, .office-zone-label").length > 6')
+      );
+      // Debug handle for camera moves and performance readings.
+      await evaluate("localStorage.setItem('axon.officeDebug', '1')");
+      contents.reload();
+      await pause(600);
+      await waitFor(
+        'window.__axonOffice && !document.querySelector(".office-loading")',
+        'scene after reload'
+      );
+      await pause(800);
+      const strip = () =>
+        evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
+      assert.equal((await strip()).length, 8);
+      assert.match(
+        await evaluate('document.querySelector(".office-team-caption strong").textContent'),
+        /Commons/
+      );
+      for (let index = 0; index < 8; index++) {
+        await evaluate(`document.querySelectorAll(".office-team-people button")[${index}].click()`);
+        await pause(80);
         assert.equal(
           await evaluate(
-            `document.querySelectorAll(".office-person-label")[${index}].getAttribute("aria-pressed")`
+            `document.querySelectorAll(".office-team-people button")[${index}].getAttribute("aria-pressed")`
           ),
           'true'
         );
         assert.ok(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'));
       }
-      await evaluate('document.querySelectorAll(".office-person-label")[0].click()');
+      // Close up, people get name tags.
+      await evaluate('window.__axonOffice.focus(0.2, 0.7, 10)');
+      await waitFor('document.querySelectorAll(".office-person-label").length >= 6', 'name tags close up');
+      await snap('campus-pods.png');
+      // Whole campus: district cards, and performance within budget.
+      await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
+      await waitFor('document.querySelectorAll(".office-district-card").length === 8', 'district cards');
+      await pause(3000);
+      const stats = await evaluate('window.__axonOffice.stats()');
+      const tiers = await evaluate('window.__axonOffice.tiers()');
+      console.log('CAMPUS_STATS', JSON.stringify(stats), JSON.stringify(tiers));
+      assert.ok(stats.calls < 900, `draw calls ${stats.calls}`);
+      assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
+      await snap('campus-overview.png');
       const win = BrowserWindow.fromWebContents(contents);
       win.setContentSize(1100, 740);
       await pause(400);
       await snap('office-compact.png');
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
       await evaluate(`document.querySelector('button[aria-label="Team view"]').click()`);
-      await waitFor('document.querySelectorAll(".roster-card").length === 16', 'roster');
+      await waitFor('document.querySelectorAll(".roster-card").length === 207', 'roster');
+      assert.equal(await evaluate('document.querySelectorAll(".roster-district").length'), 8);
       await evaluate('document.querySelectorAll(".roster-card")[1].click()');
       await pause(50);
       assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Writer');
       await evaluate(`document.querySelector('button[aria-label="Office view"]').click()`);
-      await waitFor(
-        'document.querySelector(".office-person-label") && !document.querySelector(".office-loading")',
-        'return to scene'
-      );
-      await evaluate('document.querySelectorAll(".office-person-label")[0].click()');
+      await waitFor('window.__axonOffice && !document.querySelector(".office-loading")', 'return to scene');
+      await pause(300);
+      await evaluate(`document.querySelector('[aria-label="Reset view"]').click()`);
+      await pause(600);
+      await evaluate('document.querySelectorAll(".office-team-people button")[0].click()');
       await pause(50);
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
+        'Research Analyst'
+      );
       await evaluate(`(() => {
         const input = document.querySelector('.composer-textarea');
         Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Confirm the office provider connection.');
@@ -117,7 +155,9 @@ app.on('web-contents-created', (_, contents) => {
       );
       await waitFor('document.querySelector(".status-badge.completed")', 'completion');
       assert.match(
-        await evaluate('document.querySelector(".office-thread .message.assistant:last-of-type").textContent'),
+        await evaluate(
+          'document.querySelector(".office-thread .message.assistant:last-of-type").textContent'
+        ),
         /existing provider pipeline/
       );
       assert.ok(
@@ -159,8 +199,9 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate('document.querySelector(".composer-btn-send").click()');
       await waitFor('document.querySelector(".status-badge.completed")', 'second thread completion');
       assert.equal(
-        (await evaluate('window.axon.snapshot()')).conversations.filter((c) => c.agentId === 'research-analyst')
-          .length,
+        (await evaluate('window.axon.snapshot()')).conversations.filter(
+          (c) => c.agentId === 'research-analyst'
+        ).length,
         2
       );
       // Settings and the library open as sheets over the office; Esc closes the top layer only.
@@ -192,19 +233,30 @@ app.on('web-contents-created', (_, contents) => {
       await pause(150);
       await snap('office-dark.png');
       await evaluate("document.documentElement.dataset.theme = 'light'");
-      const changeWing = async (name) => {
+      const goToDepartment = async (name) => {
+        await evaluate(`document.querySelector('.office-department-trigger').click()`);
+        await waitFor('document.querySelector(".office-department-popover")', 'department menu');
         await evaluate(
-          `(() => { const select = document.querySelector('[aria-label="Office department"]'); select.value = ${JSON.stringify(name)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`
+          `[...document.querySelectorAll('.office-department-list [role="option"]')].find(b => b.textContent.includes(${JSON.stringify(name)})).click()`
         );
-        await waitFor('!document.querySelector(".office-loading")', 'department render');
-        await pause(250);
+        await pause(1500);
       };
-      await changeWing('AI, ML & Data');
-      assert.equal(await evaluate('document.querySelectorAll(".office-person-label").length'), 25);
-      await snap('office-data-department.png');
-      await changeWing('Backend & APIs');
-      await evaluate(`document.querySelector('[data-anchor="agent:backend-developer"]').click()`);
-      await pause(50);
+      await goToDepartment('AI, ML & Data');
+      assert.equal(
+        await evaluate('document.querySelector(".office-team-caption strong").textContent'),
+        'AI, ML & Data'
+      );
+      assert.equal((await strip()).length, 17);
+      await snap('campus-ai-data.png');
+      await goToDepartment('Backend & APIs');
+      await evaluate(
+        `[...document.querySelectorAll(".office-team-people button")].find(b => b.title.startsWith("Backend Developer ·")).click()`
+      );
+      await pause(80);
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
+        'Backend Developer'
+      );
       await evaluate(
         `(() => { const input = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Design a typed API contract.'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
       );
@@ -229,12 +281,15 @@ app.on('web-contents-created', (_, contents) => {
         'document.querySelector(".activity-agent-meta h3").textContent === "Business Analyst" && !document.querySelector(".office-loading")',
         'search selects specialist'
       );
-      assert.equal(
-        await evaluate(`document.querySelector('[aria-label="Office department"]').value`),
-        'Strategy & Innovation'
-      );
-      await changeWing('Headquarters');
-      await evaluate(`document.querySelector('[data-anchor="agent:files-agent"]').click()`);
+      const searchFor = async (text) => {
+        await evaluate(
+          `(() => { const input = document.querySelector('[aria-label="Find a coworker"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(text)}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
+        );
+        await pause(100);
+        await evaluate('document.querySelector(".office-search-results > button").click()');
+        await pause(100);
+      };
+      await searchFor('files agent');
       await pause(80);
       assert.ok(await evaluate('document.querySelector(".office-file-open")'));
       await evaluate('document.querySelector(".office-file-open").click()');
@@ -264,7 +319,11 @@ app.on('web-contents-created', (_, contents) => {
         )
       );
 
-      await evaluate(`document.querySelector('[data-anchor="agent:frontend-developer"]').click()`);
+      await searchFor('front-end');
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
+        'Frontend Developer'
+      );
       win.setContentSize(375, 812);
       await pause(350);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
@@ -279,9 +338,9 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(
         `document.querySelector('.office-canvas-container canvas').dispatchEvent(new Event('webglcontextlost', { cancelable: true }))`
       );
-      await waitFor('document.querySelectorAll(".roster-card").length === 16', 'context loss fallback');
+      await waitFor('document.querySelectorAll(".roster-card").length === 207', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: artwork, 16 selections, department navigation, catalog search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: campus artwork, district chips and cards, zoom-tier labels, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
-import type { DistrictId } from '../campus/districts';
 
 export interface AgentActivity {
   id: string;
@@ -24,19 +23,15 @@ export interface AgentRuntime {
 export type Overlay = 'settings' | 'knowledge';
 
 interface OfficeStoreState {
-  /** The district the chips and team strip follow; null follows the camera. */
-  focusDistrict: DistrictId | null;
-  /** A department picked from "Go to department…"; the team strip shows it. */
+  /** A department picked from "Go to department…"; the team strip shows it until another choice. */
   focusDepartment: string | null;
-  setFocus: (district: DistrictId | null, department?: string | null) => void;
+  setFocusDepartment: (department: string | null) => void;
   selectedAgentId: string;
-  focusedZoneId: string | null;
   agentRuntime: Record<string, AgentRuntime>;
   is3dEnabled: boolean;
   overlay: Overlay | null;
 
   selectAgent: (id: string) => void;
-  focusZone: (zoneId: string | null) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
   setAgentTask: (agentId: string, task: string) => void;
   setAgentConversation: (agentId: string, conversationId: string) => void;
@@ -56,11 +51,9 @@ for (const agent of OFFICE_AGENTS) {
 }
 
 export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
-  focusDistrict: null,
   focusDepartment: null,
-  setFocus: (district, department = null) => set({ focusDistrict: district, focusDepartment: department }),
+  setFocusDepartment: (department) => set({ focusDepartment: department }),
   selectedAgentId: 'frontend-developer',
-  focusedZoneId: 'agents',
   agentRuntime: initialRuntime,
   is3dEnabled: true,
   overlay: null,
@@ -68,10 +61,8 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
-    set({ selectedAgentId: id, focusedZoneId: agent.zone });
+    set({ selectedAgentId: id });
   },
-
-  focusZone: (zoneId: string | null) => set({ focusedZoneId: zoneId }),
 
   setAgentStatus: (agentId: string, status: AgentStatus) => {
     const current = get().agentRuntime[agentId];

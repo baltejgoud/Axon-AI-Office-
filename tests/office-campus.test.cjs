@@ -150,3 +150,23 @@ test('hysteresis keeps someone already shown', () => {
   const people = [P('near', 10), P('kept', 12)];
   assert.deepEqual([...tiers.chooseFullTier(people, { x: 0, z: 0 }, 1, new Set(['kept']))], ['kept']);
 });
+
+const search = require('../src/renderer/src/features/office/shell/search.ts');
+const top = (q) => search.searchCoworkers(q, agents.OFFICE_AGENTS)[0]?.name;
+
+test('search finds people by name or specialty', () => {
+  assert.equal(top('front-end'), 'Frontend Developer');
+  assert.equal(top('frontend'), 'Frontend Developer');
+  assert.equal(top('front end'), 'Frontend Developer');
+  assert.equal(top('business analyst'), 'Business Analyst');
+  assert.equal(top('sre'), 'Site Reliability Engineer (SRE)');
+  assert.equal(top('files'), 'Files Agent');
+  assert.equal(top('cto'), 'Chief Technology Officer (CTO)');
+  assert.deepEqual(search.searchCoworkers('', agents.OFFICE_AGENTS), []);
+  assert.deepEqual(search.searchCoworkers('   ', agents.OFFICE_AGENTS), []);
+});
+
+test('search can find a whole department', () => {
+  const names = search.searchCoworkers('security', agents.OFFICE_AGENTS, 10).map((a) => a.department);
+  assert.ok(names.filter((d) => d === 'Security').length >= 5, names.join(', '));
+});

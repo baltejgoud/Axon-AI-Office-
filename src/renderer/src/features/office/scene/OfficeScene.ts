@@ -29,6 +29,7 @@ export interface OfficeDebugHandle {
   focus(x: number, z: number, span: number): void;
   breakdown(): Record<string, { meshes: number; triangles: number }>;
   shadows(on: boolean): void;
+  view(): OfficeView;
   seed: number;
 }
 
@@ -166,6 +167,11 @@ export class OfficeScene {
           triangles: this.renderer.info.render.triangles
         }),
         focus: (x, z, span) => this.cameraRig.focus({ x, z }, span),
+        view: () => ({
+          bounds: this.cameraRig.viewBounds(),
+          target: this.cameraRig.target(),
+          metresPerPixel: this.cameraRig.metresPerPixel()
+        }),
         shadows: (on) => {
           this.sun.castShadow = on;
         },
