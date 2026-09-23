@@ -403,3 +403,56 @@ test('reduced motion keeps everyone at their desks; work still starts', () => {
   office.step(1 / 10);
   assert.equal(office.screenState('desk-writer'), 'active');
 });
+
+const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
+
+test('207 people: at most twelve away from their desks, and a step stays cheap', () => {
+  const ids = agents.OFFICE_AGENTS.map((a) => a.id);
+  const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
+  for (const id of ids) office.setTaskStatus(id, 'idle');
+  let peak = 0;
+  const walking = {};
+  run(office, 15 * 60, 1 / 10, (o) => {
+    peak = Math.max(peak, o.awayCount());
+    assert.ok(o.awayCount() <= 12, `${o.awayCount()} away`);
+    for (const view of o.views()) {
+      if (view.behavior !== 'walking') {
+        walking[view.id] = 0;
+        continue;
+      }
+      assert.ok(o.grid.isFree(view.position), `${view.id} walked into furniture`);
+      walking[view.id] = (walking[view.id] ?? 0) + 0.1;
+      assert.ok(walking[view.id] < 90, `${view.id} walked for ninety seconds without arriving`);
+    }
+  });
+  assert.ok(peak >= 6, `the office should be lively; peak away was ${peak}`);
+  let worst = 0;
+  for (let i = 0; i < 200; i++) {
+    const started = performance.now();
+    office.step(1 / 60);
+    worst = Math.max(worst, performance.now() - started);
+  }
+  assert.ok(worst < 8, `worst step ${worst.toFixed(2)} ms`);
+});
+
+test('specialists only visit people in their own department, and stay in their district', () => {
+  const ids = agents.OFFICE_AGENTS.map((a) => a.id);
+  const byId = new Map(agents.OFFICE_AGENTS.map((a) => [a.id, a]));
+  const office = new OfficeSimulation({ agentIds: ids, seed: 11 });
+  for (const id of ids) office.setTaskStatus(id, 'idle');
+  let visits = 0;
+  run(office, 20 * 60, 1 / 10, (o) => {
+    for (const view of o.views()) {
+      const person = byId.get(view.id);
+      if (person.district === 'commons' || !view.poiId) continue;
+      const spot = layout.poiById(view.poiId);
+      if (spot.type === 'visit') {
+        visits++;
+        assert.equal(layout.poiById(spot.hostDeskId).department, person.department, view.id);
+      }
+      if (spot.type === 'whiteboard' || spot.type === 'open-area')
+        assert.equal(spot.district, person.district, `${view.id} at ${spot.id}`);
+    }
+  });
+  assert.ok(visits > 0, 'nobody visited a colleague in twenty minutes');
+});

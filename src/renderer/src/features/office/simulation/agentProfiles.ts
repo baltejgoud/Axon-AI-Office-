@@ -109,3 +109,22 @@ export const ACTIVITY_DURATIONS: Readonly<Record<AmbientActivity, [number, numbe
 };
 
 export const MEETING_DURATION: [number, number] = [30, 90];
+
+const SPECIALIST_PROPS: (HeldItem | null)[] = ['tablet', 'clipboard', null, 'book', 'tablet', null];
+
+/**
+ * Everyone in the districts: mostly at their desk, with short trips to their department's
+ * whiteboard, a colleague's desk or (near the Commons) the café. Meetings stay with the core team.
+ */
+export function specialistProfile(id: string): AgentProfile {
+  let hash = 0;
+  for (const letter of id) hash = (Math.imul(hash, 31) + letter.charCodeAt(0)) >>> 0;
+  return {
+    id,
+    weights: { desk: 70, coffee: 6, whiteboard: 8, visit: 8, idle: 4, lounge: 4 },
+    meetingAffinity: 0,
+    prop: SPECIALIST_PROPS[hash % SPECIALIST_PROPS.length],
+    pace: 0.92 + (hash % 17) / 100,
+    initial: { kind: 'desk' }
+  };
+}

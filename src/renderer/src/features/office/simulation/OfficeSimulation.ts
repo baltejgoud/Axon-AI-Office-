@@ -2,12 +2,14 @@ import {
   ACTIVITY_DURATIONS,
   AGENT_PROFILES,
   MEETING_DURATION,
+  specialistProfile,
   type AgentProfile,
   type AmbientActivity
 } from './agentProfiles';
 import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, WALLS, poiById } from './layout';
 import { NavGrid, obstaclesFrom } from './navigation';
 import { Random, hashString } from './random';
+import type { DistrictId } from '../campus/districts';
 import {
   distance,
   yawTowards,
@@ -103,6 +105,10 @@ interface AgentState {
   visitorSpeaks: boolean;
   turnUntil: number;
   behavior: AgentBehaviorState;
+  /** Their neighbourhood; undefined for the core team in the Commons. */
+  district?: DistrictId;
+  department?: string;
+  nearCommons: boolean;
 }
 
 export interface SimulationOptions {
@@ -111,9 +117,25 @@ export interface SimulationOptions {
   homeDesks?: Readonly<Record<string, string>>;
   /** Honour the OS "reduce motion" setting: everyone stays at their desk, work starts in place. */
   reducedMotion?: boolean;
+  /** Most people away from their desks at once (real tasks never wait for this). */
+  maxAway?: number;
 }
 
 const CAFE_PICKUP = ['cafe-machine', 'cafe-counter-1', 'cafe-counter-2'];
+/** Plans that take someone away from their desk; counted against the away budget. */
+const OUTINGS = new Set<PlanKind>([
+  'coffee',
+  'lounge',
+  'whiteboard',
+  'bookshelf',
+  'printer',
+  'cabinet',
+  'idle',
+  'visit',
+  'meeting'
+]);
+/** Specialists this close to the café may use the Commons; nobody hikes the whole campus for coffee. */
+const COMMONS_REACH = 35;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -129,6 +151,11 @@ export class OfficeSimulation {
   private readonly occupancy = new Map<string, Set<string>>();
   private readonly rng: Random;
   private readonly reducedMotion: boolean;
+  private readonly maxAway: number;
+  /** Rebuilt after every step: who sits where, who stands where, who is visiting whom. */
+  private seatedAt = new Map<string, AgentState>();
+  private standingAt = new Map<string, string[]>();
+  private visitors = new Map<string, AgentState>();
   private meeting: Meeting | null = null;
   private meetingCount = 0;
   private nextMeetingCheck: number;
@@ -138,15 +165,14 @@ export class OfficeSimulation {
     const seed = options.seed ?? 1;
     this.rng = new Random(hashString(`meetings:${seed}`));
     this.reducedMotion = options.reducedMotion ?? false;
+    this.maxAway = options.maxAway ?? 12;
+    const cafe = poiById('cafe-machine').position;
     this.nextMeetingCheck = this.rng.range(60, 100);
     for (const id of options.agentIds) {
-      const profile = AGENT_PROFILES[id] ?? {
-        ...AGENT_PROFILES['research-analyst'],
-        id,
-        initial: { kind: 'desk' as const }
-      };
+      const profile = AGENT_PROFILES[id] ?? specialistProfile(id);
       const home = options.homeDesks?.[id] ?? HOME_DESKS[id];
-      if (!profile || !home) continue;
+      if (!home) continue;
+      const homeSpot = poiById(home);
       const agent: AgentState = {
         id,
         profile,
@@ -174,7 +200,10 @@ export class OfficeSimulation {
         visitHostId: null,
         visitorSpeaks: true,
         turnUntil: 0,
-        behavior: 'idle'
+        behavior: 'idle',
+        district: homeSpot.district,
+        department: homeSpot.department,
+        nearCommons: !homeSpot.district || distance(homeSpot.position, cafe) <= COMMONS_REACH
       };
       this.agents.set(id, agent);
       this.placeInitial(agent);
@@ -193,6 +222,36 @@ export class OfficeSimulation {
     this.time += slice;
     this.updateMeeting();
     for (const agent of this.agents.values()) this.advance(agent, slice);
+    this.reindex();
+  }
+
+  /** People currently away from their own desk for something other than real work. */
+  awayCount(): number {
+    let count = 0;
+    for (const agent of this.agents.values()) if (this.isAway(agent)) count++;
+    return count;
+  }
+
+  private isAway(agent: AgentState): boolean {
+    return !agent.onTask && (OUTINGS.has(agent.plan.kind) || agent.poiId !== agent.home);
+  }
+
+  private reindex(): void {
+    this.seatedAt = new Map();
+    this.standingAt = new Map();
+    this.visitors = new Map();
+    for (const agent of this.agents.values()) {
+      if (!agent.poiId) continue;
+      if (agent.sit >= 0.6) this.seatedAt.set(agent.poiId, agent);
+      const list = this.standingAt.get(agent.poiId);
+      if (list) list.push(agent.id);
+      else this.standingAt.set(agent.poiId, [agent.id]);
+      const step = agent.plan.steps[agent.stepIndex];
+      if (agent.visitHostId && step?.type === 'do' && step.kind === 'visit') {
+        const host = this.agents.get(agent.visitHostId);
+        if (host && agent.poiId === `visit-${host.home}`) this.visitors.set(host.id, agent);
+      }
+    }
   }
 
   /**
@@ -259,15 +318,13 @@ export class OfficeSimulation {
   }
 
   screenState(deskPoiId: string): ScreenState {
-    for (const agent of this.agents.values()) {
-      if (agent.poiId !== deskPoiId || agent.sit < 0.6) continue;
-      return agent.onTask ? 'active' : 'on';
-    }
-    return 'off';
+    const agent = this.seatedAt.get(deskPoiId);
+    if (!agent) return 'off';
+    return agent.onTask ? 'active' : 'on';
   }
 
   occupantsOf(poiId: string): string[] {
-    return [...this.agents.values()].filter((agent) => agent.poiId === poiId).map((agent) => agent.id);
+    return this.standingAt.get(poiId) ?? [];
   }
 
   // ---------------------------------------------------------------- placement
@@ -401,6 +458,8 @@ export class OfficeSimulation {
     // Back from an outing: settle in for a proper stint before the next one.
     if (this.reducedMotion || agent.poiId !== agent.home)
       return this.deskPlan(agent, agent.rng.range(45, 110));
+    // The office is busy enough: keep working and look again later.
+    if (this.awayCount() >= this.maxAway) return this.deskPlan(agent, agent.rng.range(min, max));
     const activity = agent.rng.weighted(agent.profile.weights);
     return this.ambientPlan(agent, activity) ?? this.deskPlan(agent, agent.rng.range(min, max));
   }
@@ -419,6 +478,8 @@ export class OfficeSimulation {
       return chosen;
     };
 
+    const commonsOnly: AmbientActivity[] = ['coffee', 'lounge', 'bookshelf', 'printer', 'cabinet'];
+    if (commonsOnly.includes(activity) && !agent.nearCommons) return null;
     switch (activity) {
       case 'desk':
         return this.deskPlan(agent, duration);
@@ -465,7 +526,9 @@ export class OfficeSimulation {
         };
       }
       case 'whiteboard': {
-        const spot = claim(this.poisOfType((poi) => poi.type === 'whiteboard'));
+        const spot = claim(
+          this.poisOfType((poi) => poi.type === 'whiteboard' && poi.district === agent.district)
+        );
         if (!spot) return null;
         return {
           kind: 'whiteboard',
@@ -516,7 +579,9 @@ export class OfficeSimulation {
         };
       }
       case 'idle': {
-        const spot = claim(this.poisOfType((poi) => poi.type === 'open-area'));
+        const spot = claim(
+          this.poisOfType((poi) => poi.type === 'open-area' && poi.district === agent.district)
+        );
         if (!spot) return null;
         return {
           kind: 'idle',
@@ -525,7 +590,11 @@ export class OfficeSimulation {
       }
       case 'visit': {
         const hosts = [...this.agents.values()].filter(
-          (host) => host !== agent && this.canBeVisited(host) && this.hasRoom(`visit-${host.home}`, agent)
+          (host) =>
+            host !== agent &&
+            host.department === agent.department &&
+            this.canBeVisited(host) &&
+            this.hasRoom(`visit-${host.home}`, agent)
         );
         if (!hosts.length) return null;
         const host = rng.pick(hosts);
@@ -592,9 +661,9 @@ export class OfficeSimulation {
   }
 
   private canBeVisited(host: AgentState): boolean {
-    return (
-      this.settledAtDesk(host) && ![...this.agents.values()].some((other) => other.visitHostId === host.id)
-    );
+    if (!this.settledAtDesk(host)) return false;
+    for (const other of this.agents.values()) if (other.visitHostId === host.id) return false;
+    return true;
   }
 
   private hostIsAvailable(visitor: AgentState): boolean {
@@ -602,13 +671,11 @@ export class OfficeSimulation {
     return !!host && !host.onTask && host.poiId === host.home && host.meetingId === null;
   }
 
+  /** Who is standing at this person's desk for a chat (as of the last step). */
   private visitorOf(host: AgentState): AgentState | null {
-    for (const agent of this.agents.values()) {
-      if (agent.visitHostId !== host.id) continue;
-      const step = agent.plan.steps[agent.stepIndex];
-      if (step?.type === 'do' && step.kind === 'visit' && agent.poiId === `visit-${host.home}`) return agent;
-    }
-    return null;
+    const visitor = this.visitors.get(host.id);
+    if (!visitor || visitor.visitHostId !== host.id) return null;
+    return visitor;
   }
 
   private availableForMeeting(agent: AgentState): boolean {
@@ -653,9 +720,12 @@ export class OfficeSimulation {
 
   /** Pulls two or three people who are quietly working into a meeting. Purely visual. */
   private startMeeting(): void {
-    const pool = [...this.agents.values()].filter((agent) => this.availableForMeeting(agent));
+    const pool = [...this.agents.values()].filter(
+      (agent) => agent.profile.meetingAffinity > 0 && this.availableForMeeting(agent)
+    );
     if (pool.length < 2) return;
     const count = Math.min(pool.length, this.rng.chance(0.45) ? 3 : 2);
+    if (this.awayCount() + count > this.maxAway) return;
     const chosen: AgentState[] = [];
     while (chosen.length < count) {
       const weights = Object.fromEntries(pool.map((agent) => [agent.id, agent.profile.meetingAffinity]));
