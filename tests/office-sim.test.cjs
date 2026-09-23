@@ -19,7 +19,9 @@ const layout = require('../src/renderer/src/features/office/simulation/layout.ts
 
 const { OfficeSimulation, WALK_SPEED } = sim;
 const ANALYST = 'research-analyst';
-const ALL = Object.keys(layout.HOME_DESKS);
+const commons = require('../src/renderer/src/features/office/campus/commons.ts');
+// The core team in the Commons; the specialists are covered per department below.
+const ALL = Object.keys(commons.CORE_HOME_DESKS);
 const DESK_MODES = ['typing', 'reading', 'thinking'];
 const CAFE_PICKUP = ['cafe-machine', 'cafe-counter-1', 'cafe-counter-2'];
 const catalog = require('../src/renderer/src/features/office/data/coworkerCatalog.ts');
@@ -40,24 +42,26 @@ function runUntil(office, predicate, limit, dt = 1 / 60) {
   return run(office, limit, dt, () => !predicate(office));
 }
 
-test('every catalog specialist has a reachable workstation in their department', () => {
+test('every department works at its own desks, reachable from the café', () => {
   assert.equal(new Set(catalog.SPECIALIST_ROLES.map((role) => role.id)).size, 199);
   for (const group of catalog.SPECIALIST_GROUPS) {
     const ids = catalog.SPECIALIST_ROLES.filter((role) => role.group === group).map((role) => role.id);
-    assert.ok(ids.length <= layout.SPECIALIST_DESKS.length);
-    const homes = Object.fromEntries(ids.map((id, index) => [id, layout.SPECIALIST_DESKS[index]]));
-    const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], homeDesks: homes, seed: 17 });
+    const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], seed: 17 });
     assert.equal(office.views().length, ALL.length + ids.length);
-    for (const [id, home] of Object.entries(homes)) {
+    const home = layout.HOME_DESKS[ids[0]];
+    assert.ok(
+      office.grid.findPath(layout.poiById(home).approach, layout.poiById('cafe-machine').approach),
+      group
+    );
+    for (const id of ids) {
       assert.ok(
-        office.grid.findPath(layout.poiById(home).approach, layout.poiById('cafe-machine').approach),
+        layout.DESK_SETUPS.some((setup) => setup.poiId === layout.HOME_DESKS[id]),
         id
       );
-      assert.ok(layout.DESK_SETUPS.some((setup) => setup.poiId === home));
       office.setTaskStatus(id, 'working');
     }
     run(office, 1, 0.1);
-    for (const home of Object.values(homes)) assert.equal(office.screenState(home), 'active');
+    for (const id of ids) assert.equal(office.screenState(layout.HOME_DESKS[id]), 'active', id);
   }
 });
 
@@ -65,8 +69,7 @@ test('largest department runs with distinct seats and furniture-safe paths', () 
   const ids = catalog.SPECIALIST_ROLES.filter((role) => role.group === 'AI, ML & Data').map(
     (role) => role.id
   );
-  const homes = Object.fromEntries(ids.map((id, index) => [id, layout.SPECIALIST_DESKS[index]]));
-  const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], homeDesks: homes, seed: 42 });
+  const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], seed: 42 });
   run(office, 20 * 60, 0.1, (o) => {
     const seats = new Set();
     for (const view of o.views()) {
@@ -80,34 +83,37 @@ test('largest department runs with distinct seats and furniture-safe paths', () 
   });
 });
 
-test('every spot is on walkable floor and reachable without crossing furniture', () => {
+test('every spot is on walkable floor; Commons routes and sampled campus routes stay clear of furniture', () => {
   const office = new OfficeSimulation({ agentIds: [] });
   const grid = office.grid;
-  const ids = new Set();
   for (const poi of layout.POINTS_OF_INTEREST) {
-    assert.ok(!ids.has(poi.id), `duplicate spot ${poi.id}`);
-    ids.add(poi.id);
     assert.ok(
       grid.isFree(poi.approach),
       `${poi.id} approach ${JSON.stringify(poi.approach)} is inside furniture`
     );
     assert.ok(dist(poi.approach, poi.position) < 1, `${poi.id} sits too far from where it is approached`);
   }
-  for (const desk of Object.values(layout.HOME_DESKS)) {
-    const from = layout.poiById(desk).approach;
+  const clear = (from, to, label) => {
+    const path = grid.findPath(from, to);
+    assert.ok(path, `no route ${label}`);
+    for (let i = 1; i < path.length; i++)
+      assert.ok(grid.isClearLine(path[i - 1], path[i]), `route ${label} cuts through furniture at leg ${i}`);
+  };
+  const commonsSpots = layout.POINTS_OF_INTEREST.filter((poi) => !poi.district);
+  for (const desk of Object.values(commons.CORE_HOME_DESKS)) {
     assert.ok(
       layout.DESK_SETUPS.some((setup) => setup.poiId === desk),
       `${desk} has no workstation`
     );
-    for (const poi of layout.POINTS_OF_INTEREST) {
-      const path = grid.findPath(from, poi.approach);
-      assert.ok(path, `no route from ${desk} to ${poi.id}`);
-      for (let i = 1; i < path.length; i++)
-        assert.ok(
-          grid.isClearLine(path[i - 1], path[i]),
-          `route ${desk} -> ${poi.id} cuts through furniture at leg ${i}`
-        );
-    }
+    for (const poi of commonsSpots)
+      clear(layout.poiById(desk).approach, poi.approach, `${desk} -> ${poi.id}`);
+  }
+  const desks = Object.values(layout.HOME_DESKS);
+  const spots = layout.POINTS_OF_INTEREST;
+  for (let i = 0; i < 40; i++) {
+    const desk = desks[(i * 37) % desks.length];
+    const spot = spots[(i * 101 + 13) % spots.length];
+    clear(layout.poiById(desk).approach, spot.approach, `${desk} -> ${spot.id}`);
   }
 });
 

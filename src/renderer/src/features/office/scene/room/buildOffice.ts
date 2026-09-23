@@ -11,28 +11,7 @@ import {
 } from '../../simulation/layout';
 import type { ScreenState } from '../../simulation/types';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
-import { GEOMETRY, PALETTE, box, mat, part, woodFloorTexture, type ScreenFlavor } from './materials';
-
-const SCREEN_FLAVOR: Record<string, ScreenFlavor> = {
-  'desk-analyst': 'data',
-  'desk-writer': 'document',
-  'desk-designer': 'design',
-  'desk-ops': 'data',
-  'desk-marketing': 'design',
-  'desk-product': 'document',
-  'desk-librarian': 'document',
-  'desk-files': 'code'
-};
-
-const DESK_ACCENT: Record<string, string> = {
-  'desk-analyst': '#2563eb',
-  'desk-writer': '#8b5cf6',
-  'desk-designer': '#ec4899',
-  'desk-ops': '#64748b',
-  'desk-marketing': '#eab308',
-  'desk-librarian': '#0d9488',
-  'desk-files': '#10b981'
-};
+import { GEOMETRY, PALETTE, box, mat, part, woodFloorTexture } from './materials';
 
 const SCREEN_GLOW: Record<ScreenState, number> = { off: 0.05, on: 0.55, active: 1.05 };
 
@@ -236,8 +215,8 @@ export function buildOffice(): OfficeRoom {
     const station = workstation(
       setup.equipment,
       setup.props,
-      SCREEN_FLAVOR[setup.poiId] ?? 'code',
-      DESK_ACCENT[setup.poiId] ?? PALETTE.white
+      setup.flavor ?? 'code',
+      setup.accent ?? PALETTE.white
     );
     station.object.position.set(seat.position.x, 0, seat.position.z);
     station.object.rotation.y = seat.facing;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OFFICE_AGENTS, type OfficeAgent, type AgentStatus } from '../data/officeAgents';
 import type { AmbientActivity } from '../simulation/agentProfiles';
-import { POINTS_OF_INTEREST, ZONE_ANCHORS, HOME_DESKS, SPECIALIST_DESKS } from '../simulation/layout';
+import { POINTS_OF_INTEREST, ZONE_ANCHORS } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
 import type { AgentView, ScreenState, ZoneId } from '../simulation/types';
 import { OfficeAgentCharacter } from './agents/OfficeAgentCharacter';
@@ -103,19 +103,6 @@ export class OfficeScene {
     const seed = Math.floor(Math.random() * 1e9);
     this.simulation = new OfficeSimulation({
       agentIds: agents.map((agent) => agent.id),
-      homeDesks: Object.fromEntries(
-        agents
-          .filter((agent) => agent.district !== 'commons')
-          .map((agent, index) => [
-            agent.id,
-            SPECIALIST_DESKS[
-              Math.floor(
-                (index * SPECIALIST_DESKS.length) /
-                  agents.filter((agent) => agent.district !== 'commons').length
-              )
-            ]
-          ])
-      ),
       seed,
       reducedMotion: this.reducedMotion
     });

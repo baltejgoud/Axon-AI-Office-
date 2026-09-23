@@ -519,6 +519,20 @@ function credenza(itemDef: FurnitureItem): THREE.Group {
   return g;
 }
 
+/** The front desk: a wood cabinet, a work surface at desk height and a raised counter for visitors. */
+function receptionDesk(itemDef: FurnitureItem): THREE.Group {
+  const { w, d } = itemDef;
+  const g = group(
+    box(PALETTE.woodLight, [w, 0.72, d * 0.55], [0, 0.36, -d * 0.2]),
+    box(PALETTE.white, [w + 0.04, 0.04, d * 0.6], [0, 0.74, -d * 0.2]),
+    box(PALETTE.wood, [w, 1.02, 0.12], [0, 0.51, d / 2 - 0.06]),
+    box(PALETTE.white, [w + 0.08, 0.04, 0.3], [0, 1.04, d / 2 - 0.1])
+  );
+  for (let i = 1; i < 8; i++)
+    g.add(box(PALETTE.woodDark, [0.012, 0.9, 0.012], [-w / 2 + (i * w) / 8, 0.48, d / 2 + 0.002]));
+  return g;
+}
+
 function floorLamp(): THREE.Group {
   return group(
     cylinder(PALETTE.darkMetal, 0.16, 0.03, [0, 0.015, 0]),
@@ -652,6 +666,8 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       return { object: bench(itemDef) };
     case 'low-cabinet':
       return { object: lowCabinet(itemDef) };
+    case 'reception-desk':
+      return { object: receptionDesk(itemDef) };
   }
 }
 

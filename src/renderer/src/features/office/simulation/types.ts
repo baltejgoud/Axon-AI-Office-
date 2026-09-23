@@ -1,3 +1,5 @@
+import type { DistrictId } from '../campus/districts';
+
 /** Floor coordinates in metres. x runs along the back wall, z toward the viewer. */
 export interface Vec2 {
   x: number;
@@ -54,6 +56,9 @@ export interface PointOfInterest {
   group?: 'meeting-room' | 'collab-table';
   /** For visit spots: the desk whose occupant is being visited. */
   hostDeskId?: string;
+  /** Set on spots that belong to a district neighbourhood; untagged spots are in the Commons. */
+  district?: DistrictId;
+  department?: string;
 }
 
 export type ScreenState = 'off' | 'on' | 'active';

@@ -69,17 +69,39 @@ export class NavGrid {
     const comfortRadius = options.comfortRadius ?? 0.5;
     this.cols = Math.ceil((ROOM.maxX - ROOM.minX) / this.cellSize);
     this.rows = Math.ceil((ROOM.maxZ - ROOM.minZ) / this.cellSize);
-    const blocked = new Uint8Array(this.cols * this.rows);
-    const comfortBlocked = new Uint8Array(this.cols * this.rows);
-    for (let row = 0; row < this.rows; row++) {
+    const total = this.cols * this.rows;
+    // Distance from each cell centre to the nearest wall, furniture or room edge, capped at the
+    // comfort radius. Each obstacle only visits the cells within that radius of it.
+    const nearest = new Float32Array(total);
+    for (let row = 0; row < this.rows; row++)
       for (let col = 0; col < this.cols; col++) {
         const { x, z } = this.centerOf(col, row);
-        let nearest = Math.min(x - ROOM.minX, ROOM.maxX - x, z - ROOM.minZ, ROOM.maxZ - z);
-        for (const o of obstacles) nearest = Math.min(nearest, distanceToObstacle(o, x, z));
-        const index = row * this.cols + col;
-        blocked[index] = nearest < bodyRadius ? 1 : 0;
-        comfortBlocked[index] = nearest < comfortRadius ? 1 : 0;
+        nearest[row * this.cols + col] = Math.min(
+          comfortRadius,
+          x - ROOM.minX,
+          ROOM.maxX - x,
+          z - ROOM.minZ,
+          ROOM.maxZ - z
+        );
       }
+    for (const o of obstacles) {
+      const [minX, maxX, minZ, maxZ] =
+        o.kind === 'circle' ? [o.x - o.r, o.x + o.r, o.z - o.r, o.z + o.r] : [o.minX, o.maxX, o.minZ, o.maxZ];
+      const [c0, r0] = this.cellOf({ x: minX - comfortRadius, z: minZ - comfortRadius });
+      const [c1, r1] = this.cellOf({ x: maxX + comfortRadius, z: maxZ + comfortRadius });
+      for (let row = r0; row <= r1; row++)
+        for (let col = c0; col <= c1; col++) {
+          const { x, z } = this.centerOf(col, row);
+          const index = row * this.cols + col;
+          const d = distanceToObstacle(o, x, z);
+          if (d < nearest[index]) nearest[index] = d;
+        }
+    }
+    const blocked = new Uint8Array(total);
+    const comfortBlocked = new Uint8Array(total);
+    for (let index = 0; index < total; index++) {
+      blocked[index] = nearest[index] < bodyRadius ? 1 : 0;
+      comfortBlocked[index] = nearest[index] < comfortRadius ? 1 : 0;
     }
     this.grid = { blocked, comfortBlocked };
   }
@@ -143,6 +165,43 @@ export class NavGrid {
       if (blockedAt(col, row)) return false;
     }
     return true;
+  }
+
+  /** Every cell a body can walk to from the given point: 1 = reachable. */
+  reachableFrom(from: Vec2): Uint8Array {
+    const { blocked } = this.grid;
+    const cols = this.cols;
+    const seen = new Uint8Array(cols * this.rows);
+    const start = this.nearestFreeCell(...this.cellOf(from));
+    if (start === null) return seen;
+    const queue = new Int32Array(cols * this.rows);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    while (head < tail) {
+      const current = queue[head++];
+      const col = current % cols;
+      const row = Math.floor(current / cols);
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const c = col + dc;
+          const r = row + dr;
+          if (c < 0 || r < 0 || c >= cols || r >= this.rows) continue;
+          const next = r * cols + c;
+          if (seen[next] || blocked[next]) continue;
+          if (dr && dc && (blocked[row * cols + c] || blocked[r * cols + col])) continue;
+          seen[next] = 1;
+          queue[tail++] = next;
+        }
+    }
+    return seen;
+  }
+
+  isReachable(mask: Uint8Array, p: Vec2): boolean {
+    const [col, row] = this.cellOf(p);
+    return mask[row * this.cols + col] === 1;
   }
 
   private nearestFreeCell(col: number, row: number): number | null {
