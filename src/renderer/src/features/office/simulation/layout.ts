@@ -20,7 +20,7 @@ export type {
  * obstacles from the same data, so what people walk around is exactly what is drawn.
  * Units are metres; x runs along the back wall (left to right), z runs toward the viewer.
  */
-export const ROOM = { minX: -56, maxX: 56, minZ: -33, maxZ: 33 } as const;
+export const ROOM = { minX: -62, maxX: 62, minZ: -38, maxZ: 38 } as const;
 export const WALL_THICKNESS = 0.16;
 
 const builder = new LayoutBuilder();
@@ -37,26 +37,19 @@ for (const agent of OFFICE_AGENTS)
   if (agent.district !== 'commons') (members[agent.department] ??= []).push(agent.id);
 const specialistDesks = buildDistricts(builder, members);
 // Trees along the main corridors: landmarks that make the long walks pleasant.
-for (const [x, z] of [
-  [-17.5, -29],
-  [-17.5, -20],
-  [-17.5, -4],
-  [-17.5, 4],
-  [-17.5, 20],
-  [-17.5, 29],
-  [17.5, -29],
-  [17.5, -20],
-  [17.5, -5],
-  [17.5, 1],
-  [17.5, 20],
-  [17.5, 29],
-  [25.5, -12.5],
-  [33.5, -12.5],
-  [44.5, -12.5],
-  [25, 9.5],
-  [36.5, 9.5],
-  [48, 9.5]
-])
+const CORRIDOR_TREES: [number, number][] = [
+  ...[-29, -20, -4, 4, 20, 29].flatMap((z): [number, number][] => [
+    [-22.5, z],
+    [22.5, z]
+  ]),
+  [31.5, -15],
+  [44, -15],
+  [55, -15],
+  [31, 12],
+  [42.5, 12],
+  [54, 12]
+];
+for (const [x, z] of CORRIDOR_TREES)
   builder.item(`corridor-tree-${x}-${z}`, 'tree', x, z, 1.0, 1.0, { round: true });
 const built = builder.finish();
 

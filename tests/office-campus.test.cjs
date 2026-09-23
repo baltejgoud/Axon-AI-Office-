@@ -62,6 +62,33 @@ const hood = require('../src/renderer/src/features/office/campus/neighbourhoods.
 const nav = require('../src/renderer/src/features/office/simulation/navigation.ts');
 const inside = (p, b) => p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ;
 
+test('the campus grows 12 m each way and every district keeps its size', () => {
+  assert.deepEqual({ ...layout.ROOM }, { minX: -62, maxX: 62, minZ: -38, maxZ: 38 });
+  const size = (id) => {
+    const b = districts.districtById(id).bounds;
+    return [b.maxX - b.minX, b.maxZ - b.minZ];
+  };
+  assert.deepEqual(size('commons'), [40, 32]);
+  const kept = {
+    engineering: [35, 62],
+    product: [32, 18.5],
+    design: [13, 17],
+    leadership: [19, 17],
+    'ai-data': [35, 19],
+    business: [32, 16.5],
+    'people-ops': [35, 20]
+  };
+  for (const [id, wd] of Object.entries(kept)) assert.deepEqual(size(id), wd, id);
+  const r = layout.ROOM;
+  for (const d of districts.DISTRICTS) {
+    const b = d.bounds;
+    assert.ok(
+      b.minX - r.minX >= 2 && r.maxX - b.maxX >= 2 && b.minZ - r.minZ >= 2 && r.maxZ - b.maxZ >= 2,
+      d.id
+    );
+  }
+});
+
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });

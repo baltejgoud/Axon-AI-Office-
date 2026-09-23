@@ -31,8 +31,8 @@ export interface District {
 }
 
 /**
- * The campus: a Commons in the middle (the original office, unchanged) and seven districts around
- * it, each at least 2.6 m from its neighbours so the main corridors stay open.
+ * The campus: a 40 x 32 m Commons in the middle and seven districts around it, each at least
+ * 2.5 m from its neighbours so the main corridors stay open.
  */
 export const DISTRICTS: readonly District[] = [
   {
@@ -40,7 +40,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Commons',
     short: 'Commons',
     color: '#9a6414',
-    bounds: { minX: -14, maxX: 14, minZ: -10, maxZ: 12 },
+    bounds: { minX: -20, maxX: 20, minZ: -15, maxZ: 17 },
     grid: [1, 1],
     departments: [],
     flavor: 'document',
@@ -52,7 +52,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Engineering',
     short: 'Engineering',
     color: '#2f5bd3',
-    bounds: { minX: -54, maxX: -19, minZ: -31, maxZ: 31 },
+    bounds: { minX: -60, maxX: -25, minZ: -31, maxZ: 31 },
     grid: [3, 3],
     departments: [
       'Web & Frontend',
@@ -74,7 +74,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Product & Delivery',
     short: 'Product',
     color: '#7c3aed',
-    bounds: { minX: -16, maxX: 16, minZ: -31, maxZ: -12.5 },
+    bounds: { minX: -16, maxX: 16, minZ: -36, maxZ: -17.5 },
     grid: [3, 1],
     departments: ['Product Management', 'Project Management', 'Engineering Management'],
     flavor: 'document',
@@ -86,7 +86,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Design Studio',
     short: 'Design',
     color: '#c0267a',
-    bounds: { minX: 19, maxX: 32, minZ: -31, maxZ: -14 },
+    bounds: { minX: 25, maxX: 38, minZ: -36, maxZ: -19 },
     grid: [1, 1],
     departments: ['Design'],
     flavor: 'design',
@@ -98,7 +98,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Leadership Suite',
     short: 'Leadership',
     color: '#0f5e57',
-    bounds: { minX: 35, maxX: 54, minZ: -31, maxZ: -14 },
+    bounds: { minX: 41, maxX: 60, minZ: -36, maxZ: -19 },
     grid: [5, 2],
     departments: ['Executive Leadership'],
     flavor: 'document',
@@ -110,7 +110,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'AI & Data Lab',
     short: 'AI & Data',
     color: '#0e7490',
-    bounds: { minX: 19, maxX: 54, minZ: -11, maxZ: 8 },
+    bounds: { minX: 25, maxX: 60, minZ: -11, maxZ: 8 },
     grid: [1, 1],
     departments: ['AI, ML & Data'],
     flavor: 'data',
@@ -122,7 +122,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'Business',
     short: 'Business',
     color: '#b4461b',
-    bounds: { minX: -16, maxX: 16, minZ: 14.5, maxZ: 31 },
+    bounds: { minX: -16, maxX: 16, minZ: 19.5, maxZ: 36 },
     grid: [4, 1],
     departments: ['Sales Management', 'Marketing Management', 'Customer Success', 'Strategy & Innovation'],
     flavor: 'data',
@@ -134,7 +134,7 @@ export const DISTRICTS: readonly District[] = [
     name: 'People & Ops',
     short: 'People & Ops',
     color: '#3f7a3a',
-    bounds: { minX: 19, maxX: 54, minZ: 11, maxZ: 31 },
+    bounds: { minX: 25, maxX: 60, minZ: 16, maxZ: 36 },
     grid: [3, 1],
     departments: ['Operations Management', 'HR & People', 'General Management'],
     flavor: 'document',
