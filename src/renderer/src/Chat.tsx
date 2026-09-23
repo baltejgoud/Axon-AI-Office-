@@ -40,50 +40,11 @@ import { useApp, perform } from './state';
 import { timeAgo } from './format';
 import { Button, Icon } from './ui';
 import { RolePicker, SkillPicker, SelectionChips } from './ui/CatalogPicker';
-import { ApprovalCard } from './ui/ApprovalCard';
+import { MessageView } from './chat/MessageView';
+import { PendingApprovals } from './chat/PendingApprovals';
+import { ModelSelect } from './chat/ModelSelect';
+export { ModelSelect };
 import type { Selection } from '../../shared/types';
-
-export function ModelSelect({
-  value,
-  onChange,
-  disabled = false,
-  size = 'md'
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-  size?: 'sm' | 'md';
-}) {
-  const data = useApp((s) => s.data)!;
-  const isDeepSeek = value.toLowerCase().includes('deepseek');
-
-  return (
-    <div className="model-select-pill-container">
-      <span className={`model-select-dot ${isDeepSeek ? 'dot-deepseek' : 'dot-accent'}`} />
-      <select
-        className={`model-select-pill ${size === 'sm' ? 'pill-sm' : ''}`}
-        aria-label="AI model"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Select a model</option>
-        {data.providers
-          .filter((p) => p.enabled)
-          .map((p) => (
-            <optgroup label={p.name} key={p.id}>
-              {p.models.map((m) => (
-                <option value={`${p.id}::${m.id}`} key={m.id}>
-                  {m.displayName || m.id}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-      </select>
-      <Icon icon={ChevronDown} size="sm" className="model-select-arrow" />
-    </div>
-  );
-}
 
 const starterCards = [
   {
@@ -177,46 +138,6 @@ const slashCommands = [
     prompt: 'Check persistent project memory in .axon/MEMORY.md and summarize recent architectural decisions.'
   }
 ];
-
-/** Flattens the highlighted element tree back into the raw source for copying. */
-function textOf(node: ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join('');
-  if (node && typeof node === 'object' && 'props' in node)
-    return textOf((node as { props?: { children?: ReactNode } }).props?.children);
-  return '';
-}
-
-/** Fenced code block with a language label and a copy button. */
-function CodeBlock({ children }: { children?: ReactNode }) {
-  const [copied, setCopied] = useState(false);
-  const className = (children as { props?: { className?: string } } | undefined)?.props?.className ?? '';
-  const language = /language-([\w+#-]+)/.exec(className)?.[1];
-  return (
-    <div className="code-block">
-      <div className="code-block-bar">
-        {language && <span className="code-block-lang">{language}</span>}
-        <button
-          type="button"
-          className="code-block-copy"
-          onClick={() => {
-            navigator.clipboard.writeText(textOf(children)).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1400);
-              },
-              () => useApp.getState().pushToast('Could not copy to clipboard', 'error')
-            );
-          }}
-        >
-          <Icon icon={copied ? Check : Copy} size="sm" />
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre>{children}</pre>
-    </div>
-  );
-}
 
 export function Chat({ codeContext }: { codeContext?: { path: string; text: string } }) {
   const { data, chatId, workspaceId, model, patch, pendingSelection, pendingApprovals } = useApp();
@@ -560,149 +481,33 @@ export function Chat({ codeContext }: { codeContext?: { path: string; text: stri
         ) : (
           <div className="messages">
             {messages.map((m) => (
-              <article key={m.id} className={`message ${m.role}${m.streaming ? ' streaming' : ''}`}>
-                <div className="message-avatar">
-                  <Icon icon={m.role === 'user' ? User : Sparkles} size="sm" />
-                </div>
-                <div className="message-body">
-                  <div className="message-meta">
-                    <strong>{m.role === 'user' ? 'You' : 'Axon'}</strong>
-                    {m.modelId && <span className="text-caption">{m.modelId}</span>}
-                    <span className="text-caption" title={new Date(m.createdAt).toLocaleString()}>
-                      {timeAgo(m.createdAt)}
-                    </span>
-                    {m.usage && (
-                      <span className="text-caption" style={{ marginLeft: 'auto' }}>
-                        {(m.usage.promptTokens || 0).toLocaleString()} in /{' '}
-                        {(m.usage.completionTokens || 0).toLocaleString()} out
-                      </span>
-                    )}
-                    {m.streaming && (
-                      <span className="message-status">
-                        <span className="thinking-dots" aria-hidden="true">
-                          <span />
-                          <span />
-                          <span />
-                        </span>
-                        Generating
-                      </span>
-                    )}
-                  </div>
-                  {m.thought && (
-                    <details className="thought-block">
-                      <summary>Thought Process</summary>
-                      <div className="thought-content">{m.thought}</div>
-                    </details>
-                  )}
-                  {m.toolCalls && m.toolCalls.length > 0 && (
-                    <div className="tool-calls">
-                      {m.toolCalls.map((tc) => (
-                        <details key={tc.id} className="tool-call-item">
-                          <summary className="tool-call-summary">
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                              <Icon icon={Wrench} size="sm" />
-                              <strong>{tc.name}</strong>
-                            </span>
-                            <span
-                              className={`tool-call-status ${
-                                tc.error ? 'failed' : tc.result ? 'completed' : 'running'
-                              }`}
-                            >
-                              {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running...'}
-                            </span>
-                          </summary>
-                          <div className="tool-call-body">
-                            <div className="tool-call-label">Arguments:</div>
-                            <pre className="tool-call-pre">{tc.arguments}</pre>
-                            {tc.result && (
-                              <>
-                                <div className="tool-call-label" style={{ marginTop: 'var(--space-2)' }}>
-                                  Result:
-                                </div>
-                                <pre className="tool-call-pre scrollable">{tc.result}</pre>
-                              </>
-                            )}
-                            {tc.error && (
-                              <div style={{ color: 'var(--danger-text)', marginTop: 'var(--space-2)' }}>
-                                {tc.error}
-                              </div>
-                            )}
-                          </div>
-                        </details>
-                      ))}
-                    </div>
-                  )}
-                  <Markdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                      img: ({ alt }) => <span>[Image: {alt}]</span>,
-                      a: ({ children }) => <span className="message-link">{children}</span>,
-                      pre: ({ children }) => <CodeBlock>{children}</CodeBlock>
-                    }}
-                  >
-                    {m.content || (m.streaming ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
-                  </Markdown>
-                  {m.error && <p className="message-error">{m.error}</p>}
-                  {m.role === 'assistant' && m.content && !m.streaming && (
-                    <div className="message-actions">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={Copy}
-                        onClick={() =>
-                          void perform(() => navigator.clipboard.writeText(m.content), 'Copied to clipboard')
-                        }
-                      >
-                        Copy
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={RefreshCw}
-                        disabled={busy}
-                        onClick={() => {
-                          const idx = messages.findIndex((msg) => msg.id === m.id);
-                          const prevUser = [...messages.slice(0, idx)]
-                            .reverse()
-                            .find((msg) => msg.role === 'user');
-                          if (prevUser) {
-                            void send(prevUser.content);
-                          }
-                        }}
-                      >
-                        Regenerate
-                      </Button>
-                    </div>
-                  )}
-                  {m.role === 'user' && m.content && (
-                    <div className="message-actions">
-                      <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setInput(m.content)}>
-                        Edit
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </article>
+              <MessageView
+                key={m.id}
+                message={m}
+                actions={
+                  m.role === 'assistant' && m.content && !m.streaming ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={RefreshCw}
+                      disabled={busy}
+                      onClick={() => {
+                        const idx = messages.findIndex((msg) => msg.id === m.id);
+                        const prevUser = [...messages.slice(0, idx)].reverse().find((msg) => msg.role === 'user');
+                        if (prevUser) void send(prevUser.content);
+                      }}
+                    >
+                      Regenerate
+                    </Button>
+                  ) : m.role === 'user' && m.content ? (
+                    <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setInput(m.content)}>
+                      Edit
+                    </Button>
+                  ) : undefined
+                }
+              />
             ))}
-            {Object.values(pendingApprovals)
-              .filter((req) => req.conversationId === chatId)
-              .map((req) => (
-                <ApprovalCard
-                  key={req.id}
-                  request={req}
-                  onDecision={(approved, alwaysAllowSession) => {
-                    const next = { ...pendingApprovals };
-                    delete next[req.id];
-                    patch({ pendingApprovals: next });
-                    void window.axon.toolApprove({
-                      requestId: req.id,
-                      approved,
-                      alwaysAllowSession
-                    });
-                  }}
-                />
-              ))}
+            <PendingApprovals conversationId={chatId} />
           </div>
         )}
         <div ref={bottom} />

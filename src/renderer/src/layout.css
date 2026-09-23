@@ -1028,6 +1028,18 @@
   font-size: var(--text-xs);
   user-select: none;
 }
+.tool-call-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tool-call-error {
+  color: var(--danger-text);
+  margin-top: var(--space-2);
+}
+.tool-call-label + .tool-call-pre + .tool-call-label {
+  margin-top: var(--space-2);
+}
 .tool-call-status {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
