@@ -61,7 +61,7 @@ export function ActivityPanel() {
         </span>
       </header>
       <div className="activity-agent-hero">
-        <AgentPortrait agent={agent} className="activity-portrait" />
+        <AgentPortrait agent={agent} className="activity-portrait" urgent />
         <div className="activity-agent-meta">
           <span className="activity-selected-tag">Selected coworker</span>
           <h3>{agent.name}</h3>

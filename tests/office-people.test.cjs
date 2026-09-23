@@ -1,0 +1,88 @@
+// Who everyone looks like: deterministic, varied within a pod, dressed for their district.
+const ts = require('typescript');
+const fs = require('node:fs');
+require.extensions['.ts'] = (module, file) =>
+  module._compile(
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        esModuleInterop: true,
+        resolveJsonModule: true
+      }
+    }).outputText,
+    file
+  );
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const appearance = require('../src/renderer/src/features/office/scene/agents/appearance.ts');
+const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
+
+const specialists = agents.OFFICE_AGENTS.filter((a) => a.district !== 'commons');
+
+test('the same id always gets the same look', () => {
+  const a = appearance.generateAppearance('frontend-developer', 'engineering', '#2f5bd3');
+  const b = appearance.generateAppearance('frontend-developer', 'engineering', '#2f5bd3');
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(a, appearance.generateAppearance('frontend-developer', 'engineering', '#2f5bd3', 1));
+});
+
+test('everyone in the catalog has a complete look', () => {
+  for (const agent of agents.OFFICE_AGENTS) {
+    const look = appearance.appearanceFor(agent.id);
+    assert.ok(look, agent.id);
+    for (const key of ['skin', 'hair', 'hairStyle', 'shirt', 'trousers', 'shoes', 'accent', 'top'])
+      assert.ok(look[key], `${agent.id} ${key}`);
+    assert.ok(look.height >= 1.55 && look.height <= 1.9, `${agent.id} height ${look.height}`);
+  }
+});
+
+test('nobody in the same pod shares hairstyle and top colour', () => {
+  const byDepartment = new Map();
+  for (const agent of specialists) {
+    const list = byDepartment.get(agent.department) ?? [];
+    list.push(agent.id);
+    byDepartment.set(agent.department, list);
+  }
+  for (const [department, ids] of byDepartment)
+    for (let start = 0; start < ids.length; start += 4) {
+      const pod = ids.slice(start, start + 4).map((id) => {
+        const look = appearance.appearanceFor(id);
+        return `${look.hairStyle}|${look.jacket ?? look.shirt}`;
+      });
+      assert.equal(new Set(pod).size, pod.length, `${department} pod ${start / 4}: ${pod.join(', ')}`);
+    }
+});
+
+test('specialists are dressed for their district', () => {
+  for (const agent of specialists) {
+    const look = appearance.appearanceFor(agent.id);
+    assert.ok(
+      appearance.DRESS_CODES[agent.district].tops.includes(look.top),
+      `${agent.id} wears ${look.top}`
+    );
+  }
+  for (const agent of specialists.filter((a) => a.district === 'leadership'))
+    assert.ok(['suit', 'blazer'].includes(appearance.appearanceFor(agent.id).top), agent.id);
+});
+
+test('the catalog is visibly varied', () => {
+  const looks = agents.OFFICE_AGENTS.map((a) => appearance.appearanceFor(a.id));
+  assert.ok(new Set(looks.map((l) => l.hairStyle)).size >= 8);
+  assert.ok(new Set(looks.map((l) => l.skin)).size >= 6);
+  assert.ok(new Set(looks.map((l) => l.top)).size >= 6);
+  assert.ok(looks.some((l) => l.beard) && looks.some((l) => l.headphones) && looks.some((l) => l.glasses));
+});
+
+const { PortraitQueue } = require('../src/renderer/src/features/office/scene/people/portraitQueue.ts');
+
+test('portraits are queued once, in order, with urgent requests first', () => {
+  const queue = new PortraitQueue();
+  for (const id of ['a', 'b', 'c', 'a']) queue.request(id);
+  queue.request('c', true);
+  queue.request('d', true);
+  assert.deepEqual(queue.take(2), ['d', 'c']);
+  assert.deepEqual(queue.take(5), ['a', 'b']);
+  queue.request('a');
+  assert.equal(queue.size, 0);
+});

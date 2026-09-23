@@ -1,13 +1,38 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { Appearance, HairStyle } from '../agents/appearance';
+import type { Appearance, HairStyle, Top } from '../agents/appearance';
 import { applyPose, buildHumanoid } from '../agents/HumanoidRig';
 import { computePose } from '../agents/poses';
 
 /** Seat height the crowd pose is baked at; office chairs sit here. */
 const SEAT_HEIGHT = 0.5;
 const BASE_HEIGHT = 1.68;
-const HAIR_STYLES: HairStyle[] = ['short', 'bob', 'bun', 'ponytail', 'curly', 'wavy'];
+const HAIR_STYLES: HairStyle[] = [
+  'short',
+  'crop',
+  'side-part',
+  'buzz',
+  'bob',
+  'long',
+  'ponytail',
+  'bun',
+  'curly',
+  'afro',
+  'braids',
+  'wavy'
+];
+/** Tops that share a body shape share a baked template. */
+const SHAPE_OF: Record<Top, Top> = {
+  tee: 'tee',
+  shirt: 'shirt',
+  polo: 'shirt',
+  hoodie: 'hoodie',
+  blazer: 'blazer',
+  cardigan: 'blazer',
+  suit: 'suit',
+  vest: 'vest'
+};
+const SHAPES: Top[] = ['tee', 'shirt', 'hoodie', 'blazer', 'suit', 'vest'];
 
 type Role =
   | 'skin'
@@ -17,32 +42,43 @@ type Role =
   | 'hair'
   | 'shoes'
   | 'badge'
+  | 'beard'
   | 'eyes'
   | 'white'
   | 'mouth'
-  | 'glasses';
+  | 'glasses'
+  | 'headphones'
+  | 'strings';
 
 /** Colours no real appearance uses, so a baked mesh's material tells us which part it is. */
-const SENTINEL: Record<'skin' | 'shirt' | 'outer' | 'trousers' | 'hair' | 'shoes' | 'badge', string> = {
+const SENTINEL: Record<
+  'skin' | 'shirt' | 'outer' | 'trousers' | 'hair' | 'shoes' | 'badge' | 'beard',
+  string
+> = {
   skin: '#010101',
   shirt: '#020202',
   outer: '#030303',
   trousers: '#040404',
   hair: '#050505',
   shoes: '#060606',
-  badge: '#070707'
+  badge: '#070707',
+  beard: '#080808'
 };
 const FIXED: Record<string, Role> = {
   '23262b': 'eyes',
   ffffff: 'white',
   a36d5b: 'mouth',
-  '2b2f36': 'glasses'
+  '2b2f36': 'glasses',
+  '1f2430': 'headphones',
+  f3f1ec: 'strings'
 };
 const FIXED_COLOR: Partial<Record<Role, string>> = {
   eyes: '#23262b',
   white: '#ffffff',
   mouth: '#a36d5b',
-  glasses: '#2b2f36'
+  glasses: '#2b2f36',
+  headphones: '#1f2430',
+  strings: '#f3f1ec'
 };
 const BY_SENTINEL = new Map(Object.entries(SENTINEL).map(([role, color]) => [color.slice(1), role as Role]));
 
@@ -106,6 +142,9 @@ const template = (overrides: Partial<Appearance>): Appearance => ({
   shoes: SENTINEL.shoes,
   accent: SENTINEL.badge,
   glasses: false,
+  top: 'shirt',
+  beard: null,
+  headphones: false,
   ...overrides
 });
 
@@ -173,6 +212,8 @@ export class CrowdRenderer {
           return look.shoes;
         case 'badge':
           return look.accent;
+        case 'beard':
+          return look.beard ?? look.hair;
         default:
           return FIXED_COLOR[role] ?? '#ffffff';
       }
@@ -200,16 +241,27 @@ export class CrowdRenderer {
     };
 
     const all = people.map((_, i) => i);
-    const bodyRoles = (role: Role) => role !== 'hair' && role !== 'glasses';
-    const withJacket = all.filter((i) => people[i].look.jacket);
-    const plain = all.filter((i) => !people[i].look.jacket);
-    for (const [look, members] of [
-      [template({ jacket: SENTINEL.outer }), withJacket],
-      [template({}), plain]
-    ] as const) {
+    const accessory: ReadonlySet<Role> = new Set(['hair', 'glasses', 'beard', 'headphones']);
+    for (const shape of SHAPES) {
+      const members = all.filter((i) => SHAPE_OF[people[i].look.top] === shape);
       if (!members.length) continue;
-      for (const [role, geometry] of bake(look, bodyRoles)) addGroup(geometry, role, members);
+      const layered = shape === 'blazer' || shape === 'suit' || shape === 'vest';
+      const look = template({ top: shape, jacket: layered ? SENTINEL.outer : null });
+      for (const [role, geometry] of bake(look, (role) => !accessory.has(role)))
+        addGroup(geometry, role, members);
     }
+    const beards = all.filter((i) => people[i].look.beard);
+    const beard = bake(
+      template({ hairStyle: 'bald', beard: SENTINEL.beard }),
+      (role) => role === 'beard'
+    ).get('beard');
+    if (beard) addGroup(beard, 'beard', beards);
+    const listening = all.filter((i) => people[i].look.headphones);
+    const phones = bake(
+      template({ hairStyle: 'bald', headphones: true }),
+      (role) => role === 'headphones'
+    ).get('headphones');
+    if (phones) addGroup(phones, 'headphones', listening);
     for (const style of HAIR_STYLES) {
       const members = all.filter((i) => people[i].look.hairStyle === style);
       if (!members.length) continue;

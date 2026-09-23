@@ -66,6 +66,8 @@ export class OfficeAgentCharacter {
   private hovered = false;
   private working = false;
   private glanceUntil = 0;
+  private nextBlink = 0;
+  private blinkUntil = 0;
   private readonly scratchQuat = new THREE.Quaternion();
   private readonly scratchQuat2 = new THREE.Quaternion();
 
@@ -184,6 +186,18 @@ export class OfficeAgentCharacter {
     this.ring.scale.setScalar(this.selected ? pulse * 1.02 : 1);
 
     this.updateProps(view.heldItem);
+    this.blink(time, reducedMotion);
+  }
+
+  /** A quick blink every few seconds, never in step with anyone else. */
+  private blink(time: number, reducedMotion: boolean): void {
+    if (reducedMotion) return;
+    if (time >= this.nextBlink) {
+      this.blinkUntil = time + 0.12;
+      this.nextBlink = time + 3 + ((this.seed * 13 + time * 0.37) % 3);
+    }
+    const open = time >= this.blinkUntil;
+    for (const eye of this.rig.eyes) if (eye.visible !== open) eye.visible = open;
   }
 
   private updateProps(held: HeldItem | null): void {

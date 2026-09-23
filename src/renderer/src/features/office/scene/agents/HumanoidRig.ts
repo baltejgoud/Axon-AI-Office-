@@ -24,7 +24,8 @@ const SHAPES = {
     cylinder: GEOMETRY.cylinder,
     lowSphere: GEOMETRY.lowSphere,
     hairCap: new THREE.SphereGeometry(0.5, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    lens: new THREE.TorusGeometry(0.04, 0.006, 6, 18)
+    lens: new THREE.TorusGeometry(0.04, 0.006, 6, 18),
+    band: new THREE.TorusGeometry(0.178, 0.014, 6, 20, Math.PI)
   },
   low: {
     box: GEOMETRY.box,
@@ -33,7 +34,8 @@ const SHAPES = {
     cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
     lowSphere: new THREE.IcosahedronGeometry(0.5, 0),
     hairCap: new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    lens: new THREE.TorusGeometry(0.04, 0.006, 3, 10)
+    lens: new THREE.TorusGeometry(0.04, 0.006, 3, 10),
+    band: new THREE.TorusGeometry(0.178, 0.014, 3, 10, Math.PI)
   }
 };
 type Shapes = (typeof SHAPES)['full'];
@@ -57,6 +59,8 @@ export interface HumanoidRig {
   legR: Limb;
   /** Body meshes that get a selection outline (no eyes or glasses). */
   outlinable: THREE.Mesh[];
+  /** Eyes and eye highlights, hidden for a moment to blink. */
+  eyes: THREE.Mesh[];
 }
 
 function joint(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Group {
@@ -86,7 +90,13 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   const outer = fabric(look.jacket ?? look.shirt);
   const trousers = fabric(look.trousers);
   const hair = mat(look.hair, { roughness: 0.95 });
+  const eyeMaterial = mat('#23262b', { roughness: 0.3 });
+  const highlight = mat('#ffffff');
+  const accent = mat(look.accent, { roughness: 0.5 });
   const width = look.build;
+  // Sleeves: short on a tee, shirt sleeves under a vest, otherwise the outer layer.
+  const upperSleeve = look.top === 'vest' || look.top === 'tee' ? shirt : outer;
+  const lowerSleeve = look.top === 'tee' ? skin : look.top === 'vest' ? shirt : outer;
 
   // Hips and legs
   const hips = joint(body, 0, STANDING_HIP_HEIGHT, 0);
@@ -112,11 +122,17 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   } else {
     add(spine, part(G.capsule, shirt, [0.41 * width, 0.23, 0.255], [0, 0.24, 0]));
   }
-  add(
-    spine,
-    part(G.box, mat(look.accent, { roughness: 0.5 }), [0.06, 0.04, 0.012], [0.1 * width, 0.33, 0.138]),
-    false
-  );
+  add(spine, part(G.box, accent, [0.06, 0.04, 0.012], [0.1 * width, 0.33, 0.138]), false);
+  if (look.top === 'suit') add(spine, part(G.box, accent, [0.036, 0.22, 0.012], [0, 0.27, 0.142]), false);
+  if (look.top === 'hoodie') {
+    // The hood rests behind the neck.
+    add(spine, part(G.sphere, shirt, [0.3 * width, 0.15, 0.15], [0, 0.44, -0.1]));
+    for (const side of [-1, 1])
+      spine.add(part(G.box, mat('#f3f1ec'), [0.01, 0.1, 0.008], [side * 0.035, 0.36, 0.13]));
+  }
+  if (look.top === 'polo')
+    for (const side of [-1, 1])
+      spine.add(part(G.box, shirt, [0.08, 0.035, 0.05], [side * 0.05, 0.46, 0.08], [0.4, 0, side * 0.35]));
 
   // Neck and head
   const neck = joint(spine, 0, 0.47, 0);
@@ -126,14 +142,7 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   const faceZ = HEAD.d / 2 - 0.012;
   for (const side of [1, -1]) {
     add(head, part(G.sphere, skin, [0.05, 0.08, 0.05], [0.148 * side, HEAD.y, 0]));
-    head.add(
-      part(
-        G.sphere,
-        mat('#23262b', { roughness: 0.3 }),
-        [0.034, 0.042, 0.026],
-        [0.058 * side, HEAD.y + 0.025, faceZ]
-      )
-    );
+    head.add(part(G.sphere, eyeMaterial, [0.034, 0.042, 0.026], [0.058 * side, HEAD.y + 0.025, faceZ]));
     if (look.glasses)
       head.add(
         part(
@@ -149,9 +158,7 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   add(head, part(G.sphere, skin, [0.045, 0.055, 0.05], [0, HEAD.y - 0.015, faceZ + 0.008]), false);
   // Small face details remain warm and legible in close-up.
   for (const side of [-1, 1]) {
-    head.add(
-      part(G.sphere, mat('#ffffff'), [0.009, 0.011, 0.006], [0.055 * side, HEAD.y + 0.033, faceZ + 0.014])
-    );
+    head.add(part(G.sphere, highlight, [0.009, 0.011, 0.006], [0.055 * side, HEAD.y + 0.033, faceZ + 0.014]));
     head.add(
       part(
         G.box,
@@ -167,13 +174,27 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
     for (const side of [-1, 1])
       spine.add(part(G.box, shirt, [0.065, 0.13, 0.014], [side * 0.058, 0.38, 0.137], [0, 0, side * 0.3]));
   buildHair(head, look, hair, add, G);
+  if (look.beard)
+    add(
+      head,
+      part(G.sphere, mat(look.beard, { roughness: 0.95 }), [0.27, 0.15, 0.21], [0, HEAD.y - 0.09, 0.04])
+    );
+  if (look.headphones) {
+    const phones = mat('#1f2430', { roughness: 0.4 });
+    add(head, part(G.band, phones, [1, 1, 1], [0, HEAD.y + 0.02, -0.01]));
+    for (const side of [-1, 1])
+      add(
+        head,
+        part(G.cylinder, phones, [0.085, 0.05, 0.085], [0.165 * side, HEAD.y, 0], [0, 0, Math.PI / 2])
+      );
+  }
 
   // Arms
   const arm = (side: 1 | -1): Limb => {
     const shoulder = joint(spine, 0.235 * side * width, 0.41, 0);
-    add(shoulder, part(G.capsule, outer, [0.115, UPPER_ARM / 2, 0.115], [0, -UPPER_ARM / 2, 0]));
+    add(shoulder, part(G.capsule, upperSleeve, [0.115, UPPER_ARM / 2, 0.115], [0, -UPPER_ARM / 2, 0]));
     const elbow = joint(shoulder, 0, -UPPER_ARM, 0);
-    add(elbow, part(G.capsule, outer, [0.1, FOREARM / 2 - 0.01, 0.1], [0, -FOREARM / 2 + 0.01, 0]));
+    add(elbow, part(G.capsule, lowerSleeve, [0.1, FOREARM / 2 - 0.01, 0.1], [0, -FOREARM / 2 + 0.01, 0]));
     const hand = joint(elbow, 0, -FOREARM, 0);
     add(hand, part(G.sphere, skin, [0.095, 0.11, 0.08], [0, 0, 0]));
     return { root: shoulder, joint: elbow, end: hand };
@@ -189,7 +210,12 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
       object.receiveShadow = false;
     }
   });
-  return { root, scale, hips, spine, head, armL, armR, legL, legR, outlinable: consolidate(root, outlined) };
+  const outlines = consolidate(root, outlined);
+  const eyes = head.children.filter(
+    (child): child is THREE.Mesh =>
+      child instanceof THREE.Mesh && (child.material === eyeMaterial || child.material === highlight)
+  );
+  return { root, scale, hips, spine, head, armL, armR, legL, legR, outlinable: outlines, eyes };
 }
 
 function buildHair(
@@ -249,6 +275,34 @@ function buildHair(
       cap(1.09);
       add(head, part(G.sphere, hair, [0.18, 0.09, 0.13], [0.05, y + 0.15, 0.085], [0, 0, -0.3]));
       add(head, part(G.sphere, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
+      return;
+    case 'crop':
+      cap(1.04);
+      return;
+    case 'buzz':
+      cap(1.02);
+      return;
+    case 'side-part':
+      cap(1.08);
+      add(head, part(G.sphere, hair, [0.2, 0.08, 0.16], [-0.06, y + 0.15, 0.07], [0, 0, 0.35]));
+      add(head, part(G.sphere, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
+      return;
+    case 'long':
+      cap(1.1);
+      add(head, part(G.sphere, hair, [0.36, 0.5, 0.2], [0, y - 0.18, -0.08]));
+      return;
+    case 'afro':
+      cap(1.42);
+      for (const side of [-1, 1])
+        add(head, part(G.sphere, hair, [0.2, 0.26, 0.26], [0.15 * side, y + 0.02, -0.05]));
+      return;
+    case 'braids':
+      cap(1.07);
+      for (const side of [-1, 1])
+        add(head, part(G.capsule, hair, [0.055, 0.16, 0.055], [0.085 * side, y - 0.2, -0.13], [0.2, 0, 0]));
+      return;
+    case 'bald':
+      return;
   }
 }
 

@@ -91,6 +91,11 @@ app.on('web-contents-created', (_, contents) => {
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 8);
+      // Portraits are rendered from each person's 3D figure.
+      await waitFor(
+        'document.querySelectorAll(".office-team-people .office-portrait img").length === 8',
+        'rendered portraits'
+      );
       assert.match(
         await evaluate('document.querySelector(".office-team-caption strong").textContent'),
         /Commons/
