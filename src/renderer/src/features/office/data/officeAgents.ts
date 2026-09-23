@@ -7,8 +7,6 @@ export interface OfficeAgent {
   id: string;
   name: string;
   role: string;
-  /** The Commons room they belong to; specialists belong to the open floor ('agents'). */
-  zone: 'chat' | 'workspaces' | 'knowledge' | 'agents' | 'files' | 'cafe';
   description: string;
   accentColor: string;
   accentSoft: string;
@@ -30,7 +28,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Library',
     name: 'Research Analyst',
     role: 'Research & Insights',
-    zone: 'agents',
     description: 'Finds insights, analyzes patterns, and summarizes complex information with rigor.',
     accentColor: '#2563eb', // Blue
     accentSoft: 'rgba(37, 99, 235, 0.15)',
@@ -45,7 +42,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Library',
     name: 'Writer',
     role: 'Writing & Editorial',
-    zone: 'agents',
     description: 'Drafts, rewrites, refines tone, and polishes briefs, articles, and documentation.',
     accentColor: '#8b5cf6', // Purple
     accentSoft: 'rgba(139, 92, 246, 0.15)',
@@ -60,7 +56,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Planning',
     name: 'Designer',
     role: 'Product & UX Design',
-    zone: 'agents',
     description: 'Shapes user journeys, product visual systems, layouts, and UX architecture.',
     accentColor: '#ec4899', // Pink / Violet
     accentSoft: 'rgba(236, 72, 153, 0.15)',
@@ -75,7 +70,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Planning',
     name: 'Product Coach',
     role: 'Product Strategy & Roadmaps',
-    zone: 'workspaces',
     description: 'Breaks complex visions into actionable PRDs, milestone roadmaps, and requirements.',
     accentColor: '#f97316', // Orange
     accentSoft: 'rgba(249, 115, 22, 0.15)',
@@ -90,7 +84,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Library',
     name: 'Knowledge Librarian',
     role: 'Knowledge & Research',
-    zone: 'knowledge',
     description: 'Organizes references, retrieves relevant passages, and explains domain knowledge.',
     accentColor: '#0d9488', // Teal
     accentSoft: 'rgba(13, 148, 136, 0.15)',
@@ -105,7 +98,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Files room',
     name: 'Files Agent',
     role: 'Files & Assets',
-    zone: 'files',
     description: 'Manages project file context, organizes attachments, and extracts structured data.',
     accentColor: '#10b981', // Green
     accentSoft: 'rgba(16, 185, 129, 0.15)',
@@ -120,7 +112,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Lounge',
     name: 'Marketing Strategist',
     role: 'Marketing & Positioning',
-    zone: 'agents',
     description: 'Designs go-to-market strategies, positioning messaging, and campaign narratives.',
     accentColor: '#eab308', // Yellow
     accentSoft: 'rgba(234, 179, 8, 0.15)',
@@ -135,7 +126,6 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     department: 'Reception',
     name: 'Ops Coordinator',
     role: 'Operations & Execution',
-    zone: 'files',
     description: 'Coordinates cross-functional workflows, operational checklists, and timelines.',
     accentColor: '#64748b', // Blue-Gray
     accentSoft: 'rgba(100, 116, 139, 0.15)',
@@ -153,8 +143,7 @@ OFFICE_AGENTS.push(
       id: role.id,
       name: role.name,
       role: role.group,
-      zone: 'agents',
-      district: district.id,
+        district: district.id,
       department: role.group,
       roleIds: role.id === 'business-analyst' ? [] : [role.id],
       description: role.profile.split('\n')[0].replace('Owns: ', ''),
