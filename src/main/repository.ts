@@ -12,7 +12,7 @@ export function initialState(): PlatformState {
       instructions: '', defaultProviderId: null, defaultModelId: null, enabledTools: [], knowledgeDocIds: [],
       skillIds: [], roleIds: [],
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
-    settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
+    settings: { theme: 'light', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
       streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' },
     mcpServers: []
   };
