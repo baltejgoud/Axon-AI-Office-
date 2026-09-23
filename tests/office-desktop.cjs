@@ -110,12 +110,12 @@ app.on('web-contents-created', (_, contents) => {
       await pause(70);
       await evaluate('document.querySelector(".composer-btn-send").click()');
       await waitFor(
-        'document.querySelector(".status-badge.working") && document.querySelector(".response-preview-box")',
+        'document.querySelector(".status-badge.working") && document.querySelector(".office-thread .message.assistant")',
         'streaming response'
       );
       await waitFor('document.querySelector(".status-badge.completed")', 'completion');
       assert.match(
-        await evaluate('document.querySelector(".response-preview-box").textContent'),
+        await evaluate('document.querySelector(".office-thread .message.assistant:last-of-type").textContent'),
         /existing provider pipeline/
       );
       assert.ok(

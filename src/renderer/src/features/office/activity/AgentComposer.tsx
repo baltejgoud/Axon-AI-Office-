@@ -5,6 +5,9 @@ import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { Icon } from '../../../ui';
+import { ModelSelect } from '../../../chat/ModelSelect';
+import { activeThread } from './thread';
+import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 
 interface AgentComposerProps {
   agentId: string;
@@ -13,7 +16,7 @@ interface AgentComposerProps {
 }
 
 export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentComposerProps) {
-  const { data, model, patch, workspaceId } = useApp();
+  const { data, model, patch } = useApp();
   const { agentRuntime, setAgentStatus, setAgentTask, setAgentConversation, pushActivity } = useOfficeStore();
 
   const [input, setInput] = useState('');
@@ -23,6 +26,9 @@ export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentC
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
   const runtime = agentRuntime[agentId];
   const isBusy = sending || runtime?.status === 'working';
+  const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
+  const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
+  const needsModel = !conversation && !model;
 
   const handleAttach = async () => {
     try {
@@ -56,48 +62,42 @@ export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentC
     });
 
     try {
-      let convId = runtime?.conversationId;
+      let convId = conversation?.id;
+      if (convId && libraryResident) await syncOfficeLibrary();
       if (!convId) {
-        const existing = data?.conversations.find((c) => c.agentId === agentId);
-        if (existing) {
-          convId = existing.id;
-        } else {
-          const enabledProviders = data?.providers.filter((p) => p.enabled) || [];
-          const chosenModel =
-            model ||
-            (enabledProviders[0]?.models[0]
-              ? `${enabledProviders[0].id}::${enabledProviders[0].models[0].id}`
-              : '');
-          const [providerId, ...modelParts] = chosenModel.split('::');
-          if (!providerId || modelParts.length === 0) {
-            throw new Error('Please configure and enable an AI model in Settings first.');
-          }
-
-          pushActivity(agentId, {
-            type: 'started',
-            title: 'Preparing context',
-            detail: `Starting session for ${agent.name}`
-          });
-
-          const workspace =
-            data?.workspaces.find((item) => item.id === workspaceId) ??
-            (agent.department === 'workspaces' ? data?.workspaces[0] : undefined);
-          const savedAgent = data?.agents.find((item) => item.id === agentId);
-          const created = await window.axon.chatCreate(
-            providerId,
-            modelParts.join('::'),
-            workspace?.id ?? null,
-            savedAgent?.id ?? agentId,
-            { skillIds: [], roleIds: agent.roleIds ?? [] },
-            null,
-            savedAgent ? undefined : agent.systemPrompt
-          );
-          convId = created.id;
+        const enabledProviders = data?.providers.filter((p) => p.enabled) || [];
+        const chosenModel =
+          model ||
+          (enabledProviders[0]?.models[0]
+            ? `${enabledProviders[0].id}::${enabledProviders[0].models[0].id}`
+            : '');
+        const [providerId, ...modelParts] = chosenModel.split('::');
+        if (!providerId || modelParts.length === 0) {
+          throw new Error('Please configure and enable an AI model in Settings first.');
         }
-        setAgentConversation(agentId, convId);
-      }
 
-      patch({ chatId: convId });
+        pushActivity(agentId, {
+          type: 'started',
+          title: 'Preparing context',
+          detail: `Starting session for ${agent.name}`
+        });
+
+        const workspaceId = libraryResident ? await syncOfficeLibrary() : null;
+        const savedAgent = data?.agents.find((item) => item.id === agentId);
+        const created = await window.axon.chatCreate(
+          providerId,
+          modelParts.join('::'),
+          workspaceId,
+          savedAgent?.id ?? agentId,
+          { skillIds: [], roleIds: agent.roleIds ?? [] },
+          null,
+          savedAgent ? undefined : agent.systemPrompt
+        );
+        convId = created.id;
+        setAgentConversation(agentId, convId);
+        // The panel shows threads from the snapshot, so load the new conversation before streaming.
+        await useApp.getState().refresh();
+      }
 
       const attachIds = attachments.map((a) => a.id);
       setInput('');
@@ -196,18 +196,38 @@ export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentC
             <Icon icon={Paperclip} size="sm" />
           </button>
 
+          <ModelSelect
+            size="sm"
+            value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
+            disabled={Boolean(conversation) || isBusy}
+            title={
+              conversation ? 'Start a new conversation to change the model' : 'Model for this conversation'
+            }
+            onChange={(value) => patch({ model: value })}
+          />
+
           <span className="composer-hint">Shift+Enter for newline</span>
 
-          <button
-            type="button"
-            className="composer-btn-send"
-            title="Send task (Enter)"
-            aria-label="Send task"
-            disabled={!input.trim() || isBusy}
-            onClick={() => void handleSend()}
-          >
-            <Icon icon={ArrowUp} size="sm" />
-          </button>
+          {needsModel ? (
+            <button
+              type="button"
+              className="composer-connect"
+              onClick={() => useOfficeStore.getState().openOverlay('settings')}
+            >
+              Connect a model
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="composer-btn-send"
+              title="Send task (Enter)"
+              aria-label="Send task"
+              disabled={!input.trim() || isBusy}
+              onClick={() => void handleSend()}
+            >
+              <Icon icon={ArrowUp} size="sm" />
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -15,8 +15,12 @@ export interface AgentRuntime {
   currentTask?: string;
   conversationId?: string;
   lastResponse?: string;
+  /** The user asked for a new conversation; the next task starts one. */
+  fresh?: boolean;
   activities: AgentActivity[];
 }
+
+export type Overlay = 'settings' | 'knowledge';
 
 interface OfficeStoreState {
   activeWing: string;
@@ -25,6 +29,7 @@ interface OfficeStoreState {
   focusedZoneId: string | null;
   agentRuntime: Record<string, AgentRuntime>;
   is3dEnabled: boolean;
+  overlay: Overlay | null;
 
   selectAgent: (id: string) => void;
   focusZone: (zoneId: string | null) => void;
@@ -34,6 +39,8 @@ interface OfficeStoreState {
   setLastResponse: (agentId: string, text: string) => void;
   pushActivity: (agentId: string, activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>) => void;
   toggle3d: () => void;
+  openOverlay: (overlay: Overlay | null) => void;
+  startFresh: (agentId: string) => void;
 }
 
 const initialRuntime: Record<string, AgentRuntime> = {};
@@ -57,6 +64,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   focusedZoneId: 'agents',
   agentRuntime: initialRuntime,
   is3dEnabled: true,
+  overlay: null,
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
@@ -100,7 +108,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     set({
       agentRuntime: {
         ...get().agentRuntime,
-        [agentId]: { ...current, conversationId }
+        [agentId]: { ...current, conversationId, fresh: false }
       }
     });
   },
@@ -136,5 +144,25 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     });
   },
 
-  toggle3d: () => set({ is3dEnabled: !get().is3dEnabled })
+  toggle3d: () => set({ is3dEnabled: !get().is3dEnabled }),
+
+  openOverlay: (overlay) => set({ overlay }),
+
+  startFresh: (agentId: string) => {
+    const current = get().agentRuntime[agentId];
+    if (!current) return;
+    set({
+      agentRuntime: {
+        ...get().agentRuntime,
+        [agentId]: {
+          ...current,
+          conversationId: undefined,
+          fresh: true,
+          currentTask: undefined,
+          lastResponse: undefined,
+          status: 'idle'
+        }
+      }
+    });
+  }
 }));

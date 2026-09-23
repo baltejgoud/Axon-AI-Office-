@@ -1,30 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OfficeFiles, type OfficeFileContext } from './OfficeFiles';
-import { Activity, ArrowUpRight, Check, FileText, Sparkles } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Activity, BookOpen, FileText, MessageSquarePlus, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { useApp } from '../../../state';
+import { timeAgo } from '../../../format';
 import { AgentComposer } from './AgentComposer';
 import { AgentPortrait } from '../AgentPortrait';
+import { Conversation } from './Conversation';
+import { activeThread, agentThreads } from './thread';
+import { LIBRARY_RESIDENTS } from '../library';
+
+const FEED_PREVIEW = 3;
 
 export function ActivityPanel() {
   const [fileContext, setFileContext] = useState<OfficeFileContext | null>(null);
-  const { data, patch, workspaceId } = useApp();
-  const { selectedAgentId, agentRuntime } = useOfficeStore();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [feedOpen, setFeedOpen] = useState(false);
+  const data = useApp((s) => s.data);
+  const { selectedAgentId, agentRuntime, startFresh, setAgentConversation, openOverlay } = useOfficeStore();
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
   const runtime = agentRuntime[agent.id];
-  const conversation =
-    data?.conversations.find((c) => c.id === runtime?.conversationId) ??
-    data?.conversations.find((c) => c.agentId === agent.id);
+  const conversations = data?.conversations ?? [];
+  const conversation = activeThread(conversations, agent.id, runtime);
+  const threads = agentThreads(conversations, agent.id);
   const messages = data?.messages.filter((m) => m.conversationId === conversation?.id) ?? [];
   const assistant = [...messages].reverse().find((m) => m.role === 'assistant');
-  const lastTask = [...messages]
-    .reverse()
-    .find((m) => m.role === 'user')
-    ?.content.split('\n\n<attachment')[0];
-  const task = runtime?.currentTask ?? lastTask;
   const status =
     runtime?.status === 'idle' && assistant
       ? assistant.error
@@ -33,15 +34,15 @@ export function ActivityPanel() {
           ? 'working'
           : 'completed'
       : (runtime?.status ?? 'idle');
-  const response = runtime?.lastResponse || assistant?.content || '';
   const streaming = status === 'working';
-  const openConversation = () =>
-    patch({
-      page: 'chat',
-      chatId: conversation?.id ?? runtime?.conversationId ?? null,
-      workspaceId: conversation?.workspaceId ?? workspaceId,
-      ...(conversation ? { model: `${conversation.providerId}::${conversation.modelId}` } : {})
-    });
+  const activities = runtime?.activities ?? [];
+  const shownActivities = feedOpen ? activities : activities.slice(0, FEED_PREVIEW);
+  const libraryResident = LIBRARY_RESIDENTS.includes(agent.id);
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setFeedOpen(false);
+  }, [agent.id]);
 
   return (
     <aside className="office-activity-panel" aria-label="Selected coworker activity">
@@ -69,68 +70,62 @@ export function ActivityPanel() {
             {status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1)}
           </span>
         </div>
+        <ConversationMenu
+          open={menuOpen}
+          onToggle={setMenuOpen}
+          items={[
+            {
+              key: 'new',
+              label: 'New conversation',
+              icon: <MessageSquarePlus size={15} />,
+              disabled: !conversation,
+              onSelect: () => startFresh(agent.id)
+            },
+            ...(libraryResident
+              ? [
+                  {
+                    key: 'library',
+                    label: 'Manage library',
+                    icon: <BookOpen size={15} />,
+                    onSelect: () => openOverlay('knowledge')
+                  }
+                ]
+              : []),
+            ...threads.slice(0, 8).map((thread) => ({
+              key: thread.id,
+              label: thread.title,
+              detail: timeAgo(thread.updatedAt),
+              current: thread.id === conversation?.id,
+              onSelect: () => setAgentConversation(agent.id, thread.id)
+            }))
+          ]}
+        />
       </div>
       <div className="activity-body">
         {agent.id === 'files-agent' && <OfficeFiles onInclude={setFileContext} />}
-        <section className="current-task-card">
-          <div className="activity-section-heading">
-            <FileText size={15} />
-            <h4>{task ? 'Current task' : 'Let’s make progress'}</h4>
-          </div>
-          {task ? (
-            <p className="current-task-title">{task}</p>
-          ) : (
-            <>
-              <p className="activity-intro">{agent.description}</p>
-              <div className="activity-capabilities">
-                {agent.capabilities.slice(0, 3).map((cap) => (
-                  <span key={cap}>{cap}</span>
-                ))}
-              </div>
-            </>
-          )}
-          {task && (
-            <div className="activity-lifecycle" aria-label={`Task status: ${status}`}>
-              <span className="done">
-                <Check size={12} />
-                Assigned
-              </span>
-              <span className={streaming ? 'active' : status === 'completed' ? 'done' : ''}>
-                <span />
-                Generating
-              </span>
-              <span className={status === 'completed' ? 'done' : status === 'error' ? 'failed' : ''}>
-                <span />
-                {status === 'error' ? 'Error' : 'Complete'}
-              </span>
-            </div>
-          )}
-        </section>
-        {response && (
-          <section className="response-preview-box">
+        {!conversation && (
+          <section className="current-task-card">
             <div className="activity-section-heading">
-              <Sparkles size={15} />
-              <h4>{streaming ? 'Response streaming' : 'Latest response'}</h4>
+              <FileText size={15} />
+              <h4>{runtime?.fresh ? 'New conversation' : 'Let’s make progress'}</h4>
             </div>
-            <div className="markdown-content">
-              <Markdown remarkPlugins={[remarkGfm]}>{response}</Markdown>
+            <p className="activity-intro">{agent.description}</p>
+            <div className="activity-capabilities">
+              {agent.capabilities.slice(0, 3).map((cap) => (
+                <span key={cap}>{cap}</span>
+              ))}
             </div>
           </section>
         )}
-        {assistant?.error && (
-          <p className="office-task-error" role="alert">
-            {assistant.error}
-          </p>
-        )}
-        <section className="activity-feed-section">
-          <div className="activity-section-heading">
-            <Activity size={15} />
-            <h4>Recent updates</h4>
-            <span className="activity-session-label">This session</span>
-          </div>
-          {runtime?.activities.length ? (
+        {activities.length > 0 && (
+          <section className="activity-feed-section">
+            <div className="activity-section-heading">
+              <Activity size={15} />
+              <h4>Recent updates</h4>
+              <span className="activity-session-label">This session</span>
+            </div>
             <ol className="activity-feed-list">
-              {runtime.activities.map((event) => (
+              {shownActivities.map((event) => (
                 <li key={event.id} className={`activity-item type-${event.type}`}>
                   <time>
                     {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -142,25 +137,30 @@ export function ActivityPanel() {
                 </li>
               ))}
             </ol>
-          ) : (
-            <div className="activity-empty">
-              <span>
-                <Sparkles size={20} />
-              </span>
-              <strong>A clear desk. A fresh start.</strong>
-              <p>
-                Give {shortName(agent.name)} a task.
-                <br />
-                Updates and answers will appear here.
-              </p>
-            </div>
-          )}
-        </section>
-        {(conversation || runtime?.conversationId) && (
-          <button className="activity-open-chat" onClick={openConversation}>
-            Open full conversation
-            <ArrowUpRight size={15} />
-          </button>
+            {activities.length > FEED_PREVIEW && (
+              <button className="activity-feed-more" onClick={() => setFeedOpen(!feedOpen)}>
+                {feedOpen ? 'Show fewer' : `Show all (${activities.length})`}
+              </button>
+            )}
+          </section>
+        )}
+        <Conversation
+          agentName={agent.name}
+          conversation={conversation}
+          pendingTask={streaming ? runtime?.currentTask : undefined}
+        />
+        {!conversation && !activities.length && (
+          <div className="activity-empty">
+            <span>
+              <Sparkles size={20} />
+            </span>
+            <strong>A clear desk. A fresh start.</strong>
+            <p>
+              Give {shortName(agent.name)} a task.
+              <br />
+              Your conversation will appear here.
+            </p>
+          </div>
         )}
       </div>
       <AgentComposer
@@ -170,6 +170,82 @@ export function ActivityPanel() {
         clearFileContext={() => setFileContext(null)}
       />
     </aside>
+  );
+}
+
+interface MenuItem {
+  key: string;
+  label: string;
+  icon?: JSX.Element;
+  detail?: string;
+  current?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+function ConversationMenu({
+  open,
+  onToggle,
+  items
+}: {
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  items: MenuItem[];
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) onToggle(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onToggle(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, onToggle]);
+  const actions = items.filter((item) => item.icon);
+  const history = items.filter((item) => !item.icon);
+  const render = (item: MenuItem) => (
+    <button
+      key={item.key}
+      role="menuitem"
+      disabled={item.disabled}
+      aria-current={item.current || undefined}
+      className={item.current ? 'current' : ''}
+      onClick={() => {
+        item.onSelect();
+        onToggle(false);
+      }}
+    >
+      {item.icon}
+      <span className="activity-menu-label">{item.label}</span>
+      {item.detail && <small>{item.detail}</small>}
+    </button>
+  );
+  return (
+    <div className="activity-menu-anchor" ref={root}>
+      <button
+        className="activity-menu-trigger"
+        aria-label="Conversation options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => onToggle(!open)}
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open && (
+        <div className="activity-menu" role="menu">
+          {actions.map(render)}
+          {history.length > 0 && <div className="activity-menu-heading">Earlier conversations</div>}
+          {history.map(render)}
+        </div>
+      )}
+    </div>
   );
 }
 
