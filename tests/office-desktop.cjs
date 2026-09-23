@@ -1,0 +1,108 @@
+// Isolated visual and interaction check. Only the provider transport is a loopback fixture.
+const { app, BrowserWindow } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const assert = require('node:assert/strict');
+const output = path.resolve(__dirname, '../test-results/office');
+fs.mkdirSync(output, { recursive: true });
+const profile = fs.mkdtempSync(path.join(output, 'profile-'));
+app.setPath('userData', profile);
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+let providerRequest;
+const server = http.createServer((request, response) => {
+  let body = '';
+  request.on('data', chunk => { body += chunk; });
+  request.on('end', () => {
+    providerRequest = JSON.parse(body);
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    response.write('data: {"choices":[{"delta":{"content":"The office connection is working. "}}]}\n\n');
+    setTimeout(() => {
+      response.write('data: {"choices":[{"delta":{"content":"This response travelled through Axon’s existing provider pipeline."}}]}\n\n');
+      response.end('data: [DONE]\n\n');
+    }, 1100);
+  });
+});
+const timeout = setTimeout(() => { console.error('OFFICE_CHECK_TIMEOUT'); app.exit(1); }, 60000);
+app.on('browser-window-created', (_, win) => {
+  // Capture the actual sandboxed desktop renderer without interrupting the user's current window.
+  win.show = () => {};
+  win.setContentSize(1600, 960);
+});
+app.on('web-contents-created', (_, contents) => {
+  contents.once('did-finish-load', async () => {
+    try {
+      const evaluate = script => contents.executeJavaScript(script);
+      const waitFor = async (script, label) => {
+        for (let i = 0; i < 100; i++) { if (await evaluate(script)) return; await pause(100); }
+        throw new Error('Timed out: ' + label);
+      };
+      await waitFor('document.querySelector(".office-person-label") && !document.querySelector(".office-loading")', 'scene artwork');
+      await pause(500);
+      const snap = async name => fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
+      await snap('office-desktop.png');
+      const ids = await evaluate('[...document.querySelectorAll(".office-person-label")].map(b => b.getAttribute("aria-label"))');
+      assert.equal(ids.length, 8);
+      for (let index = 0; index < 8; index++) {
+        await evaluate(`document.querySelectorAll(".office-person-label")[${index}].click()`);
+        await pause(60);
+        assert.equal(await evaluate(`document.querySelectorAll(".office-person-label")[${index}].getAttribute("aria-pressed")`), 'true');
+        assert.ok(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'));
+      }
+      await evaluate('document.querySelectorAll(".office-person-label")[0].click()');
+      const win = BrowserWindow.fromWebContents(contents);
+      win.setContentSize(1100, 740);
+      await pause(400);
+      await snap('office-compact.png');
+      assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
+      await evaluate('document.querySelector("button[aria-label=\"Team view\"]").click()');
+      await waitFor('document.querySelectorAll(".roster-card").length === 8', 'roster');
+      await evaluate('document.querySelectorAll(".roster-card")[1].click()');
+      await pause(50);
+      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Writer');
+      await evaluate('document.querySelector("button[aria-label=\"Office view\"]").click()');
+      await waitFor('document.querySelector(".office-person-label") && !document.querySelector(".office-loading")', 'return to scene');
+      await evaluate('document.querySelectorAll(".office-person-label")[0].click()');
+      await pause(50);
+      await evaluate(`(() => {
+        const input = document.querySelector('.composer-textarea');
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Confirm the office provider connection.');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await pause(70);
+      await evaluate('document.querySelector(".composer-btn-send").click()');
+      await waitFor('document.querySelector(".status-badge.working") && document.querySelector(".response-preview-box")', 'streaming response');
+      await waitFor('document.querySelector(".status-badge.completed")', 'completion');
+      assert.match(await evaluate('document.querySelector(".response-preview-box").textContent'), /existing provider pipeline/);
+      assert.ok(providerRequest.messages.some(message => message.role === 'system' && message.content.includes('Research Analyst')));
+      const result = await evaluate('window.axon.snapshot()');
+      assert.ok(result.conversations.some(c => c.agentId === 'research-analyst'));
+      assert.equal(await evaluate('typeof window.require'), 'undefined');
+      win.setContentSize(1600, 960);
+      await pause(400);
+      await snap('office-response.png');
+      await evaluate("document.documentElement.dataset.theme = 'dark'");
+      await pause(150);
+      await snap('office-dark.png');
+      // WebGL loss should preserve access to all coworker actions.
+      await evaluate(`document.querySelector('.office-canvas-container canvas').dispatchEvent(new Event('webglcontextlost', { cancelable: true }))`);
+      await waitFor('document.querySelectorAll(".roster-card").length === 8', 'context loss fallback');
+      console.log('OFFICE_CHECK_PASS: artwork, eight selections, compact layout, roster, IPC streaming, persisted role, isolation, WebGL fallback.');
+      fs.writeFileSync(path.join(output, 'result.txt'), 'PASS: 8 coworkers; compact layout; scene/roster switching; streamed response via actual IPC/main/provider pipeline with loopback transport; persisted role; renderer isolation; WebGL context loss fallback.');
+      clearTimeout(timeout); server.close(); app.exit(0);
+    } catch (error) { console.error(error); clearTimeout(timeout); server.close(); app.exit(1); }
+  });
+});
+server.listen(0, '127.0.0.1', () => {
+  const now = Date.now();
+  fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
+  fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify({
+    version: 1, providers: [{ id: 'office-check', name: 'Office check', kind: 'openai-compatible',
+      baseUrl: `http://127.0.0.1:${server.address().port}/v1`, models: [{ id: 'fixture', displayName: 'Fixture' }],
+      enabled: true, createdAt: now, hasApiKey: false }],
+    workspaces: [], conversations: [], messages: [], agents: [], documents: [], chunks: [], mcpServers: [],
+    settings: { theme: 'light', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
+      streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
+  }));
+  require('../out/main/index.js');
+});

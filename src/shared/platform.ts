@@ -32,7 +32,7 @@ export interface PlatformAPI {
   settingsSave(settings: Settings): Promise<void>;
   mcpServerSave(server: MCPServerConfig): Promise<void>;
   mcpServerDelete(id: string): Promise<void>;
-  chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null): Promise<Conversation>;
+  chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null, systemPrompt?: string): Promise<Conversation>;
   chatRename(id: string, title: string): Promise<void>;
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
   chatDelete(id: string): Promise<void>;

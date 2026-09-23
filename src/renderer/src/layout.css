@@ -4,6 +4,52 @@
   height: 100vh;
   overflow: hidden;
 }
+.app-shell.office-shell .sidebar {
+  width: 76px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 8px;
+}
+.office-shell .window-traffic-lights,
+.office-shell .brand-name,
+.office-shell .badge-beta,
+.office-shell .btn-new-chat .btn-new-chat-left span,
+.office-shell .btn-new-chat .kbd,
+.office-shell .sidebar-section,
+.office-shell .sidebar-search,
+.office-shell .history,
+.office-shell .sidebar-workspace-card,
+.office-shell .nav-label,
+.office-shell .user-details,
+.office-shell .user-menu-btn {
+  display: none;
+}
+.office-shell .brand {
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-2) 0;
+}
+.office-shell .btn-new-chat {
+  width: 44px;
+  justify-content: center;
+  padding: 0;
+}
+.office-shell .nav,
+.office-shell .sidebar-footer {
+  width: 100%;
+}
+.office-shell .nav-item {
+  justify-content: center;
+  padding: 0;
+}
+.office-shell .sidebar-footer {
+  align-items: center;
+}
+.office-shell .sidebar-user-card {
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-2) 0 0;
+}
 .main-area {
   flex: 1;
   min-width: 0;

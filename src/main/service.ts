@@ -146,7 +146,7 @@ export class Service {
   async toolApprove(decision: ToolApprovalDecision): Promise<void> {
     this.permissions.resolveApproval(decision);
   }
-  async chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null) {
+  async chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null, systemPrompt?: string) {
     const provider = this.state.providers.find(p => p.id === providerId && p.enabled);
     if (!provider?.models.some(m => m.id === modelId)) throw new Error('Configure and select an enabled model in Settings first.');
     if (workspaceId && !this.state.workspaces.some(w => w.id === workspaceId)) throw new Error('Unknown workspace.');
@@ -157,11 +157,12 @@ export class Service {
       id, title: 'New conversation', providerId, modelId, workspaceId, createdAt: now, updatedAt: now,
       skillIds: dedupe(agent?.skillIds ?? [], sel.skillIds),
       roleIds: dedupe(agent?.roleIds ?? [], sel.roleIds),
-      agentId: agent?.id,
+      agentId: agent?.id ?? (systemPrompt ? agentId : undefined),
       projectRoot: projectRoot ?? null
     };
     this.state.conversations.unshift(chat);
-    if (agent) this.state.messages.push({ id: this.repo.id(), conversationId: id, role: 'system', content: agent.systemPrompt, createdAt: now });
+    const prompt = agent?.systemPrompt ?? systemPrompt?.trim();
+    if (prompt) this.state.messages.push({ id: this.repo.id(), conversationId: id, role: 'system', content: prompt, createdAt: now });
     await this.repo.save();
     return chat;
   }

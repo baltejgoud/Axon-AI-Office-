@@ -24,7 +24,7 @@ interface UIState {
 }
 export const useApp = create<UIState>((set, get) => ({
   data: null,
-  page: 'chat',
+  page: 'office',
   chatId: null,
   workspaceId: null,
   model: '',

@@ -21,6 +21,7 @@
     "format:check": "prettier --check \"src/renderer/src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
+    "@types/three": "^0.186.0",
     "exceljs": "^4.4.0",
     "highlight.js": "^11.10.0",
     "mammoth": "^1.8.0",
@@ -30,6 +31,7 @@
     "react-markdown": "^9.0.1",
     "rehype-highlight": "^7.0.1",
     "remark-gfm": "^4.0.0",
+    "three": "^0.186.0",
     "zustand": "^5.0.1"
   },
   "devDependencies": {

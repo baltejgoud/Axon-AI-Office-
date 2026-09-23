@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell,
   Bot,
+  Building2,
   ChevronDown,
   Code,
   FileText,
@@ -26,8 +27,11 @@ import { Chat } from './Chat';
 import { SettingsPanel } from './Settings';
 import { Workspaces, Agents, Knowledge, Code as CodeWorkspace } from './Spaces';
 import { AxonLogo, Button, Icon, Kbd, ToastStack } from './ui';
+import { OfficePage } from './features/office/OfficePage';
+import { useOfficeStore } from './features/office/store/officeStore';
 
 const navItems = [
+  { id: 'office', icon: Building2, label: 'AI Office' },
   { id: 'chat', icon: MessageSquare, label: 'Chat' },
   { id: 'code', icon: Code, label: 'Code' },
   { id: 'knowledge', icon: Library, label: 'Knowledge' },
@@ -62,6 +66,36 @@ export function App() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = window.axon.onStream((event) => {
+      // Sync stream events with office runtime
+      if (event.channel === 'chat') {
+        const conv = useApp.getState().data?.conversations.find((c) => c.id === event.conversationId);
+        const office = useOfficeStore.getState();
+        const associatedAgent = Object.entries(office.agentRuntime).find(
+          ([, runtime]) => runtime.conversationId === event.conversationId
+        )?.[0];
+        const agentId = associatedAgent || conv?.agentId;
+        if (agentId) {
+          if (event.contentSoFar !== undefined) {
+            office.setLastResponse(agentId, event.contentSoFar);
+          }
+          if (event.done && event.error) {
+            office.setAgentStatus(agentId, 'error');
+            office.pushActivity(agentId, {
+              type: 'error',
+              title: 'Task error',
+              detail: event.error
+            });
+          } else if (event.done) {
+            office.setAgentStatus(agentId, 'completed');
+            office.pushActivity(agentId, {
+              type: 'completed',
+              title: 'Task completed',
+              detail: 'Response finished streaming'
+            });
+          }
+        }
+      }
+
       if (event.channel !== 'chat' || event.done) {
         if (!timer)
           timer = setTimeout(() => {
@@ -178,7 +212,7 @@ export function App() {
   const displayedChats = showAllRecent ? chats : chats.slice(0, 5);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${page === 'office' ? 'office-shell' : ''}`}>
       <aside className="sidebar">
         <div className="window-traffic-lights" aria-hidden="true">
           <span className="traffic-dot dot-close" />
@@ -211,6 +245,8 @@ export function App() {
             <button
               key={id}
               className="nav-item"
+              aria-label={label}
+              title={label}
               aria-current={page === id && !workspaceId ? 'page' : undefined}
               onClick={() => navigate(id)}
             >
@@ -312,6 +348,8 @@ export function App() {
 
           <button
             className="nav-item"
+            aria-label="Settings"
+            title="Settings"
             aria-current={page === 'settings' ? 'page' : undefined}
             onClick={() => navigate('settings')}
           >
@@ -321,6 +359,8 @@ export function App() {
 
           <button
             className="nav-item"
+            aria-label="Help and feedback"
+            title="Help and feedback"
             onClick={() => {
               window.open('https://github.com', '_blank');
             }}
@@ -361,6 +401,7 @@ export function App() {
             />
           </div>
         )}
+        {page === 'office' && <OfficePage />}
         {page === 'chat' && <Chat />}
         {page === 'settings' && <SettingsPanel />}
         {page === 'workspaces' && <Workspaces />}
