@@ -2,6 +2,7 @@ import { LayoutBuilder, type DeskSetup, type FurnitureItem, type Wall } from '..
 import { COMMONS_ROOMS, CORE_HOME_DESKS, buildCommons } from '../campus/commons';
 import { DISTRICTS, boundsCentre, type Bounds, type DistrictId } from '../campus/districts';
 import { buildDistricts } from '../campus/neighbourhoods';
+import { buildCoffeeStations } from '../campus/coffee';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import type { PointOfInterest, Vec2, ZoneId } from './types';
 
@@ -42,7 +43,7 @@ const CORRIDOR_TREES: [number, number][] = [
     [-22.5, z],
     [22.5, z]
   ]),
-  [31.5, -15],
+  [33.5, -15],
   [44, -15],
   [55, -15],
   [31, 12],
@@ -51,6 +52,7 @@ const CORRIDOR_TREES: [number, number][] = [
 ];
 for (const [x, z] of CORRIDOR_TREES)
   builder.item(`corridor-tree-${x}-${z}`, 'tree', x, z, 1.0, 1.0, { round: true });
+buildCoffeeStations(builder);
 const built = builder.finish();
 
 export const WALLS: readonly Wall[] = builder.walls;

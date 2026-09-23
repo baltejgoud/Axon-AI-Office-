@@ -284,12 +284,12 @@ Station ids and positions (rotation 0 faces +z, and the pickups stand 0.9 m in f
 | `coffee-engineering-south` | engineering | −42.5, 37.2 | π |
 | `coffee-product` | product | −19.3, −27 | π/2 |
 | `coffee-business` | business | −19.3, 27.5 | π/2 |
-| `coffee-design` | design | 30, −17.2 | π |
-| `coffee-leadership` | leadership | 50, −17.2 | π |
-| `coffee-ai-data` | ai-data | 36, 9.6 | π |
-| `coffee-people-ops` | people-ops | 48, 14.4 | 0 |
+| `coffee-design` | design | 30, −14.6 | π |
+| `coffee-leadership` | leadership | 50, −14.6 | π |
+| `coffee-ai-data` | ai-data | 36, 11.0 | π |
+| `coffee-people-ops` | people-ops | 48, 13.0 | 0 |
 
-- Pickups: `${id}-pickup-1/2`, 0.45 m either side of the machine, facing the counter.
+- Stations stand in the corridor, clear of the district's own furniture (the first positions for Design, Leadership, AI & Data and People & Ops put stand spots on the district edge; the layout tests caught it). `nearestCoffee` only considers the person's **own district's** stations and the café, so nobody takes coffee in another district. Pickups: `${id}-pickup-1/2`, 0.45 m either side of the machine, facing the counter.
 - Stand spots: `${id}-stand-1/2`, 1.8 m in front, 0.8 m apart, facing each other.
 - All four spots are tagged with the station's `district`. The item is `busyWith` its two pickups.
 

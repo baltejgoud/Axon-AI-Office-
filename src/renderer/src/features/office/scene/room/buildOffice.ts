@@ -14,6 +14,7 @@ import { DISTRICTS, type FloorKind } from '../../campus/districts';
 import { DEPARTMENT_ANCHORS } from '../../simulation/layout';
 import { COMMONS_BACK_Z } from '../../campus/commons';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
+import { animateSteam } from './kit';
 import {
   GEOMETRY,
   PALETTE,
@@ -306,13 +307,13 @@ export function buildOffice(): OfficeRoom {
   root.add(floor(), wallDecor(), departmentSigns());
   for (const w of WALLS) root.add(wallMesh(w));
 
-  const lights: { spots: readonly string[]; mesh: THREE.Mesh }[] = [];
+  const lights: { spots: readonly string[]; mesh: THREE.Mesh; steam?: THREE.Object3D }[] = [];
   for (const item of FURNITURE) {
     const built = buildFurniture(item);
     built.object.position.set(item.x, 0, item.z);
     built.object.rotation.y = item.rotation;
     root.add(built.object);
-    if (built.light) lights.push({ spots: item.busyWith ?? [], mesh: built.light });
+    if (built.light) lights.push({ spots: item.busyWith ?? [], mesh: built.light, steam: built.steam });
   }
 
   const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
@@ -358,11 +359,11 @@ export function buildOffice(): OfficeRoom {
     },
     update(dt, elapsed, screenState, busy) {
       screens.update(dt, elapsed, screenState);
-      for (const { spots, mesh } of lights) {
+      for (const { spots, mesh, steam } of lights) {
+        const inUse = spots.some(busy);
         const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = spots.some(busy)
-          ? 0.9 + Math.sin(elapsed * (spots[0] === 'printer' ? 9 : 4)) * 0.6
-          : 0.35;
+        material.emissiveIntensity = inUse ? 0.9 + Math.sin(elapsed * (spots[0] === 'printer' ? 9 : 4)) * 0.6 : 0.35;
+        if (steam) animateSteam(steam, inUse, elapsed);
       }
     },
     dispose() {

@@ -111,6 +111,33 @@ test('the bigger Commons has room for more people', () => {
   assert.equal(layout.FURNITURE.filter((f) => f.kind === 'cabinet-wall').length, 1);
 });
 
+const coffee = require('../src/renderer/src/features/office/campus/coffee.ts');
+
+test('a coffee station in every district but the Commons, two in Engineering', () => {
+  const count = {};
+  for (const s of coffee.COFFEE_STATIONS) count[s.district] = (count[s.district] ?? 0) + 1;
+  for (const d of districts.DISTRICTS.filter((x) => x.id !== 'commons')) assert.ok(count[d.id] >= 1, d.id);
+  assert.equal(count.engineering, 2);
+  assert.equal(count.commons, undefined);
+  for (const s of coffee.COFFEE_STATIONS) {
+    assert.ok(layout.FURNITURE.some((f) => f.id === s.id && f.kind === 'coffee-station'), s.id);
+    for (const id of coffee.stationSpots(s.id)) assert.equal(layout.poiById(id).district, s.district, id);
+  }
+});
+
+test('the nearest coffee is the café for the Commons and a station far away', () => {
+  const cafe = layout.poiById('cafe-machine').position;
+  const at = (id) => layout.poiById(layout.HOME_DESKS[id]).position;
+  assert.equal(coffee.nearestCoffee(at('research-analyst'), cafe), 'cafe');
+  const far = at('frontend-developer');
+  const pick = coffee.nearestCoffee(far, cafe, 'engineering');
+  const d = (p) => Math.hypot(p.x - far.x, p.z - far.z);
+  const own = coffee.COFFEE_STATIONS.filter((s) => s.district === 'engineering');
+  const best = Math.min(d(cafe), ...own.map(d));
+  assert.equal(d(pick === 'cafe' ? cafe : own.find((s) => s.id === pick)), best);
+  assert.notEqual(pick, 'cafe');
+});
+
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });

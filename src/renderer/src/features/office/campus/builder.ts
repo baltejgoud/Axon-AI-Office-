@@ -60,7 +60,8 @@ export type FurnitureKind =
   | 'sorting-table'
   | 'bike-rack'
   | 'coat-rack'
-  | 'pendant-lamp';
+  | 'pendant-lamp'
+  | 'coffee-station';
 
 export interface FurnitureItem {
   id: string;

@@ -32,6 +32,7 @@ export type PoiType =
   | 'visit'
   | 'cafe'
   | 'cafe-seat'
+  | 'cafe-stand'
   | 'meeting'
   | 'whiteboard'
   | 'lounge'

@@ -10,6 +10,7 @@ import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, WALLS, poiById } from './lay
 import { NavGrid, obstaclesFrom } from './navigation';
 import { Random, hashString } from './random';
 import type { DistrictId } from '../campus/districts';
+import { nearestCoffee, stationSpots } from '../campus/coffee';
 import {
   distance,
   yawTowards,
@@ -111,6 +112,8 @@ interface AgentState {
   district?: DistrictId;
   department?: string;
   nearCommons: boolean;
+  /** Where they get coffee: 'cafe', or the id of their district's nearest coffee station. */
+  coffee: string;
 }
 
 export interface SimulationOptions {
@@ -208,7 +211,8 @@ export class OfficeSimulation {
         behavior: 'idle',
         district: homeSpot.district,
         department: homeSpot.department,
-        nearCommons: !homeSpot.district || distance(homeSpot.position, cafe) <= COMMONS_REACH
+        nearCommons: !homeSpot.district || distance(homeSpot.position, cafe) <= COMMONS_REACH,
+        coffee: nearestCoffee(homeSpot.position, cafe, homeSpot.district)
       };
       this.agents.set(id, agent);
       this.placeInitial(agent);
@@ -483,13 +487,15 @@ export class OfficeSimulation {
       return chosen;
     };
 
-    const commonsOnly: AmbientActivity[] = ['coffee', 'lounge', 'bookshelf', 'printer', 'cabinet'];
+    const commonsOnly: AmbientActivity[] = ['lounge', 'bookshelf', 'printer', 'cabinet'];
     if (commonsOnly.includes(activity) && !agent.nearCommons) return null;
     switch (activity) {
       case 'desk':
         return this.deskPlan(agent, duration);
       case 'coffee': {
-        const pickup = this.freeSpots(CAFE_PICKUP, agent)[0];
+        // The café, or their district's coffee station: pick up a cup, then sit or stand with it.
+        const station = agent.coffee === 'cafe' ? null : stationSpots(agent.coffee);
+        const pickup = this.freeSpots(station ? station.slice(0, 2) : CAFE_PICKUP, agent)[0];
         if (!pickup) return null;
         this.reserve(agent, pickup);
         const steps: Step[] = [
@@ -498,7 +504,11 @@ export class OfficeSimulation {
           this.doing('waiting', rng.range(4, 7)),
           { type: 'hold', item: 'cup' }
         ];
-        const seat = rng.chance(0.5) ? claim(this.poisOfType((poi) => poi.type === 'cafe-seat')) : null;
+        const seat = !rng.chance(0.5)
+          ? null
+          : station
+            ? claim(station.slice(2))
+            : claim(this.poisOfType((poi) => poi.type === 'cafe-seat'));
         if (seat)
           steps.push(
             leave,

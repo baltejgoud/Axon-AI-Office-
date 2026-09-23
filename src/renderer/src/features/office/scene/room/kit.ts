@@ -154,3 +154,61 @@ export function bookshelf(itemDef: FurnitureItem, height = 2.2, shelves = 5): TH
   }
   return g;
 }
+
+const steamMaterial = new THREE.MeshBasicMaterial({
+  color: '#ffffff',
+  transparent: true,
+  opacity: 0.5,
+  depthWrite: false
+});
+
+export interface CoffeeMachine {
+  group: THREE.Group;
+  /** The ready light, brighter while someone waits for a cup. */
+  light: THREE.Mesh;
+  /** Puffs above the spout, shown and animated while the machine is in use. */
+  steam: THREE.Group;
+}
+
+/** An espresso machine with a ready light and a wisp of steam. */
+export function coffeeMachine(): CoffeeMachine {
+  const light = part(
+    GEOMETRY.sphere,
+    new THREE.MeshStandardMaterial({ color: '#5a3d12', emissive: '#f59e0b', emissiveIntensity: 0.4 }),
+    [0.025, 0.025, 0.025],
+    [0.1, 0.33, 0.185]
+  );
+  light.userData.dynamic = true;
+  const steam = group();
+  for (let i = 0; i < 3; i++) {
+    const puff = part(GEOMETRY.lowSphere, steamMaterial, [0.06, 0.06, 0.06], [0, 0, 0]);
+    puff.castShadow = false;
+    puff.receiveShadow = false;
+    puff.userData.dynamic = true;
+    puff.userData.phase = i / 3;
+    steam.add(puff);
+  }
+  steam.position.set(0, 0.5, 0.12);
+  steam.visible = false;
+  const g = group(
+    box(PALETTE.black, [0.34, 0.42, 0.36], [0, 0.21, 0], { roughness: 0.4 }),
+    box('#555b64', [0.36, 0.04, 0.38], [0, 0.44, 0], { roughness: 0.4, metalness: 0.3 }),
+    box('#15181c', [0.22, 0.14, 0.02], [0, 0.18, 0.18]),
+    box(PALETTE.metal, [0.2, 0.02, 0.12], [0, 0.04, 0.14], { metalness: 0.5 }),
+    light,
+    steam
+  );
+  return { group: g, light, steam };
+}
+
+/** Steam rising from a machine in use: each puff climbs 0.4 m, swells and fades, then starts over. */
+export function animateSteam(steam: THREE.Object3D, busy: boolean, elapsed: number): void {
+  steam.visible = busy;
+  if (!busy) return;
+  for (const puff of steam.children) {
+    const t = (elapsed / 1.6 + (puff.userData.phase as number)) % 1;
+    const size = 0.04 + 0.1 * Math.sin(Math.PI * t);
+    puff.position.set(Math.sin(t * 5 + (puff.userData.phase as number) * 9) * 0.03, t * 0.4, 0);
+    puff.scale.setScalar(size);
+  }
+}

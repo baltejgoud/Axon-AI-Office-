@@ -65,6 +65,38 @@ test('every department works at its own desks, reachable from the café', () => 
   }
 });
 
+const coffee = require('../src/renderer/src/features/office/campus/coffee.ts');
+
+test('coffee breaks go to the nearest station or the café', () => {
+  const agents = require('../src/renderer/src/features/office/data/officeAgents.ts').OFFICE_AGENTS;
+  const cafe = layout.poiById('cafe-machine').position;
+  const districtsSeen = new Set();
+  for (const person of agents.filter((a) => a.district !== 'commons')) {
+    if (districtsSeen.has(person.district)) continue;
+    districtsSeen.add(person.district);
+    const office = new OfficeSimulation({ agentIds: [person.id], seed: 5 });
+    office.step(1 / 60);
+    assert.ok(office.requestActivity(person.id, 'coffee'), person.id);
+    const home = layout.poiById(layout.HOME_DESKS[person.id]).position;
+    const expected = coffee.nearestCoffee(home, cafe, person.district);
+    let pickup = null;
+    runUntil(
+      office,
+      (o) => {
+        const v = o.view(person.id);
+        if (v.poiId && layout.poiById(v.poiId).type === 'cafe' && v.behavior === 'waiting') pickup = v.poiId;
+        return pickup !== null;
+      },
+      300,
+      0.05
+    );
+    assert.ok(pickup, `${person.id} never reached coffee`);
+    if (expected === 'cafe') assert.ok(CAFE_PICKUP.includes(pickup), `${person.id} at ${pickup}`);
+    else assert.ok(pickup.startsWith(`${expected}-pickup`), `${person.id} at ${pickup}, expected ${expected}`);
+  }
+  assert.equal(districtsSeen.size, 7);
+});
+
 test('largest department runs with distinct seats and furniture-safe paths', () => {
   const ids = catalog.SPECIALIST_ROLES.filter((role) => role.group === 'AI, ML & Data').map(
     (role) => role.id
@@ -451,6 +483,9 @@ test('specialists only visit people in their own department, and stay in their d
         assert.equal(layout.poiById(spot.hostDeskId).department, person.department, view.id);
       }
       if (spot.type === 'whiteboard' || spot.type === 'open-area')
+        assert.equal(spot.district, person.district, `${view.id} at ${spot.id}`);
+      // Coffee comes from their own district's station, or the café.
+      if ((spot.type === 'cafe' || spot.type === 'cafe-stand') && spot.district)
         assert.equal(spot.district, person.district, `${view.id} at ${spot.id}`);
     }
   });

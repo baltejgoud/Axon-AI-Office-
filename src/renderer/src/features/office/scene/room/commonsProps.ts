@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { FurnitureItem } from '../../simulation/layout';
-import { bookshelf, group, seeded } from './kit';
+import { bookshelf, coffeeMachine, group, plant, seeded, type CoffeeMachine } from './kit';
 import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part } from './materials';
 
 /**
@@ -178,4 +178,25 @@ export function pendantLamp(): THREE.Group {
     part(GEOMETRY.cone, mat('#efe6d6', { roughness: 0.6 }), [0.38, 0.22, 0.38], [0, 2.27, 0]),
     part(GEOMETRY.sphere, lampGlow.table(), [0.16, 0.1, 0.16], [0, 2.15, 0])
   );
+}
+
+/** A district's coffee counter: a machine, a stack of cups and a small plant. */
+export function coffeeStation(item: FurnitureItem): CoffeeMachine {
+  const { w, d } = item;
+  const g = group(
+    box(PALETTE.woodLight, [w, 0.86, d], [0, 0.45, 0]),
+    box('#b58d62', [w - 0.02, 0.08, d - 0.08], [0, 0.04, 0]),
+    box(PALETTE.white, [w + 0.04, 0.05, d + 0.04], [0, 0.905, 0], { roughness: 0.35 })
+  );
+  for (let i = 1; i < 3; i++)
+    g.add(box('#b99870', [0.01, 0.72, 0.01], [-w / 2 + (i * w) / 3, 0.47, d / 2 + 0.005]));
+  const machine = coffeeMachine();
+  machine.group.position.set(0, 0.93, -0.08);
+  g.add(machine.group);
+  for (let i = 0; i < 4; i++) g.add(cylinder(PALETTE.white, 0.04, 0.025, [-0.55, 0.945 + i * 0.026, 0.05]));
+  g.add(cylinder('#e8b04a', 0.04, 0.1, [-0.35, 0.98, 0.12]), cylinder(PALETTE.white, 0.04, 0.1, [0.4, 0.98, 0.14]));
+  const herb = plant(0.4, PALETTE.white, Math.abs(item.x * 13 + item.z));
+  herb.position.set(0.62, 0.93, -0.06);
+  g.add(herb);
+  return { ...machine, group: g };
 }

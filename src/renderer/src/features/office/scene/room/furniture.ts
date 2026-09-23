@@ -15,7 +15,7 @@ import {
 } from './materials';
 import * as commons from './commonsProps';
 import * as props from './props';
-import { bookshelf, group, largePlant, plant, seeded } from './kit';
+import { bookshelf, coffeeMachine, group, largePlant, plant, seeded, type CoffeeMachine } from './kit';
 
 export { largePlant, plant };
 
@@ -227,25 +227,7 @@ function fileCabinet(itemDef: FurnitureItem): THREE.Group {
   return g;
 }
 
-function coffeeMachine(): { group: THREE.Group; light: THREE.Mesh } {
-  const light = part(
-    GEOMETRY.sphere,
-    new THREE.MeshStandardMaterial({ color: '#5a3d12', emissive: '#f59e0b', emissiveIntensity: 0.4 }),
-    [0.025, 0.025, 0.025],
-    [0.1, 0.33, 0.185]
-  );
-  light.userData.dynamic = true;
-  const g = group(
-    box(PALETTE.black, [0.34, 0.42, 0.36], [0, 0.21, 0], { roughness: 0.4 }),
-    box('#555b64', [0.36, 0.04, 0.38], [0, 0.44, 0], { roughness: 0.4, metalness: 0.3 }),
-    box('#15181c', [0.22, 0.14, 0.02], [0, 0.18, 0.18]),
-    box(PALETTE.metal, [0.2, 0.02, 0.12], [0, 0.04, 0.14], { metalness: 0.5 }),
-    light
-  );
-  return { group: g, light };
-}
-
-function cafeCounter(itemDef: FurnitureItem): { group: THREE.Group; light: THREE.Mesh } {
+function cafeCounter(itemDef: FurnitureItem): CoffeeMachine {
   const { w, d } = itemDef;
   const g = group(
     box(PALETTE.woodLight, [w, 0.86, d], [0, 0.45, 0]),
@@ -266,7 +248,7 @@ function cafeCounter(itemDef: FurnitureItem): { group: THREE.Group; light: THREE
   const herb = plant(0.45, PALETTE.white, 31);
   herb.position.set(-1.8, 0.93, -0.05);
   g.add(herb, cylinder('#d9c3a0', 0.08, 0.2, [-1.3, 1.03, -0.05]));
-  return { group: g, light: machine.light };
+  return { group: g, light: machine.light, steam: machine.steam };
 }
 
 function cafeIsland(itemDef: FurnitureItem): THREE.Group {
@@ -471,6 +453,8 @@ export interface BuiltFurniture {
   object: THREE.Object3D;
   /** Small emissive indicators the scene animates (coffee machine, printer). */
   light?: THREE.Mesh;
+  /** Steam over a coffee machine, shown while it is in use. */
+  steam?: THREE.Object3D;
 }
 
 export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
@@ -512,7 +496,11 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       return { object: fileCabinet(itemDef) };
     case 'cafe-counter': {
       const built = cafeCounter(itemDef);
-      return { object: built.group, light: built.light };
+      return { object: built.group, light: built.light, steam: built.steam };
+    }
+    case 'coffee-station': {
+      const built = commons.coffeeStation(itemDef);
+      return { object: built.group, light: built.light, steam: built.steam };
     }
     case 'cafe-island':
       return { object: cafeIsland(itemDef) };
