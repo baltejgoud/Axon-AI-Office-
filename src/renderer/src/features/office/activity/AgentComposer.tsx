@@ -1,6 +1,5 @@
-import type { OfficeFileContext } from './OfficeFiles';
 import { useState, type KeyboardEvent } from 'react';
-import { ArrowUp, Paperclip, X } from 'lucide-react';
+import { ArrowUp, FileText, Paperclip, X } from 'lucide-react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -8,16 +7,17 @@ import { Icon } from '../../../ui';
 import { ModelSelect } from '../../../chat/ModelSelect';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
+import { withFileContext } from './fileContext';
 
 interface AgentComposerProps {
   agentId: string;
-  fileContext?: OfficeFileContext | null;
-  clearFileContext?: () => void;
 }
 
-export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentComposerProps) {
+export function AgentComposer({ agentId }: AgentComposerProps) {
   const { data, model, patch } = useApp();
-  const { agentRuntime, setAgentStatus, setAgentTask, setAgentConversation, pushActivity } = useOfficeStore();
+  const { agentRuntime, setAgentStatus, setAgentTask, setAgentConversation, pushActivity, removeFile } =
+    useOfficeStore();
+  const handed = useOfficeStore((s) => s.pendingFiles[agentId]) ?? [];
 
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<{ id: string; name: string }[]>([]);
@@ -111,12 +111,10 @@ export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentC
 
       await window.axon.chatSend(
         convId,
-        fileContext
-          ? `${textToSend}\n\nFile context: ${fileContext.path}\n<file-content>\n${fileContext.content}\n</file-content>`
-          : textToSend,
+        withFileContext(textToSend, useOfficeStore.getState().pendingFiles[agentId] ?? []),
         attachIds
       );
-      clearFileContext?.();
+      useOfficeStore.getState().clearFiles(agentId);
       await useApp.getState().refresh();
     } catch (err) {
       setAgentStatus(agentId, 'error');
@@ -144,13 +142,17 @@ export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentC
         <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
         Message {agent?.name}
       </div>
-      {fileContext && (
-        <div className="composer-attachment-tag">
-          <Paperclip size={14} />
-          <span>{fileContext.path}</span>
-          <button aria-label="Remove file context" onClick={clearFileContext}>
-            <X size={14} />
-          </button>
+      {handed.length > 0 && (
+        <div className="composer-attachments-preview composer-handed" aria-label="Files handed over">
+          {handed.map((file) => (
+            <span key={file.path} className="composer-attachment-tag handed" title={file.path}>
+              <FileText size={13} />
+              <span>{file.path.split('/').pop()}</span>
+              <button aria-label={`Remove ${file.path}`} onClick={() => removeFile(agentId, file.path)}>
+                <X size={13} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
       {attachments.length > 0 && (

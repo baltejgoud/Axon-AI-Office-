@@ -1,0 +1,246 @@
+/* The Files room: folder wall, file browser and the Hand to… picker. */
+
+.office-files-hub {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--office-border);
+}
+.office-folder-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+.office-folder-cabinet {
+  position: relative;
+}
+.office-folder-cabinet > button:first-child,
+.office-folder-wall .office-folder-cabinet.add {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 72px;
+  padding: 11px 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: linear-gradient(160deg, var(--office-paper), var(--office-soft));
+  color: var(--office-ink);
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 3px 10px #223d700a;
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.office-folder-cabinet > button:first-child svg {
+  color: #d39a2c;
+}
+.office-folder-cabinet > button:first-child span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-folder-cabinet > button:first-child:hover,
+.office-folder-wall .office-folder-cabinet.add:hover {
+  transform: translateY(-1px);
+  border-color: #b9c7e4;
+  box-shadow: 0 8px 18px #223d7014;
+}
+.office-folder-cabinet.open > button:first-child {
+  border-color: var(--office-blue);
+  box-shadow: 0 0 0 3px #3867f61c;
+}
+.office-folder-wall .office-folder-cabinet.add {
+  border-style: dashed;
+  background: transparent;
+  color: var(--office-blue);
+  justify-content: center;
+}
+.office-folder-forget {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--office-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.office-folder-cabinet:hover .office-folder-forget,
+.office-folder-forget:focus-visible {
+  opacity: 1;
+}
+.office-folder-forget:hover {
+  background: var(--office-soft);
+  color: var(--office-ink);
+}
+.office-files-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #fff0f2;
+  color: #bc3447;
+  font-size: 12px;
+}
+.office-files-error button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.office-files-hub .office-file-browser {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: var(--office-paper);
+}
+.office-files-hub .office-file-root {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--office-ink);
+}
+.office-file-entry.picked {
+  background: #3867f60f;
+}
+.office-file-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #b6c2d6;
+  border-radius: 5px;
+  color: #fff;
+}
+.office-file-entry.picked .office-file-check {
+  border-color: var(--office-blue);
+  background: var(--office-blue);
+}
+.office-files-empty {
+  margin: 6px 4px;
+  font-size: 12px;
+  color: var(--office-muted);
+}
+.office-file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid var(--office-border);
+  font-size: 11px;
+  color: var(--office-muted);
+}
+.office-hand-anchor {
+  position: relative;
+}
+.office-hand-to {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--office-blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 10px #3867f62b;
+}
+.office-hand-to:disabled {
+  box-shadow: none;
+}
+.office-hand-picker {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 25;
+  width: min(320px, 80vw);
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  background: var(--office-paper);
+  box-shadow: 0 18px 44px #16233b2b;
+  overflow: hidden;
+  animation: office-pop 0.14s ease-out;
+}
+.office-hand-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.office-hand-list > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--office-ink);
+  text-align: left;
+}
+.office-hand-list > button:hover {
+  background: var(--office-soft);
+}
+.office-hand-list .office-portrait {
+  width: 32px;
+  height: 32px;
+}
+.office-hand-list strong,
+.office-hand-list small {
+  display: block;
+}
+.office-hand-list strong {
+  font-size: 12.5px;
+}
+.office-hand-list small {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--office-muted);
+}
+.composer-attachment-tag.handed {
+  border: 1px solid #c9d6f5;
+  background: #eef3ff;
+  color: #2447b8;
+}
+.composer-attachment-tag.handed button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+[data-theme='dark'] .office-files-error {
+  background: #3a1d24;
+}
+[data-theme='dark'] .composer-attachment-tag.handed {
+  border-color: #31405c;
+  background: #1e2d47;
+  color: #a9bff5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-hand-picker {
+    animation: none;
+  }
+}

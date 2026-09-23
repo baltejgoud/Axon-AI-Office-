@@ -78,6 +78,8 @@ export class OfficeScene {
   public onAgentClick?: (agentId: string) => void;
   public onAgentHover?: (agentId: string | null) => void;
   public onViewChange?: (view: OfficeView) => void;
+  /** The Files room cabinets were clicked. */
+  public onFilesClick?: () => void;
 
   private readonly cameraRig = new OfficeCameraRig();
   private readonly simulation: OfficeSimulation;
@@ -91,6 +93,11 @@ export class OfficeScene {
   private readonly pointer = new THREE.Vector2();
   private readonly scratch = new THREE.Vector3();
   private readonly sun: THREE.DirectionalLight;
+  /** Invisible click target over the Files room cabinets. */
+  private readonly filesHotspot = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 2.2, 3.1),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
   private labels: SceneLabel[] = [];
   private full = new Set<string>();
   private selectedId: string | null = null;
@@ -154,6 +161,8 @@ export class OfficeScene {
       })
     );
     this.scene.add(this.crowd.object);
+    this.filesHotspot.position.set(12.35, 1.1, -4.6);
+    this.scene.add(this.filesHotspot);
 
     if (localStorage.getItem('axon.officeDebug') === '1') {
       window.__axonOffice = {
@@ -297,6 +306,11 @@ export class OfficeScene {
     });
   }
 
+  /** Send someone on an errand (the Files Agent to the cabinets, for example). */
+  public sendTo(agentId: string, activity: AmbientActivity): void {
+    this.simulation.requestActivity(agentId, activity);
+  }
+
   public updateAgentStatus(agentId: string, status: AgentStatus): void {
     this.statuses.set(agentId, status);
     this.simulation.setTaskStatus(agentId, status);
@@ -430,6 +444,7 @@ export class OfficeScene {
       if (!moved) {
         const agentId = this.agentAtPointer();
         if (agentId) this.onAgentClick?.(agentId);
+        else if (this.raycaster.intersectObject(this.filesHotspot, false).length) this.onFilesClick?.();
       }
       canvas.style.cursor = this.hoveredAgentId ? 'pointer' : 'grab';
     };
@@ -596,6 +611,8 @@ export class OfficeScene {
     if (window.__axonOffice) delete window.__axonOffice;
     this.characters.forEach((character) => character.dispose());
     this.crowd.dispose();
+    this.filesHotspot.geometry.dispose();
+    (this.filesHotspot.material as THREE.Material).dispose();
     this.room.dispose();
     this.renderer.dispose();
     if (this.container.contains(this.renderer.domElement))

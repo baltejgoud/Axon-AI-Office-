@@ -11,7 +11,7 @@ const api: PlatformAPI = {
   chatSelectionSet: invoke('chatSelectionSet'),
   chatDelete: invoke('chatDelete'), chatSend: invoke('chatSend'), chatStop: invoke('chatStop'), toolApprove: invoke('toolApprove'), attach: invoke('attach'),
   knowledgeImport: invoke('knowledgeImport'), knowledgeDelete: invoke('knowledgeDelete'), knowledgeSearch: invoke('knowledgeSearch'),
-  projectChoose: invoke('projectChoose'), projectList: invoke('projectList'), projectRead: invoke('projectRead'),
+  projectChoose: invoke('projectChoose'), projectRecent: invoke('projectRecent'), projectOpen: invoke('projectOpen'), projectForget: invoke('projectForget'), projectList: invoke('projectList'), projectRead: invoke('projectRead'),
   projectWrite: invoke('projectWrite'), projectSearch: invoke('projectSearch'),
   onStream(callback) {
     const listener = (_: Electron.IpcRendererEvent, event: StreamEvent) => callback(event);

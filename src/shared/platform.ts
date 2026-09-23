@@ -44,6 +44,9 @@ export interface PlatformAPI {
   knowledgeDelete(id: string): Promise<void>;
   knowledgeSearch(query: string): Promise<{ docName: string; text: string; score: number }[]>;
   projectChoose(): Promise<string | null>;
+  projectRecent(): Promise<string[]>;
+  projectOpen(folder: string): Promise<string | null>;
+  projectForget(folder: string): Promise<void>;
   projectList(): Promise<string[]>;
   projectRead(path: string): Promise<string>;
   projectWrite(path: string, text: string): Promise<void>;

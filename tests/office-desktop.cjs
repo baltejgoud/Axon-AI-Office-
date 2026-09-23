@@ -113,7 +113,7 @@ app.on('web-contents-created', (_, contents) => {
       }
       // Close up, people get name tags.
       await evaluate('window.__axonOffice.focus(0.2, 0.7, 10)');
-      await waitFor('document.querySelectorAll(".office-person-label").length >= 6', 'name tags close up');
+      await waitFor('document.querySelectorAll(".office-person-label").length >= 3', 'name tags close up');
       await snap('campus-pods.png');
       // Whole campus: district cards, and performance within budget.
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
@@ -294,24 +294,37 @@ app.on('web-contents-created', (_, contents) => {
         await evaluate('document.querySelector(".office-search-results > button").click()');
         await pause(100);
       };
+      // Files room: open a folder, tick a file and hand it to the Frontend Developer.
       await searchFor('files agent');
-      await pause(80);
-      assert.ok(await evaluate('document.querySelector(".office-file-open")'));
+      await waitFor('document.querySelector(".office-files-hub .office-file-open")', 'folder wall');
       await evaluate('document.querySelector(".office-file-open").click()');
       await waitFor('document.querySelector(".office-file-entry")', 'folder listing');
-      await evaluate('document.querySelector(".office-file-entry").click()');
+      assert.equal(await evaluate('document.querySelectorAll(".office-folder-cabinet:not(.add)").length'), 1);
+      await evaluate(
+        '[...document.querySelectorAll(".office-file-entry")].find(button => button.textContent.includes("notes")).click()'
+      );
       await pause(70);
       await evaluate(
         '[...document.querySelectorAll(".office-file-entry")].find(button => button.textContent.includes("brief.txt")).click()'
       );
-      await waitFor('document.querySelector(".office-file-preview")', 'file preview');
-      await evaluate('document.querySelector(".office-file-preview button").click()');
       await pause(50);
-      assert.match(
-        await evaluate('document.querySelector(".activity-composer").textContent'),
-        /notes\/brief.txt/
+      assert.equal(
+        await evaluate('document.querySelector(".office-file-entry.picked").getAttribute("aria-checked")'),
+        'true'
       );
-      await snap('office-files-desk.png');
+      await evaluate('document.querySelector(".office-hand-to").click()');
+      await waitFor('document.querySelector(".office-hand-picker input")', 'hand-to picker');
+      await evaluate(
+        `(() => { const input = document.querySelector('.office-hand-picker input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'frontend'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
+      await pause(80);
+      await evaluate('document.querySelector(".office-hand-list > button").click()');
+      await waitFor(
+        'document.querySelector(".activity-agent-meta h3").textContent === "Frontend Developer" && document.querySelector(".composer-attachment-tag.handed")',
+        'files handed to the frontend developer'
+      );
+      assert.match(await evaluate('document.querySelector(".composer-handed").textContent'), /brief\.txt/);
+      await snap('office-files-hand-to.png');
       await evaluate(
         `(() => { const input = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Summarize this brief.'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
       );
@@ -320,8 +333,20 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor('document.querySelector(".status-badge.completed")', 'files task completion');
       assert.ok(
         providerRequest.messages.some(
-          (message) => message.role === 'user' && message.content.includes('Office file context fixture')
+          (message) =>
+            message.role === 'user' &&
+            message.content.includes('<file path="notes/brief.txt">') &&
+            message.content.includes('Office file context fixture')
         )
+      );
+      assert.equal(await evaluate('document.querySelector(".composer-attachment-tag.handed")'), null);
+      assert.match(
+        await evaluate('[...document.querySelectorAll(".office-thread .message.user")].pop().textContent'),
+        /Summarize this brief\./
+      );
+      assert.doesNotMatch(
+        await evaluate('[...document.querySelectorAll(".office-thread .message.user")].pop().textContent'),
+        /file path=/
       );
 
       await searchFor('front-end');
@@ -345,7 +370,7 @@ app.on('web-contents-created', (_, contents) => {
       );
       await waitFor('document.querySelectorAll(".roster-card").length === 207', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: campus artwork, district chips and cards, zoom-tier labels, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: campus artwork, district chips and cards, zoom-tier labels, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),

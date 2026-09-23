@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { OfficeFiles, type OfficeFileContext } from './OfficeFiles';
+import { FilesPanel } from './FilesPanel';
 import { Activity, BookOpen, FileText, MessageSquarePlus, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -15,7 +15,6 @@ import { useEscape } from '../../../ui/escape';
 const FEED_PREVIEW = 3;
 
 export function ActivityPanel() {
-  const [fileContext, setFileContext] = useState<OfficeFileContext | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const data = useApp((s) => s.data);
@@ -103,7 +102,7 @@ export function ActivityPanel() {
         />
       </div>
       <div className="activity-body">
-        {agent.id === 'files-agent' && <OfficeFiles onInclude={setFileContext} />}
+        {agent.id === 'files-agent' && <FilesPanel />}
         {!conversation && (
           <section className="current-task-card">
             <div className="activity-section-heading">
@@ -164,12 +163,7 @@ export function ActivityPanel() {
           </div>
         )}
       </div>
-      <AgentComposer
-        key={agent.id}
-        agentId={agent.id}
-        fileContext={agent.id === 'files-agent' ? fileContext : null}
-        clearFileContext={() => setFileContext(null)}
-      />
+      <AgentComposer key={agent.id} agentId={agent.id} />
     </aside>
   );
 }

@@ -28,7 +28,9 @@ export function OfficeCanvas() {
     agentRuntime,
     is3dEnabled,
     focusDepartment,
+    flyTo,
     selectAgent,
+    flyToAgent,
     toggle3d,
     openOverlay,
     setFocusDepartment
@@ -53,6 +55,7 @@ export function OfficeCanvas() {
       };
       world.onAgentHover = setHovered;
       world.onViewChange = setView;
+      world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)
@@ -73,7 +76,19 @@ export function OfficeCanvas() {
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);
+    // Picking someone outside the chosen department lets the strip follow the camera again.
+    const store = useOfficeStore.getState();
+    const person = OFFICE_AGENTS.find((agent) => agent.id === selectedAgentId);
+    if (store.focusDepartment && person && person.department !== store.focusDepartment)
+      store.setFocusDepartment(null);
+    // With the Files room open, the Files Agent goes to the cabinets.
+    if (selectedAgentId === 'files-agent') scene.current?.sendTo('files-agent', 'cabinet');
   }, [selectedAgentId]);
+
+  // Someone asked the office to go to a person (handing over files, clicking the cabinets).
+  useEffect(() => {
+    if (flyTo) scene.current?.setSelectedAgent(flyTo.agentId, true);
+  }, [flyTo]);
 
   useEffect(() => {
     Object.entries(agentRuntime).forEach(([id, runtime]) =>
@@ -127,7 +142,9 @@ export function OfficeCanvas() {
   };
   const chooseRoom = (zone: ZoneId) => {
     setFocusDepartment(null);
-    scene.current?.focusZone(zone);
+    // The Files room opens the folder wall with the Files Agent.
+    if (zone === 'files') flyToAgent('files-agent');
+    else scene.current?.focusZone(zone);
   };
   const chooseFromMenu = (choice: DepartmentChoice) =>
     choice.kind === 'department' ? chooseDepartment(choice.name) : chooseRoom(choice.zone);

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
+import type { HandedFile } from '../activity/fileContext';
 
 export interface AgentActivity {
   id: string;
@@ -39,6 +40,14 @@ interface OfficeStoreState {
   pushActivity: (agentId: string, activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>) => void;
   toggle3d: () => void;
   openOverlay: (overlay: Overlay | null) => void;
+  /** Files handed to each coworker from the Files room, waiting in their message box. */
+  pendingFiles: Record<string, HandedFile[]>;
+  handFiles: (agentId: string, files: HandedFile[]) => void;
+  removeFile: (agentId: string, path: string) => void;
+  clearFiles: (agentId: string) => void;
+  /** Ask the office to select someone and glide the camera to them. */
+  flyTo: { agentId: string; at: number } | null;
+  flyToAgent: (agentId: string) => void;
   startFresh: (agentId: string) => void;
 }
 
@@ -57,6 +66,8 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   agentRuntime: initialRuntime,
   is3dEnabled: true,
   overlay: null,
+  pendingFiles: {},
+  flyTo: null,
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
@@ -131,6 +142,21 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   toggle3d: () => set({ is3dEnabled: !get().is3dEnabled }),
 
   openOverlay: (overlay) => set({ overlay }),
+
+  handFiles: (agentId, files) => {
+    const current = get().pendingFiles[agentId] ?? [];
+    const merged = [...current.filter((file) => !files.some((next) => next.path === file.path)), ...files];
+    set({ pendingFiles: { ...get().pendingFiles, [agentId]: merged.slice(-5) } });
+  },
+  removeFile: (agentId, path) =>
+    set({
+      pendingFiles: {
+        ...get().pendingFiles,
+        [agentId]: (get().pendingFiles[agentId] ?? []).filter((file) => file.path !== path)
+      }
+    }),
+  clearFiles: (agentId) => set({ pendingFiles: { ...get().pendingFiles, [agentId]: [] } }),
+  flyToAgent: (agentId) => set({ selectedAgentId: agentId, flyTo: { agentId, at: Date.now() } }),
 
   startFresh: (agentId: string) => {
     const current = get().agentRuntime[agentId];
