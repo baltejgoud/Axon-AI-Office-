@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Search, Building2, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { OFFICE_AGENTS } from './data/officeAgents';
-import { SPECIALIST_GROUPS } from './data/coworkerCatalog';
 import { useOfficeStore } from './store/officeStore';
 import { AgentPortrait } from './AgentPortrait';
 
 export function OfficeDirectory() {
-  const { activeWing, setWing, selectAgent } = useOfficeStore();
+  const { selectAgent } = useOfficeStore();
   const [query, setQuery] = useState('');
   const normalized = query.toLowerCase().replace(/[^a-z0-9]/g, '');
   const matches = normalized
@@ -23,16 +22,6 @@ export function OfficeDirectory() {
   };
   return (
     <div className="office-directory">
-      <label className="office-wing-picker">
-        <Building2 size={17} />
-        <span className="office-sr-only">Office department</span>
-        <select aria-label="Office department" value={activeWing} onChange={(e) => setWing(e.target.value)}>
-          <option>Headquarters</option>
-          {SPECIALIST_GROUPS.map((group) => (
-            <option key={group}>{group}</option>
-          ))}
-        </select>
-      </label>
       <div className="office-find-person">
         <Search size={16} />
         <input
@@ -60,7 +49,7 @@ export function OfficeDirectory() {
                 <AgentPortrait agent={agent} />
                 <span>
                   <strong>{agent.name}</strong>
-                  <small>{agent.wing ?? 'Headquarters'}</small>
+                  <small>{agent.department}</small>
                 </span>
               </button>
             ))}

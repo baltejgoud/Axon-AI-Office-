@@ -75,7 +75,7 @@ export class OfficeScene {
     private readonly container: HTMLElement,
     private readonly onFailure: () => void,
     private readonly onReady: () => void,
-    agents: OfficeAgent[] = OFFICE_AGENTS.filter((agent) => !agent.wing)
+    agents: OfficeAgent[] = OFFICE_AGENTS.filter((agent) => agent.district === 'commons')
   ) {
     this.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.renderer = new THREE.WebGLRenderer({
@@ -105,11 +105,14 @@ export class OfficeScene {
       agentIds: agents.map((agent) => agent.id),
       homeDesks: Object.fromEntries(
         agents
-          .filter((agent) => agent.wing)
+          .filter((agent) => agent.district !== 'commons')
           .map((agent, index) => [
             agent.id,
             SPECIALIST_DESKS[
-              Math.floor((index * SPECIALIST_DESKS.length) / agents.filter((agent) => agent.wing).length)
+              Math.floor(
+                (index * SPECIALIST_DESKS.length) /
+                  agents.filter((agent) => agent.district !== 'commons').length
+              )
             ]
           ])
       ),

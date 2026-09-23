@@ -1,17 +1,19 @@
 import type { CSSProperties } from 'react';
 import type { OfficeAgent } from './data/officeAgents';
 import { appearanceFor } from './scene/agents/appearance';
+import { AVATARS } from './data/avatars';
 
 export function AgentPortrait({ agent, className = '' }: { agent: OfficeAgent; className?: string }) {
   const look = appearanceFor(agent.id, agent.accentColor);
+  const avatar = AVATARS[agent.id];
   return (
     <span
       className={`office-portrait ${className}`}
       role="img"
       aria-label={agent.name}
-      style={{ '--portrait': `url("${agent.avatar}")`, '--agent-color': agent.accentColor } as CSSProperties}
+      style={{ '--portrait': `url("${avatar}")`, '--agent-color': agent.accentColor } as CSSProperties}
     >
-      {!agent.avatar && (
+      {!avatar && (
         <svg viewBox="0 0 80 80" aria-hidden="true">
           <circle cx="40" cy="40" r="40" fill={agent.accentSoft} />
           <path d="M8 82 Q9 57 29 56 L51 56 Q72 58 74 82" fill={look.jacket ?? look.shirt} />

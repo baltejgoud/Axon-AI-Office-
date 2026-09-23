@@ -1,12 +1,5 @@
-import { SPECIALIST_ROLES, HQ_SPECIALISTS, specialistColor } from './coworkerCatalog';
-import analystImg from '@/assets/agents/research-analyst.jpg';
-import designerImg from '@/assets/agents/designer.jpg';
-import filesImg from '@/assets/agents/files-agent.jpg';
-import opsImg from '@/assets/agents/ops-coordinator.jpg';
-import writerImg from '@/assets/agents/writer.png';
-import productCoachImg from '@/assets/agents/product-coach.png';
-import librarianImg from '@/assets/agents/knowledge-librarian.png';
-import marketingImg from '@/assets/agents/marketing-strategist.png';
+import { SPECIALIST_ROLES } from './coworkerCatalog';
+import { districtById, districtOf, type DistrictId } from '../campus/districts';
 
 export type AgentStatus = 'idle' | 'working' | 'waiting' | 'completed' | 'error';
 
@@ -14,27 +7,31 @@ export interface OfficeAgent {
   id: string;
   name: string;
   role: string;
-  department: 'chat' | 'workspaces' | 'knowledge' | 'agents' | 'files' | 'cafe';
+  /** The Commons room they belong to; specialists belong to the open floor ('agents'). */
+  zone: 'chat' | 'workspaces' | 'knowledge' | 'agents' | 'files' | 'cafe';
   description: string;
-  avatar?: string;
   accentColor: string;
   accentSoft: string;
   status: AgentStatus;
   currentTask?: string;
   capabilities: string[];
   systemPrompt: string;
-  wing?: string;
+  /** Where they sit: the Commons for the core team, otherwise their department's district. */
+  district: DistrictId;
+  /** Catalog department for specialists; the hub room for the core team. */
+  department: string;
   roleIds?: string[];
 }
 
 export const OFFICE_AGENTS: OfficeAgent[] = [
   {
     id: 'research-analyst',
+    district: 'commons',
+    department: 'Library',
     name: 'Research Analyst',
     role: 'Research & Insights',
-    department: 'agents',
+    zone: 'agents',
     description: 'Finds insights, analyzes patterns, and summarizes complex information with rigor.',
-    avatar: analystImg,
     accentColor: '#2563eb', // Blue
     accentSoft: 'rgba(37, 99, 235, 0.15)',
     status: 'idle',
@@ -44,11 +41,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'writer',
+    district: 'commons',
+    department: 'Library',
     name: 'Writer',
     role: 'Writing & Editorial',
-    department: 'agents',
+    zone: 'agents',
     description: 'Drafts, rewrites, refines tone, and polishes briefs, articles, and documentation.',
-    avatar: writerImg,
     accentColor: '#8b5cf6', // Purple
     accentSoft: 'rgba(139, 92, 246, 0.15)',
     status: 'idle',
@@ -58,11 +56,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'designer',
+    district: 'commons',
+    department: 'Planning',
     name: 'Designer',
     role: 'Product & UX Design',
-    department: 'agents',
+    zone: 'agents',
     description: 'Shapes user journeys, product visual systems, layouts, and UX architecture.',
-    avatar: designerImg,
     accentColor: '#ec4899', // Pink / Violet
     accentSoft: 'rgba(236, 72, 153, 0.15)',
     status: 'idle',
@@ -72,11 +71,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'product-coach',
+    district: 'commons',
+    department: 'Planning',
     name: 'Product Coach',
     role: 'Product Strategy & Roadmaps',
-    department: 'workspaces',
+    zone: 'workspaces',
     description: 'Breaks complex visions into actionable PRDs, milestone roadmaps, and requirements.',
-    avatar: productCoachImg,
     accentColor: '#f97316', // Orange
     accentSoft: 'rgba(249, 115, 22, 0.15)',
     status: 'idle',
@@ -86,11 +86,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'knowledge-librarian',
+    district: 'commons',
+    department: 'Library',
     name: 'Knowledge Librarian',
     role: 'Knowledge & Research',
-    department: 'knowledge',
+    zone: 'knowledge',
     description: 'Organizes references, retrieves relevant passages, and explains domain knowledge.',
-    avatar: librarianImg,
     accentColor: '#0d9488', // Teal
     accentSoft: 'rgba(13, 148, 136, 0.15)',
     status: 'idle',
@@ -100,11 +101,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'files-agent',
+    district: 'commons',
+    department: 'Files room',
     name: 'Files Agent',
     role: 'Files & Assets',
-    department: 'files',
+    zone: 'files',
     description: 'Manages project file context, organizes attachments, and extracts structured data.',
-    avatar: filesImg,
     accentColor: '#10b981', // Green
     accentSoft: 'rgba(16, 185, 129, 0.15)',
     status: 'idle',
@@ -114,11 +116,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'marketing-strategist',
+    district: 'commons',
+    department: 'Lounge',
     name: 'Marketing Strategist',
     role: 'Marketing & Positioning',
-    department: 'agents',
+    zone: 'agents',
     description: 'Designs go-to-market strategies, positioning messaging, and campaign narratives.',
-    avatar: marketingImg,
     accentColor: '#eab308', // Yellow
     accentSoft: 'rgba(234, 179, 8, 0.15)',
     status: 'idle',
@@ -128,11 +131,12 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
   },
   {
     id: 'ops-coordinator',
+    district: 'commons',
+    department: 'Reception',
     name: 'Ops Coordinator',
     role: 'Operations & Execution',
-    department: 'files',
+    zone: 'files',
     description: 'Coordinates cross-functional workflows, operational checklists, and timelines.',
-    avatar: opsImg,
     accentColor: '#64748b', // Blue-Gray
     accentSoft: 'rgba(100, 116, 139, 0.15)',
     status: 'idle',
@@ -143,25 +147,22 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
 ];
 
 OFFICE_AGENTS.push(
-  ...SPECIALIST_ROLES.map((role) => ({
-    id: role.id,
-    name: role.name,
-    role: role.group,
-    wing: role.group,
-    roleIds: role.id === 'business-analyst' ? [] : [role.id],
-    department: 'agents' as const,
-    description: role.profile.split('\n')[0].replace('Owns: ', ''),
-    accentColor: specialistColor(role.group),
-    accentSoft: `${specialistColor(role.group)}18`,
-    status: 'idle' as const,
-    capabilities: [role.group, 'Dedicated conversation', 'File context'],
-    systemPrompt: `You are Axon's ${role.name}. ${role.profile}\nBe explicit about what you have actually done versus recommendations. Use available tools when needed; do not claim access to files or services you do not have.`
-  }))
+  ...SPECIALIST_ROLES.map((role): OfficeAgent => {
+    const district = districtById(districtOf(role.group));
+    return {
+      id: role.id,
+      name: role.name,
+      role: role.group,
+      zone: 'agents',
+      district: district.id,
+      department: role.group,
+      roleIds: role.id === 'business-analyst' ? [] : [role.id],
+      description: role.profile.split('\n')[0].replace('Owns: ', ''),
+      accentColor: district.color,
+      accentSoft: `${district.color}18`,
+      status: 'idle',
+      capabilities: [role.group, 'Dedicated conversation', 'File context'],
+      systemPrompt: `You are Axon's ${role.name}. ${role.profile}\nBe explicit about what you have actually done versus recommendations. Use available tools when needed; do not claim access to files or services you do not have.`
+    };
+  })
 );
-
-export function agentsForWing(wing: string): OfficeAgent[] {
-  return OFFICE_AGENTS.filter(
-    (agent) =>
-      !agent.wing || (wing === 'Headquarters' ? HQ_SPECIALISTS.includes(agent.id) : agent.wing === wing)
-  );
-}

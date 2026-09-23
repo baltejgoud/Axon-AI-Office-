@@ -13,18 +13,3 @@ export const SPECIALIST_ROLES = [
 ];
 
 export const SPECIALIST_GROUPS = [...new Set(SPECIALIST_ROLES.map((role) => role.group))];
-export const HQ_SPECIALISTS = [
-  'frontend-developer',
-  'backend-developer',
-  'business-analyst',
-  'business-development-manager',
-  'devops-engineer',
-  'qa-engineer',
-  'ui-ux-designer',
-  'data-engineer'
-];
-export const GROUP_COLORS = ['#3867f6', '#0c8b83', '#9564c5', '#ca7636', '#bf527e', '#4d7b55'];
-
-export function specialistColor(group: string): string {
-  return GROUP_COLORS[SPECIALIST_GROUPS.indexOf(group) % GROUP_COLORS.length] ?? GROUP_COLORS[0];
-}

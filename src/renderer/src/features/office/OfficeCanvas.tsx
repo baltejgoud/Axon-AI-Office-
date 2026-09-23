@@ -21,7 +21,20 @@ import { OfficeScene } from './scene/OfficeScene';
 
 import { useOfficeStore } from './store/officeStore';
 
-import { OFFICE_AGENTS, agentsForWing, type AgentStatus } from './data/officeAgents';
+import { OFFICE_AGENTS, type AgentStatus } from './data/officeAgents';
+
+// Interim floor until the campus lands: the core team and eight specialists.
+const FLOOR_IDS = new Set([
+  'frontend-developer',
+  'backend-developer',
+  'business-analyst',
+  'business-development-manager',
+  'devops-engineer',
+  'qa-engineer',
+  'ui-ux-designer',
+  'data-engineer'
+]);
+const FLOOR_AGENTS = OFFICE_AGENTS.filter((agent) => agent.district === 'commons' || FLOOR_IDS.has(agent.id));
 
 import { OFFICE_ZONES } from './data/officeZones';
 
@@ -94,7 +107,6 @@ export function OfficeCanvas() {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const {
-    activeWing,
     selectedAgentId,
     focusedZoneId,
     agentRuntime,
@@ -105,7 +117,7 @@ export function OfficeCanvas() {
     openOverlay
   } = useOfficeStore();
 
-  const visibleAgents = useMemo(() => agentsForWing(activeWing), [activeWing]);
+  const visibleAgents = FLOOR_AGENTS;
 
   const roster = failed || !is3dEnabled;
 
@@ -193,7 +205,8 @@ export function OfficeCanvas() {
 
     focusZone(id);
 
-    const primary = id === 'agents' ? visibleAgents.find((agent) => agent.wing)?.id : zone.primaryAgentId;
+    const primary =
+      id === 'agents' ? visibleAgents.find((agent) => agent.district !== 'commons')?.id : zone.primaryAgentId;
 
     if (primary) selectAgent(primary);
 

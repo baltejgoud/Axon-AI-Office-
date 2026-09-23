@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { OFFICE_AGENTS, agentsForWing, type AgentStatus } from '../data/officeAgents';
+import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
+import type { DistrictId } from '../campus/districts';
 
 export interface AgentActivity {
   id: string;
@@ -23,8 +24,11 @@ export interface AgentRuntime {
 export type Overlay = 'settings' | 'knowledge';
 
 interface OfficeStoreState {
-  activeWing: string;
-  setWing: (wing: string) => void;
+  /** The district the chips and team strip follow; null follows the camera. */
+  focusDistrict: DistrictId | null;
+  /** A department picked from "Go to department…"; the team strip shows it. */
+  focusDepartment: string | null;
+  setFocus: (district: DistrictId | null, department?: string | null) => void;
   selectedAgentId: string;
   focusedZoneId: string | null;
   agentRuntime: Record<string, AgentRuntime>;
@@ -52,14 +56,9 @@ for (const agent of OFFICE_AGENTS) {
 }
 
 export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
-  activeWing: 'Headquarters',
-  setWing: (wing) => {
-    const agents = agentsForWing(wing);
-    const selected = agents.some((a) => a.id === get().selectedAgentId)
-      ? get().selectedAgentId
-      : (agents.find((a) => a.wing)?.id ?? agents[0].id);
-    set({ activeWing: wing, selectedAgentId: selected, focusedZoneId: null });
-  },
+  focusDistrict: null,
+  focusDepartment: null,
+  setFocus: (district, department = null) => set({ focusDistrict: district, focusDepartment: department }),
   selectedAgentId: 'frontend-developer',
   focusedZoneId: 'agents',
   agentRuntime: initialRuntime,
@@ -69,13 +68,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
-    set({
-      activeWing: agentsForWing(get().activeWing).some((a) => a.id === id)
-        ? get().activeWing
-        : (agent.wing ?? 'Headquarters'),
-      selectedAgentId: id,
-      focusedZoneId: agent.department
-    });
+    set({ selectedAgentId: id, focusedZoneId: agent.zone });
   },
 
   focusZone: (zoneId: string | null) => set({ focusedZoneId: zoneId }),
