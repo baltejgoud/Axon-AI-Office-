@@ -281,7 +281,7 @@ app.on('web-contents-created', (_, contents) => {
       );
       await waitFor('document.querySelectorAll(".roster-card").length === 16', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: artwork, 16 selections, department navigation, catalog search, specialist role context, compact layout, roster, IPC streaming, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: artwork, 16 selections, department navigation, catalog search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),

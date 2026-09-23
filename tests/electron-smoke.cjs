@@ -1,5 +1,5 @@
 // Runs the built application with an isolated profile and a local mock provider.
-// Verifies renderer, IPC, isolation, workspace defaults, and a full streaming
+// Verifies the office-only renderer, IPC, isolation, layered overlays, and a full streaming
 // round-trip including the Authorization header (asserted server-side) and usage.
 const { app } = require('electron');
 const http = require('node:http');
@@ -51,12 +51,8 @@ app.on('web-contents-created', (_, contents) => {
         if (state.version !== 1) throw new Error('Invalid snapshot');
         if (!(state.skills.length > 800) || state.roles.length !== 198) throw new Error('Catalogs missing from snapshot');
         if (typeof require !== 'undefined' || typeof process !== 'undefined') throw new Error('Node exposed in renderer');
-        if (!document.querySelector('.welcome')) throw new Error('Welcome view did not render');
-        const workspaceButton = [...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('Research test'));
-        if (!workspaceButton) throw new Error('Workspace sidebar item missing');
-        workspaceButton.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
-        if (document.querySelector('select[aria-label="AI model"]').value !== 'seed::workspace') throw new Error('Workspace default model was not selected');
+        if (!document.querySelector('.office-viewport')) throw new Error('Office did not render');
+        if (document.querySelector('.sidebar, .chat-view, .return-to-office')) throw new Error('A page other than the office is reachable');
         const id = crypto.randomUUID();
         await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
         const chat = await window.axon.chatCreate(id, 'mock-model', 'research', undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
@@ -67,44 +63,24 @@ app.on('web-contents-created', (_, contents) => {
         if (assistant.usage?.promptTokens !== 7 || assistant.usage?.completionTokens !== 4) throw new Error('Usage not captured: ' + JSON.stringify(assistant.usage));
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
-        // Nested Modal Apply: a picker Modal (SkillPicker/RolePicker) nested inside the workspace/agent
-        // Modal must not have its submit swallowed by the outer form. Drive it through the real UI.
-        const createWorkspaceBtn = document.querySelector('button[aria-label="Create workspace"]');
-        if (!createWorkspaceBtn) throw new Error('Create workspace button missing');
-        createWorkspaceBtn.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
-        const configureBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Configure');
-        if (!configureBtn) throw new Error('Configure button missing');
-        configureBtn.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
-        let dialogs = [...document.querySelectorAll('[role=dialog]')];
-        const outerDialog = dialogs[dialogs.length - 1];
-        const rolesBtn = outerDialog && [...outerDialog.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Roles'));
-        if (!rolesBtn) throw new Error('Roles button missing in workspace modal');
-        rolesBtn.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
-        dialogs = [...document.querySelectorAll('[role=dialog]')];
-        const pickerDialog = dialogs[dialogs.length - 1];
-        const firstRow = pickerDialog && pickerDialog.querySelector('.picker-row input');
-        if (!firstRow) throw new Error('No role rows in picker');
-        firstRow.click();
-        const primaryButtons = pickerDialog.querySelectorAll('.btn-primary');
-        const applyBtn = primaryButtons[primaryButtons.length - 1];
-        if (!applyBtn) throw new Error('Apply button missing in role picker');
-        applyBtn.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
-        dialogs = [...document.querySelectorAll('[role=dialog]')];
-        const remaining = dialogs[0];
-        const chip = remaining && [...remaining.querySelectorAll('.chip')].find(c => c.textContent.trim().length > 0);
-        if (dialogs.length !== 1 || !chip) throw new Error('Nested picker Apply failed');
+        // Layered Esc: a modal opened inside the Settings sheet closes first; the sheet stays open.
+        const wait = () => new Promise(resolve => setTimeout(resolve, 200));
+        document.querySelector('button[aria-label="Office settings"]').click();
+        await wait();
+        if (document.querySelector('.office-overlay h2')?.textContent !== 'Settings') throw new Error('Settings sheet did not open');
+        const addProvider = [...document.querySelectorAll('.office-overlay button')].find(b => b.textContent.includes('Add provider'));
+        if (!addProvider) throw new Error('Add provider button missing');
+        addProvider.click();
+        await wait();
+        if (document.querySelectorAll('[role=dialog]').length !== 2) throw new Error('Provider modal did not open over Settings');
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-        await new Promise(resolve => setTimeout(resolve, 150));
-        const chatNavBtn = [...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.trim().startsWith('Chat'));
-        if (!chatNavBtn) throw new Error('Chat nav button missing');
-        chatNavBtn.click();
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await wait();
+        if (document.querySelectorAll('[role=dialog]').length !== 1 || !document.querySelector('.office-overlay')) throw new Error('Esc did not close only the provider modal');
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await wait();
+        if (document.querySelector('.office-overlay')) throw new Error('Esc did not close the Settings sheet');
         await window.axon.chatDelete(chat.id); await window.axon.providerDelete(id);
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, selection: true, nestedPicker: true, title: document.title };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, selection: true, layeredEscape: true, title: document.title };
       })()`);
       if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
       const sent = JSON.parse(lastBody);
