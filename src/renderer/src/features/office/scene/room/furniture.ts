@@ -685,32 +685,27 @@ export const SOFA_SEAT_HEIGHT = 0.45;
 
 export interface Workstation {
   object: THREE.Group;
-  displays: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>[];
+  displays: THREE.Mesh[];
 }
 
-function display(width: number, height: number, flavor: ScreenFlavor) {
-  const texture = new THREE.CanvasTexture(screenCanvas(flavor));
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1, 0.5);
-  const mesh = new THREE.Mesh(
-    GEOMETRY.plane as THREE.PlaneGeometry,
-    new THREE.MeshStandardMaterial({
-      color: '#0b0f16',
-      emissive: '#ffffff',
-      emissiveMap: texture,
-      emissiveIntensity: 0.04,
-      roughness: 0.35
-    })
-  );
+const screenPlaceholder = new THREE.MeshBasicMaterial({ visible: false });
+
+/**
+ * Where a screen goes. The room collects these and draws every screen as one instanced mesh per
+ * style (see screens.ts), so the placeholder itself is never rendered.
+ */
+function display(width: number, height: number, flavor: ScreenFlavor): THREE.Mesh {
+  const mesh = new THREE.Mesh(GEOMETRY.plane, screenPlaceholder);
   mesh.scale.set(width, height, 1);
   mesh.userData.dynamic = true;
+  mesh.userData.screen = flavor;
+  mesh.castShadow = false;
   return mesh;
 }
 
 function laptop(flavor: ScreenFlavor): {
   object: THREE.Group;
-  display: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  display: THREE.Mesh;
 } {
   const screen = display(0.3, 0.19, flavor);
   screen.position.set(0, 0.11, 0.007);
@@ -730,7 +725,7 @@ function laptop(flavor: ScreenFlavor): {
 
 function monitor(flavor: ScreenFlavor): {
   object: THREE.Group;
-  display: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  display: THREE.Mesh;
 } {
   const screen = display(0.52, 0.3, flavor);
   screen.position.set(0, 0.37, 0.014);

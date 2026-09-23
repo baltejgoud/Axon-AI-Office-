@@ -132,3 +132,21 @@ test('every spot is walkable and reachable from reception', () => {
     assert.ok(grid.isReachable(mask, poi.approach), `${poi.id} unreachable`);
   }
 });
+
+const tiers = require('../src/renderer/src/features/office/scene/people/tiers.ts');
+const P = (id, x, mustBeFull = false, canBeCrowd = true) => ({ id, x, z: 0, mustBeFull, canBeCrowd });
+
+test('full tier keeps required people and fills the rest by distance', () => {
+  const people = [P('a', 50, true, false), P('b', 1), P('c', 2), P('d', 30)];
+  assert.deepEqual([...tiers.chooseFullTier(people, { x: 0, z: 0 }, 3, new Set())].sort(), ['a', 'b', 'c']);
+});
+
+test('required people exceed the budget rather than being dropped', () => {
+  const people = [P('a', 1, true, false), P('b', 2, true, false), P('c', 0)];
+  assert.deepEqual([...tiers.chooseFullTier(people, { x: 0, z: 0 }, 1, new Set())].sort(), ['a', 'b']);
+});
+
+test('hysteresis keeps someone already shown', () => {
+  const people = [P('near', 10), P('kept', 12)];
+  assert.deepEqual([...tiers.chooseFullTier(people, { x: 0, z: 0 }, 1, new Set(['kept']))], ['kept']);
+});

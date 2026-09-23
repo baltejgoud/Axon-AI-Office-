@@ -136,9 +136,7 @@ export function OfficeCanvas() {
 
         () => setFailed(true),
 
-        () => setLoading(false),
-
-        visibleAgents
+        () => setLoading(false)
       );
 
       scene.current = world;
@@ -176,7 +174,7 @@ export function OfficeCanvas() {
 
       scene.current = null;
     };
-  }, [roster, selectAgent, visibleAgents]);
+  }, [roster, selectAgent]);
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);

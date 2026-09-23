@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { hashString } from '../../simulation/random';
 import { yawTowards, type AgentBehaviorState, type AgentView, type HeldItem } from '../../simulation/types';
-import { GEOMETRY, box, cylinder } from '../room/materials';
+import { box, cylinder } from '../room/materials';
 import { appearanceFor } from './appearance';
 import { applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
 import { WALK_STRIDE, computePose, easePose, neutralPose, type Pose } from './poses';
@@ -199,12 +199,19 @@ export class OfficeAgentCharacter {
   }
 
   private buildOutlines(): THREE.Mesh[] {
+    // Inverted hull, pushed out along the normals, so merged body parts outline cleanly.
     const material = new THREE.MeshBasicMaterial({ color: this.accent, side: THREE.BackSide });
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n  transformed += normal * 0.016;'
+      );
+    };
     return this.rig.outlinable.map((mesh) => {
       const outline = new THREE.Mesh(mesh.geometry, material);
       outline.position.copy(mesh.position);
       outline.rotation.copy(mesh.rotation);
-      outline.scale.copy(mesh.scale).multiplyScalar(mesh.geometry === GEOMETRY.box ? 1.14 : 1.1);
+      outline.scale.copy(mesh.scale);
       outline.castShadow = false;
       mesh.parent!.add(outline);
       return outline;
@@ -216,6 +223,9 @@ export class OfficeAgentCharacter {
     this.halo.material.dispose();
     const outlineMaterial = this.outlines?.[0]?.material as THREE.Material | undefined;
     outlineMaterial?.dispose();
+    this.root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.userData.ownsGeometry) object.geometry.dispose();
+    });
     this.root.removeFromParent();
   }
 }

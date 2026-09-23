@@ -218,3 +218,86 @@ export function screenCanvas(flavor: ScreenFlavor): HTMLCanvasElement {
   screenCanvases.set(flavor, canvas);
   return canvas;
 }
+
+// ---------------------------------------------------------------- district floors
+
+const floorTextures = new Map<string, THREE.CanvasTexture>();
+
+function canvasTexture(
+  key: string,
+  size: number,
+  draw: (g: CanvasRenderingContext2D, random: () => number) => void
+): THREE.CanvasTexture {
+  const cached = floorTextures.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  let seed = key.length * 7919 + 17;
+  const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  draw(g, random);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 4;
+  floorTextures.set(key, texture);
+  return texture;
+}
+
+/** Carpet tiles: fine speckle with faint tile seams. Neutral grey; the material tints it. One tile covers 2 m. */
+export function carpetTexture(): THREE.CanvasTexture {
+  return canvasTexture('carpet', 512, (g, random) => {
+    g.fillStyle = '#e4e4e4';
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 9000; i++) {
+      const shade = 200 + Math.floor(random() * 55);
+      g.fillStyle = `rgb(${shade},${shade},${shade})`;
+      g.fillRect(random() * 512, random() * 512, 1.6, 1.6);
+    }
+    g.fillStyle = 'rgba(120,120,120,0.18)';
+    g.fillRect(0, 0, 512, 2);
+    g.fillRect(0, 0, 2, 512);
+    g.fillRect(0, 255, 512, 1.5);
+    g.fillRect(255, 0, 1.5, 512);
+  });
+}
+
+/** Polished concrete: soft clouds and a few hairline cracks. One tile covers 6 m. */
+export function concreteTexture(): THREE.CanvasTexture {
+  return canvasTexture('concrete', 512, (g, random) => {
+    g.fillStyle = '#e6e3de';
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 70; i++) {
+      const x = random() * 512;
+      const y = random() * 512;
+      const r = 20 + random() * 70;
+      const gradient = g.createRadialGradient(x, y, 0, x, y, r);
+      const tone = random() < 0.5 ? '255,255,255' : '160,155,148';
+      gradient.addColorStop(0, `rgba(${tone},0.12)`);
+      gradient.addColorStop(1, `rgba(${tone},0)`);
+      g.fillStyle = gradient;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    g.strokeStyle = 'rgba(120,115,110,0.25)';
+    g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, 511, 511);
+  });
+}
+
+/** Terrazzo: a warm stone base with scattered coloured chips. One tile covers 3 m. */
+export function terrazzoTexture(): THREE.CanvasTexture {
+  return canvasTexture('terrazzo', 512, (g, random) => {
+    g.fillStyle = '#f1ece4';
+    g.fillRect(0, 0, 512, 512);
+    const chips = ['#c9b8a3', '#9fb0b8', '#d9a88a', '#b9c2a5', '#8f8a86', '#e8d8c4'];
+    for (let i = 0; i < 900; i++) {
+      g.fillStyle = chips[Math.floor(random() * chips.length)];
+      g.beginPath();
+      const x = random() * 512;
+      const y = random() * 512;
+      const r = 1 + random() * 4;
+      g.ellipse(x, y, r, r * (0.5 + random() * 0.6), random() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+}

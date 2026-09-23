@@ -10,10 +10,21 @@ import {
   type Wall
 } from '../../simulation/layout';
 import type { ScreenState } from '../../simulation/types';
+import { DISTRICTS, type FloorKind } from '../../campus/districts';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
-import { GEOMETRY, PALETTE, box, mat, part, woodFloorTexture } from './materials';
-
-const SCREEN_GLOW: Record<ScreenState, number> = { off: 0.05, on: 0.55, active: 1.05 };
+import {
+  GEOMETRY,
+  PALETTE,
+  box,
+  carpetTexture,
+  concreteTexture,
+  mat,
+  part,
+  terrazzoTexture,
+  woodFloorTexture,
+  type ScreenFlavor
+} from './materials';
+import { DeskScreens, type ScreenSlot } from './screens';
 
 export interface OfficeRoom {
   root: THREE.Group;
@@ -66,27 +77,33 @@ function wallMesh(w: Wall): THREE.Group {
   return g;
 }
 
-/** Windows, wood slats and framed art on the two full-height walls. */
+/** A run of tall windows along one of the two full-height perimeter walls. */
+function windowBays(g: THREE.Group, alongX: boolean, fixed: number, from: number, to: number): void {
+  const glassMat = mat(PALETTE.window, { emissive: '#e8f3fb', emissiveIntensity: 0.35, roughness: 0.2 });
+  const bay = 3.6;
+  const pitch = 6;
+  for (let start = from + 1.2; start + bay <= to - 1; start += pitch) {
+    const centre = start + bay / 2;
+    const at = (along: number, y: number, depth = 0): [number, number, number] =>
+      alongX ? [along, y, fixed + depth] : [fixed + depth, y, along];
+    const size = (length: number, height: number, thick: number): [number, number, number] =>
+      alongX ? [length, height, thick] : [thick, height, length];
+    const pane = part(GEOMETRY.box, glassMat, size(bay, 1.9, 0.02), at(centre, 1.45));
+    pane.castShadow = false;
+    g.add(pane, box(PALETTE.white, size(bay + 0.1, 0.05, 0.08), at(centre, 0.48, 0.03)));
+    const mullions = 3;
+    for (let i = 0; i <= mullions; i++)
+      g.add(box(PALETTE.darkMetal, size(0.04, 1.9, 0.03), at(start + (i * bay) / mullions, 1.45, 0.01)));
+    g.add(box(PALETTE.darkMetal, size(bay, 0.04, 0.03), at(centre, 2.4, 0.01)));
+  }
+}
+
+/** Windows on the tall perimeter walls; wood slats, framed art and a clock on the Commons wall. */
 function wallDecor(): THREE.Group {
   const g = new THREE.Group();
-  const innerLeft = ROOM.minX + WALL_THICKNESS / 2 + 0.01;
-  const innerBack = ROOM.minZ + WALL_THICKNESS / 2 + 0.01;
-  const glassMat = mat(PALETTE.window, { emissive: '#e8f3fb', emissiveIntensity: 0.35, roughness: 0.2 });
-  for (const [from, to] of [
-    [-8.6, -4.8],
-    [-3.4, 2.8],
-    [4.6, 8.0]
-  ]) {
-    const length = to - from;
-    const centre = (from + to) / 2;
-    const pane = part(GEOMETRY.box, glassMat, [0.02, 1.5, length], [innerLeft, 1.55, centre]);
-    pane.castShadow = false;
-    g.add(pane, box(PALETTE.white, [0.08, 0.05, length + 0.1], [innerLeft + 0.03, 0.78, centre]));
-    const panes = Math.round(length / 1.2);
-    for (let i = 0; i <= panes; i++)
-      g.add(box(PALETTE.darkMetal, [0.03, 1.5, 0.04], [innerLeft + 0.01, 1.55, from + (i * length) / panes]));
-    g.add(box(PALETTE.darkMetal, [0.03, 0.04, length], [innerLeft + 0.01, 2.3, centre]));
-  }
+  windowBays(g, false, ROOM.minX + WALL_THICKNESS / 2 + 0.01, ROOM.minZ, ROOM.maxZ);
+  windowBays(g, true, ROOM.minZ + WALL_THICKNESS / 2 + 0.01, ROOM.minX, ROOM.maxX);
+  const innerBack = -9 + WALL_THICKNESS / 2 + 0.01;
   for (const [from, to] of [
     [-12.7, -11.6],
     [11.9, 12.8]
@@ -125,24 +142,78 @@ function wallDecor(): THREE.Group {
   return g;
 }
 
-function floor(): THREE.Group {
-  const width = ROOM.maxX - ROOM.minX;
-  const depth = ROOM.maxZ - ROOM.minZ;
-  const texture = woodFloorTexture();
-  texture.repeat.set(width / 4, depth / 4);
+/** Floor finish per district: texture, tint and how many metres one texture tile covers. */
+const FLOORS: Record<FloorKind | 'corridor', { texture: () => THREE.Texture; tint: string; tile: number }> = {
+  corridor: { texture: concreteTexture, tint: '#f7f4ef', tile: 6 },
+  oak: { texture: woodFloorTexture, tint: '#ffffff', tile: 4 },
+  walnut: { texture: woodFloorTexture, tint: '#a9876a', tile: 4 },
+  'carpet-blue': { texture: carpetTexture, tint: '#c4cfdc', tile: 2 },
+  'carpet-sage': { texture: carpetTexture, tint: '#c9d6c2', tile: 2 },
+  'carpet-grey': { texture: carpetTexture, tint: '#d0d3d7', tile: 2 },
+  concrete: { texture: concreteTexture, tint: '#ffffff', tile: 6 },
+  terrazzo: { texture: terrazzoTexture, tint: '#ffffff', tile: 3 }
+};
+
+function floorPlane(
+  kind: FloorKind | 'corridor',
+  minX: number,
+  maxX: number,
+  minZ: number,
+  maxZ: number,
+  lift: number
+): THREE.Mesh {
+  const finish = FLOORS[kind];
+  const width = maxX - minX;
+  const depth = maxZ - minZ;
+  const texture = finish.texture().clone();
+  texture.repeat.set(width / finish.tile, depth / finish.tile);
+  const material = new THREE.MeshStandardMaterial({
+    map: texture,
+    color: finish.tint,
+    roughness: kind.startsWith('carpet') ? 0.95 : 0.72,
+    polygonOffset: true,
+    polygonOffsetFactor: -lift,
+    polygonOffsetUnits: -lift
+  });
   const surface = part(
     GEOMETRY.plane,
-    new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }),
+    material,
     [width, depth, 1],
-    [(ROOM.minX + ROOM.maxX) / 2, 0, 0],
+    [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
     [-Math.PI / 2, 0, 0]
   );
   surface.castShadow = false;
+  return surface;
+}
+
+/** Pale stone corridors, and each district on its own floor with a thin inlay in its colour. */
+function floor(): THREE.Group {
+  const g = new THREE.Group();
+  const width = ROOM.maxX - ROOM.minX;
+  const depth = ROOM.maxZ - ROOM.minZ;
+  g.add(floorPlane('corridor', ROOM.minX, ROOM.maxX, ROOM.minZ, ROOM.maxZ, 0));
+  for (const district of DISTRICTS) {
+    const { minX, maxX, minZ, maxZ } = district.bounds;
+    const pad = 0.6;
+    g.add(floorPlane(district.floor, minX - pad, maxX + pad, minZ - pad, maxZ + pad, 1));
+    const inlay = mat(district.color, { roughness: 0.5 });
+    const y = 0.004;
+    const t = 0.07;
+    for (const [x, z, w, d] of [
+      [(minX + maxX) / 2, minZ - pad, maxX - minX + pad * 2, t],
+      [(minX + maxX) / 2, maxZ + pad, maxX - minX + pad * 2, t],
+      [minX - pad, (minZ + maxZ) / 2, t, maxZ - minZ + pad * 2],
+      [maxX + pad, (minZ + maxZ) / 2, t, maxZ - minZ + pad * 2]
+    ]) {
+      const line = part(GEOMETRY.box, inlay, [w, 0.004, d], [x, y, z]);
+      line.castShadow = false;
+      g.add(line);
+    }
+  }
   // The slab's top sits just under the floor; coplanar faces would z-fight into grey streaks.
   const slab = box(PALETTE.slab, [width + 0.3, 0.32, depth + 0.3], [(ROOM.minX + ROOM.maxX) / 2, -0.18, 0]);
   slab.castShadow = false;
-  const g = new THREE.Group();
-  g.add(surface, slab);
+  g.add(slab);
   return g;
 }
 
@@ -209,7 +280,7 @@ export function buildOffice(): OfficeRoom {
       lights.push({ poiId: item.kind === 'printer' ? 'printer' : 'cafe-machine', mesh: built.light });
   }
 
-  const displays = new Map<string, THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>[]>();
+  const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
   for (const setup of DESK_SETUPS) {
     const seat = poiById(setup.poiId);
     const station = workstation(
@@ -221,13 +292,27 @@ export function buildOffice(): OfficeRoom {
     station.object.position.set(seat.position.x, 0, seat.position.z);
     station.object.rotation.y = seat.facing;
     root.add(station.object);
-    displays.set(setup.poiId, station.displays);
+    stations.push({ deskId: setup.poiId, displays: station.displays });
   }
 
+  // Every screen becomes one instance in a shared mesh; the placeholders go away.
+  root.updateMatrixWorld(true);
+  const slots: ScreenSlot[] = [];
+  for (const { deskId, displays } of stations)
+    for (const display of displays) {
+      slots.push({
+        deskId,
+        flavor: display.userData.screen as ScreenFlavor,
+        matrix: display.matrixWorld.clone()
+      });
+      display.removeFromParent();
+    }
+  const screens = new DeskScreens(slots);
+
   mergeStatic(root);
+  root.add(screens.object);
 
   const seatKinds = new Map(FURNITURE.map((item) => [item.id, item.kind]));
-  const glow = new Map<string, number>();
 
   return {
     root,
@@ -236,20 +321,8 @@ export function buildOffice(): OfficeRoom {
       const kind = seatKinds.get(`${poiId}-seat`);
       return (kind && SEAT_HEIGHT[kind]) ?? 0.48;
     },
-    update(dt, elapsed, screens, busy) {
-      const ease = 1 - Math.exp(-dt * 4);
-      for (const [deskId, meshes] of displays) {
-        const state = screens(deskId);
-        const current = glow.get(deskId) ?? SCREEN_GLOW.off;
-        const next = current + (SCREEN_GLOW[state] - current) * ease;
-        glow.set(deskId, next);
-        for (const mesh of meshes) {
-          mesh.material.emissiveIntensity = next;
-          // Real work scrolls the screen; idle desks sit still.
-          if (state === 'active' && mesh.material.emissiveMap)
-            mesh.material.emissiveMap.offset.y = (elapsed * 0.035) % 0.5;
-        }
-      }
+    update(dt, elapsed, screenState, busy) {
+      screens.update(dt, elapsed, screenState);
       for (const { poiId, mesh } of lights) {
         const material = mesh.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = busy(poiId)
@@ -258,6 +331,7 @@ export function buildOffice(): OfficeRoom {
       }
     },
     dispose() {
+      screens.dispose();
       root.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return;
         if (!Object.values(GEOMETRY).includes(object.geometry as never)) object.geometry.dispose();
