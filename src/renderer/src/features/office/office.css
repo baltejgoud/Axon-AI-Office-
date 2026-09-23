@@ -137,33 +137,6 @@
   pointer-events: auto;
   white-space: nowrap;
 }
-.office-zone-label {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  border: 1px solid #fff;
-  background: #fffffff0;
-  border-radius: 11px;
-  padding: 9px 12px;
-  color: #3565f4;
-  box-shadow: 0 4px 20px #263c701a;
-  backdrop-filter: blur(8px);
-}
-.office-zone-label span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-.office-zone-label strong {
-  color: #172843;
-  font-size: 12px;
-  font-weight: 650;
-}
-.office-zone-label small {
-  color: #687797;
-  font-size: 9px;
-}
 .office-person-label {
   border: 1px solid #fff;
   border-radius: 6px;
@@ -1003,15 +976,6 @@ sized for the side panel. */
   .office-activity-panel {
     min-width: 300px;
   }
-  .office-zone-label {
-    padding: 6px 8px;
-  }
-  .office-zone-label small {
-    display: none;
-  }
-  .office-zone-label strong {
-    font-size: 10px;
-  }
   .office-person-label {
     font-size: 9px;
     padding: 4px 5px;
@@ -1029,9 +993,6 @@ sized for the side panel. */
   }
   .office-team-dock {
     padding: 8px 4px;
-  }
-  .office-zone-label svg {
-    display: none;
   }
   .office-person-label {
     font-size: 8px;

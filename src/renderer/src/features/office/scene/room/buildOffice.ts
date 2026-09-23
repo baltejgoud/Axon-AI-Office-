@@ -11,7 +11,6 @@ import {
 } from '../../simulation/layout';
 import type { ScreenState } from '../../simulation/types';
 import { DISTRICTS, type FloorKind } from '../../campus/districts';
-import { DEPARTMENT_ANCHORS } from '../../simulation/layout';
 import { COMMONS_BACK_Z } from '../../campus/commons';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
 import { animateSteam } from './kit';
@@ -142,43 +141,6 @@ function wallDecor(): THREE.Group {
   return g;
 }
 
-/** A header band on each department's board: its name on the district colour. */
-function departmentSigns(): THREE.Group {
-  const g = new THREE.Group();
-  for (const district of DISTRICTS) {
-    if (district.id === 'commons' || district.id === 'leadership') continue;
-    for (const name of district.departments) {
-      const anchor = DEPARTMENT_ANCHORS[name];
-      if (!anchor) continue;
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 64;
-      const context = canvas.getContext('2d')!;
-      context.fillStyle = district.color;
-      context.fillRect(0, 0, 512, 64);
-      context.fillStyle = '#ffffff';
-      context.font = '600 30px Inter, "Segoe UI", system-ui, sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      const label = name.length > 26 ? `${name.slice(0, 25)}…` : name;
-      context.fillText(label, 256, 33, 490);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 4;
-      const band = part(
-        GEOMETRY.plane,
-        new THREE.MeshBasicMaterial({ map: texture }),
-        [2.0, 0.25, 1],
-        [anchor.x, 2.13, anchor.z + 0.03]
-      );
-      band.castShadow = false;
-      band.receiveShadow = false;
-      g.add(band);
-    }
-  }
-  return g;
-}
-
 /** Floor finish per district: texture, tint and how many metres one texture tile covers. */
 const FLOORS: Record<FloorKind | 'corridor', { texture: () => THREE.Texture; tint: string; tile: number }> = {
   corridor: { texture: concreteTexture, tint: '#f7f4ef', tile: 6 },
@@ -304,7 +266,7 @@ function mergeStatic(root: THREE.Group): void {
 
 export function buildOffice(): OfficeRoom {
   const root = new THREE.Group();
-  root.add(floor(), wallDecor(), departmentSigns());
+  root.add(floor(), wallDecor());
   for (const w of WALLS) root.add(wallMesh(w));
 
   const lights: { spots: readonly string[]; mesh: THREE.Mesh; steam?: THREE.Object3D }[] = [];

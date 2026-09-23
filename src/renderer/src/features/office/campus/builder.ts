@@ -67,7 +67,8 @@ export type FurnitureKind =
   | 'exec-credenza'
   | 'wall-art'
   | 'ledge-art'
-  | 'exec-rug';
+  | 'exec-rug'
+  | 'sign-post';
 
 export interface FurnitureItem {
   id: string;

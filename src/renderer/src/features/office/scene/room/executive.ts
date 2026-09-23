@@ -97,9 +97,9 @@ function artwork(width: number, height: number, seed: number): THREE.Group {
     const bh = (0.2 + random() * 0.5) * (height - 0.1);
     const x = (random() - 0.5) * (width - 0.1 - bw);
     const y = (random() - 0.5) * (height - 0.1 - bh);
-    g.add(
-      box(ART_PALETTE[Math.floor(random() * ART_PALETTE.length)], [bw, bh, 0.004], [x, y, 0.025 + i * 0.001])
-    );
+    const block = box(ART_PALETTE[Math.floor(random() * ART_PALETTE.length)], [bw, bh, 0.004], [x, y, 0.025 + i * 0.001]);
+    block.castShadow = false;
+    g.add(block);
   }
   return g;
 }
@@ -110,10 +110,15 @@ export function wallArt(item: FurnitureItem): THREE.Group {
   const g = group();
   const boards = Math.max(1, Math.round(w / 0.3));
   const boardWidth = w / boards;
-  for (let i = 0; i < boards; i++)
-    g.add(
-      box(i % 2 ? WALNUT : WALNUT_LIGHT, [boardWidth - 0.01, 2.3, 0.015], [-w / 2 + boardWidth * (i + 0.5), 1.15, 0])
+  for (let i = 0; i < boards; i++) {
+    const board = box(
+      i % 2 ? WALNUT : WALNUT_LIGHT,
+      [boardWidth - 0.01, 2.3, 0.015],
+      [-w / 2 + boardWidth * (i + 0.5), 1.15, 0]
     );
+    board.castShadow = false;
+    g.add(board);
+  }
   const painting = artwork(1.1, 0.75, item.x * 3 + item.z);
   painting.position.set(0, 1.62, 0.02);
   g.add(painting);
@@ -140,44 +145,52 @@ const RUGS = [
   ['#2f5a44', '#eadfc2', '#c9a24b'],
   ['#3a3d42', '#e6dccb', '#a24b2a']
 ] as const;
-const rugLayers = new Map<string, THREE.MeshStandardMaterial>();
+const rugMaterials = new Map<number, THREE.MeshStandardMaterial>();
 
-/** Layered flat rug material, pulled toward the camera a little more for each layer so none z-fight. */
-function rugLayer(color: string, layer: number): THREE.MeshStandardMaterial {
-  const key = `${color}|${layer}`;
-  let material = rugLayers.get(key);
-  if (!material) {
-    material = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 1,
-      polygonOffset: true,
-      polygonOffsetFactor: -2 - layer,
-      polygonOffsetUnits: -2 - layer
-    });
-    rugLayers.set(key, material);
-  }
+/** One painted rug per palette: a border, an inner line, a plain field and a round medallion. */
+function rugMaterial(palette: number): THREE.MeshStandardMaterial {
+  let material = rugMaterials.get(palette);
+  if (material) return material;
+  const [border, field, accent] = RUGS[palette];
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 432;
+  const ctx = canvas.getContext('2d')!;
+  const { width: w, height: h } = canvas;
+  ctx.fillStyle = border;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = field;
+  ctx.fillRect(14, 14, w - 28, h - 28);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 5;
+  ctx.strokeRect(24, 24, w - 48, h - 48);
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, 52, 0, Math.PI * 2);
+  ctx.fillStyle = border;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, 28, 0, Math.PI * 2);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: 1,
+    // Pulled toward the camera in the depth test so it never z-fights the floor beneath.
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
+  });
+  rugMaterials.set(palette, material);
   return material;
 }
 
-/** A rug with a border, a plain field and a round medallion in the middle. */
-export function execRug(item: FurnitureItem): THREE.Group {
-  const { w, d } = item;
-  const [border, field, accent] = RUGS[Math.abs(Math.round(item.x * 3 + item.z)) % RUGS.length];
-  const flat = (material: THREE.Material, size: [number, number], y: number, disc = false) => {
-    const mesh = part(disc ? GEOMETRY.disc : GEOMETRY.plane, material, [size[0], size[1], 1], [0, y, 0], [
-      -Math.PI / 2,
-      0,
-      0
-    ]);
-    mesh.castShadow = false;
-    return mesh;
-  };
-  return group(
-    flat(rugLayer(border, 0), [w, d], 0.012),
-    flat(rugLayer(field, 1), [w - 0.36, d - 0.36], 0.013),
-    flat(rugLayer(accent, 2), [w - 0.52, d - 0.52], 0.0135),
-    flat(rugLayer(field, 3), [w - 0.6, d - 0.6], 0.014),
-    flat(rugLayer(border, 4), [1.3, 1.3], 0.015, true),
-    flat(rugLayer(accent, 5), [0.7, 0.7], 0.016, true)
-  );
+/** A patterned rug, its palette chosen by where it lies. */
+export function execRug(item: FurnitureItem): THREE.Mesh {
+  const palette = Math.abs(Math.round(item.x * 3 + item.z)) % RUGS.length;
+  const mesh = part(GEOMETRY.plane, rugMaterial(palette), [item.w, item.d, 1], [0, 0.012, 0], [-Math.PI / 2, 0, 0]);
+  mesh.castShadow = false;
+  return mesh;
 }

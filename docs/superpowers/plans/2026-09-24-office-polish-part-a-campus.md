@@ -447,7 +447,7 @@ export interface SignSpec {
   color: string;         // panel colour (district colour; rooms use the Commons colour)
   x: number; y: number; z: number; // bottom-centre of the panel
   width: number; height: number;   // panel size at scale 1, metres
-  letter: number;        // cap height of the title at scale 1, metres
+  letter: number;        // font size of the title at scale 1, metres (on-screen text size = letter · scale · 0.77 / metresPerPixel)
   hanging: boolean;      // leans 0.2 rad toward the camera, with two cables above
   maxScale: number;      // growth limit (departments: never wider than their department)
 }
@@ -458,7 +458,7 @@ export function titleAbbreviation(roleName: string): string;
 ```
 
 Constants and rules:
-- **District sign:** 2.4 × 0.8 m, `letter` 0.42, `maxScale` 9, mounted at `y` 2.6 on its post, not hanging.
+- **District sign:** 2.4 × 0.8 m, `letter` 0.36, `maxScale` 9, mounted at `y` 2.6 on its post, not hanging.
 - **Department sign:** 2.6 × 0.55 m, `letter` 0.2, hanging, `y` 2.7, at the department's back strip: `(anchor.x, bounds.minZ + 1.1)`. `maxScale = departmentWidth / 2.6`.
 - **Room sign:** 1.8 × 0.45 m, `letter` 0.18, hanging, `maxScale` 3, at `ROOM_SIGN_POINTS`.
 - **Nameplate:** 0.5 × 0.16 m, `letter` 0.08, `maxScale` 1, on the office's front glass at `(cx + 1.15, 1.5, bottom + 0.03)`. `title` is `titleAbbreviation(role name)` of the office's occupant; the text in parentheses at the end of the name, else the whole name.
@@ -467,18 +467,20 @@ Constants and rules:
   - district: `near` 0.25, otherwise 1;
   - department and room: `far` 0, otherwise 1;
   - nameplate: `near` 1, otherwise 0.
-- **District sign positions** (`districts.ts`), each in the corridor just outside its district's corner nearest the Commons:
+- **District sign positions** (`districts.ts`), as built: just in front of the middle of each district's **front edge**, so from afar each sign rises over its own district and never over a neighbour. The first try, at the corners nearest the Commons, crowded the signs together and the Commons and Business signs overlapped. The Commons has Business in front of it, so its sign stands on its right-hand side.
 
 | id | position |
 |---|---|
-| commons | (−18.8, 15.9) |
-| engineering | (−24.3, 0) |
-| product | (−17.2, −16.4) |
-| design | (24.2, −18.2) |
-| leadership | (40.2, −18.2) |
-| ai-data | (24.2, −2) |
-| business | (−17.2, 20.6) |
-| people-ops | (24.2, 17.2) |
+| commons | (20.9, 1) |
+| engineering | (−42.5, 31.8) |
+| product | (0, −16.7) |
+| design | (29, −18.2) |
+| leadership | (52, −18.2) |
+| ai-data | (42.5, 8.8) |
+| business | (0, 36.8) |
+| people-ops | (42.5, 36.8) |
+
+- **As built, sizes are tighter:** department signs 2.8 × 0.44 m and room signs 1.6 × 0.34 m. The Café sign hangs over the island, clear of the Files room sign. `letter` is the title's font size (the on-screen text size is `letter · scale · 0.77 / metresPerPixel`). All signs but nameplates turn to face the camera's yaw (`SignSpec.faceCamera`). Squared to +z they read as slanted banners at the whole-campus view, so this replaces the first half of deviation 2.
 
 `SignLayer` (`scene/room/signs.ts`):
 - **Atlas:** one 2048 × 1024 canvas texture (sRGB, anisotropy 4) with a slot per sign. District slots are 512 × 170, department 512 × 110, room 384 × 110 and nameplate 256 × 80, packed in rows. Each slot holds a rounded panel in `color`, the title in white `600` Inter, a second line when a department name is longer than 22 characters (split at the space nearest the middle), and the subtitle at 60% size. One extra dark pixel block (`#1f2430`) is used for the rims and cables.

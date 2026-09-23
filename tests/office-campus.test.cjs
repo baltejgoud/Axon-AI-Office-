@@ -155,6 +155,68 @@ test('each executive office is furnished', () => {
   assert.ok(backRow.every((w) => w.kind === 'solid'));
 });
 
+const signs = require('../src/renderer/src/features/office/campus/signs.ts');
+
+test('signs: one per district, per department in shared districts, per Commons room, per executive', () => {
+  const of = (k) => signs.SIGNS.filter((s) => s.kind === k);
+  assert.equal(of('district').length, 8);
+  assert.equal(of('department').length, 19);
+  assert.deepEqual(
+    of('room')
+      .map((s) => s.target)
+      .sort(),
+    ['cafe', 'chat', 'files', 'knowledge', 'reception', 'workspaces']
+  );
+  assert.deepEqual(
+    of('nameplate')
+      .map((s) => s.title)
+      .sort(),
+    ['CEO', 'CFO', 'CGO', 'CIO', 'CMO', 'COO', 'CPO', 'CRO', 'CSO', 'CTO']
+  );
+  assert.equal(new Set(signs.SIGNS.map((s) => s.id)).size, signs.SIGNS.length);
+});
+
+test('district signs stand in the corridor beside their own district', () => {
+  const gap = (p, b) =>
+    Math.hypot(Math.max(b.minX - p.x, 0, p.x - b.maxX), Math.max(b.minZ - p.z, 0, p.z - b.maxZ));
+  for (const s of signs.SIGNS.filter((x) => x.kind === 'district')) {
+    const own = districts.districtById(s.target).bounds;
+    assert.ok(gap(s, own) <= 3, s.id);
+    for (const d of districts.DISTRICTS)
+      if (d.id !== s.target) assert.ok(!inside(s, d.bounds), `${s.id} inside ${d.id}`);
+    assert.ok(layout.FURNITURE.some((f) => f.kind === 'sign-post' && f.x === s.x && f.z === s.z), s.id);
+  }
+});
+
+test('department signs hang over their department’s back strip', () => {
+  for (const s of signs.SIGNS.filter((x) => x.kind === 'department')) {
+    const b = layout.DEPARTMENT_BOUNDS[s.target];
+    assert.ok(s.x > b.minX && s.x < b.maxX && s.z > b.minZ && s.z < b.minZ + 2.2, s.id);
+    assert.ok(s.width * s.maxScale <= b.maxX - b.minX + 1e-6, s.id);
+  }
+});
+
+test('signs are true size up close and readable from afar, within their cap', () => {
+  const px = (s, mpp) => (signs.signScale(s, mpp) * s.letter * 0.77) / mpp;
+  for (const s of signs.SIGNS) {
+    assert.equal(signs.signScale(s, 0.005), 1, s.id);
+    assert.ok(signs.signScale(s, 0.2) <= s.maxScale + 1e-9, s.id);
+  }
+  for (const s of signs.SIGNS.filter((x) => x.kind === 'district')) assert.ok(px(s, 0.146) >= 16 - 1e-6, s.id);
+});
+
+test('sign visibility by zoom tier, and executive titles', () => {
+  assert.equal(signs.signOpacity('district', 'far'), 1);
+  assert.equal(signs.signOpacity('district', 'near'), 0.25);
+  assert.equal(signs.signOpacity('department', 'far'), 0);
+  assert.equal(signs.signOpacity('department', 'middle'), 1);
+  assert.equal(signs.signOpacity('room', 'far'), 0);
+  assert.equal(signs.signOpacity('nameplate', 'middle'), 0);
+  assert.equal(signs.signOpacity('nameplate', 'near'), 1);
+  assert.equal(signs.titleAbbreviation('Chief Executive Officer (CEO)'), 'CEO');
+  assert.equal(signs.titleAbbreviation('Board Advisor'), 'Board Advisor');
+});
+
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });

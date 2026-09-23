@@ -499,6 +499,8 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       const built = cafeCounter(itemDef);
       return { object: built.group, light: built.light, steam: built.steam };
     }
+    case 'sign-post':
+      return { object: props.signPost() };
     case 'exec-desk':
       return { object: exec.execDesk(itemDef) };
     case 'exec-chair':

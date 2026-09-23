@@ -21,6 +21,12 @@ export interface District {
   /** Label and minimap colour; dark enough for white text and for text on white (AA). */
   color: string;
   bounds: Bounds;
+  /**
+   * Where the district's sign stands: just in front of the middle of its front edge, so from afar the
+   * sign rises over its own district and never over a neighbour. The Commons, with Business in front
+   * of it, has its sign on its right-hand side instead.
+   */
+  sign: { x: number; z: number };
   /** Department cells: columns along x, rows along z. */
   grid: [cols: number, rows: number];
   /** Catalog department (group) names, in layout order. */
@@ -41,6 +47,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Commons',
     color: '#9a6414',
     bounds: { minX: -20, maxX: 20, minZ: -15, maxZ: 17 },
+    sign: { x: 20.9, z: 1 },
     grid: [1, 1],
     departments: [],
     flavor: 'document',
@@ -53,6 +60,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Engineering',
     color: '#2f5bd3',
     bounds: { minX: -60, maxX: -25, minZ: -31, maxZ: 31 },
+    sign: { x: -42.5, z: 31.8 },
     grid: [3, 3],
     departments: [
       'Web & Frontend',
@@ -75,6 +83,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Product',
     color: '#7c3aed',
     bounds: { minX: -16, maxX: 16, minZ: -36, maxZ: -17.5 },
+    sign: { x: 0, z: -16.7 },
     grid: [3, 1],
     departments: ['Product Management', 'Project Management', 'Engineering Management'],
     flavor: 'document',
@@ -87,6 +96,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Design',
     color: '#c0267a',
     bounds: { minX: 25, maxX: 38, minZ: -36, maxZ: -19 },
+    sign: { x: 29, z: -18.2 },
     grid: [1, 1],
     departments: ['Design'],
     flavor: 'design',
@@ -99,6 +109,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Leadership',
     color: '#0f5e57',
     bounds: { minX: 41, maxX: 60, minZ: -36, maxZ: -19 },
+    sign: { x: 52, z: -18.2 },
     grid: [5, 2],
     departments: ['Executive Leadership'],
     flavor: 'document',
@@ -111,6 +122,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'AI & Data',
     color: '#0e7490',
     bounds: { minX: 25, maxX: 60, minZ: -11, maxZ: 8 },
+    sign: { x: 42.5, z: 8.8 },
     grid: [1, 1],
     departments: ['AI, ML & Data'],
     flavor: 'data',
@@ -123,6 +135,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Business',
     color: '#b4461b',
     bounds: { minX: -16, maxX: 16, minZ: 19.5, maxZ: 36 },
+    sign: { x: 0, z: 36.8 },
     grid: [4, 1],
     departments: ['Sales Management', 'Marketing Management', 'Customer Success', 'Strategy & Innovation'],
     flavor: 'data',
@@ -135,6 +148,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'People & Ops',
     color: '#3f7a3a',
     bounds: { minX: 25, maxX: 60, minZ: 16, maxZ: 36 },
+    sign: { x: 42.5, z: 36.8 },
     grid: [3, 1],
     departments: ['Operations Management', 'HR & People', 'General Management'],
     flavor: 'document',

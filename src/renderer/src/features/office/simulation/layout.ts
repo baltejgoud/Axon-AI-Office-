@@ -1,6 +1,6 @@
 import { LayoutBuilder, type DeskSetup, type FurnitureItem, type Wall } from '../campus/builder';
 import { COMMONS_ROOMS, CORE_HOME_DESKS, buildCommons } from '../campus/commons';
-import { DISTRICTS, boundsCentre, type Bounds, type DistrictId } from '../campus/districts';
+import { DISTRICTS, type Bounds } from '../campus/districts';
 import { buildDistricts } from '../campus/neighbourhoods';
 import { buildCoffeeStations } from '../campus/coffee';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -53,6 +53,9 @@ const CORRIDOR_TREES: [number, number][] = [
 for (const [x, z] of CORRIDOR_TREES)
   builder.item(`corridor-tree-${x}-${z}`, 'tree', x, z, 1.0, 1.0, { round: true });
 buildCoffeeStations(builder);
+// Each district's sign stands on a slim post in the corridor beside it.
+for (const district of DISTRICTS)
+  builder.item(`sign-post-${district.id}`, 'sign-post', district.sign.x, district.sign.z, 0.3, 0.3);
 const built = builder.finish();
 
 export const WALLS: readonly Wall[] = builder.walls;
@@ -74,15 +77,7 @@ export const HOME_DESKS: Readonly<Record<string, string>> = { ...CORE_HOME_DESKS
 /** Label anchors and camera focus points for the Commons rooms. */
 export const ZONE_ANCHORS: Readonly<Record<ZoneId, Vec2>> = COMMONS_ROOMS;
 
-/** Where each district's card floats and where the camera frames it. */
-export const DISTRICT_ANCHORS = Object.fromEntries(
-  DISTRICTS.map((district) => [
-    district.id,
-    district.id === 'commons' ? { x: 0, z: 1 } : boundsCentre(district.bounds)
-  ])
-) as Readonly<Record<DistrictId, Vec2>>;
-
-/** Where each department's label floats, and the floor it occupies. */
+/** Where each department's sign hangs, and the floor it occupies. */
 export const DEPARTMENT_ANCHORS: Readonly<Record<string, Vec2>> = Object.fromEntries(
   builder.departments.map((area) => [area.name, area.anchor])
 );

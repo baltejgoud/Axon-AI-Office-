@@ -14,6 +14,7 @@ import { SceneLabels, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
+import type { SignSpec } from './campus/signs';
 
 export function OfficeCanvas() {
   const container = useRef<HTMLDivElement>(null);
@@ -23,6 +24,8 @@ export function OfficeCanvas() {
   const [loading, setLoading] = useState(true);
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<OfficeView | null>(null);
+  /** The latest sign handler; the scene is created once and calls through this. */
+  const signClick = useRef<(sign: SignSpec) => void>(() => {});
   const {
     selectedAgentId,
     agentRuntime,
@@ -57,6 +60,7 @@ export function OfficeCanvas() {
       world.onViewChange = setView;
       world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
+      world.onSignClick = (sign) => signClick.current(sign);
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)
@@ -146,6 +150,11 @@ export function OfficeCanvas() {
     // The Files room opens the folder wall with the Files Agent.
     if (zone === 'files') flyToAgent('files-agent');
     else scene.current?.focusZone(zone);
+  };
+  signClick.current = (sign) => {
+    if (sign.kind === 'district') chooseDistrict(sign.target as DistrictId);
+    else if (sign.kind === 'department') chooseDepartment(sign.target);
+    else if (sign.kind === 'room') chooseRoom(sign.target as ZoneId);
   };
   const chooseFromMenu = (choice: DepartmentChoice) =>
     choice.kind === 'department' ? chooseDepartment(choice.name) : chooseRoom(choice.zone);
@@ -287,9 +296,6 @@ export function OfficeCanvas() {
             statuses={statuses}
             loading={loading}
             onAgent={chooseAgent}
-            onDistrict={chooseDistrict}
-            onDepartment={chooseDepartment}
-            onRoom={chooseRoom}
           />
           {!loading && (
             <Minimap

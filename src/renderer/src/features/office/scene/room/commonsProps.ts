@@ -85,11 +85,11 @@ export function pastryCase(item: FurnitureItem): THREE.Group {
       const x = -w / 2 + 0.16 + i * ((w - 0.32) / 5);
       const colour = colours[Math.floor(random() * colours.length)];
       const round = (i + shelf) % 2 === 0;
-      g.add(
-        round
-          ? part(GEOMETRY.sphere, mat(colour, { roughness: 0.7 }), [0.12, 0.07, 0.12], [x, y + 0.035, 0])
-          : cylinder(colour, 0.06, 0.05, [x, y + 0.025, 0], { roughness: 0.7 })
-      );
+      const pastry = round
+        ? part(GEOMETRY.sphere, mat(colour, { roughness: 0.7 }), [0.12, 0.07, 0.12], [x, y + 0.035, 0])
+        : cylinder(colour, 0.06, 0.05, [x, y + 0.025, 0], { roughness: 0.7 });
+      pastry.castShadow = false;
+      g.add(pastry);
     }
   return g;
 }

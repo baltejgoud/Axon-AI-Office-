@@ -2,16 +2,12 @@ import * as THREE from 'three';
 import type { Bounds } from '../campus/districts';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { AmbientActivity } from '../simulation/agentProfiles';
-import {
-  DEPARTMENT_ANCHORS,
-  DISTRICT_ANCHORS,
-  HOME_DESKS,
-  POINTS_OF_INTEREST,
-  ZONE_ANCHORS,
-  poiById
-} from '../simulation/layout';
+import { HOME_DESKS, POINTS_OF_INTEREST, ZONE_ANCHORS, poiById } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
-import { FILES_HOTSPOT, LIBRARY_HOTSPOT, ROOM_SIGN_POINTS } from '../campus/commons';
+import { FILES_HOTSPOT, LIBRARY_HOTSPOT } from '../campus/commons';
+import { SIGNS, type SignKind, type SignSpec } from '../campus/signs';
+import { labelTier } from '../shell/framing';
+import { SignLayer } from './room/signs';
 import type { AgentView, ScreenState, Vec2, ZoneId } from '../simulation/types';
 import { OfficeAgentCharacter } from './agents/OfficeAgentCharacter';
 import { appearanceFor } from './agents/appearance';
@@ -34,6 +30,10 @@ export interface OfficeDebugHandle {
   breakdown(): Record<string, { meshes: number; triangles: number }>;
   shadows(on: boolean): void;
   view(): OfficeView;
+  /** Every sign with its current opacity and scale. */
+  signs(): { id: string; kind: SignKind; target: string; opacity: number; scale: number }[];
+  /** Where a sign's face is on screen, in canvas pixels. */
+  signPoint(id: string): { x: number; y: number } | null;
   seed: number;
 }
 
@@ -50,17 +50,11 @@ export interface OfficeView {
   metresPerPixel: number;
 }
 
-type SceneLabel =
-  | { element: HTMLElement; kind: 'point'; point: THREE.Vector3 }
-  | { element: HTMLElement; kind: 'agent'; agentId: string };
-
-/** Commons room cards float where each room's sign hangs, or over the pods. */
-const ROOM_SIGNS: Record<ZoneId, THREE.Vector3> = {
-  ...(Object.fromEntries(
-    Object.entries(ROOM_SIGN_POINTS).map(([zone, p]) => [zone, new THREE.Vector3(p.x, p.y + 0.6, p.z)])
-  ) as Record<Exclude<ZoneId, 'agents'>, THREE.Vector3>),
-  agents: new THREE.Vector3(-0.6, 2.6, 2.4)
-};
+/** A name tag that follows a person. */
+interface SceneLabel {
+  element: HTMLElement;
+  agentId: string;
+}
 
 /** An invisible box over part of the room that reacts to clicks. */
 const hotspot = (area: { x: number; z: number; w: number; d: number; h: number }) => {
@@ -94,6 +88,8 @@ export class OfficeScene {
   public onFilesClick?: () => void;
   /** The Library's shelves were clicked. */
   public onLibraryClick?: () => void;
+  /** A district, department or room sign was clicked. */
+  public onSignClick?: (sign: SignSpec) => void;
 
   private readonly cameraRig = new OfficeCameraRig();
   private readonly simulation: OfficeSimulation;
@@ -113,6 +109,10 @@ export class OfficeScene {
   /** Invisible click targets over the Files room cabinets and the Library shelves. */
   private readonly filesHotspot = hotspot(FILES_HOTSPOT);
   private readonly libraryHotspot = hotspot(LIBRARY_HOTSPOT);
+  private readonly signs = new SignLayer(SIGNS, this.cameraRig.yawTowardViewer);
+  /** Metres per pixel the signs were last scaled for. */
+  private signScaleAt = 0;
+  private hoveredSign: string | null = null;
   private labels: SceneLabel[] = [];
   private full = new Set<string>();
   private selectedId: string | null = null;
@@ -176,7 +176,7 @@ export class OfficeScene {
       })
     );
     this.scene.add(this.crowd.object);
-    this.scene.add(this.filesHotspot, this.libraryHotspot);
+    this.scene.add(this.filesHotspot, this.libraryHotspot, this.signs.object);
 
     if (localStorage.getItem('axon.officeDebug') === '1') {
       window.__axonOffice = {
@@ -190,6 +190,9 @@ export class OfficeScene {
           triangles: this.renderer.info.render.triangles
         }),
         focus: (x, z, span) => this.cameraRig.focus({ x, z }, span),
+        signs: () => this.signs.info(),
+        signPoint: (id) =>
+          this.signs.screenPoint(id, this.cameraRig.camera, this.container.clientWidth, this.container.clientHeight),
         view: () => ({
           bounds: this.cameraRig.viewBounds(),
           target: this.cameraRig.target(),
@@ -313,28 +316,12 @@ export class OfficeScene {
     this.cameraRig.reset();
   }
 
-  /**
-   * Floating HTML labels. Each element carries `data-anchor`: `zone:<id>` pins it above a Commons
-   * room, `district:<id>` and `department:<name>` above those areas, `agent:<id>` follows a person.
-   */
+  /** Floating name tags. Each element carries `data-anchor="agent:<id>"` and follows that person. */
   public setLabels(elements: HTMLElement[]): void {
     this.labels = elements.flatMap((element): SceneLabel[] => {
       const anchor = element.dataset.anchor ?? '';
-      const split = anchor.indexOf(':');
-      const kind = anchor.slice(0, split);
-      const id = anchor.slice(split + 1);
-      if (kind === 'zone' && id in ROOM_SIGNS)
-        return [{ element, kind: 'point', point: ROOM_SIGNS[id as ZoneId].clone() }];
-      if (kind === 'district' && id in DISTRICT_ANCHORS) {
-        const p = DISTRICT_ANCHORS[id as keyof typeof DISTRICT_ANCHORS];
-        return [{ element, kind: 'point', point: new THREE.Vector3(p.x, 4.2, p.z) }];
-      }
-      if (kind === 'department' && id in DEPARTMENT_ANCHORS) {
-        const p = DEPARTMENT_ANCHORS[id];
-        return [{ element, kind: 'point', point: new THREE.Vector3(p.x, 2.6, p.z) }];
-      }
-      if (kind === 'agent' && this.crowd.has(id)) return [{ element, kind: 'agent', agentId: id }];
-      return [];
+      const id = anchor.startsWith('agent:') ? anchor.slice(6) : '';
+      return id && this.crowd.has(id) ? [{ element, agentId: id }] : [];
     });
   }
 
@@ -441,12 +428,17 @@ export class OfficeScene {
     return (hit?.userData.agentId as string | undefined) ?? this.crowd.pick(this.raycaster);
   }
 
-  private setHovered(agentId: string | null): void {
+  /** People come first; a sign only reacts when nobody stands in front of it. */
+  private setHovered(agentId: string | null, signId: string | null = null): void {
+    if (signId !== this.hoveredSign) {
+      this.hoveredSign = signId;
+      this.signs.setHovered(signId);
+    }
+    this.renderer.domElement.style.cursor = agentId || signId ? 'pointer' : 'grab';
     if (agentId === this.hoveredAgentId) return;
     if (this.hoveredAgentId) this.characters.get(this.hoveredAgentId)?.setHovered(false);
     this.hoveredAgentId = agentId;
     if (agentId) this.characters.get(agentId)?.setHovered(true);
-    this.renderer.domElement.style.cursor = agentId ? 'pointer' : 'grab';
     this.onAgentHover?.(agentId);
   }
 
@@ -459,7 +451,8 @@ export class OfficeScene {
         this.lastPointer = { x: event.clientX, y: event.clientY };
         return;
       }
-      this.setHovered(this.agentAtPointer());
+      const agentId = this.agentAtPointer();
+      this.setHovered(agentId, agentId ? null : (this.signs.pick(this.raycaster)?.id ?? null));
     };
     const onDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
@@ -475,11 +468,13 @@ export class OfficeScene {
       this.updatePointer(event);
       if (!moved) {
         const agentId = this.agentAtPointer();
+        const sign = agentId ? null : this.signs.pick(this.raycaster);
         if (agentId) this.onAgentClick?.(agentId);
+        else if (sign) this.onSignClick?.(sign);
         else if (this.raycaster.intersectObject(this.filesHotspot, false).length) this.onFilesClick?.();
         else if (this.raycaster.intersectObject(this.libraryHotspot, false).length) this.onLibraryClick?.();
       }
-      canvas.style.cursor = this.hoveredAgentId ? 'pointer' : 'grab';
+      canvas.style.cursor = this.hoveredAgentId || this.hoveredSign ? 'pointer' : 'grab';
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -556,6 +551,7 @@ export class OfficeScene {
       (poiId) => this.simulation.occupantsOf(poiId).length > 0
     );
     this.cameraRig.update(dt, this.reducedMotion);
+    this.updateSigns();
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.placeLabels();
     this.notifyView(dt);
@@ -564,6 +560,14 @@ export class OfficeScene {
       this.updateTiers();
       this.onReady();
     }
+  }
+
+  /** Signs grow as the camera pulls back and fade by zoom tier; only redone when the zoom moves. */
+  private updateSigns(): void {
+    const metresPerPixel = this.cameraRig.metresPerPixel();
+    if (this.signScaleAt && Math.abs(metresPerPixel - this.signScaleAt) / this.signScaleAt < 0.03) return;
+    this.signScaleAt = metresPerPixel;
+    this.signs.setView(metresPerPixel, labelTier(this.cameraRig.viewBounds()));
   }
 
   private notifyView(dt: number): void {
@@ -591,21 +595,16 @@ export class OfficeScene {
     const height = this.container.clientHeight;
     const occupied: { x: number; y: number; w: number; h: number }[] = [];
     const ordered = [...this.labels].sort((a, b) => {
-      const priority = (label: SceneLabel) =>
-        label.element.getAttribute('aria-pressed') === 'true' ? 0 : label.kind === 'point' ? 1 : 2;
+      const priority = (label: SceneLabel) => (label.element.getAttribute('aria-pressed') === 'true' ? 0 : 1);
       return priority(a) - priority(b);
     });
     const dimensions = new Map(
       ordered.map((label) => [label, { w: label.element.offsetWidth, h: label.element.offsetHeight }])
     );
     for (const label of ordered) {
-      let point: THREE.Vector3 | null;
-      if (label.kind === 'point') point = this.scratch.copy(label.point);
-      else {
-        point = this.labelPoint(label.agentId, this.scratch);
-        const behavior = this.simulation.view(label.agentId)?.behavior ?? 'idle';
-        if (label.element.dataset.behavior !== behavior) label.element.dataset.behavior = behavior;
-      }
+      const point = this.labelPoint(label.agentId, this.scratch);
+      const behavior = this.simulation.view(label.agentId)?.behavior ?? 'idle';
+      if (label.element.dataset.behavior !== behavior) label.element.dataset.behavior = behavior;
       if (!point) continue;
       const projected = point.project(this.cameraRig.camera);
       const x = ((projected.x + 1) * width) / 2;
@@ -624,7 +623,7 @@ export class OfficeScene {
             Math.abs(placedX - rect.x) < (w + rect.w) / 2 + 5 && Math.abs(cy - rect.y) < (h + rect.h) / 2 + 4
         );
       let free = !collides(placedY);
-      if (!free && label.kind === 'agent')
+      if (!free)
         for (const offset of [-28, 28, -56, 56]) {
           const candidateY = placedY + offset;
           if (candidateY < h / 2 || candidateY > height - h / 2 || collides(candidateY)) continue;
@@ -658,6 +657,7 @@ export class OfficeScene {
     if (window.__axonOffice) delete window.__axonOffice;
     this.characters.forEach((character) => character.dispose());
     this.crowd.dispose();
+    this.signs.dispose();
     for (const spot of [this.filesHotspot, this.libraryHotspot]) {
       spot.geometry.dispose();
       (spot.material as THREE.Material).dispose();

@@ -304,3 +304,11 @@ export function planter(item: FurnitureItem): THREE.Group {
   }
   return g;
 }
+
+/** The slim post a district sign stands on; the sign itself is drawn by the sign layer. */
+export function signPost(): THREE.Group {
+  return group(
+    box(PALETTE.darkMetal, [0.3, 0.04, 0.3], [0, 0.02, 0], { metalness: 0.4, roughness: 0.5 }),
+    box(PALETTE.darkMetal, [0.1, 2.62, 0.1], [0, 1.31, 0], { metalness: 0.4, roughness: 0.5 })
+  );
+}
