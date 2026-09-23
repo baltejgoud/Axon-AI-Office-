@@ -18,6 +18,9 @@ import { OfficeCameraRig } from './cameraRig';
 import { CrowdRenderer } from './people/CrowdRenderer';
 import { chooseFullTier } from './people/tiers';
 import { buildOffice, type OfficeRoom } from './room/buildOffice';
+import { MIDDAY, followsTimeOfDay, lightingAt, type Lighting } from './room/lighting';
+import { LAMP_BASE, windowGlass } from './room/materials';
+import { RACK_LIGHTS } from './room/props';
 
 /** Opt-in inspection handle for automated checks (set localStorage `axon.officeDebug` to "1"). */
 export interface OfficeDebugHandle {
@@ -93,6 +96,9 @@ export class OfficeScene {
   private readonly pointer = new THREE.Vector2();
   private readonly scratch = new THREE.Vector3();
   private readonly sun: THREE.DirectionalLight;
+  private readonly hemisphere = new THREE.HemisphereLight('#ffffff', '#d8c6ab', 1.9);
+  private readonly fill = new THREE.DirectionalLight('#e2ecff', 0.55);
+  private lightingClock = 0;
   /** Invisible click target over the Files room cabinets. */
   private readonly filesHotspot = new THREE.Mesh(
     new THREE.BoxGeometry(1.5, 2.2, 3.1),
@@ -207,12 +213,31 @@ export class OfficeScene {
     }
 
     this.initEvents();
+    this.applyLighting();
     this.handleResize();
     this.start();
   }
 
+  /** Light the office for the time of day (or midday, if the user switched that off). */
+  private applyLighting(): void {
+    const now = new Date();
+    const light: Lighting = followsTimeOfDay() ? lightingAt(now.getHours() + now.getMinutes() / 60) : MIDDAY;
+    this.hemisphere.color.set(light.sky);
+    this.hemisphere.groundColor.set(light.ground);
+    this.hemisphere.intensity = light.hemisphere;
+    this.sun.color.set(light.sunColor);
+    this.sun.intensity = light.sun;
+    this.fill.intensity = light.fill;
+    for (const [material, glow] of LAMP_BASE) material.emissiveIntensity = glow * (0.45 + 1.1 * light.lamps);
+    const glass = windowGlass();
+    glass.color.set(light.windows);
+    glass.emissive.set(light.windows);
+    glass.emissiveIntensity = 0.25 + 0.3 * (1 - light.lamps);
+    this.container.style.background = `radial-gradient(ellipse at 45% 25%, #ffffff 0%, ${light.backdrop} 75%)`;
+  }
+
   private addLights(): THREE.DirectionalLight {
-    this.scene.add(new THREE.HemisphereLight('#ffffff', '#d8c6ab', 1.9));
+    this.scene.add(this.hemisphere);
     // From the viewer's side, so the two tall walls throw their shadows outward, not across the room.
     const sun = new THREE.DirectionalLight('#fff3df', 2.4);
     sun.castShadow = true;
@@ -220,9 +245,8 @@ export class OfficeScene {
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     this.scene.add(sun, sun.target);
-    const fill = new THREE.DirectionalLight('#e2ecff', 0.55);
-    fill.position.set(14, 9, -8);
-    this.scene.add(fill);
+    this.fill.position.set(14, 9, -8);
+    this.scene.add(this.fill);
     return sun;
   }
 
@@ -454,6 +478,8 @@ export class OfficeScene {
       this.cameraRig.zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, this.pointer.x, this.pointer.y);
     };
     const onLeave = () => this.setHovered(null);
+    const onLightingChange = () => this.applyLighting();
+    window.addEventListener('axon-office-lighting', onLightingChange);
     const onContextLost = (event: Event) => {
       event.preventDefault();
       this.onFailure();
@@ -471,6 +497,7 @@ export class OfficeScene {
       window.removeEventListener('mouseup', onUp);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('webglcontextlost', onContextLost);
+      window.removeEventListener('axon-office-lighting', onLightingChange);
     };
   }
 
@@ -494,6 +521,17 @@ export class OfficeScene {
 
   private tick(dt: number): void {
     this.simulation.step(dt);
+    this.lightingClock += dt;
+    if (this.lightingClock > 20) {
+      this.lightingClock = 0;
+      this.applyLighting();
+    }
+    // Server racks twinkle, each colour at its own pace.
+    RACK_LIGHTS.forEach((material, i) => {
+      material.emissiveIntensity = this.reducedMotion
+        ? 1
+        : 0.75 + 0.45 * Math.sin(this.elapsed * (1.7 + i * 0.9) + i);
+    });
     this.tierClock += dt;
     if (this.tierClock >= TIER_INTERVAL) this.updateTiers();
     for (const id of this.full) {

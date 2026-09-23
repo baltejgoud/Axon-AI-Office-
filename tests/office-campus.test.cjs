@@ -64,7 +64,9 @@ const inside = (p, b) => p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b
 
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
-  assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 1, rows: 3 });
+  assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });
+  assert.deepEqual(hood.podGrid(10, 5.25, 13.9), { cols: 1, rows: 3 });
+  assert.deepEqual(hood.podGrid(14, 9.13, 16.33), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(17, 35, 19), { cols: 4, rows: 2 });
 });
 
@@ -169,4 +171,14 @@ test('search finds people by name or specialty', () => {
 test('search can find a whole department', () => {
   const names = search.searchCoworkers('security', agents.OFFICE_AGENTS, 10).map((a) => a.department);
   assert.ok(names.filter((d) => d === 'Security').length >= 5, names.join(', '));
+});
+
+test('pods and their chairs stay inside their department', () => {
+  const inCell = (x, z, b) =>
+    x >= b.minX - 0.01 && x <= b.maxX + 0.01 && z >= b.minZ - 0.01 && z <= b.maxZ + 0.01;
+  for (const poi of layout.POINTS_OF_INTEREST.filter((p) => p.type === 'desk' && p.department)) {
+    const cell = layout.DEPARTMENT_BOUNDS[poi.department];
+    assert.ok(inCell(poi.position.x, poi.position.z, cell), `${poi.id} outside ${poi.department}`);
+    assert.ok(inCell(poi.approach.x, poi.approach.z, cell), `${poi.id} approach outside ${poi.department}`);
+  }
 });

@@ -69,10 +69,11 @@ test('officeLibraryWorkspace updates the documents and keeps createdAt', () => {
 });
 
 test('library residents are the three Library coworkers', () => {
-  assert.deepEqual(
-    [...library.LIBRARY_RESIDENTS].sort(),
-    ['knowledge-librarian', 'research-analyst', 'writer']
-  );
+  assert.deepEqual([...library.LIBRARY_RESIDENTS].sort(), [
+    'knowledge-librarian',
+    'research-analyst',
+    'writer'
+  ]);
 });
 
 const display = { x: 0, y: 0, width: 1920, height: 1040 };

@@ -1,6 +1,7 @@
 import { hashString } from '../simulation/random';
 import type { DeskProp, LayoutBuilder } from './builder';
 import { DISTRICTS, type Bounds, type District } from './districts';
+import { boardKind, decorateDepartment } from './decor';
 
 const FACE_FRONT = 0;
 const FACE_BACK = Math.PI;
@@ -23,12 +24,21 @@ export const slug = (name: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
-/** Pods of four for `count` people in a w x d area: roughly the area's shape, never wider than fits. */
+/**
+ * Pods of four for `count` people in a w x d area: roughly the area's shape, never wider than fits,
+ * and with enough columns that the rows (chairs included) fit the depth.
+ */
 export function podGrid(count: number, w: number, d: number): { cols: number; rows: number } {
   const pods = Math.max(1, Math.ceil(count / 4));
-  const maxCols = Math.max(1, Math.floor(w / POD_PITCH_X));
-  const cols = Math.min(pods, maxCols, Math.max(1, Math.ceil(Math.sqrt((pods * w) / d))));
-  return { cols, rows: Math.ceil(pods / cols) };
+  // The outermost pods need no aisle on their outer side: n columns take 4.8n − 1.6 m.
+  const maxCols = Math.max(1, Math.min(pods, Math.floor((w + 1.6) / POD_PITCH_X)));
+  const depthOf = (rows: number) => rows * POD_PITCH_Z - 2.34;
+  const ideal = Math.min(maxCols, Math.max(1, Math.ceil(Math.sqrt((pods * w) / d))));
+  for (let cols = ideal; cols <= maxCols; cols++) {
+    const rows = Math.ceil(pods / cols);
+    if (depthOf(rows) <= d) return { cols, rows };
+  }
+  return { cols: maxCols, rows: Math.ceil(pods / maxCols) };
 }
 
 /** Splits a district into its department cells, back row first, with corridors between them. */
@@ -64,14 +74,18 @@ function packDepartment(
   district: District,
   name: string,
   cell: Bounds,
-  members: string[]
+  members: string[],
+  index: number
 ): Record<string, string> {
   const key = slug(name);
   const tags = { district: district.id, department: name };
   const cx = (cell.minX + cell.maxX) / 2;
   b.departments.push({ name, district: district.id, bounds: cell, anchor: { x: cx, z: cell.minZ + 0.35 } });
 
-  b.item(`wb-${key}`, 'whiteboard', cx, cell.minZ + 0.35, 2.0, 0.1);
+  b.item(`wb-${key}`, boardKind(district, name), cx, cell.minZ + 0.35, 2.0, 0.1);
+  if (name === 'Sales Management') b.item(`gong-${key}`, 'gong', cx + 1.55, cell.minZ + 0.45, 0.8, 0.4);
+  if (name === 'Customer Success')
+    b.item(`trophies-${key}`, 'trophy-shelf', cx + 1.55, cell.minZ + 0.45, 0.9, 0.35);
   b.spot(`wb-spot-${key}`, 'whiteboard', 'agents', cx, cell.minZ + 1.0, FACE_BACK, tags);
   b.spot(`open-${key}`, 'open-area', 'agents', cell.minX + 1.2, cell.minZ + 1.1, FACE_FRONT, tags);
   b.plant(`plant-${key}-nw`, cell.minX + 0.5, cell.minZ + 0.5, true);
@@ -114,6 +128,7 @@ function packDepartment(
         seatIndex++;
       }
   }
+  decorateDepartment(b, district, key, region, { centreX, centreZ, cols, rows }, index);
   return homes;
 }
 
@@ -187,7 +202,7 @@ export function buildDistricts(
     }
     const cells = departmentCells(district);
     district.departments.forEach((name, index) =>
-      Object.assign(homes, packDepartment(b, district, name, cells[index], members[name] ?? []))
+      Object.assign(homes, packDepartment(b, district, name, cells[index], members[name] ?? [], index))
     );
   }
   return homes;

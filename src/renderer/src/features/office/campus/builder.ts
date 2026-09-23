@@ -40,7 +40,20 @@ export type FurnitureKind =
   | 'floor-lamp'
   | 'bench'
   | 'low-cabinet'
-  | 'reception-desk';
+  | 'reception-desk'
+  | 'tree'
+  | 'bean-bag'
+  | 'ping-pong'
+  | 'server-rack'
+  | 'data-wall'
+  | 'kanban-board'
+  | 'mood-board'
+  | 'pinboard'
+  | 'drafting-table'
+  | 'gong'
+  | 'trophy-shelf'
+  | 'water-cooler'
+  | 'planter';
 
 export interface FurnitureItem {
   id: string;

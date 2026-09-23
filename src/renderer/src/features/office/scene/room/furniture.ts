@@ -2,7 +2,18 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 const roundedSurface = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
 import type { DeskEquipment, DeskProp, FurnitureItem } from '../../simulation/layout';
-import { GEOMETRY, PALETTE, box, cylinder, mat, part, screenCanvas, type ScreenFlavor } from './materials';
+import {
+  GEOMETRY,
+  PALETTE,
+  box,
+  cylinder,
+  lampGlow,
+  mat,
+  part,
+  screenCanvas,
+  type ScreenFlavor
+} from './materials';
+import * as props from './props';
 
 /**
  * Low-poly furniture built from primitives. Each builder returns a group centred on the item's
@@ -244,12 +255,7 @@ function sideTable(): THREE.Group {
   return group(
     ...roundTable(0.25, 0.55, PALETTE.woodLight).children,
     cylinder(PALETTE.white, 0.05, 0.26, [0, 0.7, 0]),
-    part(
-      GEOMETRY.cone,
-      mat('#fff6e0', { emissive: '#ffd79a', emissiveIntensity: 0.6 }),
-      [0.28, 0.2, 0.28],
-      [0, 0.9, 0]
-    )
+    part(GEOMETRY.cone, lampGlow.table(), [0.28, 0.2, 0.28], [0, 0.9, 0])
   );
 }
 
@@ -544,12 +550,7 @@ function floorLamp(): THREE.Group {
       [0.22, 1.82, 0],
       [0, 0, -1.1]
     ),
-    part(
-      GEOMETRY.sphere,
-      mat('#fff4dc', { emissive: '#ffd690', emissiveIntensity: 0.9 }),
-      [0.3, 0.22, 0.3],
-      [0.48, 1.86, 0]
-    )
+    part(GEOMETRY.sphere, lampGlow.floor(), [0.3, 0.22, 0.3], [0.48, 1.86, 0])
   );
 }
 
@@ -668,6 +669,32 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       return { object: lowCabinet(itemDef) };
     case 'reception-desk':
       return { object: receptionDesk(itemDef) };
+    case 'tree':
+      return { object: props.tree(itemDef) };
+    case 'bean-bag':
+      return { object: props.beanBag(itemDef) };
+    case 'ping-pong':
+      return { object: props.pingPong(itemDef) };
+    case 'server-rack':
+      return { object: props.serverRack(itemDef) };
+    case 'data-wall':
+      return { object: props.dataWall(itemDef) };
+    case 'kanban-board':
+      return { object: props.kanbanBoard(itemDef) };
+    case 'mood-board':
+      return { object: props.moodBoard(itemDef) };
+    case 'pinboard':
+      return { object: props.pinboard(itemDef) };
+    case 'drafting-table':
+      return { object: props.draftingTable(itemDef) };
+    case 'gong':
+      return { object: props.gong(itemDef) };
+    case 'trophy-shelf':
+      return { object: props.trophyShelf(itemDef) };
+    case 'water-cooler':
+      return { object: props.waterCooler() };
+    case 'planter':
+      return { object: props.planter(itemDef) };
   }
 }
 
@@ -748,13 +775,7 @@ function deskProp(prop: DeskProp, accent: string): THREE.Object3D {
       return group(
         cylinder(PALETTE.darkMetal, 0.06, 0.02, [0, 0.01, 0]),
         part(GEOMETRY.cylinder, mat(PALETTE.darkMetal), [0.018, 0.36, 0.018], [0, 0.18, 0], [0.25, 0, 0]),
-        part(
-          GEOMETRY.cone,
-          mat('#fff3d6', { emissive: '#ffd88f', emissiveIntensity: 0.7 }),
-          [0.12, 0.09, 0.12],
-          [0, 0.35, 0.08],
-          [0.5, 0, 0]
-        )
+        part(GEOMETRY.cone, lampGlow.desk(), [0.12, 0.09, 0.12], [0, 0.35, 0.08], [0.5, 0, 0])
       );
     case 'plant':
       return plant(0.3, PALETTE.white, 71);

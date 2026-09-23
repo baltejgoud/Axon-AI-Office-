@@ -301,3 +301,23 @@ export function terrazzoTexture(): THREE.CanvasTexture {
     }
   });
 }
+
+// ---------------------------------------------------------------- lights the time of day changes
+
+/** Warm lamp shades and bulbs, shared so the scene can turn them up in the evening. */
+export const lampGlow = {
+  table: () => mat('#fff6e0', { emissive: '#ffd79a', emissiveIntensity: 0.6 }),
+  floor: () => mat('#fff4dc', { emissive: '#ffd690', emissiveIntensity: 0.9 }),
+  desk: () => mat('#fff3d6', { emissive: '#ffd88f', emissiveIntensity: 0.7 })
+};
+
+/** Base glow of each lamp material, before the time of day scales it. */
+export const LAMP_BASE: ReadonlyMap<THREE.MeshStandardMaterial, number> = new Map([
+  [lampGlow.table(), 0.6],
+  [lampGlow.floor(), 0.9],
+  [lampGlow.desk(), 0.7]
+]);
+
+/** The window panes on the tall walls. */
+export const windowGlass = () =>
+  mat(PALETTE.window, { emissive: '#e8f3fb', emissiveIntensity: 0.35, roughness: 0.2 });

@@ -86,3 +86,20 @@ test('portraits are queued once, in order, with urgent requests first', () => {
   queue.request('a');
   assert.equal(queue.size, 0);
 });
+
+const lighting = require('../src/renderer/src/features/office/scene/room/lighting.ts');
+
+test('time of day: bright at noon, golden at sunset, lamps on in the evening, never dark', () => {
+  const noon = lighting.lightingAt(12);
+  const sunset = lighting.lightingAt(18.5);
+  const night = lighting.lightingAt(23);
+  assert.equal(noon.sunColor, '#fff3df');
+  assert.ok(noon.lamps < 0.3 && night.lamps > 0.9);
+  assert.equal(sunset.sunColor, '#ffc27d');
+  for (let hour = 0; hour < 24; hour += 0.5) {
+    const l = lighting.lightingAt(hour);
+    assert.ok(l.hemisphere >= 1.3 && l.sun >= 1.0, `too dark at ${hour}`);
+    assert.match(l.sky, /^#[0-9a-f]{6}$/);
+  }
+  assert.deepEqual(lighting.lightingAt(24), lighting.lightingAt(0));
+});

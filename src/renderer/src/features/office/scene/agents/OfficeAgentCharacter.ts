@@ -67,6 +67,7 @@ export class OfficeAgentCharacter {
   private working = false;
   private glanceUntil = 0;
   private nextBlink = 0;
+  private waveUntil = 0;
   private blinkUntil = 0;
   private readonly scratchQuat = new THREE.Quaternion();
   private readonly scratchQuat2 = new THREE.Quaternion();
@@ -112,7 +113,10 @@ export class OfficeAgentCharacter {
   }
 
   setSelected(value: boolean, now: number): void {
-    if (value && !this.selected) this.glanceUntil = now + 1.6;
+    if (value && !this.selected) {
+      this.glanceUntil = now + 1.6;
+      this.waveUntil = now + 1.5;
+    }
     this.selected = value;
     if (value && !this.outlines) this.outlines = this.buildOutlines();
     for (const outline of this.outlines ?? []) outline.visible = value;
@@ -173,6 +177,10 @@ export class OfficeAgentCharacter {
       lookYaw,
       lounging: seat?.lounging ?? false
     });
+    // A friendly wave when you pick someone.
+    if (!reducedMotion && time < this.waveUntil && view.behavior !== 'walking') {
+      target.armR = { fwd: 0.35, out: 2.35, bend: 0.85 + 0.45 * Math.sin(time * 13) };
+    }
     easePose(this.pose, target, 1 - Math.exp(-18 * dt));
     applyPose(this.rig, this.pose);
 

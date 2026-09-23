@@ -3,6 +3,7 @@ import { KeyRound, Plus, Trash2, Server } from 'lucide-react';
 import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared/types';
 import { useApp, perform } from './state';
 import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
+import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
 
 interface PresetInfo {
   kind: ProviderKind;
@@ -418,6 +419,7 @@ export function SettingsPanel() {
                 <option value="system">Match system</option>
               </select>
             </Field>
+            <OfficeLightingField />
             <Field label="Maximum output tokens" hint="256 – 32,768. Applies to new messages.">
               <input
                 className="input"
@@ -786,5 +788,28 @@ export function SettingsPanel() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** The office follows the clock (golden evenings, lamps on at night) unless switched off here. */
+function OfficeLightingField() {
+  const [on, setOn] = useState(followsTimeOfDay);
+  return (
+    <Field
+      label="Office lighting"
+      hint="Warm mornings, golden evenings and lamps at night, following your clock."
+    >
+      <label className="row" style={{ gap: 'var(--space-2)' }}>
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            setOn(e.target.checked);
+            setFollowsTimeOfDay(e.target.checked);
+          }}
+        />
+        <span>Follow the time of day</span>
+      </label>
+    </Field>
   );
 }

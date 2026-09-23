@@ -11,6 +11,7 @@ import {
 } from '../../simulation/layout';
 import type { ScreenState } from '../../simulation/types';
 import { DISTRICTS, type FloorKind } from '../../campus/districts';
+import { DEPARTMENT_ANCHORS } from '../../simulation/layout';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
 import {
   GEOMETRY,
@@ -21,6 +22,7 @@ import {
   mat,
   part,
   terrazzoTexture,
+  windowGlass,
   woodFloorTexture,
   type ScreenFlavor
 } from './materials';
@@ -79,7 +81,7 @@ function wallMesh(w: Wall): THREE.Group {
 
 /** A run of tall windows along one of the two full-height perimeter walls. */
 function windowBays(g: THREE.Group, alongX: boolean, fixed: number, from: number, to: number): void {
-  const glassMat = mat(PALETTE.window, { emissive: '#e8f3fb', emissiveIntensity: 0.35, roughness: 0.2 });
+  const glassMat = windowGlass();
   const bay = 3.6;
   const pitch = 6;
   for (let start = from + 1.2; start + bay <= to - 1; start += pitch) {
@@ -139,6 +141,43 @@ function wallDecor(): THREE.Group {
     box(PALETTE.darkMetal, [0.015, 0.12, 0.01], [4.9, 2.44, innerBack + 0.04]),
     box(PALETTE.darkMetal, [0.09, 0.015, 0.01], [4.94, 2.4, innerBack + 0.04])
   );
+  return g;
+}
+
+/** A header band on each department's board: its name on the district colour. */
+function departmentSigns(): THREE.Group {
+  const g = new THREE.Group();
+  for (const district of DISTRICTS) {
+    if (district.id === 'commons' || district.id === 'leadership') continue;
+    for (const name of district.departments) {
+      const anchor = DEPARTMENT_ANCHORS[name];
+      if (!anchor) continue;
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 64;
+      const context = canvas.getContext('2d')!;
+      context.fillStyle = district.color;
+      context.fillRect(0, 0, 512, 64);
+      context.fillStyle = '#ffffff';
+      context.font = '600 30px Inter, "Segoe UI", system-ui, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const label = name.length > 26 ? `${name.slice(0, 25)}…` : name;
+      context.fillText(label, 256, 33, 490);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      const band = part(
+        GEOMETRY.plane,
+        new THREE.MeshBasicMaterial({ map: texture }),
+        [2.0, 0.25, 1],
+        [anchor.x, 2.13, anchor.z + 0.03]
+      );
+      band.castShadow = false;
+      band.receiveShadow = false;
+      g.add(band);
+    }
+  }
   return g;
 }
 
@@ -267,7 +306,7 @@ function mergeStatic(root: THREE.Group): void {
 
 export function buildOffice(): OfficeRoom {
   const root = new THREE.Group();
-  root.add(floor(), wallDecor());
+  root.add(floor(), wallDecor(), departmentSigns());
   for (const w of WALLS) root.add(wallMesh(w));
 
   const lights: { poiId: string; mesh: THREE.Mesh }[] = [];

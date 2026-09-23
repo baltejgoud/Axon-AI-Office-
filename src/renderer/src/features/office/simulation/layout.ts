@@ -36,6 +36,28 @@ const members: Record<string, string[]> = {};
 for (const agent of OFFICE_AGENTS)
   if (agent.district !== 'commons') (members[agent.department] ??= []).push(agent.id);
 const specialistDesks = buildDistricts(builder, members);
+// Trees along the main corridors: landmarks that make the long walks pleasant.
+for (const [x, z] of [
+  [-17.5, -29],
+  [-17.5, -20],
+  [-17.5, -4],
+  [-17.5, 4],
+  [-17.5, 20],
+  [-17.5, 29],
+  [17.5, -29],
+  [17.5, -20],
+  [17.5, -5],
+  [17.5, 1],
+  [17.5, 20],
+  [17.5, 29],
+  [25.5, -12.5],
+  [33.5, -12.5],
+  [44.5, -12.5],
+  [25, 9.5],
+  [36.5, 9.5],
+  [48, 9.5]
+])
+  builder.item(`corridor-tree-${x}-${z}`, 'tree', x, z, 1.0, 1.0, { round: true });
 const built = builder.finish();
 
 export const WALLS: readonly Wall[] = builder.walls;
