@@ -53,7 +53,14 @@ export type FurnitureKind =
   | 'gong'
   | 'trophy-shelf'
   | 'water-cooler'
-  | 'planter';
+  | 'planter'
+  | 'bookshelf-tall'
+  | 'cabinet-wall'
+  | 'pastry-case'
+  | 'sorting-table'
+  | 'bike-rack'
+  | 'coat-rack'
+  | 'pendant-lamp';
 
 export interface FurnitureItem {
   id: string;
@@ -68,6 +75,8 @@ export interface FurnitureItem {
   round: boolean;
   /** Whether people must walk around it. Rugs and wall-mounted items do not block. */
   blocks: boolean;
+  /** Spots whose occupants make this item light up (a coffee machine, the printer). */
+  busyWith?: string[];
 }
 
 export type DeskEquipment = 'laptop' | 'laptop-monitor' | 'monitor';
@@ -130,7 +139,7 @@ export class LayoutBuilder {
     z: number,
     w: number,
     d: number,
-    options: { rotation?: number; round?: boolean; blocks?: boolean } = {}
+    options: { rotation?: number; round?: boolean; blocks?: boolean; busyWith?: string[] } = {}
   ): FurnitureItem {
     const built: FurnitureItem = {
       id,
@@ -141,7 +150,8 @@ export class LayoutBuilder {
       d,
       rotation: options.rotation ?? 0,
       round: options.round ?? false,
-      blocks: options.blocks ?? true
+      blocks: options.blocks ?? true,
+      ...(options.busyWith ? { busyWith: options.busyWith } : {})
     };
     this.furniture.push(built);
     return built;

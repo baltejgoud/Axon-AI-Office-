@@ -11,6 +11,7 @@ import {
   poiById
 } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
+import { FILES_HOTSPOT, LIBRARY_HOTSPOT, ROOM_SIGN_POINTS } from '../campus/commons';
 import type { AgentView, ScreenState, Vec2, ZoneId } from '../simulation/types';
 import { OfficeAgentCharacter } from './agents/OfficeAgentCharacter';
 import { appearanceFor } from './agents/appearance';
@@ -53,14 +54,22 @@ type SceneLabel =
   | { element: HTMLElement; kind: 'point'; point: THREE.Vector3 }
   | { element: HTMLElement; kind: 'agent'; agentId: string };
 
-/** Commons room cards float above the back wall of each room, or over open floor. */
+/** Commons room cards float where each room's sign hangs, or over the pods. */
 const ROOM_SIGNS: Record<ZoneId, THREE.Vector3> = {
-  chat: new THREE.Vector3(-9.8, 3.25, -9.1),
-  workspaces: new THREE.Vector3(-2.0, 3.25, -9.1),
-  knowledge: new THREE.Vector3(5.2, 3.25, -9.1),
-  files: new THREE.Vector3(10.8, 3.25, -9.1),
-  agents: new THREE.Vector3(0.2, 2.6, 3.4),
-  cafe: new THREE.Vector3(9.4, 2.7, 1.1)
+  ...(Object.fromEntries(
+    Object.entries(ROOM_SIGN_POINTS).map(([zone, p]) => [zone, new THREE.Vector3(p.x, p.y + 0.6, p.z)])
+  ) as Record<Exclude<ZoneId, 'agents'>, THREE.Vector3>),
+  agents: new THREE.Vector3(-0.6, 2.6, 2.4)
+};
+
+/** An invisible box over part of the room that reacts to clicks. */
+const hotspot = (area: { x: number; z: number; w: number; d: number; h: number }) => {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(area.w, area.h, area.d),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  mesh.position.set(area.x, area.h / 2, area.z);
+  return mesh;
 };
 
 const LOUNGE_SEATS = new Set(POINTS_OF_INTEREST.filter((poi) => poi.type === 'lounge').map((poi) => poi.id));
@@ -83,6 +92,8 @@ export class OfficeScene {
   public onViewChange?: (view: OfficeView) => void;
   /** The Files room cabinets were clicked. */
   public onFilesClick?: () => void;
+  /** The Library's shelves were clicked. */
+  public onLibraryClick?: () => void;
 
   private readonly cameraRig = new OfficeCameraRig();
   private readonly simulation: OfficeSimulation;
@@ -99,11 +110,9 @@ export class OfficeScene {
   private readonly hemisphere = new THREE.HemisphereLight('#ffffff', '#d8c6ab', 1.9);
   private readonly fill = new THREE.DirectionalLight('#e2ecff', 0.55);
   private lightingClock = 0;
-  /** Invisible click target over the Files room cabinets. */
-  private readonly filesHotspot = new THREE.Mesh(
-    new THREE.BoxGeometry(1.5, 2.2, 3.1),
-    new THREE.MeshBasicMaterial({ visible: false })
-  );
+  /** Invisible click targets over the Files room cabinets and the Library shelves. */
+  private readonly filesHotspot = hotspot(FILES_HOTSPOT);
+  private readonly libraryHotspot = hotspot(LIBRARY_HOTSPOT);
   private labels: SceneLabel[] = [];
   private full = new Set<string>();
   private selectedId: string | null = null;
@@ -167,8 +176,7 @@ export class OfficeScene {
       })
     );
     this.scene.add(this.crowd.object);
-    this.filesHotspot.position.set(12.35, 1.1, -4.6);
-    this.scene.add(this.filesHotspot);
+    this.scene.add(this.filesHotspot, this.libraryHotspot);
 
     if (localStorage.getItem('axon.officeDebug') === '1') {
       window.__axonOffice = {
@@ -469,6 +477,7 @@ export class OfficeScene {
         const agentId = this.agentAtPointer();
         if (agentId) this.onAgentClick?.(agentId);
         else if (this.raycaster.intersectObject(this.filesHotspot, false).length) this.onFilesClick?.();
+        else if (this.raycaster.intersectObject(this.libraryHotspot, false).length) this.onLibraryClick?.();
       }
       canvas.style.cursor = this.hoveredAgentId ? 'pointer' : 'grab';
     };
@@ -649,8 +658,10 @@ export class OfficeScene {
     if (window.__axonOffice) delete window.__axonOffice;
     this.characters.forEach((character) => character.dispose());
     this.crowd.dispose();
-    this.filesHotspot.geometry.dispose();
-    (this.filesHotspot.material as THREE.Material).dispose();
+    for (const spot of [this.filesHotspot, this.libraryHotspot]) {
+      spot.geometry.dispose();
+      (spot.material as THREE.Material).dispose();
+    }
     this.room.dispose();
     this.renderer.dispose();
     if (this.container.contains(this.renderer.domElement))

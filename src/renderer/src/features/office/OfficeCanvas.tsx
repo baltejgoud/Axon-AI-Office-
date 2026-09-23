@@ -56,6 +56,7 @@ export function OfficeCanvas() {
       world.onAgentHover = setHovered;
       world.onViewChange = setView;
       world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
+      world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)

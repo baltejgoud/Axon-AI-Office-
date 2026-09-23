@@ -12,6 +12,7 @@ import {
 import type { ScreenState } from '../../simulation/types';
 import { DISTRICTS, type FloorKind } from '../../campus/districts';
 import { DEPARTMENT_ANCHORS } from '../../simulation/layout';
+import { COMMONS_BACK_Z } from '../../campus/commons';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
 import {
   GEOMETRY,
@@ -105,14 +106,10 @@ function wallDecor(): THREE.Group {
   const g = new THREE.Group();
   windowBays(g, false, ROOM.minX + WALL_THICKNESS / 2 + 0.01, ROOM.minZ, ROOM.maxZ);
   windowBays(g, true, ROOM.minZ + WALL_THICKNESS / 2 + 0.01, ROOM.minX, ROOM.maxX);
-  const innerBack = -9 + WALL_THICKNESS / 2 + 0.01;
-  for (const [from, to] of [
-    [-12.7, -11.6],
-    [11.9, 12.8]
-  ]) {
-    for (let x = from; x < to; x += 0.09)
-      g.add(box(PALETTE.wood, [0.05, 2.55, 0.05], [x, 1.3, innerBack + 0.03]));
-  }
+  const innerBack = COMMONS_BACK_Z + WALL_THICKNESS / 2 + 0.01;
+  // Wood slats in the Lounge's corner.
+  for (let x = -19.3; x < -18.1; x += 0.09)
+    g.add(box(PALETTE.wood, [0.05, 2.55, 0.05], [x, 1.3, innerBack + 0.03]));
   const art = (x: number, y: number, width: number, height: number, colors: string[]) => {
     g.add(box(PALETTE.woodDark, [width + 0.06, height + 0.06, 0.03], [x, y, innerBack + 0.015]));
     g.add(box('#f5f1ea', [width, height, 0.01], [x, y, innerBack + 0.035]));
@@ -126,20 +123,20 @@ function wallDecor(): THREE.Group {
       )
     );
   };
-  art(-9.4, 1.75, 1.2, 0.8, ['#8fa8c4', '#c9b6a0', '#6d8fb0']);
-  art(-7.0, 1.7, 0.6, 0.8, ['#d5b98a', '#9fb4a1']);
-  art(10.5, 1.7, 0.8, 0.6, ['#8fa8c4', '#b5c7d6']);
+  // Art over the Lounge sofa, and a clock over the Marketing Strategist's desk.
+  art(-16.3, 1.75, 1.2, 0.8, ['#8fa8c4', '#c9b6a0', '#6d8fb0']);
+  art(-14.5, 1.7, 0.6, 0.8, ['#d5b98a', '#9fb4a1']);
   const clock = part(
     GEOMETRY.cylinder,
     mat(PALETTE.white),
     [0.34, 0.03, 0.34],
-    [4.9, 2.4, innerBack + 0.02],
+    [-12.1, 2.25, innerBack + 0.02],
     [Math.PI / 2, 0, 0]
   );
   g.add(
     clock,
-    box(PALETTE.darkMetal, [0.015, 0.12, 0.01], [4.9, 2.44, innerBack + 0.04]),
-    box(PALETTE.darkMetal, [0.09, 0.015, 0.01], [4.94, 2.4, innerBack + 0.04])
+    box(PALETTE.darkMetal, [0.015, 0.12, 0.01], [-12.1, 2.29, innerBack + 0.04]),
+    box(PALETTE.darkMetal, [0.09, 0.015, 0.01], [-12.06, 2.25, innerBack + 0.04])
   );
   return g;
 }
@@ -309,14 +306,13 @@ export function buildOffice(): OfficeRoom {
   root.add(floor(), wallDecor(), departmentSigns());
   for (const w of WALLS) root.add(wallMesh(w));
 
-  const lights: { poiId: string; mesh: THREE.Mesh }[] = [];
+  const lights: { spots: readonly string[]; mesh: THREE.Mesh }[] = [];
   for (const item of FURNITURE) {
     const built = buildFurniture(item);
     built.object.position.set(item.x, 0, item.z);
     built.object.rotation.y = item.rotation;
     root.add(built.object);
-    if (built.light)
-      lights.push({ poiId: item.kind === 'printer' ? 'printer' : 'cafe-machine', mesh: built.light });
+    if (built.light) lights.push({ spots: item.busyWith ?? [], mesh: built.light });
   }
 
   const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
@@ -362,10 +358,10 @@ export function buildOffice(): OfficeRoom {
     },
     update(dt, elapsed, screenState, busy) {
       screens.update(dt, elapsed, screenState);
-      for (const { poiId, mesh } of lights) {
+      for (const { spots, mesh } of lights) {
         const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = busy(poiId)
-          ? 0.9 + Math.sin(elapsed * (poiId === 'printer' ? 9 : 4)) * 0.6
+        material.emissiveIntensity = spots.some(busy)
+          ? 0.9 + Math.sin(elapsed * (spots[0] === 'printer' ? 9 : 4)) * 0.6
           : 0.35;
       }
     },

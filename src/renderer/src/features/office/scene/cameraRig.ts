@@ -9,7 +9,7 @@ const DISTANCE = 140;
 /** Closest view: about this many metres of floor across the shorter side of the screen. */
 const CLOSEST_SPAN = 9;
 /** Where the office opens: the Commons with its neighbours around it. */
-const OPENING = { point: { x: 0, z: 1 }, span: 44 };
+const OPENING = { point: { x: 0, z: 1 }, span: 52 };
 const CAMPUS_CENTRE = new THREE.Vector3((ROOM.minX + ROOM.maxX) / 2, 0, (ROOM.minZ + ROOM.maxZ) / 2);
 
 /**

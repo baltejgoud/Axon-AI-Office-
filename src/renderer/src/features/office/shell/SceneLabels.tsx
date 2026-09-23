@@ -1,5 +1,5 @@
 import { forwardRef, type CSSProperties } from 'react';
-import { BookOpen, Coffee, Files, LayoutGrid, MessageCircle, Users } from 'lucide-react';
+import { BookOpen, Coffee, ConciergeBell, Files, LayoutGrid, MessageCircle, Users } from 'lucide-react';
 import { DISTRICTS, districtById, type Bounds, type DistrictId } from '../campus/districts';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import { HOME_DESKS, poiById } from '../simulation/layout';
@@ -13,7 +13,8 @@ const ROOM_ICONS: Record<ZoneId, typeof Users> = {
   knowledge: BookOpen,
   files: Files,
   agents: Users,
-  cafe: Coffee
+  cafe: Coffee,
+  reception: ConciergeBell
 };
 const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: 'Idle',

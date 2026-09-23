@@ -102,6 +102,8 @@ interface AgentState {
   blockedFor: number;
   meetingId: number | null;
   visitHostId: string | null;
+  /** When a visitor found the host away; they wait a moment before heading back. */
+  hostMissedAt: number | null;
   visitorSpeaks: boolean;
   turnUntil: number;
   behavior: AgentBehaviorState;
@@ -134,6 +136,8 @@ const OUTINGS = new Set<PlanKind>([
   'visit',
   'meeting'
 ]);
+/** Seconds a visitor waits at an empty desk before heading back. */
+const HOST_AWAY_WAIT = 3;
 /** Specialists this close to the café may use the Commons; nobody hikes the whole campus for coffee. */
 const COMMONS_REACH = 35;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
@@ -198,6 +202,7 @@ export class OfficeSimulation {
         blockedFor: 0,
         meetingId: null,
         visitHostId: null,
+        hostMissedAt: null,
         visitorSpeaks: true,
         turnUntil: 0,
         behavior: 'idle',
@@ -641,6 +646,7 @@ export class OfficeSimulation {
     }
     agent.meetingId = null;
     agent.visitHostId = null;
+    agent.hostMissedAt = null;
   }
 
   // ---------------------------------------------------------------- meetings and visits
@@ -737,7 +743,10 @@ export class OfficeSimulation {
       chosen.push(picked);
     }
     const coachHome = chosen.find((agent) => agent.home === 'desk-product');
-    const venue = coachHome || this.rng.chance(0.6) ? 'meeting-room' : 'collab-table';
+    // The Product Coach hosts from the head of the Planning A table; otherwise any meeting space.
+    const venue = coachHome
+      ? 'meeting-room'
+      : this.rng.weighted({ 'planning-room': 40, 'meeting-room': 30, 'collab-table': 30 });
     const free = this.poisOfType((poi) => poi.group === venue && this.hasRoom(poi.id));
     const needed = chosen.filter((agent) => !(venue === 'meeting-room' && agent === coachHome));
     if (free.length < needed.length) return;
@@ -853,6 +862,7 @@ export class OfficeSimulation {
       }
       case 'do':
         agent.stepEndsAt = step.seconds === null ? null : this.time + step.seconds;
+        agent.hostMissedAt = null;
         if (step.kind === 'desk') {
           agent.deskMode = 'typing';
           agent.deskModeUntil = this.time + agent.rng.range(4, 12);
@@ -873,7 +883,11 @@ export class OfficeSimulation {
         return true;
       case 'do':
         if (step.kind === 'meeting') return agent.meetingId === null;
-        if (step.kind === 'visit' && !this.hostIsAvailable(agent)) return true;
+        if (step.kind === 'visit' && !this.hostIsAvailable(agent)) {
+          // Nobody at the desk: look around for a moment, then head back.
+          agent.hostMissedAt ??= this.time;
+          return this.time - agent.hostMissedAt >= HOST_AWAY_WAIT;
+        }
         if (step.seconds === null) return step.kind === 'desk' && !agent.onTask;
         return this.time >= (agent.stepEndsAt ?? 0);
     }
@@ -1021,6 +1035,7 @@ export class OfficeSimulation {
       case 'meeting':
         return this.meeting?.speakerId === agent.id ? 'talking' : 'meeting';
       case 'visit':
+        if (!this.hostIsAvailable(agent)) return 'waiting';
         if (this.time >= agent.turnUntil) {
           agent.visitorSpeaks = !agent.visitorSpeaks;
           agent.turnUntil = this.time + agent.rng.range(3, 6);

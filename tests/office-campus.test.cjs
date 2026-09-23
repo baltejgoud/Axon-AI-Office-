@@ -89,6 +89,28 @@ test('the campus grows 12 m each way and every district keeps its size', () => {
   }
 });
 
+test('the Commons holds all its rooms, and every Commons spot sits inside it', () => {
+  const commons = districts.districtById('commons').bounds;
+  const own = layout.POINTS_OF_INTEREST.filter((p) => !p.district);
+  for (const poi of own) assert.ok(inside(poi.position, commons), poi.id);
+  const zones = new Set(own.map((p) => p.zoneId));
+  for (const zone of ['chat', 'workspaces', 'knowledge', 'files', 'agents', 'cafe', 'reception'])
+    assert.ok(zones.has(zone), zone);
+});
+
+test('the bigger Commons has room for more people', () => {
+  const count = (pred) => layout.POINTS_OF_INTEREST.filter(pred).length;
+  assert.ok(count((p) => p.type === 'cafe-seat' && !p.district) >= 19, 'café seats');
+  assert.ok(count((p) => p.type === 'lounge' && p.zoneId === 'chat') >= 7, 'lounge seats');
+  assert.ok(count((p) => p.type === 'lounge' && p.zoneId === 'knowledge') >= 3, 'reading nooks');
+  assert.ok(count((p) => p.group === 'meeting-room') >= 7, 'planning A');
+  assert.ok(count((p) => p.group === 'planning-room') >= 6, 'planning B');
+  const sofas = layout.FURNITURE.filter((f) => f.kind === 'sofa' && f.x < -11 && f.z < -6 && f.x > -20);
+  assert.ok(sofas.length >= 3, 'lounge sofas');
+  assert.equal(layout.FURNITURE.filter((f) => f.kind === 'bookshelf-tall').length, 2);
+  assert.equal(layout.FURNITURE.filter((f) => f.kind === 'cabinet-wall').length, 1);
+});
+
 test('podGrid fits every department in its cell', () => {
   assert.deepEqual(hood.podGrid(14, 9.9, 18.9), { cols: 2, rows: 2 });
   assert.deepEqual(hood.podGrid(10, 8.9, 18.5), { cols: 2, rows: 2 });

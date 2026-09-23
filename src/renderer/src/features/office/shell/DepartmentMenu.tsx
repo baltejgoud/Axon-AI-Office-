@@ -13,7 +13,8 @@ export const COMMONS_ROOMS: { name: string; zone: ZoneId }[] = [
   { name: 'Library', zone: 'knowledge' },
   { name: 'Files room', zone: 'files' },
   { name: 'Café', zone: 'cafe' },
-  { name: 'Core team pods', zone: 'agents' }
+  { name: 'Core team pods', zone: 'agents' },
+  { name: 'Reception', zone: 'reception' }
 ];
 
 const HEADCOUNT = OFFICE_AGENTS.reduce<Record<string, number>>((counts, agent) => {

@@ -25,7 +25,7 @@ export type HeldItem = 'cup' | 'book' | 'folder' | 'tablet' | 'clipboard';
 /** Mirrors the office store's real task status; the simulation never invents one. */
 export type TaskStatus = 'idle' | 'working' | 'waiting' | 'completed' | 'error';
 
-export type ZoneId = 'chat' | 'workspaces' | 'knowledge' | 'agents' | 'files' | 'cafe';
+export type ZoneId = 'chat' | 'workspaces' | 'knowledge' | 'agents' | 'files' | 'cafe' | 'reception';
 
 export type PoiType =
   | 'desk'
@@ -53,7 +53,7 @@ export interface PointOfInterest {
   seated: boolean;
   capacity: number;
   /** Meeting venue this seat belongs to. */
-  group?: 'meeting-room' | 'collab-table';
+  group?: 'meeting-room' | 'planning-room' | 'collab-table';
   /** For visit spots: the desk whose occupant is being visited. */
   hostDeskId?: string;
   /** Set on spots that belong to a district neighbourhood; untagged spots are in the Commons. */
