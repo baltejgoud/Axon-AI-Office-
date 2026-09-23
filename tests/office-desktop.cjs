@@ -71,13 +71,17 @@ app.on('web-contents-created', (_, contents) => {
         fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
       await snap('office-desktop.png');
       assert.equal(await evaluate('document.querySelector(".sidebar")'), null);
-      assert.equal(await evaluate('document.querySelectorAll(".office-district-chips button").length'), 8);
+      // District chips on one line: the ones that fit plus those in the More menu make all eight.
+      const chipCount = `document.querySelectorAll('.office-district-chips > button').length + Number(document.querySelector('.office-chip-more')?.dataset.hidden ?? 0)`;
+      assert.equal(await evaluate(chipCount), 8);
       assert.equal(
-        await evaluate('document.querySelector(".office-district-chips button.active").textContent'),
+        await evaluate('document.querySelector(".office-district-chips > button.active").textContent'),
         'Commons'
       );
-      assert.ok(
-        await evaluate('document.querySelectorAll(".office-department-label, .office-zone-label").length > 6')
+      // Signs in the world replace the floating district, department and room labels.
+      assert.equal(
+        await evaluate('document.querySelector(".office-district-card, .office-department-label, .office-zone-label")'),
+        null
       );
       // Debug handle for camera moves and performance readings.
       await evaluate("localStorage.setItem('axon.officeDebug', '1')");
@@ -88,6 +92,8 @@ app.on('web-contents-created', (_, contents) => {
         'scene after reload'
       );
       await pause(800);
+      // The opening view shows the Commons room signs and the district signs around them.
+      assert.ok(await evaluate('window.__axonOffice.signs().filter((s) => s.opacity > 0).length > 6'));
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 8);
@@ -111,24 +117,58 @@ app.on('web-contents-created', (_, contents) => {
         );
         assert.ok(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'));
       }
+      // The composer's model chip shows a short name over the native select, and the hint stays.
+      assert.equal(
+        await evaluate('document.querySelector(".activity-composer .model-chip-label").textContent'),
+        'Fixture'
+      );
+      assert.equal(
+        await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').tagName`),
+        'SELECT'
+      );
+      assert.equal(
+        await evaluate('getComputedStyle(document.querySelector(".composer-hint")).display'),
+        'block'
+      );
       // Close up, people get name tags.
       await evaluate('window.__axonOffice.focus(0.2, 0.7, 10)');
       await waitFor('document.querySelectorAll(".office-person-label").length >= 3', 'name tags close up');
       await snap('campus-pods.png');
-      // Whole campus: district cards, and performance within budget.
+      // Whole campus: every district sign at full strength, and performance within budget.
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
-      await waitFor('document.querySelectorAll(".office-district-card").length === 8', 'district cards');
+      await waitFor(
+        "window.__axonOffice.signs().filter((s) => s.kind === 'district' && s.opacity === 1).length === 8",
+        'district signs'
+      );
       await pause(3000);
       const stats = await evaluate('window.__axonOffice.stats()');
       const tiers = await evaluate('window.__axonOffice.tiers()');
       console.log('CAMPUS_STATS', JSON.stringify(stats), JSON.stringify(tiers));
-      assert.ok(stats.calls < 900, `draw calls ${stats.calls}`);
+      // Part A's budget: within 10% of the 666 calls measured before it.
+      assert.ok(stats.calls <= 733, `draw calls ${stats.calls}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
       await snap('campus-overview.png');
+      // Clicking a district sign glides there, like its chip.
+      const sign = await evaluate("window.__axonOffice.signPoint('district:engineering')");
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        const at = { clientX: r.left + ${sign.x}, clientY: r.top + ${sign.y}, button: 0, bubbles: true };
+        canvas.dispatchEvent(new MouseEvent('mousemove', at));
+        canvas.dispatchEvent(new MouseEvent('mousedown', at));
+        window.dispatchEvent(new MouseEvent('mouseup', at));
+      })()`);
+      await waitFor(
+        'document.querySelector(".office-district-chips > button.active")?.textContent === "Engineering"',
+        'sign click glides to Engineering'
+      );
       const win = BrowserWindow.fromWebContents(contents);
       win.setContentSize(1100, 740);
       await pause(400);
       await snap('office-compact.png');
+      // A narrow window keeps the chips on one line, with the rest in the More menu.
+      assert.ok(await evaluate('document.querySelector(".office-district-chips").offsetHeight <= 44'));
+      assert.equal(await evaluate(chipCount), 8);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
       await evaluate(`document.querySelector('button[aria-label="Team view"]').click()`);
       await waitFor('document.querySelectorAll(".roster-card").length === 207', 'roster');
@@ -364,13 +404,55 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(`document.querySelector('[aria-label="Reset view"]').click()`);
       await pause(800);
       await snap('office-expanded.png');
+      // Screenshots for review at two window sizes: the opening view, Engineering, a pod, the
+      // executive offices (nameplates) and the whole campus.
+      for (const [width, height] of [
+        [1920, 1080],
+        [1366, 768]
+      ]) {
+        win.setContentSize(width, height);
+        await pause(500);
+        await evaluate(`document.querySelector('[aria-label="Reset view"]').click()`);
+        await pause(1500);
+        await snap(`a-${width}-opening.png`);
+        for (const [name, x, z, span] of [
+          ['engineering', -42.5, 0, 56],
+          ['pods', -0.6, -0.3, 10],
+          ['executive', 50, -22, 8]
+        ]) {
+          await evaluate(`window.__axonOffice.focus(${x}, ${z}, ${span})`);
+          await pause(1800);
+          await snap(`a-${width}-${name}.png`);
+        }
+        assert.equal(
+          await evaluate("window.__axonOffice.signs().filter((s) => s.kind === 'nameplate' && s.opacity === 1).length"),
+          10
+        );
+        await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
+        await pause(2000);
+        await snap(`a-${width}-campus.png`);
+        if (width === 1920) {
+          await pause(2000);
+          const big = await evaluate('window.__axonOffice.stats()');
+          // Minutes in, people away from their desks are drawn in full, so the count here varies
+          // with office life; the draw budget is checked at the controlled moment above.
+          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(await evaluate('window.__axonOffice.tiers()')));
+          assert.ok(big.fps >= 50, `fps at 1080p ${big.fps}`);
+        }
+      }
+      await evaluate("document.documentElement.dataset.theme = 'dark'");
+      await pause(200);
+      await snap('a-1366-dark.png');
+      await evaluate("document.documentElement.dataset.theme = 'light'");
+      win.setContentSize(1600, 960);
+      await pause(400);
       // WebGL loss should preserve access to all coworker actions.
       await evaluate(
         `document.querySelector('.office-canvas-container canvas').dispatchEvent(new Event('webglcontextlost', { cancelable: true }))`
       );
       await waitFor('document.querySelectorAll(".roster-card").length === 207', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: campus artwork, district chips and cards, zoom-tier labels, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),

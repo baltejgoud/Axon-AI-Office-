@@ -109,7 +109,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Leadership',
     color: '#0f5e57',
     bounds: { minX: 41, maxX: 60, minZ: -36, maxZ: -19 },
-    sign: { x: 52, z: -18.2 },
+    sign: { x: 49, z: -18.2 },
     grid: [5, 2],
     departments: ['Executive Leadership'],
     flavor: 'document',

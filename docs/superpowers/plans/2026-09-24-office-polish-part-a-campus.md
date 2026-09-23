@@ -475,7 +475,7 @@ Constants and rules:
 | engineering | (−42.5, 31.8) |
 | product | (0, −16.7) |
 | design | (29, −18.2) |
-| leadership | (52, −18.2) |
+| leadership | (49, −18.2), in front of a partition so no nameplate is hidden |
 | ai-data | (42.5, 8.8) |
 | business | (0, 36.8) |
 | people-ops | (42.5, 36.8) |

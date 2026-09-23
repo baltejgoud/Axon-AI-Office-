@@ -420,3 +420,28 @@ Three parts, in order, each with its own plan, each ending with the unit tests, 
 - **Windows notification quirks** in development builds (the app ID, Focus Assist). Mitigation: set the app ID at start-up, have the planner and briefing show missed reminders anyway, and check notifications with a packaged build.
 - **Token cost of colleague questions.** Bounded by the limit of three per task and five steps per consult.
 - **Models that ignore tools** could reply "Done!" without recording anything. Mitigation: the prompt requires tools, her thread shows a tool card for every change so a missing card is visible, and the planner is the source of truth.
+
+## 13. Revisions during build
+
+Recorded as they were decided; each is also noted in its part's plan.
+
+### Part A (campus polish)
+
+| # | Change | Why |
+|---|---|---|
+| A1 | Campus bounds are `x ∈ [−62, 62]`, `z ∈ [−38, 38]` (§4.1 said ±61, ±37). | Keeps the 2 m margin between the districts and the outer walls that the campus had before. |
+| A2 | All signs except nameplates **turn to face the camera's yaw**. Hanging signs also lean 0.2 rad toward it. `letter` is the title's font size. The smallest on-screen font is 16 px for district signs and 12 px for department and room signs. District signs may grow to 9×, not 3.5×. | Squared to the walls, signs read as slanted banners from afar. 3.5× left district names at about 6 px at the whole-campus view in a 1366 px window. |
+| A3 | District signs stand **just in front of the middle of each district's front edge**, not at its entrance corner. The Commons has Business in front of it, so its sign stands on its right-hand side. The Leadership sign stands in front of a partition. | Corner signs crowded round the Commons and overlapped. At the front edge, each sign rises over its own district, as the old cards did. At the corners, a post would hide an executive's nameplate. |
+| A4 | Department and room signs are capped at the width of their department or room, so at the widest middle zoom their text can drop below 12 px. Framing a district or department brings it up to size. | Growing past that width would overlap neighbouring signs. |
+| A5 | Department signs only in districts with two or more departments: 19 signs. Design, AI & Data and Leadership are named by their district sign. | They are one department each. |
+| A6 | The name bands on department boards are removed. | The hanging signs name the department; Part B draws the board faces. |
+| A7 | Library shelves are 2.6 m tall (§4.1 said 3 m). | The Commons back wall is 2.7 m. |
+| A8 | Short model names allow up to 16 characters (§4.5 said 14). | "Gemini 2.5 Flash" fits whole. |
+| A9 | The coffee venue is the nearest by straight line, among the café and **the person's own district's stations** only. | Districts are open floor, so a straight line matches the walk, and it avoids hundreds of path searches at start-up. Nobody takes a break in another district. |
+| A10 | Stations stand in the corridors, clear of their district's furniture: Design and Leadership at z −14.6, AI & Data at z 11, People & Ops at z 13. | The first positions put standing spots on the district edge, and the layout tests caught it. |
+| A11 | Visitors who find a desk empty wait 3 s before heading back, instead of turning on the spot. | In the bigger Commons a round trip can top a minute; turning mid-stride looked like a stuck walk. |
+| A12 | The Library's reading lamps are the existing side tables, which already carry a lamp. The café's pendant lamps have cream shades. The lobby got two waiting corners, a rug under reception, trees and planters. | The lobby looked bare in the first screenshots, and dark pendant shades read as floating blobs. |
+| A13 | Planning B's seats are their own meeting group. Meetings go to Planning B 40%, Planning A 30% and the collaboration table 30%, except when the Product Coach hosts in Planning A. | Two rooms sharing one group would split a meeting across them. |
+| A14 | Executive rugs are painted into one texture per palette, and flat decor (art, panelling, pastries) casts no shadow. | Keeps the whole-campus view within its draw budget. |
+| A15 | **Measured:** at the whole-campus view, fresh start, draw calls went from 666 to 721 at 1600 × 960 and from 661 to 716 at 1920 × 1080 (+8%, within the 10% budget). Minutes in, people away from their desks are drawn in full, and both builds run about 950–1150 draw calls at 1080p. Both hold about 60 fps, with the same occasional dips. | The budget is checked at the controlled moment in the desktop check. At 1080p the check logs the count and asserts frame rate. |
+

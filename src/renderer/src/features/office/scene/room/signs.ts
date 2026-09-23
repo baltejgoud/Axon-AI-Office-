@@ -292,6 +292,8 @@ export class SignLayer {
       const opacity = this.opacities.get(layer.kind) ?? 0;
       layer.mesh.visible = opacity > 0;
       layer.material.opacity = opacity;
+      // The cut-off trims the panels' rounded corners; it scales with opacity so faded signs still show.
+      layer.material.alphaTest = 0.5 * Math.max(opacity, 0.05);
       layer.material.depthWrite = opacity >= 1;
       const position = layer.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
       const array = position.array as Float32Array;
