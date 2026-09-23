@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, session, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog, screen } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PathService } from './infra/paths';
 import { Vault } from './infra/vault';
 import { Repository } from './repository';
 import { Service } from './service';
+import { loadWindowState, saveWindowState } from './windowState';
 import type { PlatformAPI } from '../shared/platform';
 let window: BrowserWindow | null = null;
 let service: Service;
@@ -16,13 +17,22 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');
 function createWindow(): void {
-  window = new BrowserWindow({ width: 1380, height: 900, minWidth: 980, minHeight: 680, show: false,
-    title: 'Axon — AI Studio', backgroundColor: '#0f172a', autoHideMenuBar: true,
+  // Axon is one big office: open maximized unless the user last left it restored.
+  const stateFile = join(app.getPath('userData'), 'window-state.json');
+  const saved = loadWindowState(stateFile, screen.getAllDisplays().map(d => d.workArea));
+  window = new BrowserWindow({ ...(saved.bounds ?? { width: 1380, height: 900 }), minWidth: 980, minHeight: 680, show: false,
+    title: 'Axon — AI Studio', backgroundColor: '#f7f8fa', autoHideMenuBar: true,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('will-attach-webview', event => event.preventDefault());
-  window.once('ready-to-show', () => window?.show());
+  window.once('ready-to-show', () => {
+    if (saved.maximized) window?.maximize();
+    window?.show();
+  });
+  window.on('close', () => {
+    if (window) saveWindowState(stateFile, { maximized: window.isMaximized(), bounds: window.getNormalBounds() });
+  });
   window.on('closed', () => { window = null; });
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(rendererFile);

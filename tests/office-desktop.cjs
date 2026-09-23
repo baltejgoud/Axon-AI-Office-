@@ -8,6 +8,8 @@ const output = path.resolve(__dirname, '../test-results/office');
 fs.mkdirSync(output, { recursive: true });
 const profile = fs.mkdtempSync(path.join(output, 'profile-'));
 app.setPath('userData', profile);
+// Keep the test window restored and off-screen; the app itself opens maximized.
+fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maximized: false }));
 const fixtureFolder = path.join(profile, 'office-files-fixture');
 fs.mkdirSync(path.join(fixtureFolder, 'notes'), { recursive: true });
 fs.writeFileSync(

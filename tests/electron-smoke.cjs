@@ -18,6 +18,8 @@ fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify(
   settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
 }));
 app.setPath('userData', profile);
+// Keep the test window restored and off-screen; the app itself opens maximized.
+fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maximized: false }));
 // Loopback-only mock provider. Rejects requests without the expected Bearer key.
 let lastAuth = '';
 let lastBody = '';
