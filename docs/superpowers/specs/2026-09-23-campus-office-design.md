@@ -222,3 +222,22 @@ chat/                Message.tsx, CodeBlock.tsx, ModelSelect.tsx, approvals (ext
 - **Scope.** This is large. The plan should deliver it in visible increments, each leaving the app working: (1) shell + side panel thread/approvals/model; (2) campus layout + desk assignment at current character fidelity; (3) LOD crowd + instanced furniture + labels/minimap; (4) new characters + portraits; (5) Files hub + Hand-to; (6) props, lighting, polish pass.
 - **Performance on integrated GPUs.** Mitigated by tiers, instancing, draw-call budget and adaptive pixel ratio; measured, not assumed.
 - **Uncommitted office work on the branch.** The current working tree has office changes not yet committed; they are committed as a checkpoint before implementation starts so the campus work diffs cleanly.
+
+## 7. Revisions during build
+
+Recorded as they were decided; each is also noted in its stage plan.
+
+| # | Change | Why |
+|---|---|---|
+| R1 | Window state lives in `window-state.json` (main-owned), not in `Settings`. | Keeps settings validation and migration untouched. |
+| R2 | Esc closes the top overlay only; there is no empty-selection state. | The panel always shows a coworker. |
+| R3 | An "Office Library" workspace mirrors every imported document and is used by the Library residents (Knowledge Librarian, Research Analyst, Writer). | Knowledge retrieval is workspace-scoped (`service.ts`), and the Workspaces page is gone. |
+| R4 | District placement: the Commons is the original 26 × 18 m room at the centre; Engineering fills the left; Product & Delivery is behind the Commons; Business is in front; Design and Leadership are at the back right; AI & Data in the middle right; People & Ops at the front right. | Reuses the tested Commons and keeps every neighbourhood ≥ 2.6 m apart. |
+| R5 | Nav grid cells stay at 0.2 m (not 0.25 m); the rasterized build takes ~25 ms. | 0.25 m cells misaligned the tested Commons spots; 0.2 m is still fast. |
+| R6 | Ops Coordinator sits at a new reception desk at the front of the Commons. | The spec's reception role; the old pod seat stays as a spare desk. |
+| R7 | Only people within 35 m of the café use Commons amenities; everyone else takes local breaks (their department's whiteboard, a colleague's desk, their district's open area). At most 12 people are away from their desks at once. | Nobody hikes 60 m for coffee, and the walking budget bounds rendering cost. |
+| R8 | Full-rig budget: 24 when close (< 30 m of floor in view), 10 in the middle range, only required people from afar; new optional rigs arrive at most 4 per 250 ms. | Measured: 60 fps at 1080p in every view on the target laptop. |
+| R9 | Draw calls at whole-campus zoom are ~480 (including the shadow pass), not ≤ 250. | Frame rate holds at 60 fps; further merging would cost clarity in code for no visible gain. |
+| R10 | Label tiers follow the visible floor width (far > 90 m, near < 30 m), not metres per pixel. | Keeps the opening view in the same tier on every window size. |
+| R11 | World-space hanging signs are deferred to the polish stage; department names are HTML labels. | Tints on 22 small signs were not distinguishable. |
+| R12 | Stages as built: 1 shell + panel; 2 campus, crowd, camera, chrome (spec increments 2–3); 3 people and portraits; 4 Files hub and Hand-to; 5 props, lighting and polish. | The crowd renderer was needed before 207 people could be shown at all. |
