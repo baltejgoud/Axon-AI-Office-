@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { OfficeFiles, type OfficeFileContext } from './OfficeFiles';
 import { Activity, ArrowUpRight, Check, FileText, Sparkles } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,6 +10,7 @@ import { AgentComposer } from './AgentComposer';
 import { AgentPortrait } from '../AgentPortrait';
 
 export function ActivityPanel() {
+  const [fileContext, setFileContext] = useState<OfficeFileContext | null>(null);
   const { data, patch, workspaceId } = useApp();
   const { selectedAgentId, agentRuntime } = useOfficeStore();
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
@@ -68,6 +71,7 @@ export function ActivityPanel() {
         </div>
       </div>
       <div className="activity-body">
+        {agent.id === 'files-agent' && <OfficeFiles onInclude={setFileContext} />}
         <section className="current-task-card">
           <div className="activity-section-heading">
             <FileText size={15} />
@@ -159,7 +163,12 @@ export function ActivityPanel() {
           </button>
         )}
       </div>
-      <AgentComposer key={agent.id} agentId={agent.id} />
+      <AgentComposer
+        key={agent.id}
+        agentId={agent.id}
+        fileContext={agent.id === 'files-agent' ? fileContext : null}
+        clearFileContext={() => setFileContext(null)}
+      />
     </aside>
   );
 }

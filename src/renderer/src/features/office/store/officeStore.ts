@@ -1,19 +1,11 @@
 import { create } from 'zustand';
-import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
+import { OFFICE_AGENTS, agentsForWing, type AgentStatus } from '../data/officeAgents';
 
 export interface AgentActivity {
   id: string;
   agentId: string;
   timestamp: number;
-  type:
-    | 'task_assigned'
-    | 'started'
-    | 'streaming'
-    | 'message'
-    | 'file'
-    | 'knowledge'
-    | 'completed'
-    | 'error';
+  type: 'task_assigned' | 'started' | 'streaming' | 'message' | 'file' | 'knowledge' | 'completed' | 'error';
   title: string;
   detail?: string;
 }
@@ -27,6 +19,8 @@ export interface AgentRuntime {
 }
 
 interface OfficeStoreState {
+  activeWing: string;
+  setWing: (wing: string) => void;
   selectedAgentId: string;
   focusedZoneId: string | null;
   agentRuntime: Record<string, AgentRuntime>;
@@ -38,10 +32,7 @@ interface OfficeStoreState {
   setAgentTask: (agentId: string, task: string) => void;
   setAgentConversation: (agentId: string, conversationId: string) => void;
   setLastResponse: (agentId: string, text: string) => void;
-  pushActivity: (
-    agentId: string,
-    activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>
-  ) => void;
+  pushActivity: (agentId: string, activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>) => void;
   toggle3d: () => void;
 }
 
@@ -54,7 +45,15 @@ for (const agent of OFFICE_AGENTS) {
 }
 
 export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
-  selectedAgentId: 'research-analyst',
+  activeWing: 'Headquarters',
+  setWing: (wing) => {
+    const agents = agentsForWing(wing);
+    const selected = agents.some((a) => a.id === get().selectedAgentId)
+      ? get().selectedAgentId
+      : (agents.find((a) => a.wing)?.id ?? agents[0].id);
+    set({ activeWing: wing, selectedAgentId: selected, focusedZoneId: null });
+  },
+  selectedAgentId: 'frontend-developer',
   focusedZoneId: 'agents',
   agentRuntime: initialRuntime,
   is3dEnabled: true,
@@ -63,6 +62,9 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
     set({
+      activeWing: agentsForWing(get().activeWing).some((a) => a.id === id)
+        ? get().activeWing
+        : (agent.wing ?? 'Headquarters'),
       selectedAgentId: id,
       focusedZoneId: agent.department
     });

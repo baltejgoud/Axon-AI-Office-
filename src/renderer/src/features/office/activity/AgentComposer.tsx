@@ -1,3 +1,4 @@
+import type { OfficeFileContext } from './OfficeFiles';
 import { useState, type KeyboardEvent } from 'react';
 import { ArrowUp, Paperclip, X } from 'lucide-react';
 import { useApp } from '../../../state';
@@ -7,9 +8,11 @@ import { Icon } from '../../../ui';
 
 interface AgentComposerProps {
   agentId: string;
+  fileContext?: OfficeFileContext | null;
+  clearFileContext?: () => void;
 }
 
-export function AgentComposer({ agentId }: AgentComposerProps) {
+export function AgentComposer({ agentId, fileContext, clearFileContext }: AgentComposerProps) {
   const { data, model, patch, workspaceId } = useApp();
   const { agentRuntime, setAgentStatus, setAgentTask, setAgentConversation, pushActivity } = useOfficeStore();
 
@@ -85,7 +88,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             modelParts.join('::'),
             workspace?.id ?? null,
             savedAgent?.id ?? agentId,
-            { skillIds: [], roleIds: [] },
+            { skillIds: [], roleIds: agent.roleIds ?? [] },
             null,
             savedAgent ? undefined : agent.systemPrompt
           );
@@ -106,7 +109,14 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         detail: 'Analyzing request and streaming answer'
       });
 
-      await window.axon.chatSend(convId, textToSend, attachIds);
+      await window.axon.chatSend(
+        convId,
+        fileContext
+          ? `${textToSend}\n\nFile context: ${fileContext.path}\n<file-content>\n${fileContext.content}\n</file-content>`
+          : textToSend,
+        attachIds
+      );
+      clearFileContext?.();
       await useApp.getState().refresh();
     } catch (err) {
       setAgentStatus(agentId, 'error');
@@ -134,6 +144,15 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
         Message {agent?.name}
       </div>
+      {fileContext && (
+        <div className="composer-attachment-tag">
+          <Paperclip size={14} />
+          <span>{fileContext.path}</span>
+          <button aria-label="Remove file context" onClick={clearFileContext}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {attachments.length > 0 && (
         <div className="composer-attachments-preview">
           {attachments.map((att) => (

@@ -1,0 +1,220 @@
+import * as THREE from 'three';
+
+/** Warm, light office palette taken from the reference artwork. */
+export const PALETTE = {
+  floor: '#dcc09a',
+  wall: '#f3efe9',
+  wallCap: '#aab3bd',
+  slab: '#b9c1ca',
+  wood: '#c79c6b',
+  woodLight: '#e2c8a0',
+  woodDark: '#9f7549',
+  white: '#f6f5f2',
+  offWhite: '#e9e4db',
+  metal: '#c7cbd1',
+  darkMetal: '#3b4048',
+  black: '#262a30',
+  fabricBlue: '#8096ad',
+  fabricCream: '#ece5d8',
+  fabricGray: '#d4d6d9',
+  rug: '#d6d3cd',
+  glass: '#d6ebf2',
+  bronze: '#9a7a52',
+  leaf: '#4c8a47',
+  leafLight: '#6aa85a',
+  leafDark: '#3d7039',
+  pot: '#f0ede7',
+  clay: '#c78d64',
+  window: '#d3e6f1',
+  screenOff: '#1d2530',
+  paper: '#fbfaf6'
+} as const;
+
+const materials = new Map<string, THREE.MeshStandardMaterial>();
+
+export interface MaterialOptions {
+  roughness?: number;
+  metalness?: number;
+  emissive?: string;
+  emissiveIntensity?: number;
+  transparent?: boolean;
+  opacity?: number;
+  flat?: boolean;
+  map?: THREE.Texture;
+}
+
+/** Shared material per look; building eight people and a whole office reuses these. */
+export function mat(color: string, options: MaterialOptions = {}): THREE.MeshStandardMaterial {
+  const key = JSON.stringify([
+    color,
+    options.roughness,
+    options.metalness,
+    options.emissive,
+    options.emissiveIntensity,
+    options.transparent,
+    options.opacity,
+    options.flat,
+    options.map?.uuid
+  ]);
+  let material = materials.get(key);
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: options.roughness ?? 0.82,
+      metalness: options.metalness ?? 0,
+      emissive: options.emissive ?? '#000000',
+      emissiveIntensity: options.emissiveIntensity ?? 1,
+      transparent: options.transparent ?? false,
+      opacity: options.opacity ?? 1,
+      flatShading: options.flat ?? false,
+      map: options.map ?? null,
+      depthWrite: !(options.transparent ?? false)
+    });
+    materials.set(key, material);
+  }
+  return material;
+}
+
+/** Unit primitives, scaled per use. */
+export const GEOMETRY = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 20),
+  cone: new THREE.CylinderGeometry(0.34, 0.5, 1, 18),
+  sphere: new THREE.SphereGeometry(0.5, 20, 14),
+  lowSphere: new THREE.IcosahedronGeometry(0.5, 1),
+  capsule: new THREE.CapsuleGeometry(0.5, 1, 6, 14),
+  plane: new THREE.PlaneGeometry(1, 1),
+  disc: new THREE.CircleGeometry(0.5, 32)
+} as const;
+
+type Vec3 = [number, number, number];
+
+/** A mesh from a unit primitive, sized and placed in its parent's frame. */
+export function part(
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  size: Vec3,
+  position: Vec3,
+  rotation: Vec3 = [0, 0, 0]
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.set(...size);
+  mesh.position.set(...position);
+  mesh.rotation.set(...rotation);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+export const box = (color: string, size: Vec3, position: Vec3, options?: MaterialOptions) =>
+  part(GEOMETRY.box, mat(color, options), size, position);
+
+export const cylinder = (
+  color: string,
+  radius: number,
+  height: number,
+  position: Vec3,
+  options?: MaterialOptions
+) => part(GEOMETRY.cylinder, mat(color, options), [radius * 2, height, radius * 2], position);
+
+// ---------------------------------------------------------------- procedural textures
+
+let floorTexture: THREE.CanvasTexture | null = null;
+
+/** Light oak planks with staggered joints, drawn once. One tile covers 4 m. */
+export function woodFloorTexture(): THREE.CanvasTexture {
+  if (floorTexture) return floorTexture;
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = PALETTE.floor;
+  g.fillRect(0, 0, size, size);
+  const rows = 20;
+  const rowHeight = size / rows;
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  for (let row = 0; row < rows; row++) {
+    let x = -random() * 400;
+    while (x < size) {
+      const length = 260 + random() * 320;
+      const shade = 0.93 + random() * 0.12;
+      g.fillStyle = `rgb(${Math.round(220 * shade)}, ${Math.round(192 * shade)}, ${Math.round(154 * shade)})`;
+      g.fillRect(x, row * rowHeight, length, rowHeight);
+      g.globalAlpha = 0.12;
+      g.strokeStyle = '#a57d51';
+      for (let grain = 0; grain < 3; grain++) {
+        const y = row * rowHeight + rowHeight * (0.2 + random() * 0.6);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.bezierCurveTo(x + length * 0.3, y + 3, x + length * 0.7, y - 3, x + length, y + 1);
+        g.stroke();
+      }
+      g.globalAlpha = 0.45;
+      g.fillStyle = '#b08a5f';
+      g.fillRect(x, row * rowHeight, 2, rowHeight);
+      g.globalAlpha = 1;
+      x += length;
+    }
+    g.fillStyle = 'rgba(150, 115, 78, 0.45)';
+    g.fillRect(0, row * rowHeight, size, 1.5);
+  }
+  floorTexture = new THREE.CanvasTexture(canvas);
+  floorTexture.colorSpace = THREE.SRGBColorSpace;
+  floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+  floorTexture.anisotropy = 4;
+  return floorTexture;
+}
+
+export type ScreenFlavor = 'document' | 'data' | 'design' | 'code';
+const screenCanvases = new Map<ScreenFlavor, HTMLCanvasElement>();
+
+/** Abstract app UI for laptop and monitor screens: no readable text, just structure. */
+export function screenCanvas(flavor: ScreenFlavor): HTMLCanvasElement {
+  const cached = screenCanvases.get(flavor);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 320; // twice the visible height, so the content can scroll
+  const g = canvas.getContext('2d')!;
+  const dark = flavor === 'code';
+  g.fillStyle = dark ? '#1c2330' : '#f4f7fb';
+  g.fillRect(0, 0, 256, 320);
+  g.fillStyle = dark ? '#252e3d' : '#e3e9f2';
+  g.fillRect(0, 0, 44, 320);
+  const accents: Record<ScreenFlavor, string[]> = {
+    document: ['#3b6ff5', '#9aa8bd'],
+    data: ['#10a37f', '#3b6ff5', '#f59e0b'],
+    design: ['#ec4899', '#8b5cf6', '#f59e0b', '#10b981'],
+    code: ['#7dd3fc', '#c4b5fd', '#86efac', '#fca5a5']
+  };
+  let seed = flavor.length * 97;
+  const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  for (let y = 12; y < 320; y += 14) {
+    const accent = accents[flavor][Math.floor(random() * accents[flavor].length)];
+    if (flavor === 'design' && random() < 0.3) {
+      g.fillStyle = accent;
+      g.fillRect(56 + random() * 100, y, 30 + random() * 60, 24);
+      y += 14;
+      continue;
+    }
+    if (flavor === 'data' && random() < 0.25) {
+      for (let bar = 0; bar < 8; bar++) {
+        g.fillStyle = accents.data[bar % 3];
+        const height = 8 + random() * 26;
+        g.fillRect(60 + bar * 22, y + 34 - height, 14, height);
+      }
+      y += 28;
+      continue;
+    }
+    g.fillStyle = random() < 0.2 ? accent : dark ? '#4b5566' : '#c3cbd8';
+    const indent = flavor === 'code' ? 56 + Math.floor(random() * 3) * 12 : 56;
+    g.fillRect(indent, y, 40 + random() * (190 - indent), 6);
+  }
+  for (let y = 10; y < 320; y += 22) {
+    g.fillStyle = dark ? '#3a4454' : '#c8d2e0';
+    g.fillRect(10, y, 24, 8);
+  }
+  screenCanvases.set(flavor, canvas);
+  return canvas;
+}

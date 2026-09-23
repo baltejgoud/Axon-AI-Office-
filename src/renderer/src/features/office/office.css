@@ -230,6 +230,25 @@
 .person-status.error {
   background: #cf4652;
 }
+.person-status.completed {
+  background: #15a36f;
+  box-shadow: 0 0 0 3px #15a36f33;
+}
+.person-label-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.15;
+}
+.person-label-detail strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+.person-label-detail small {
+  color: #687797;
+  font-size: 9px;
+}
 .office-map-hint {
   position: absolute;
   display: flex;
@@ -888,4 +907,315 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Expanded office campus */
+.office-container {
+  padding: 22px;
+}
+.office-directory {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 12px;
+  position: relative;
+  z-index: 8;
+}
+.office-wing-picker,
+.office-find-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 1px solid var(--office-border);
+  background: var(--office-paper);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--office-muted);
+}
+.office-wing-picker {
+  flex: 0 1 270px;
+  min-width: 0;
+}
+.office-wing-picker select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--office-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.office-find-person {
+  flex: 1;
+  position: relative;
+  min-width: 140px;
+}
+.office-find-person input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  background: transparent;
+  border: 0;
+  color: var(--office-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.office-find-person > button {
+  border: 0;
+  background: transparent;
+  color: var(--office-muted);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 36px;
+}
+.office-search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px #16233b22;
+  background: var(--office-paper);
+  padding: 8px;
+}
+.office-search-results > button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px;
+  color: var(--office-ink);
+  background: transparent;
+}
+.office-search-results > button:hover {
+  background: var(--office-soft);
+}
+.office-search-results strong,
+.office-search-results small {
+  display: block;
+}
+.office-search-results strong {
+  font-size: 13px;
+}
+.office-search-results small {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--office-muted);
+}
+.office-search-count,
+.office-search-results > p {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--office-muted);
+}
+.office-team-people {
+  overflow-x: auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 5px 3px;
+  scrollbar-width: thin;
+}
+.office-team-people button {
+  flex: 0 0 82px;
+}
+.office-team-people button > span:last-child {
+  width: 82px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+.office-portrait svg {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.office-portrait {
+  overflow: hidden;
+}
+.office-person-label {
+  max-width: 150px;
+}
+.office-person-label:not(.selected) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.office-view-controls button {
+  width: 40px;
+  height: 40px;
+}
+.office-container input:focus-visible,
+.office-container select:focus-visible {
+  outline: 2px solid var(--office-blue);
+  outline-offset: 2px;
+}
+.return-to-office {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 10px;
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+@media (max-width: 1250px) {
+  .office-container {
+    padding: 14px;
+    gap: 12px;
+  }
+  .office-heading {
+    padding-bottom: 12px;
+  }
+  .office-directory {
+    padding-bottom: 8px;
+  }
+  .office-zone-tabs button {
+    padding: 8px;
+  }
+}
+@media (max-width: 960px) {
+  .office-directory {
+    flex-wrap: wrap;
+  }
+  .office-wing-picker {
+    flex: 1 1 180px;
+  }
+  .office-find-person {
+    flex: 1 1 210px;
+  }
+  .office-presence small {
+    max-width: 150px;
+  }
+}
+
+.office-file-browser {
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--office-border);
+}
+.office-file-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  border-radius: 9px;
+  border: 1px solid var(--office-border);
+  background: var(--office-soft);
+  color: var(--office-blue);
+  font-size: 12px;
+  padding: 8px;
+}
+.office-file-root {
+  font-size: 12px;
+  color: var(--office-muted);
+  overflow-wrap: anywhere;
+}
+.office-file-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.office-file-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--office-ink);
+  text-align: left;
+  padding: 6px;
+  font-size: 12px;
+}
+.office-file-entry:hover {
+  background: var(--office-soft);
+}
+.office-file-entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-file-preview {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.office-file-preview strong {
+  overflow-wrap: anywhere;
+}
+.office-file-preview pre {
+  max-height: 150px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--office-soft);
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .office-container {
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .office-viewport {
+    flex: none;
+    min-height: 630px;
+  }
+  .office-stage {
+    min-height: 320px;
+  }
+  .office-activity-panel {
+    flex: none;
+    max-width: none;
+    min-width: 0;
+    min-height: 540px;
+    max-height: 720px;
+  }
+  .office-navigation {
+    align-items: flex-start;
+  }
+  .office-zone-tabs {
+    gap: 0;
+  }
+  .office-view-controls {
+    flex-direction: column;
+  }
+  .office-directory {
+    padding-inline: 0;
+    gap: 8px;
+  }
+  .office-team-people button {
+    flex-basis: 56px;
+  }
+}
+
+.office-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.office-person-label {
+  background: var(--office-paper);
 }

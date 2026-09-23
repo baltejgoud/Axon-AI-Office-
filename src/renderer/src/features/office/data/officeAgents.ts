@@ -1,3 +1,4 @@
+import { SPECIALIST_ROLES, HQ_SPECIALISTS, specialistColor } from './coworkerCatalog';
 import analystImg from '@/assets/agents/research-analyst.jpg';
 import designerImg from '@/assets/agents/designer.jpg';
 import filesImg from '@/assets/agents/files-agent.jpg';
@@ -22,7 +23,8 @@ export interface OfficeAgent {
   currentTask?: string;
   capabilities: string[];
   systemPrompt: string;
-  mapPosition: [number, number]; // normalized image coordinates where the coworker stands
+  wing?: string;
+  roleIds?: string[];
 }
 
 export const OFFICE_AGENTS: OfficeAgent[] = [
@@ -38,8 +40,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['Deep research', 'Competitor analysis', 'Document synthesis', 'Pattern detection'],
     systemPrompt:
-      'You are Axon’s Research Analyst. Your focus is deep research, synthesizing disparate information, analyzing market and technical documents, comparing alternatives, and extracting actionable findings with clear citations and structured reasoning.',
-    mapPosition: [0.411, 0.464]
+      'You are Axon’s Research Analyst. Your focus is deep research, synthesizing disparate information, analyzing market and technical documents, comparing alternatives, and extracting actionable findings with clear citations and structured reasoning.'
   },
   {
     id: 'writer',
@@ -53,8 +54,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['Executive briefs', 'Technical writing', 'Copywriting', 'Tone adaptation'],
     systemPrompt:
-      'You are Axon’s Writer. You craft crisp, persuasive, and clear prose. You adapt tone from technical precision to executive brevity, remove fluff, and communicate ideas with elegance.',
-    mapPosition: [0.375, 0.557]
+      'You are Axon’s Writer. You craft crisp, persuasive, and clear prose. You adapt tone from technical precision to executive brevity, remove fluff, and communicate ideas with elegance.'
   },
   {
     id: 'designer',
@@ -68,8 +68,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['UX architecture', 'Design systems', 'Layout strategy', 'User flow design'],
     systemPrompt:
-      'You are Axon’s Product & UX Designer. You analyze user flows, critique interface designs, recommend clean layout patterns, and balance visual polish with usability.',
-    mapPosition: [0.592, 0.639]
+      'You are Axon’s Product & UX Designer. You analyze user flows, critique interface designs, recommend clean layout patterns, and balance visual polish with usability.'
   },
   {
     id: 'product-coach',
@@ -83,8 +82,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['PRD creation', 'Sprint planning', 'Tradeoff evaluation', 'Feature prioritization'],
     systemPrompt:
-      'You are Axon’s Product Coach. You help founders and teams turn messy ideas into structured requirements, user stories, milestone roadmaps, and crisp decision frameworks.',
-    mapPosition: [0.457, 0.189]
+      'You are Axon’s Product Coach. You help founders and teams turn messy ideas into structured requirements, user stories, milestone roadmaps, and crisp decision frameworks.'
   },
   {
     id: 'knowledge-librarian',
@@ -98,8 +96,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['Knowledge indexing', 'Citation finding', 'Domain synthesis', 'Semantic retrieval'],
     systemPrompt:
-      'You are Axon’s Knowledge Librarian. You organize, search, and extract high-signal knowledge from project documentation, research papers, and uploaded files with pinpoint accuracy.',
-    mapPosition: [0.672, 0.292]
+      'You are Axon’s Knowledge Librarian. You organize, search, and extract high-signal knowledge from project documentation, research papers, and uploaded files with pinpoint accuracy.'
   },
   {
     id: 'files-agent',
@@ -113,8 +110,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['File navigation', 'Attachment context', 'Document audit', 'Format extraction'],
     systemPrompt:
-      'You are Axon’s Files Agent. You inspect project structures, verify file contents, assist with file organization, and extract structured takeaways from multi-format attachments.',
-    mapPosition: [0.844, 0.357]
+      'You are Axon’s Files Agent. You inspect project structures, verify file contents, assist with file organization, and extract structured takeaways from multi-format attachments.'
   },
   {
     id: 'marketing-strategist',
@@ -128,8 +124,7 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['GTM strategy', 'Positioning frameworks', 'Value propositions', 'Campaign design'],
     systemPrompt:
-      'You are Axon’s Marketing Strategist. You specialize in positioning, defining target audiences, crafting compelling value propositions, and planning go-to-market rollouts.',
-    mapPosition: [0.28, 0.171]
+      'You are Axon’s Marketing Strategist. You specialize in positioning, defining target audiences, crafting compelling value propositions, and planning go-to-market rollouts.'
   },
   {
     id: 'ops-coordinator',
@@ -143,7 +138,30 @@ export const OFFICE_AGENTS: OfficeAgent[] = [
     status: 'idle',
     capabilities: ['Workflow tracking', 'Operational checklists', 'Timeline coordination', 'Blocker triage'],
     systemPrompt:
-      'You are Axon’s Ops Coordinator. You keep tasks on schedule, break multi-step projects into verifiable checklist items, identify dependencies, and ensure operational excellence.',
-    mapPosition: [0.628, 0.525]
+      'You are Axon’s Ops Coordinator. You keep tasks on schedule, break multi-step projects into verifiable checklist items, identify dependencies, and ensure operational excellence.'
   }
 ];
+
+OFFICE_AGENTS.push(
+  ...SPECIALIST_ROLES.map((role) => ({
+    id: role.id,
+    name: role.name,
+    role: role.group,
+    wing: role.group,
+    roleIds: role.id === 'business-analyst' ? [] : [role.id],
+    department: 'agents' as const,
+    description: role.profile.split('\n')[0].replace('Owns: ', ''),
+    accentColor: specialistColor(role.group),
+    accentSoft: `${specialistColor(role.group)}18`,
+    status: 'idle' as const,
+    capabilities: [role.group, 'Dedicated conversation', 'File context'],
+    systemPrompt: `You are Axon's ${role.name}. ${role.profile}\nBe explicit about what you have actually done versus recommendations. Use available tools when needed; do not claim access to files or services you do not have.`
+  }))
+);
+
+export function agentsForWing(wing: string): OfficeAgent[] {
+  return OFFICE_AGENTS.filter(
+    (agent) =>
+      !agent.wing || (wing === 'Headquarters' ? HQ_SPECIALISTS.includes(agent.id) : agent.wing === wing)
+  );
+}
