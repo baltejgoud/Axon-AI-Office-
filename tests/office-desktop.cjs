@@ -27,8 +27,31 @@ const server = http.createServer((request, response) => {
     body += chunk;
   });
   request.on('end', () => {
-    providerRequest = JSON.parse(body);
+    const parsed = JSON.parse(body);
+    const system = parsed.messages?.find((message) => message.role === 'system')?.content ?? '';
+    const last = parsed.messages?.[parsed.messages.length - 1];
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    // A colleague answering a question.
+    if (system.includes('is asking you a question')) {
+      response.end(
+        'data: {"choices":[{"delta":{"content":"409 Conflict, with a problem+json body."}}]}\n\ndata: [DONE]\n\n'
+      );
+      return;
+    }
+    providerRequest = parsed;
+    // A coworker asked to consult someone calls ask_colleague first.
+    if (last?.role === 'user' && /ask a colleague/i.test(last.content)) {
+      const call = {
+        index: 0,
+        id: 'call_colleague',
+        function: {
+          name: 'ask_colleague',
+          arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'Which status code for a conflict?' })
+        }
+      };
+      response.end(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`);
+      return;
+    }
     response.write('data: {"choices":[{"delta":{"content":"The office connection is working. "}}]}\n\n');
     setTimeout(() => {
       response.write(
@@ -394,6 +417,56 @@ app.on('web-contents-created', (_, contents) => {
         await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
         'Frontend Developer'
       );
+      // Coworkers ask colleagues: a card in the thread, a help record, and a card on the colleague's board.
+      await evaluate(
+        `(() => { const input = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Please ask a colleague about status codes.'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
+      await pause(70);
+      await evaluate('document.querySelector(".composer-btn-send").click()');
+      await waitFor(
+        'document.querySelector(".colleague-card")?.textContent.includes("409 Conflict")',
+        'colleague card with the answer'
+      );
+      assert.match(await evaluate('document.querySelector(".colleague-card").textContent'), /Backend Developer/);
+      await waitFor(
+        `window.axon.snapshot().then((s) => s.tasks.some((t) => t.kind === 'work' && t.coworkerId === 'frontend-developer' && t.status === 'done' && s.tasks.some((h) => h.kind === 'help' && h.createdAt >= t.runStartedAt)))`,
+        'the asking run finishes'
+      );
+      const records = (await evaluate('window.axon.snapshot()')).tasks;
+      assert.ok(
+        records.some(
+          (t) =>
+            t.kind === 'help' &&
+            t.status === 'done' &&
+            t.coworkerId === 'backend-developer' &&
+            t.forCoworkerId === 'frontend-developer'
+        ),
+        'help record'
+      );
+      await waitFor('document.querySelector(".status-badge.completed")', 'asker shows completed');
+      await waitFor(
+        `window.__axonOffice.boards().find((b) => b.team === 'Backend & APIs').cards.some((c) => c.title === 'Helping Frontend')`,
+        'help card on the Backend board'
+      );
+      // The board opens the team's task list; Esc goes back to the coworker.
+      await evaluate('window.__axonOffice.focus(-42.5, -29.5, 7)');
+      await pause(1800);
+      await snap('b-board-closeup.png');
+      const board = await evaluate(`window.__axonOffice.boardPoint('Backend & APIs')`);
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        const at = { clientX: r.left + ${board.x}, clientY: r.top + ${board.y}, button: 0, bubbles: true };
+        canvas.dispatchEvent(new MouseEvent('mousemove', at));
+        canvas.dispatchEvent(new MouseEvent('mousedown', at));
+        window.dispatchEvent(new MouseEvent('mouseup', at));
+      })()`);
+      await waitFor('document.querySelector(".team-list")', 'team list from the board');
+      assert.match(await evaluate('document.querySelector(".team-list").textContent'), /Helping Frontend Developer/);
+      await snap('b-team-list.png');
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await pause(120);
+      assert.equal(await evaluate('document.querySelector(".team-list")'), null);
       win.setContentSize(375, 812);
       await pause(350);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
@@ -452,7 +525,7 @@ app.on('web-contents-created', (_, contents) => {
       );
       await waitFor('document.querySelectorAll(".roster-card").length === 207', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, task boards and team list, colleagues asked and answering, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),

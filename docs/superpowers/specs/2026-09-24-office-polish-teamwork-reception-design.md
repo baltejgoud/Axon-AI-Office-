@@ -445,3 +445,17 @@ Recorded as they were decided; each is also noted in its part's plan.
 | A14 | Executive rugs are painted into one texture per palette, and flat decor (art, panelling, pastries) casts no shadow. | Keeps the whole-campus view within its draw budget. |
 | A15 | **Measured:** at the whole-campus view, fresh start, draw calls went from 666 to 721 at 1600 × 960 and from 661 to 716 at 1920 × 1080 (+8%, within the 10% budget). Minutes in, people away from their desks are drawn in full, and both builds run about 950–1150 draw calls at 1080p. Both hold about 60 fps, with the same occasional dips. | The budget is checked at the controlled moment in the desktop check. At 1080p the check logs the count and asserts frame rate. |
 
+
+### Part B (task boards and teamwork)
+
+| # | Change | Why |
+|---|---|---|
+| B1 | Boards show a **2 × 2 grid of cards tinted by status**, each with a short title and the person's initials and short name, instead of four text rows. | At the closest zoom a 1.1 m board fits about 7 px of text per row. Colour and short titles read at a glance, and the team list has the details. |
+| B2 | Department boards widen from 2.0 m to **2.4 m**. The Sales gong and Customer Success trophies move over. Leadership gets a board in its corridor, between the first two doors. The Library, Planning (its whiteboard, widened), Lounge and Files room each get one. | Leadership had no board, and the core team's rooms needed one each. |
+| B3 | `ask_colleague` returns `{ colleague, name, answer }` as JSON (errors stay plain text). | The card needs to know who answered. |
+| B4 | `TaskItem` gains **`runStartedAt`** on work records. | So a colleague's walk-over belongs to the run that asked. |
+| B5 | `MessageView` gains a **`renderToolCall`** prop. | The office draws colleague cards without the chat view knowing about coworkers. |
+| B6 | A colleague is resolved by exact name or id, or when **exactly one** person scores as a strong name match in the specialty search. Otherwise the tool returns the five closest names. | "engineer" would otherwise pick Engineering Manager over dozens of engineers. |
+| B7 | **Tool results stay on the call that made them** (for every tool, not just colleagues). The office thread no longer shows `tool` messages as messages of their own; for older threads it fills the results in from them. | Found when building: after a reload the card sat on "Thinking…" and the raw tool result showed as a message. Office conversations had no tools before Part B, so it had not surfaced. |
+| B8 | Department signs hang at 3.05 m (was 2.7 m), and the Lounge board stands clear of the Lounge's room sign. | At 2.7 m a sign hid its board's header from the camera. |
+| B9 | **Measured:** the whole-campus view went from 721 to 722 draw calls (boards are one call) and holds 60 fps. | — |
