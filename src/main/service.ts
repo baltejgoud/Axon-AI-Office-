@@ -2,7 +2,7 @@ import { app, dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { PlatformAPI, Snapshot, TaskPatch } from '../shared/platform';
-import type { FocusTarget, TaskItem } from '../shared/types';
+import type { FocusTarget, Settings, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
@@ -23,12 +23,20 @@ import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } fro
 import { READ_ONLY_TOOLS, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
+import { Reminders, type Notice } from './reminders';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 
 /** What the receptionist says when her model can't call tools, so she can't keep the planner. */
 export const NO_TOOLS = "This model can't use tools, so I can't keep your planner. Pick another model.";
 const noToolSupport = (message: string) =>
   /\btools?\b|function.?call/i.test(message) && /support|allow|enable|invalid|unknown|unrecogni/i.test(message);
+
+/** What the service needs from the desktop around it: notifications, the window, sign-in start. */
+export interface ShellPort {
+  notify(notice: Notice): void;
+  windowVisible(): boolean;
+  applySettings(settings: Settings): void;
+}
 
 const text = (value: unknown, max = 200000): string => {
   if (typeof value !== 'string' || value.length > max) throw new Error('Invalid text input.');
@@ -50,12 +58,19 @@ export class Service {
   private readonly tracker: TaskTracker;
   /** Where a notification or the tray wanted the next window to open. */
   private pendingFocus: FocusTarget | null = null;
+  /** The to-dos' reminders; they start once there is a shell to show them. */
+  readonly reminders: Reminders;
+  private shell: ShellPort | null = null;
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
     this.parsers = new ParsePool(parserPath);
     this.mcp = new MCPClientManager(this.tools);
-    this.tasks = new TaskStore(this.state, () => this.repo.id(), (tasks) => this.emit({ channel: 'tasks', tasks }));
+    this.tasks = new TaskStore(this.state, () => this.repo.id(), (tasks) => {
+      this.emit({ channel: 'tasks', tasks });
+      this.reminders?.changed();
+    });
+    this.reminders = new Reminders(this.tasks, (notice) => this.shell?.notify(notice), { persist: () => void this.repo.save() });
     this.tracker = new TaskTracker(this.tasks, (id) => !!coworkerById(id) && id !== RECEPTIONIST_ID);
     this.tracker.interrupted();
     if (this.state.mcpServers?.length) {
@@ -64,6 +79,21 @@ export class Service {
     this.startScheduler();
   }
   private get state() { return this.repo.state; }
+  get settings(): Settings { return this.state.settings; }
+
+  /** Connects the desktop shell: applies the sign-in setting and lets reminders fire, missed ones first. */
+  attachShell(shell: ShellPort): void {
+    this.shell = shell;
+    shell.applySettings(this.state.settings);
+    this.reminders.startup();
+  }
+  /** True the first time the window closes to the tray, so the user is told once. */
+  firstTrayClose(): boolean {
+    if (this.state.reception.trayHintShown) return false;
+    this.state.reception.trayHintShown = true;
+    void this.repo.save();
+    return true;
+  }
   snapshot(): Snapshot {
     const { chunks, ...state } = this.state;
     const bundled = catalog();
@@ -139,6 +169,7 @@ export class Service {
     this.state.settings = { ...s, allowShellExecution: Boolean(s.allowShellExecution), shellAllowlist: s.shellAllowlist || [], sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
       keepInTray: s.keepInTray !== false, startWithWindows: Boolean(s.startWithWindows) };
     await this.repo.save();
+    this.shell?.applySettings(this.state.settings);
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
@@ -554,6 +585,14 @@ export class Service {
               done: false
             });
             this.tracker.approvalPending(id);
+            // Nobody is looking: say who is waiting, and take them straight there.
+            const asking = coworkerById(chat.agentId);
+            if (asking && this.shell && !this.shell.windowVisible())
+              this.shell.notify({
+                title: `${asking.name} needs your approval`,
+                body: `To use ${tc.name.replace(/_/g, ' ')}.`,
+                target: { agentId: asking.id, conversationId: id }
+              });
 
             shouldExecute = await promise;
             this.tracker.approvalResolved(id);
@@ -808,6 +847,7 @@ export class Service {
     if (this.schedulerTimer) return;
     this.schedulerTimer = setInterval(() => {
       void this.checkScheduledAgents();
+      this.reminders.tick();
     }, 30_000);
     this.schedulerTimer.unref();
   }
@@ -856,6 +896,7 @@ export class Service {
     this.stopScheduler();
   }
   shutdown(): void {
+    this.reminders.stop();
     this.parsers.destroy();
     this.mcp.stopAll();
     this.stopScheduler();
