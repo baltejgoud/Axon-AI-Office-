@@ -438,7 +438,7 @@ test('reduced motion keeps everyone at their desks; work still starts', () => {
 
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
-test('207 people: at most twelve away from their desks, and a step stays cheap', () => {
+test('208 people: at most twelve away from their desks, and a step stays cheap', () => {
   const ids = agents.OFFICE_AGENTS.map((a) => a.id);
   const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
   for (const id of ids) office.setTaskStatus(id, 'idle');

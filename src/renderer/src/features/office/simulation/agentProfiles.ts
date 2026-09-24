@@ -29,6 +29,15 @@ export interface AgentProfile {
 }
 
 export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
+  // The front desk is rarely empty.
+  receptionist: {
+    id: 'receptionist',
+    weights: { desk: 70, coffee: 8, idle: 8, lounge: 6, visit: 8 },
+    meetingAffinity: 0.3,
+    prop: 'tablet',
+    pace: 1,
+    initial: { kind: 'desk' }
+  },
   'research-analyst': {
     id: 'research-analyst',
     weights: { desk: 60, coffee: 12, lounge: 8, bookshelf: 8, idle: 5, visit: 4 },

@@ -16,6 +16,8 @@ require.extensions['.ts'] = (module, file) =>
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const t = require('../src/renderer/src/features/office/tasks.ts');
+const boards = require('../src/renderer/src/features/office/campus/boards.ts');
+const layout = require('../src/renderer/src/features/office/simulation/layout.ts');
 
 const task = (over) => ({ kind: 'work', title: over.id, status: 'done', createdAt: 0, updatedAt: 0, ...over });
 
@@ -27,6 +29,10 @@ test('teams: the core team by room, specialists by department', () => {
   assert.equal(t.teamOf('marketing-strategist'), 'Lounge');
   assert.equal(t.teamOf('backend-developer'), 'Backend & APIs');
   assert.equal(t.teamOf('receptionist'), null);
+  // The receptionist's board is the day's plan, behind her desk.
+  const today = boards.TASK_BOARDS.find((b) => b.kind === 'today');
+  assert.deepEqual([today.team, today.itemId], ['Today', 'board-today']);
+  assert.ok(layout.FURNITURE.some((item) => item.id === 'board-today'));
   assert.equal(t.teamOf('nobody'), null);
 });
 
@@ -113,22 +119,20 @@ test('colleague calls parse for the card', () => {
   assert.deepEqual([failed.error, failed.pending, failed.question], ['No single colleague', false, '']);
 });
 
-const boards = require('../src/renderer/src/features/office/campus/boards.ts');
-const layout = require('../src/renderer/src/features/office/simulation/layout.ts');
 const districts = require('../src/renderer/src/features/office/campus/districts.ts');
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
 test('a board for every department and every core team room, and one for everyone', () => {
   const teams = boards.TASK_BOARDS.map((b) => b.team).sort();
   const departments = districts.DISTRICTS.flatMap((d) => d.departments);
-  assert.deepEqual(teams, [...departments, 'Files room', 'Library', 'Lounge', 'Planning'].sort());
+  assert.deepEqual(teams, [...departments, 'Files room', 'Library', 'Lounge', 'Planning', 'Today'].sort());
   for (const b of boards.TASK_BOARDS) {
     const item = layout.FURNITURE.find((f) => f.id === b.itemId);
     assert.ok(item, b.itemId);
     assert.equal(item.rotation, 0, `${b.itemId} faces the viewer`);
     assert.match(b.color, /^#[0-9a-f]{6}$/i);
   }
-  for (const a of agents.OFFICE_AGENTS)
+  for (const a of agents.OFFICE_AGENTS.filter((x) => x.id !== 'receptionist'))
     assert.ok(
       boards.TASK_BOARDS.some((b) => b.team === t.teamOf(a.id)),
       `${a.id} has a board`

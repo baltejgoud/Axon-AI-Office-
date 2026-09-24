@@ -23,6 +23,7 @@ export interface OfficeAgent {
 
 /** The core team's own colours; specialists wear their district's. */
 const CORE_ACCENTS: Readonly<Record<string, [color: string, soft: string]>> = {
+  receptionist: ['#e11d48', 'rgba(225, 29, 72, 0.15)'],
   'research-analyst': ['#2563eb', 'rgba(37, 99, 235, 0.15)'],
   writer: ['#8b5cf6', 'rgba(139, 92, 246, 0.15)'],
   designer: ['#ec4899', 'rgba(236, 72, 153, 0.15)'],

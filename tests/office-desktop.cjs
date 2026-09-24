@@ -119,10 +119,10 @@ app.on('web-contents-created', (_, contents) => {
       assert.ok(await evaluate('window.__axonOffice.signs().filter((s) => s.opacity > 0).length > 6'));
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
-      assert.equal((await strip()).length, 8);
+      assert.equal((await strip()).length, 9);
       // Portraits are rendered from each person's 3D figure.
       await waitFor(
-        'document.querySelectorAll(".office-team-people .office-portrait img").length === 8',
+        'document.querySelectorAll(".office-team-people .office-portrait img").length === 9',
         'rendered portraits'
       );
       assert.match(
@@ -194,7 +194,7 @@ app.on('web-contents-created', (_, contents) => {
       assert.equal(await evaluate(chipCount), 8);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
       await evaluate(`document.querySelector('button[aria-label="Team view"]').click()`);
-      await waitFor('document.querySelectorAll(".roster-card").length === 207', 'roster');
+      await waitFor('document.querySelectorAll(".roster-card").length === 208', 'roster');
       assert.equal(await evaluate('document.querySelectorAll(".roster-district").length'), 8);
       await evaluate('document.querySelectorAll(".roster-card")[1].click()');
       await pause(50);
@@ -523,13 +523,13 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(
         `document.querySelector('.office-canvas-container canvas').dispatchEvent(new Event('webglcontextlost', { cancelable: true }))`
       );
-      await waitFor('document.querySelectorAll(".roster-card").length === 207', 'context loss fallback');
+      await waitFor('document.querySelectorAll(".roster-card").length === 208', 'context loss fallback');
       console.log(
         'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, task boards and team list, colleagues asked and answering, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),
-        'PASS: 207 coworkers across 22 departments; compact layout; scene/roster switching; streamed response via actual IPC/main/provider pipeline with loopback transport; persisted role; renderer isolation; WebGL context loss fallback.'
+        'PASS: 208 coworkers across 22 departments; compact layout; scene/roster switching; streamed response via actual IPC/main/provider pipeline with loopback transport; persisted role; renderer isolation; WebGL context loss fallback.'
       );
       clearTimeout(timeout);
       server.close();

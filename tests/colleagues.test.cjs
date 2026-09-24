@@ -25,11 +25,14 @@ const shared = require('../src/shared/coworkers.ts');
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
 test('the shared directory holds the whole office, core team first', () => {
-  assert.equal(shared.COWORKERS.length, 207);
+  assert.equal(shared.COWORKERS.length, 208);
   assert.deepEqual(
-    shared.COWORKERS.slice(0, 8).map((c) => c.core),
-    Array(8).fill(true)
+    shared.COWORKERS.slice(0, 9).map((c) => c.core),
+    Array(9).fill(true)
   );
+  assert.equal(shared.COWORKERS[9].core, false);
+  assert.equal(shared.coworkerById(shared.RECEPTIONIST_ID).name, 'Receptionist');
+  assert.equal(shared.coworkerById('ops-coordinator').department, 'Planning');
   assert.deepEqual(
     shared.COWORKERS.map((c) => c.id),
     agents.OFFICE_AGENTS.map((a) => a.id)

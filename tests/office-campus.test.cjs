@@ -26,13 +26,13 @@ test('every catalog department belongs to exactly one district', () => {
   assert.equal(catalog.SPECIALIST_GROUPS.length, 22);
 });
 
-test('all 207 coworkers have a district and department', () => {
-  assert.equal(agents.OFFICE_AGENTS.length, 207);
+test('all 208 coworkers have a district and department', () => {
+  assert.equal(agents.OFFICE_AGENTS.length, 208);
   for (const a of agents.OFFICE_AGENTS) {
     assert.ok(districts.districtById(a.district), a.id);
     assert.ok(a.department, a.id);
   }
-  assert.equal(agents.OFFICE_AGENTS.filter((a) => a.district === 'commons').length, 8);
+  assert.equal(agents.OFFICE_AGENTS.filter((a) => a.district === 'commons').length, 9);
 });
 
 test('district colours are dark enough for white text and for text on white', () => {
@@ -228,7 +228,10 @@ test('podGrid fits every department in its cell', () => {
 test('every coworker has a unique home desk with a workstation', () => {
   const desks = agents.OFFICE_AGENTS.map((a) => layout.HOME_DESKS[a.id]);
   assert.ok(desks.every(Boolean));
-  assert.equal(new Set(desks).size, 207);
+  assert.equal(new Set(desks).size, 208);
+  // The receptionist keeps the front desk; the Ops Coordinator works from the pods.
+  assert.equal(layout.HOME_DESKS['receptionist'], 'desk-reception');
+  assert.equal(layout.HOME_DESKS['ops-coordinator'], 'desk-ops');
   const setups = new Set(layout.DESK_SETUPS.map((s) => s.poiId));
   for (const desk of desks) assert.ok(setups.has(desk), desk);
 });

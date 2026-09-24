@@ -56,6 +56,21 @@ const core = (look: CoreLook): Appearance => ({
 
 /** The core team, drawn by hand. */
 export const APPEARANCES: Readonly<Record<string, Appearance>> = {
+  receptionist: core({
+    height: 1.67,
+    build: 0.93,
+    skin: '#e6b996',
+    hair: '#7b3f2a',
+    hairStyle: 'bun',
+    shirt: '#fbfaf6',
+    jacket: '#d7385e',
+    trousers: '#2f3440',
+    shoes: '#3a2a2a',
+    accent: '#e11d48',
+    glasses: false,
+    top: 'cardigan',
+    headphones: true
+  }),
   'research-analyst': core({
     height: 1.66,
     build: 0.94,

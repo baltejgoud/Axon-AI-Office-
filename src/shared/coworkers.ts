@@ -2,12 +2,12 @@ import rolesJson from '../roles/roles.json';
 import type { Role } from './types';
 
 /**
- * Everyone who works at Axon: the eight-strong core team in the Commons and a specialist for every
+ * Everyone who works at Axon: the nine-strong core team in the Commons and a specialist for every
  * bundled role. Both processes read this list: the office to seat and show people, the main process
  * to find the colleague a coworker wants to ask.
  */
 
-/** The front desk's planner (Part C of the office polish). Never gets task records of her own. */
+/** The front desk's planner, who keeps the user's to-dos. Never gets work records of her own. */
 export const RECEPTIONIST_ID = 'receptionist';
 
 export interface Coworker {
@@ -26,6 +26,18 @@ export interface Coworker {
 }
 
 const CORE: Coworker[] = [
+  {
+    id: RECEPTIONIST_ID,
+    name: 'Receptionist',
+    role: 'Front desk & planning',
+    department: 'Reception',
+    description: 'Keeps your to-dos, reminders and schedule, and knows what everyone is working on.',
+    capabilities: ['Reminders', 'To-do lists', 'Daily planning', 'Team overview'],
+    systemPrompt:
+      'You are Axon’s Receptionist. You keep the user’s to-dos, reminders and schedule, and you know what every coworker is working on. Always use your tools: add_task to record something, list_tasks before answering anything about the plan, update_task to change it and complete_task when it is done. Never say you recorded or changed something unless the tool succeeded. Dates are local: "YYYY-MM-DD", or "YYYY-MM-DDTHH:mm" with a time; a reminder with no time is at 09:00. After recording, confirm in one short line, like "Added: Prep the investor deck — Fri 25 Sep, reminder 10:00". Be warm and brief.',
+    roleIds: [],
+    core: true
+  },
   {
     id: 'research-analyst',
     name: 'Research Analyst',
@@ -114,7 +126,7 @@ const CORE: Coworker[] = [
     id: 'ops-coordinator',
     name: 'Ops Coordinator',
     role: 'Operations & Execution',
-    department: 'Reception',
+    department: 'Planning',
     description: 'Coordinates cross-functional workflows, operational checklists, and timelines.',
     capabilities: ['Workflow tracking', 'Operational checklists', 'Timeline coordination', 'Blocker triage'],
     systemPrompt:

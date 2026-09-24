@@ -12,8 +12,9 @@ export const COMMONS_BACK_Z = -15;
 /** Where the back rooms end: glass fronts with doors. */
 const ROOM_FRONT_Z = -6;
 
-/** The core team's home desks. Ops Coordinator greets people at reception. */
+/** The core team's home desks. The receptionist greets people at the front desk. */
 export const CORE_HOME_DESKS: Readonly<Record<string, string>> = {
+  receptionist: 'desk-reception',
   'research-analyst': 'desk-analyst',
   writer: 'desk-writer',
   designer: 'desk-designer',
@@ -21,7 +22,7 @@ export const CORE_HOME_DESKS: Readonly<Record<string, string>> = {
   'knowledge-librarian': 'desk-librarian',
   'files-agent': 'desk-files',
   'marketing-strategist': 'desk-marketing',
-  'ops-coordinator': 'desk-reception'
+  'ops-coordinator': 'desk-ops'
 };
 
 /** Camera focus points for the Commons rooms. */
@@ -351,6 +352,8 @@ function buildLobby(b: LayoutBuilder): void {
   }
   b.deskSeat('desk-reception', 'reception', 0, 12.5, FACE_FRONT);
   b.visit('desk-reception', 0, 14.25);
+  // The day's plan, behind the receptionist.
+  b.item('board-today', 'whiteboard', 0, 11.0, 2.0, 0.1);
   b.plant('plant-reception', -2.6, 13.0, true);
   b.item('coat-rack', 'coat-rack', 3.2, 12.4, 0.5, 0.5, { round: true });
   b.item('lobby-bench-1', 'bench', -7.5, 15.9, 2.2, 0.5);
@@ -423,7 +426,7 @@ function setUpDesks(b: LayoutBuilder): void {
       equipment: 'monitor',
       props: ['plant', 'notebook'],
       flavor: 'document',
-      accent: '#64748b'
+      accent: '#e11d48'
     }
   ] as const;
   for (const setup of setups) b.setup({ ...setup, props: [...setup.props] });
