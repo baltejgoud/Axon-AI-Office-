@@ -193,7 +193,7 @@ function listing(store: TaskStore, range: unknown, now: Date): string {
   const sections =
     range === 'all'
       ? [...open, parts.done]
-      : typeof range === 'string' && parts[range]
+      : typeof range === 'string' && Object.hasOwn(parts, range)
         ? [parts[range]]
         : open;
   const filled = sections.filter(([, tasks]) => tasks.length);
