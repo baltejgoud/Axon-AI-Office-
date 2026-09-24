@@ -285,6 +285,11 @@ export class Service {
 
     const agent = chat.agentId ? this.state.agents.find(a => a.id === chat.agentId) : undefined;
     const maxSteps = Math.max(1, Math.min(30, agent?.maxSteps ?? 20));
+    /** Records a call's outcome on the assistant message that made it, and returns a copy to send. */
+    const settle = (tc: ToolCall, outcome: { result?: string; error?: string }): ToolCall => {
+      Object.assign(tc, outcome);
+      return { ...tc };
+    };
     let step = 0;
 
     try {
@@ -386,11 +391,12 @@ export class Service {
               createdAt: Date.now()
             });
             requests.push({ role: 'tool', toolCallId: tc.id, content: asked.content });
+            settle(tc, asked.isError ? { error: asked.content } : { result: asked.content });
             this.emit({
               channel: 'chat',
               conversationId: id,
               messageId: activeAssistant.id,
-              toolCall: { ...tc, result: asked.isError ? undefined : asked.content, error: asked.isError ? asked.content : undefined },
+              toolCall: { ...tc },
               streaming: true,
               done: false
             });
@@ -409,6 +415,7 @@ export class Service {
             };
             this.state.messages.push(toolMsg);
             requests.push({ role: 'tool', toolCallId: tc.id, content: toolMsg.content });
+            settle(tc, { error: toolMsg.content });
             continue;
           }
 
@@ -463,7 +470,7 @@ export class Service {
                 channel: 'chat',
                 conversationId: id,
                 messageId: activeAssistant.id,
-                toolCall: { ...tc, error: rejectMsg.content },
+                toolCall: settle(tc, { error: rejectMsg.content }),
                 streaming: true,
                 done: false
               });
@@ -484,7 +491,7 @@ export class Service {
               channel: 'chat',
               conversationId: id,
               messageId: activeAssistant.id,
-              toolCall: { ...tc, error: denyMsg.content },
+              toolCall: settle(tc, { error: denyMsg.content }),
               streaming: true,
               done: false
             });
@@ -515,11 +522,10 @@ export class Service {
             channel: 'chat',
             conversationId: id,
             messageId: activeAssistant.id,
-            toolCall: {
-              ...tc,
-              result: execResult.content,
-              error: execResult.isError ? execResult.content : undefined
-            },
+            toolCall: settle(
+              tc,
+              execResult.isError ? { error: execResult.content } : { result: execResult.content }
+            ),
             streaming: true,
             done: false
           });

@@ -6,6 +6,7 @@ import { OFFICE_AGENTS } from '../data/officeAgents';
 import { useApp } from '../../../state';
 import { timeAgo } from '../../../format';
 import { AgentComposer } from './AgentComposer';
+import { TeamList } from './TeamList';
 import { AgentPortrait } from '../AgentPortrait';
 import { Conversation } from './Conversation';
 import { activeThread, agentThreads } from './thread';
@@ -18,7 +19,8 @@ export function ActivityPanel() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const data = useApp((s) => s.data);
-  const { selectedAgentId, agentRuntime, startFresh, setAgentConversation, openOverlay } = useOfficeStore();
+  const { selectedAgentId, agentRuntime, startFresh, setAgentConversation, openOverlay, teamBoard } =
+    useOfficeStore();
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
   const runtime = agentRuntime[agent.id];
   const conversations = data?.conversations ?? [];
@@ -43,6 +45,14 @@ export function ActivityPanel() {
     setMenuOpen(false);
     setFeedOpen(false);
   }, [agent.id]);
+
+  // A board was clicked: the panel shows that team's tasks until you pick someone or go back.
+  if (teamBoard)
+    return (
+      <aside className="office-activity-panel" aria-label="Team tasks">
+        <TeamList team={teamBoard} />
+      </aside>
+    );
 
   return (
     <aside className="office-activity-panel" aria-label="Selected coworker activity">

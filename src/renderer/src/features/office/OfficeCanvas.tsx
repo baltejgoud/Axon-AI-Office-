@@ -73,6 +73,8 @@ export function OfficeCanvas() {
       world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.onSignClick = (sign) => signClick.current(sign);
+      world.onBoardClick = (team) => useOfficeStore.getState().openTeamBoard(team);
+      world.setTasks(useApp.getState().data?.tasks ?? []);
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)
@@ -111,7 +113,9 @@ export function OfficeCanvas() {
 
   // Colleagues walk over while they help, and back once the run that asked is over.
   useEffect(() => {
-    if (scene.current) syncHelp(scene.current, activeHelp(tasks ?? []));
+    if (!scene.current) return;
+    scene.current.setTasks(tasks ?? []);
+    syncHelp(scene.current, activeHelp(tasks ?? []));
   }, [tasks, syncHelp]);
 
   useEffect(() => {

@@ -109,7 +109,8 @@ const departmentSigns: SignSpec[] = DISTRICTS.filter((district) => district.depa
         title: name,
         color: district.color,
         x: DEPARTMENT_ANCHORS[name].x,
-        y: 2.7,
+        // High enough to clear the team's task board below it.
+        y: 3.05,
         z: bounds.minZ + 1.1,
         width,
         height: 0.44,

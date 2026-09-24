@@ -2,12 +2,16 @@ import * as THREE from 'three';
 import type { Bounds } from '../campus/districts';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { AmbientActivity } from '../simulation/agentProfiles';
-import { HOME_DESKS, POINTS_OF_INTEREST, ZONE_ANCHORS, poiById } from '../simulation/layout';
+import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, ZONE_ANCHORS, poiById } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
 import { FILES_HOTSPOT, LIBRARY_HOTSPOT } from '../campus/commons';
 import { SIGNS, type SignKind, type SignSpec } from '../campus/signs';
 import { labelTier } from '../shell/framing';
 import { SignLayer } from './room/signs';
+import { BoardLayer } from './room/boards';
+import { TASK_BOARDS } from '../campus/boards';
+import type { Team } from '../tasks';
+import type { TaskItem, TaskStatus } from '../../../../../shared/types';
 import type { AgentView, ScreenState, Vec2, ZoneId } from '../simulation/types';
 import { OfficeAgentCharacter } from './agents/OfficeAgentCharacter';
 import { appearanceFor } from './agents/appearance';
@@ -34,6 +38,10 @@ export interface OfficeDebugHandle {
   signs(): { id: string; kind: SignKind; target: string; opacity: number; scale: number }[];
   /** Where a sign's face is on screen, in canvas pixels. */
   signPoint(id: string): { x: number; y: number } | null;
+  /** What each task board shows. */
+  boards(): { team: string; cards: { title: string; status: TaskStatus }[] }[];
+  /** Where a team's board is on screen, in canvas pixels. */
+  boardPoint(team: string): { x: number; y: number } | null;
   seed: number;
 }
 
@@ -90,6 +98,8 @@ export class OfficeScene {
   public onLibraryClick?: () => void;
   /** A district, department or room sign was clicked. */
   public onSignClick?: (sign: SignSpec) => void;
+  /** A team's task board was clicked. */
+  public onBoardClick?: (team: Team) => void;
 
   private readonly cameraRig = new OfficeCameraRig();
   private readonly simulation: OfficeSimulation;
@@ -113,6 +123,8 @@ export class OfficeScene {
   /** Metres per pixel the signs were last scaled for. */
   private signScaleAt = 0;
   private hoveredSign: string | null = null;
+  private readonly boards = new BoardLayer(TASK_BOARDS, FURNITURE);
+  private hoveredBoard: Team | null = null;
   private labels: SceneLabel[] = [];
   private full = new Set<string>();
   private selectedId: string | null = null;
@@ -176,7 +188,7 @@ export class OfficeScene {
       })
     );
     this.scene.add(this.crowd.object);
-    this.scene.add(this.filesHotspot, this.libraryHotspot, this.signs.object);
+    this.scene.add(this.filesHotspot, this.libraryHotspot, this.signs.object, this.boards.object);
 
     if (localStorage.getItem('axon.officeDebug') === '1') {
       window.__axonOffice = {
@@ -191,6 +203,14 @@ export class OfficeScene {
         }),
         focus: (x, z, span) => this.cameraRig.focus({ x, z }, span),
         signs: () => this.signs.info(),
+        boards: () => this.boards.info(),
+        boardPoint: (team) =>
+          this.boards.screenPoint(
+            team,
+            this.cameraRig.camera,
+            this.container.clientWidth,
+            this.container.clientHeight
+          ),
         signPoint: (id) =>
           this.signs.screenPoint(
             id,
@@ -335,6 +355,11 @@ export class OfficeScene {
     this.simulation.requestActivity(agentId, activity);
   }
 
+  /** The task records, drawn onto the teams' boards. */
+  public setTasks(tasks: readonly TaskItem[]): void {
+    this.boards.setTasks(tasks);
+  }
+
   /** A colleague walks over to help someone; false when they can't (see the simulation). */
   public startHelp(helperId: string, hostId: string): boolean {
     return this.simulation.startHelp(helperId, hostId);
@@ -442,13 +467,14 @@ export class OfficeScene {
     return (hit?.userData.agentId as string | undefined) ?? this.crowd.pick(this.raycaster);
   }
 
-  /** People come first; a sign only reacts when nobody stands in front of it. */
-  private setHovered(agentId: string | null, signId: string | null = null): void {
+  /** People come first, then signs, then boards: whatever is in front reacts. */
+  private setHovered(agentId: string | null, signId: string | null = null, board: Team | null = null): void {
     if (signId !== this.hoveredSign) {
       this.hoveredSign = signId;
       this.signs.setHovered(signId);
     }
-    this.renderer.domElement.style.cursor = agentId || signId ? 'pointer' : 'grab';
+    this.hoveredBoard = board;
+    this.renderer.domElement.style.cursor = agentId || signId || board ? 'pointer' : 'grab';
     if (agentId === this.hoveredAgentId) return;
     if (this.hoveredAgentId) this.characters.get(this.hoveredAgentId)?.setHovered(false);
     this.hoveredAgentId = agentId;
@@ -466,7 +492,8 @@ export class OfficeScene {
         return;
       }
       const agentId = this.agentAtPointer();
-      this.setHovered(agentId, agentId ? null : (this.signs.pick(this.raycaster)?.id ?? null));
+      const signId = agentId ? null : (this.signs.pick(this.raycaster)?.id ?? null);
+      this.setHovered(agentId, signId, agentId || signId ? null : this.boards.pick(this.raycaster));
     };
     const onDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
@@ -483,12 +510,14 @@ export class OfficeScene {
       if (!moved) {
         const agentId = this.agentAtPointer();
         const sign = agentId ? null : this.signs.pick(this.raycaster);
+        const board = agentId || sign ? null : this.boards.pick(this.raycaster);
         if (agentId) this.onAgentClick?.(agentId);
         else if (sign) this.onSignClick?.(sign);
+        else if (board) this.onBoardClick?.(board);
         else if (this.raycaster.intersectObject(this.filesHotspot, false).length) this.onFilesClick?.();
         else if (this.raycaster.intersectObject(this.libraryHotspot, false).length) this.onLibraryClick?.();
       }
-      canvas.style.cursor = this.hoveredAgentId || this.hoveredSign ? 'pointer' : 'grab';
+      canvas.style.cursor = this.hoveredAgentId || this.hoveredSign || this.hoveredBoard ? 'pointer' : 'grab';
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -672,6 +701,7 @@ export class OfficeScene {
     this.characters.forEach((character) => character.dispose());
     this.crowd.dispose();
     this.signs.dispose();
+    this.boards.dispose();
     for (const spot of [this.filesHotspot, this.libraryHotspot]) {
       spot.geometry.dispose();
       (spot.material as THREE.Material).dispose();

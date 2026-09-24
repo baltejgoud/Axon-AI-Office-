@@ -81,10 +81,11 @@ function packDepartment(
   const cx = (cell.minX + cell.maxX) / 2;
   b.departments.push({ name, district: district.id, bounds: cell, anchor: { x: cx, z: cell.minZ + 0.35 } });
 
-  b.item(`wb-${key}`, boardKind(district, name), cx, cell.minZ + 0.35, 2.0, 0.1);
-  if (name === 'Sales Management') b.item(`gong-${key}`, 'gong', cx + 1.55, cell.minZ + 0.45, 0.8, 0.4);
+  // The department's task board (Part B): wide enough for four cards.
+  b.item(`wb-${key}`, boardKind(district, name), cx, cell.minZ + 0.35, 2.4, 0.1);
+  if (name === 'Sales Management') b.item(`gong-${key}`, 'gong', cx + 1.75, cell.minZ + 0.45, 0.8, 0.4);
   if (name === 'Customer Success')
-    b.item(`trophies-${key}`, 'trophy-shelf', cx + 1.55, cell.minZ + 0.45, 0.9, 0.35);
+    b.item(`trophies-${key}`, 'trophy-shelf', cx + 1.75, cell.minZ + 0.45, 0.9, 0.35);
   b.spot(`wb-spot-${key}`, 'whiteboard', 'agents', cx, cell.minZ + 1.0, FACE_BACK, tags);
   b.spot(`open-${key}`, 'open-area', 'agents', cell.minX + 1.2, cell.minZ + 1.1, FACE_FRONT, tags);
   b.plant(`plant-${key}-nw`, cell.minX + 0.5, cell.minZ + 0.5, true);
@@ -146,6 +147,9 @@ function packLeadership(b: LayoutBuilder, district: District, members: string[])
     bounds: district.bounds,
     anchor: { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 }
   });
+
+  // The team's task board stands in the corridor between the first two front-row doors.
+  b.item(`wb-${slug(name)}`, boardKind(district, name), minX + width, maxZ + 0.5, 2.0, 0.1);
 
   const homes: Record<string, string> = {};
   for (let row = 0; row < rows; row++) {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { HandedFile } from '../activity/fileContext';
 import type { TaskItem } from '../../../../../shared/types';
-import { statusesFromTasks } from '../tasks';
+import { statusesFromTasks, type Team } from '../tasks';
 
 export interface AgentActivity {
   id: string;
@@ -49,6 +49,9 @@ interface OfficeStoreState {
   handFiles: (agentId: string, files: HandedFile[]) => void;
   removeFile: (agentId: string, path: string) => void;
   clearFiles: (agentId: string) => void;
+  /** A team's task list open in the side panel, from its board. */
+  teamBoard: Team | null;
+  openTeamBoard: (team: Team | null) => void;
   /** Ask the office to select someone and glide the camera to them. */
   flyTo: { agentId: string; at: number } | null;
   flyToAgent: (agentId: string) => void;
@@ -72,11 +75,13 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   overlay: null,
   pendingFiles: {},
   flyTo: null,
+  teamBoard: null,
+  openTeamBoard: (team) => set({ teamBoard: team }),
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
-    set({ selectedAgentId: id });
+    set({ selectedAgentId: id, teamBoard: null });
   },
 
   setAgentStatus: (agentId: string, status: AgentStatus) => {
@@ -172,7 +177,8 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
       }
     }),
   clearFiles: (agentId) => set({ pendingFiles: { ...get().pendingFiles, [agentId]: [] } }),
-  flyToAgent: (agentId) => set({ selectedAgentId: agentId, flyTo: { agentId, at: Date.now() } }),
+  flyToAgent: (agentId) =>
+    set({ selectedAgentId: agentId, flyTo: { agentId, at: Date.now() }, teamBoard: null }),
 
   startFresh: (agentId: string) => {
     const current = get().agentRuntime[agentId];

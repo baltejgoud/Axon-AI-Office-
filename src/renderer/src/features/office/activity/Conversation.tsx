@@ -22,13 +22,26 @@ export function Conversation({
 }) {
   const allMessages = useApp((s) => s.data?.messages);
   const approvals = useApp((s) => s.pendingApprovals);
-  const messages = useMemo(
-    () =>
-      conversation
-        ? (allMessages ?? []).filter((m) => m.conversationId === conversation.id && m.role !== 'system')
-        : [],
-    [allMessages, conversation]
-  );
+  const messages = useMemo(() => {
+    if (!conversation) return [];
+    const thread = (allMessages ?? []).filter((m) => m.conversationId === conversation.id);
+    // Tool results are shown on the call that asked for them, not as messages of their own.
+    const outcomes = new Map(thread.filter((m) => m.role === 'tool').map((m) => [m.toolCallId, m]));
+    return thread
+      .filter((m) => m.role !== 'system' && m.role !== 'tool')
+      .map((m) =>
+        m.toolCalls?.some((tc) => !tc.result && !tc.error && outcomes.has(tc.id))
+          ? {
+              ...m,
+              toolCalls: m.toolCalls.map((tc) => {
+                const outcome = outcomes.get(tc.id);
+                if (tc.result || tc.error || !outcome) return tc;
+                return outcome.error ? { ...tc, error: outcome.content } : { ...tc, result: outcome.content };
+              })
+            }
+          : m
+      );
+  }, [allMessages, conversation]);
   const shown = useMemo(() => {
     if (!pendingTask) return messages;
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');

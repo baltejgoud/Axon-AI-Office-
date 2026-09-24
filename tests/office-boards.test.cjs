@@ -112,3 +112,27 @@ test('colleague calls parse for the card', () => {
   const failed = t.parseColleagueCall({ id: '1', name: 'ask_colleague', arguments: '{', error: 'No single colleague' });
   assert.deepEqual([failed.error, failed.pending, failed.question], ['No single colleague', false, '']);
 });
+
+const boards = require('../src/renderer/src/features/office/campus/boards.ts');
+const layout = require('../src/renderer/src/features/office/simulation/layout.ts');
+const districts = require('../src/renderer/src/features/office/campus/districts.ts');
+const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
+
+test('a board for every department and every core team room, and one for everyone', () => {
+  const teams = boards.TASK_BOARDS.map((b) => b.team).sort();
+  const departments = districts.DISTRICTS.flatMap((d) => d.departments);
+  assert.deepEqual(teams, [...departments, 'Files room', 'Library', 'Lounge', 'Planning'].sort());
+  for (const b of boards.TASK_BOARDS) {
+    const item = layout.FURNITURE.find((f) => f.id === b.itemId);
+    assert.ok(item, b.itemId);
+    assert.equal(item.rotation, 0, `${b.itemId} faces the viewer`);
+    assert.match(b.color, /^#[0-9a-f]{6}$/i);
+  }
+  for (const a of agents.OFFICE_AGENTS)
+    assert.ok(
+      boards.TASK_BOARDS.some((b) => b.team === t.teamOf(a.id)),
+      `${a.id} has a board`
+    );
+  const backend = layout.FURNITURE.find((f) => f.id === boards.TASK_BOARDS.find((b) => b.team === 'Backend & APIs').itemId);
+  assert.equal(backend.w, 2.4);
+});

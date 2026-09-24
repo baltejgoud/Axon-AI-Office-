@@ -267,6 +267,10 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
   assert.ok(help.every((task) => task.status === 'done' && task.coworkerId === 'backend-developer' && task.forCoworkerId === 'frontend-developer' && task.conversationId === chat.id));
   const work = repo.state.tasks.find((task) => task.kind === 'work');
   assert.equal(work.status, 'done');
+  // The asking message keeps every call's outcome, so the thread reads the same after a reload.
+  const asking = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length);
+  assert.deepEqual(asking.toolCalls.map((tc) => Boolean(tc.result)), [true, true, true, false]);
+  assert.match(asking.toolCalls[3].error, /asked three colleagues already/);
 });
 
 test('a colleague who cannot be reached ends their help with the reason', async (t) => {

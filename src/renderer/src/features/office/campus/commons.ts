@@ -111,6 +111,7 @@ function buildLounge(b: LayoutBuilder): void {
   b.item('lounge-bag-1', 'bean-bag', -18.5, -7.3, 0.9, 0.9, { round: true });
   b.item('lounge-bag-2', 'bean-bag', -17.3, -7.1, 0.9, 0.9, { round: true });
   b.plant('plant-lounge', -11.6, -6.6);
+  b.item('board-lounge', 'whiteboard', -12.9, -6.4, 1.6, 0.1);
   b.item('desk-marketing-surface', 'desk', -12.1, -14.5, 1.4, 0.7);
   b.deskSeat('desk-marketing', 'chat', -12.1, -13.8, FACE_BACK);
 
@@ -128,7 +129,7 @@ function buildPlanning(b: LayoutBuilder): void {
   b.rug('rug-meeting', -7.8, -10.5, 5.6, 7.0);
   b.item('meeting-table', 'meeting-table', -7.8, -10.9, 2.8, 1.3);
   b.item('meeting-screen', 'wall-screen', -7.6, -14.88, 2.2, 0.05, { blocks: false });
-  b.item('meeting-whiteboard', 'whiteboard', -9.9, -14.45, 1.2, 0.1);
+  b.item('meeting-whiteboard', 'whiteboard', -9.9, -14.45, 1.6, 0.1);
   b.plant('plant-meeting', -5.1, -14.45, true);
   for (const [index, x] of [-8.75, -7.8, -6.85].entries()) {
     const n = index + 1;
@@ -226,6 +227,7 @@ function buildLibrary(b: LayoutBuilder): void {
   b.item('desk-librarian-surface', 'desk', 11.5, -10.4, 1.4, 0.7, { rotation: HALF_PI });
   b.deskSeat('desk-librarian', 'knowledge', 10.8, -10.4, FACE_RIGHT);
   b.plant('plant-library', 11.7, -6.55, true);
+  b.item('board-library', 'whiteboard', 10.0, -6.55, 1.6, 0.1);
   for (const [index, x] of [3.0, 5.2, 8.2, 10.4].entries())
     b.spot(`shelf-${index + 1}`, 'bookshelf', 'knowledge', x, -13.85, FACE_BACK);
 }
@@ -241,6 +243,7 @@ function buildFilesRoom(b: LayoutBuilder): void {
   b.item('desk-files-surface', 'desk', 18.7, -9.2, 1.4, 0.7, { rotation: HALF_PI });
   b.deskSeat('desk-files', 'files', 18.0, -9.2, FACE_RIGHT);
   b.plant('plant-files', 19.0, -6.6);
+  b.item('board-files', 'whiteboard', 13.4, -6.55, 1.4, 0.1);
 }
 
 /** A round table and a whiteboard for quick get-togethers. */
