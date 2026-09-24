@@ -1,4 +1,12 @@
 // Isolated visual and interaction check. Only the provider transport is a loopback fixture.
+// Notifications are logged instead of shown, and collected here.
+process.env.AXON_QUIET_NOTIFICATIONS = '1';
+const notices = [];
+const log = console.log;
+console.log = (...args) => {
+  if (String(args[0]).startsWith('NOTICE ')) notices.push(args.join(' ').slice(7));
+  log(...args);
+};
 const { app, BrowserWindow, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,6 +28,12 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixtureFolde
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A local calendar day, 'YYYY-MM-DD', `offset` days from today. */
+const localDay = (offset = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
+};
 let providerRequest;
 const server = http.createServer((request, response) => {
   let body = '';
@@ -39,6 +53,16 @@ const server = http.createServer((request, response) => {
       return;
     }
     providerRequest = parsed;
+    // The receptionist records what she is asked to, with her planner tools.
+    if (last?.role === 'user' && parsed.tools?.some((tool) => tool.function?.name === 'add_task')) {
+      const call = {
+        index: 0,
+        id: 'call_planner',
+        function: { name: 'add_task', arguments: JSON.stringify({ title: 'Book the venue', due: localDay(1) }) }
+      };
+      response.end(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`);
+      return;
+    }
     // A coworker asked to consult someone calls ask_colleague first.
     if (last?.role === 'user' && /ask a colleague/i.test(last.content)) {
       const call = {
@@ -92,6 +116,14 @@ app.on('web-contents-created', (_, contents) => {
       await pause(500);
       const snap = async (name) =>
         fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
+      // The first window of the day opens on the receptionist's briefing, with the planner folded.
+      await waitFor('document.querySelector(".briefing-card")', 'morning briefing');
+      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Receptionist');
+      assert.match(await evaluate('document.querySelector(".briefing-card").textContent'), /Call the bank/);
+      assert.equal(await evaluate('document.querySelector(".planner-body")'), null);
+      await snap('c-briefing.png');
+      await evaluate('document.querySelector(".briefing-dismiss").click()');
+      await waitFor('document.querySelector(".planner-body") && !document.querySelector(".briefing-card")', 'planner after the briefing');
       await snap('office-desktop.png');
       assert.equal(await evaluate('document.querySelector(".sidebar")'), null);
       // District chips on one line: the ones that fit plus those in the More menu make all eight.
@@ -196,7 +228,7 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(`document.querySelector('button[aria-label="Team view"]').click()`);
       await waitFor('document.querySelectorAll(".roster-card").length === 208', 'roster');
       assert.equal(await evaluate('document.querySelectorAll(".roster-district").length'), 8);
-      await evaluate('document.querySelectorAll(".roster-card")[1].click()');
+      await evaluate('document.querySelectorAll(".roster-card")[2].click()');
       await pause(50);
       assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Writer');
       await evaluate(`document.querySelector('button[aria-label="Office view"]').click()`);
@@ -204,7 +236,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(300);
       await evaluate(`document.querySelector('[aria-label="Reset view"]').click()`);
       await pause(600);
-      await evaluate('document.querySelectorAll(".office-team-people button")[0].click()');
+      await evaluate('document.querySelectorAll(".office-team-people button")[1].click()');
       await pause(50);
       assert.equal(
         await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
@@ -278,6 +310,13 @@ app.on('web-contents-created', (_, contents) => {
       assert.equal(await evaluate('document.querySelector(".office-overlay h2").textContent'), 'Settings');
       await pause(400);
       await snap('office-settings.png');
+      // Keep running in the tray is on; Start with Windows waits for the installed app.
+      await evaluate(`[...document.querySelectorAll('.office-overlay [role="tab"]')].find((t) => t.textContent === 'Appearance').click()`);
+      await pause(80);
+      const trayBox = (label) =>
+        `[...document.querySelectorAll('.office-overlay label.checkbox')].find((l) => l.textContent.includes(${JSON.stringify(label)})).querySelector('input')`;
+      assert.equal(await evaluate(`${trayBox('Keep running in the tray')}.checked`), true);
+      assert.equal(await evaluate(`${trayBox('Start with Windows')}.disabled`), true);
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await pause(80);
       assert.equal(await evaluate('document.querySelector(".office-overlay")'), null);
@@ -467,6 +506,90 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await pause(120);
       assert.equal(await evaluate('document.querySelector(".team-list")'), null);
+
+      // The Today board behind the front desk lists what's next and opens the receptionist's planner.
+      await evaluate('window.__axonOffice.focus(1.4, 11.8, 7)');
+      await pause(1800);
+      await waitFor(
+        `window.__axonOffice.boards().find((b) => b.team === 'Today').cards.some((c) => c.title === 'Today — Call the bank')`,
+        'the Today board'
+      );
+      const today = await evaluate(`window.__axonOffice.boardPoint('Today')`);
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        const at = { clientX: r.left + ${today.x}, clientY: r.top + ${today.y}, button: 0, bubbles: true };
+        canvas.dispatchEvent(new MouseEvent('mousemove', at));
+        canvas.dispatchEvent(new MouseEvent('mousedown', at));
+        window.dispatchEvent(new MouseEvent('mouseup', at));
+      })()`);
+      await waitFor(
+        'document.querySelector(".activity-agent-meta h3")?.textContent === "Receptionist" && document.querySelector(".planner-body")',
+        'the Today board opens the planner'
+      );
+      const plannerGroup = (title) =>
+        `[...document.querySelectorAll('.planner-group')].find((g) => g.firstElementChild.textContent.startsWith(${JSON.stringify(title)}))?.textContent ?? ''`;
+      const setValue = (selector, value, prototype = 'HTMLInputElement') =>
+        evaluate(`(() => {
+          const input = document.querySelector(${JSON.stringify(selector)});
+          Object.getOwnPropertyDescriptor(${prototype}.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+      const deck = `window.axon.snapshot().then((s) => s.tasks.find((t) => t.title === 'Prep the investor deck'))`;
+      // Add a to-do for today from the planner's own row.
+      await setValue('.planner-add-title', 'Prep the investor deck');
+      await setValue('.planner-add-date', localDay());
+      await pause(60);
+      await evaluate('document.querySelector(".planner-add button[type=submit]").click()');
+      await waitFor(`(${plannerGroup('Today')}).includes('Prep the investor deck')`, 'a new to-do under Today');
+      // Tick it: it goes to Done. Untick it: it comes back.
+      const deckRow = `[...document.querySelectorAll('.planner-row')].find((r) => r.textContent.includes('Prep the investor deck'))`;
+      await evaluate(`${deckRow}.querySelector('input[type=checkbox]').click()`);
+      await waitFor(`${deck}.then((t) => t.status === 'done')`, 'ticked off');
+      await waitFor(`!(${plannerGroup('Today')}).includes('Prep the investor deck')`, 'gone from Today');
+      await evaluate(`document.querySelector('.planner-group-toggle').click()`);
+      await waitFor(deckRow, 'shown under Done');
+      await evaluate(`${deckRow}.querySelector('input[type=checkbox]').click()`);
+      await waitFor(`${deck}.then((t) => t.status === 'open' && !t.doneAt)`, 'unticked');
+      // Reschedule it to tomorrow at 10:00 with a reminder.
+      await evaluate(`${deckRow}.querySelector('.planner-due').click()`);
+      await waitFor('document.querySelector(".planner-due-editor")', 'date editor');
+      await setValue('.planner-due-editor input[type=date]', localDay(1));
+      await setValue('.planner-due-editor input[type=time]', '10:00');
+      await evaluate(`document.querySelector('.planner-remind input').click()`);
+      await pause(60);
+      await evaluate(`document.querySelector('.planner-due-actions .primary').click()`);
+      await waitFor(`${deck}.then((t) => t.due === '${localDay(1)}T10:00')`, 'rescheduled');
+      const rescheduled = await evaluate(deck);
+      const [y, m, d] = localDay(1).split('-').map(Number);
+      assert.equal(rescheduled.remindAt, new Date(y, m - 1, d, 10, 0).getTime());
+      await waitFor(`(${plannerGroup('This week')}).includes('Prep the investor deck')`, 'moved to This week');
+      await waitFor(
+        `window.__axonOffice.boards().find((b) => b.team === 'Today').cards.some((c) => c.title === 'Tomorrow — Prep the investor deck')`,
+        'the Today board follows'
+      );
+      // Asked in her conversation, she records it with her tools, and her card says so.
+      await evaluate(
+        `(() => { const input = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Remind me to book the venue tomorrow.'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
+      await pause(70);
+      await evaluate('document.querySelector(".composer-btn-send").click()');
+      await waitFor('document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")', 'planner card');
+      assert.match(await evaluate('document.querySelector(".planner-card").textContent'), /due Tomorrow/);
+      await waitFor(`(${plannerGroup('This week')}).includes('Book the venue')`, 'her to-do in the planner');
+      assert.ok(providerRequest.messages.some((message) => message.role === 'system' && /Now: .* Today is /.test(message.content)));
+      await snap('c-reception.png');
+      // A reminder fires once, on time, as a notification that leads to her planner.
+      await evaluate(`window.axon.taskAdd({ title: 'Stand-up', remindAt: Date.now() + 2500 })`);
+      await waitFor(
+        `window.axon.snapshot().then((s) => s.tasks.some((t) => t.title === 'Stand-up' && t.remindedAt))`,
+        'the reminder fires'
+      );
+      assert.deepEqual(notices, ['Reminder — Stand-up']);
+      await evaluate('window.__axonOffice.focus(1.4, 11.8, 7)');
+      await pause(1500);
+      await snap('c-today-board.png');
       win.setContentSize(375, 812);
       await pause(350);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
@@ -525,7 +648,7 @@ app.on('web-contents-created', (_, contents) => {
       );
       await waitFor('document.querySelectorAll(".roster-card").length === 208', 'context loss fallback');
       console.log(
-        'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, task boards and team list, colleagues asked and answering, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
+        'OFFICE_CHECK_PASS: campus artwork, one-line district chips, world signs (visible by zoom, clickable), model chip, name tags, task boards and team list, colleagues asked and answering, the morning briefing, the receptionist’s planner (add, tick, reschedule, her tools), a reminder, the Today board, tray settings, core team strip, draw-call budget, department menu, specialty search, specialist role context, compact layout, roster, IPC streaming into the side-panel thread, model lock, fresh threads, office-only shell, Settings and Library sheets, Files room hand-to, persisted role, isolation, WebGL fallback.'
       );
       fs.writeFileSync(
         path.join(output, 'result.txt'),
@@ -568,6 +691,11 @@ server.listen(0, '127.0.0.1', () => {
       documents: [],
       chunks: [],
       mcpServers: [],
+      // Something to brief, and a briefing not yet given today.
+      tasks: [
+        { id: 'seed-bank', kind: 'todo', title: 'Call the bank', status: 'open', due: localDay(), createdAt: now, updatedAt: now }
+      ],
+      reception: { briefedOn: localDay(-1) },
       settings: {
         theme: 'light',
         autoTitleConversations: true,

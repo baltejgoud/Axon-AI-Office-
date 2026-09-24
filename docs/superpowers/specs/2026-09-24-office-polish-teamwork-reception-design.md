@@ -459,3 +459,22 @@ Recorded as they were decided; each is also noted in its part's plan.
 | B7 | **Tool results stay on the call that made them** (for every tool, not just colleagues). The office thread no longer shows `tool` messages as messages of their own; for older threads it fills the results in from them. | Found when building: after a reload the card sat on "Thinking…" and the raw tool result showed as a message. Office conversations had no tools before Part B, so it had not surfaced. |
 | B8 | Department signs hang at 3.05 m (was 2.7 m), and the Lounge board stands clear of the Lounge's room sign. | At 2.7 m a sign hid its board's header from the camera. |
 | B9 | **Measured:** the whole-campus view went from 721 to 722 draw calls (boards are one call) and holds 60 fps. | — |
+
+### Part C (the receptionist)
+
+| # | Change | Why |
+|---|---|---|
+| C1 | **`officeStart()`** replaces `receptionBriefing()`. A window calls it once when it opens, and it returns the day's briefing (once a day) and where a notification or the tray wanted the window to look. | A window created by a notification click would miss a `focus` event sent before it loaded. |
+| C2 | The briefing only comes **when there is something to say**: a to-do due today or overdue, or a coworker at work or needing attention. The day is marked either way. While it shows, the planner is folded; "Got it" opens it. | A new office would otherwise greet you daily with an empty list, and the open planner pushed the briefing below the fold. |
+| C3 | Notifications use the app id `com.axon.studio` **only in the installed app**; development builds use electron.exe's own. `AXON_QUIET_NOTIFICATIONS=1` logs them instead, for the automated checks. | Windows only shows toasts for an app id it can match to a shortcut. |
+| C4 | Reminders are checked on the scheduler's 30-second tick **plus a timer for the next one due sooner**, so they arrive on the minute. Firing saves the records at once. | A reminder could otherwise be up to 30 s late, or repeat after a restart. |
+| C5 | Nothing fires until the desktop shell is attached; reminders missed while Axon was closed arrive then. | A reminder shouldn't be used up before it can be shown. |
+| C6 | Closing the window **destroys it**; with Keep running in the tray on, the last window closing leaves Axon running. Rules live in `shell/lifecycle.ts` as `afterLastWindow` (`'tray'`/`'quit'`), `startedInBackground`, `loginItem` and `appUserModelId`. | Frees the renderer while Axon waits in the tray; the rules can be tested without Electron. |
+| C7 | The tray icon and the notification icon are the Axon mark on a blue tile, **embedded as PNG data URLs** (16/32 px for the tray, 64 px for notices). | Packaging ships only the build output. |
+| C8 | `Snapshot` gains **`startWithWindowsAvailable`**; the switch is disabled with "Available in the installed app" otherwise. The tray switches sit with the other general settings (the Appearance tab). | A development build would register electron.exe to start with Windows. |
+| C9 | The planner deletes inline ("Delete? Yes · No"), and its date editor only sends the reminder when it changes. | A dialog felt heavy for a to-do, and re-sending an untouched past reminder would be refused. |
+| C10 | Planner tools take **an empty string (or null) to clear** a date, reminder or notes, and every date field is a plain string in the schema. | Some providers reject JSON Schema type unions such as `["string", "null"]`. |
+| C11 | The planner's Done group also lists coworkers' work finished in the last two weeks; help records never appear. | "Done" reads as what got done today and this week, not only your own to-dos. |
+| C12 | The Today board stands at (2.4, 11.0), behind and to the right of the front desk; the coat rack moves to (−3.6, 11.4). | Directly behind her, the Reception sign and her name tag covered the board from the camera. |
+| C13 | A coworker waiting for approval while no window is showing sends "*Name* needs your approval — To use *tool*.", which opens their conversation. Snapshots carry the approvals still waiting, so a reopened window can answer them. | A closed window would otherwise leave a run stuck until its five-minute timeout. |
+| C14 | **Measured:** the whole-campus view stays at 722 draw calls (the Today board shares the whiteboard materials and the boards' single call) and holds 60 fps. | — |
