@@ -1,5 +1,6 @@
 import { hashString } from '../simulation/random';
-import type { DeskProp, LayoutBuilder } from './builder';
+import type { DeskEquipment, DeskProp, LayoutBuilder } from './builder';
+import { propPlacements, surfaceOf } from './deskPlacement';
 import { DISTRICTS, type Bounds, type District } from './districts';
 import { boardKind, decorateDepartment } from './decor';
 
@@ -14,7 +15,22 @@ const BACK_STRIP = 2.2;
 const EDGE = 0.4;
 /** Gap between department cells: the main corridors. */
 const CELL_GAP = 2.6;
-const PROPS: DeskProp[] = ['mug', 'notebook', 'plant', 'pen-cup', 'books', 'lamp', 'folder', 'tablet'];
+const PROPS: DeskProp[] = [
+  'mug',
+  'notebook',
+  'plant',
+  'pen-cup',
+  'books',
+  'lamp',
+  'folder',
+  'tablet',
+  'headphones',
+  'bottle',
+  'photo',
+  'sticky-notes',
+  'succulent',
+  'figurine'
+];
 
 export const slug = (name: string) =>
   name
@@ -55,16 +71,32 @@ export function departmentCells(district: District): Bounds[] {
   });
 }
 
-function deskProps(seatId: string): DeskProp[] {
-  const hash = hashString(seatId);
-  const count = 2 + (hash % 2);
-  const picked: DeskProp[] = [];
-  for (let i = 0; picked.length < count; i++) {
-    const prop = PROPS[(hash >>> (i * 3)) % PROPS.length];
-    if (!picked.includes(prop)) picked.push(prop);
-    if (i > 12) break;
+/**
+ * Three or four personal things for a desk, all fitting round its equipment and never the same set
+ * as a pod-mate's (`taken` holds the sets already on the pod).
+ */
+function deskProps(
+  seatId: string,
+  equipment: DeskEquipment,
+  taken: Set<string>,
+  district?: string
+): DeskProp[] {
+  const surface = surfaceOf(seatId, district);
+  let picked: DeskProp[] = [];
+  for (let salt = 0; salt < 40; salt++) {
+    const hash = hashString(salt ? `${seatId}#${salt}` : seatId);
+    const count = 3 + (hash % 2);
+    picked = [];
+    for (let i = 0; picked.length < count && i < 30; i++) {
+      const prop = PROPS[(hash >>> ((i * 3) % 27)) % PROPS.length];
+      if (!picked.includes(prop)) picked.push(prop);
+    }
+    const signature = [...picked].sort().join();
+    if (taken.has(signature) || propPlacements(equipment, picked, surface).length < picked.length) continue;
+    taken.add(signature);
+    return picked;
   }
-  return picked;
+  return picked.slice(0, 2);
 }
 
 /** One department's neighbourhood: a whiteboard corner at the back and pods of four in front. */
@@ -106,6 +138,7 @@ function packDepartment(
   let seatIndex = 0;
   const pods = Math.max(1, Math.ceil(members.length / 4));
   for (let pod = 0; pod < pods; pod++) {
+    const podProps = new Set<string>();
     const x = centreX + ((pod % cols) - (cols - 1) / 2) * POD_PITCH_X;
     const z = centreZ + (Math.floor(pod / cols) - (rows - 1) / 2) * POD_PITCH_Z;
     b.item(`pod-${key}-${pod}`, 'desk-pod', x, z, 3.2, 1.6);
@@ -118,7 +151,7 @@ function packDepartment(
         b.setup({
           poiId: id,
           equipment: district.equipment,
-          props: deskProps(id),
+          props: deskProps(id, district.equipment, podProps, district.id),
           flavor: district.flavor,
           accent: district.color
         });
@@ -186,7 +219,7 @@ function packLeadership(b: LayoutBuilder, district: District, members: string[])
       b.setup({
         poiId: id,
         equipment: district.equipment,
-        props: deskProps(id),
+        props: deskProps(id, district.equipment, new Set(), district.id),
         flavor: district.flavor,
         accent: district.color
       });

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   DESK_SETUPS,
   FURNITURE,
@@ -12,8 +11,11 @@ import {
 import type { ScreenState } from '../../simulation/types';
 import { DISTRICTS, type FloorKind } from '../../campus/districts';
 import { COMMONS_BACK_Z } from '../../campus/commons';
-import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
+import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture } from './furniture';
+import { workstation } from './desks';
+import { surfaceOf } from '../../campus/deskPlacement';
 import { animateSteam } from './kit';
+import { batchStatic } from './batching';
 import { CONTACT_OPACITY, contactMaterials, contactShadows } from './grounding';
 import { wallOutward, wallSlab } from './walls';
 import {
@@ -253,57 +255,6 @@ function floor(): THREE.Group {
   return g;
 }
 
-/** Collapses every static mesh into one mesh per material: a whole office in a few dozen draw calls. */
-function mergeStatic(root: THREE.Group): void {
-  root.updateMatrixWorld(true);
-  const buckets = new Map<
-    string,
-    {
-      material: THREE.Material;
-      geometries: THREE.BufferGeometry[];
-      cast: boolean;
-      receive: boolean;
-      order: number;
-    }
-  >();
-  const merged: THREE.Mesh[] = [];
-  root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh) || object.userData.dynamic || Array.isArray(object.material)) return;
-    const geometry = object.geometry.clone().applyMatrix4(object.matrixWorld);
-    const keep = (object.material as THREE.MeshStandardMaterial).vertexColors
-      ? ['position', 'normal', 'uv', 'color']
-      : ['position', 'normal', 'uv'];
-    for (const name of Object.keys(geometry.attributes))
-      if (!keep.includes(name)) geometry.deleteAttribute(name);
-    const key = `${object.material.uuid}|${object.castShadow}|${object.receiveShadow}|${geometry.index ? 'i' : 'n'}`;
-    let bucket = buckets.get(key);
-    if (!bucket) {
-      bucket = {
-        material: object.material,
-        geometries: [],
-        cast: object.castShadow,
-        receive: object.receiveShadow,
-        order: object.renderOrder
-      };
-      buckets.set(key, bucket);
-    }
-    bucket.geometries.push(geometry);
-    merged.push(object);
-  });
-  for (const mesh of merged) mesh.removeFromParent();
-  for (const bucket of buckets.values()) {
-    const geometry = mergeGeometries(bucket.geometries);
-    bucket.geometries.forEach((g) => g.dispose());
-    if (!geometry) continue;
-    const mesh = new THREE.Mesh(geometry, bucket.material);
-    mesh.castShadow = bucket.cast;
-    mesh.receiveShadow = bucket.receive;
-    mesh.renderOrder = bucket.order;
-    mesh.matrixAutoUpdate = false;
-    root.add(mesh);
-  }
-}
-
 export function buildOffice(): OfficeRoom {
   const root = new THREE.Group();
   root.add(floor(), wallDecor());
@@ -323,12 +274,7 @@ export function buildOffice(): OfficeRoom {
   const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
   for (const setup of DESK_SETUPS) {
     const seat = poiById(setup.poiId);
-    const station = workstation(
-      setup.equipment,
-      setup.props,
-      setup.flavor ?? 'code',
-      setup.accent ?? PALETTE.white
-    );
+    const station = workstation(setup, surfaceOf(setup.poiId, seat.district));
     station.object.position.set(seat.position.x, 0, seat.position.z);
     station.object.rotation.y = seat.facing;
     root.add(station.object);
@@ -349,7 +295,7 @@ export function buildOffice(): OfficeRoom {
     }
   const screens = new DeskScreens(slots);
 
-  mergeStatic(root);
+  batchStatic(root);
   root.add(screens.object);
 
   const seatKinds = new Map(FURNITURE.map((item) => [item.id, item.kind]));

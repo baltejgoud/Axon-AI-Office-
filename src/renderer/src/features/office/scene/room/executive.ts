@@ -24,11 +24,8 @@ export function execDesk(item: FurnitureItem): THREE.Group {
     box(WALNUT_DARK, [0.05, 0.72, d - 0.08], [-w / 2 + 0.06, 0.36, 0]),
     box(WALNUT_DARK, [0.05, 0.72, d - 0.08], [w / 2 - 0.06, 0.36, 0]),
     box(WALNUT_DARK, [w - 0.16, 0.42, 0.03], [0, 0.5, d / 2 - 0.08]),
-    box('#3a2a20', [0.62, 0.006, 0.42], [0, 0.773, -0.1], { roughness: 0.7 }),
-    cylinder('#b8914f', 0.035, 0.09, [w / 2 - 0.25, 0.815, -0.2], BRASS)
+    box('#3a2a20', [0.62, 0.006, 0.42], [0, 0.773, -0.1], { roughness: 0.7 })
   );
-  for (let i = 0; i < 3; i++)
-    g.add(box(PALETTE.paper, [0.22, 0.004, 0.3], [-w / 2 + 0.35 + i * 0.012, 0.774 + i * 0.004, 0.05]));
   return g;
 }
 

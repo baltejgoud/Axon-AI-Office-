@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Appearance, HairStyle, Top } from '../agents/appearance';
-import { applyPose, buildHumanoid } from '../agents/HumanoidRig';
+import { SOLE, applyPose, buildHumanoid } from '../agents/HumanoidRig';
 import { computePose } from '../agents/poses';
 
 /** Seat height the crowd pose is baked at; office chairs sit here. */
@@ -48,7 +48,9 @@ type Role =
   | 'mouth'
   | 'glasses'
   | 'headphones'
-  | 'strings';
+  | 'strings'
+  | 'sole-light'
+  | 'sole-dark';
 
 /** Colours no real appearance uses, so a baked mesh's material tells us which part it is. */
 const SENTINEL: Record<
@@ -70,7 +72,9 @@ const FIXED: Record<string, Role> = {
   a36d5b: 'mouth',
   '2b2f36': 'glasses',
   '1f2430': 'headphones',
-  f3f1ec: 'strings'
+  f3f1ec: 'strings',
+  [SOLE.light.slice(1)]: 'sole-light',
+  [SOLE.dark.slice(1)]: 'sole-dark'
 };
 const FIXED_COLOR: Partial<Record<Role, string>> = {
   eyes: '#23262b',
@@ -78,7 +82,9 @@ const FIXED_COLOR: Partial<Record<Role, string>> = {
   mouth: '#a36d5b',
   glasses: '#2b2f36',
   headphones: '#1f2430',
-  strings: '#f3f1ec'
+  strings: '#f3f1ec',
+  'sole-light': SOLE.light,
+  'sole-dark': SOLE.dark
 };
 const BY_SENTINEL = new Map(Object.entries(SENTINEL).map(([role, color]) => [color.slice(1), role as Role]));
 
@@ -223,7 +229,9 @@ export class CrowdRenderer {
       const fixed = FIXED_COLOR[role];
       const material = new THREE.MeshStandardMaterial({
         color: fixed ?? '#ffffff',
-        roughness: role === 'eyes' || role === 'glasses' ? 0.35 : 0.85
+        roughness: role === 'eyes' || role === 'glasses' ? 0.35 : 0.85,
+        // Hair and beards are faceted, as on the full characters.
+        flatShading: role === 'hair' || role === 'beard'
       });
       const mesh = new THREE.InstancedMesh(geometry, material, members.length);
       mesh.name = `crowd-${role}`;

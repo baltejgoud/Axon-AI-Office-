@@ -133,7 +133,7 @@ export class OfficeAgentCharacter {
   /** World point just above the head, for the floating name label. */
   labelPoint(target: THREE.Vector3): THREE.Vector3 {
     this.rig.head.getWorldPosition(target);
-    target.y += 0.42 * this.rig.scale;
+    target.y += 0.46 * this.rig.scale;
     return target;
   }
 
@@ -191,6 +191,8 @@ export class OfficeAgentCharacter {
     const pulse = this.working && !reducedMotion ? 0.85 + 0.15 * Math.sin(time * 3) : 1;
     this.ring.material.opacity = this.selected ? 0.95 : this.hovered ? 0.55 : 0;
     this.halo.material.opacity = this.selected ? 0.16 * pulse : this.hovered ? 0.08 : 0;
+    // Hidden rather than drawn at zero opacity: two draw calls saved per person.
+    this.ring.visible = this.halo.visible = this.selected || this.hovered;
     this.ring.scale.setScalar(this.selected ? pulse * 1.02 : 1);
 
     this.updateProps(view.heldItem);

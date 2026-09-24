@@ -14,26 +14,37 @@ const SHIN = 0.34;
 const UPPER_ARM = 0.24;
 const FOREARM = 0.23;
 const HEAD = { w: 0.3, h: 0.33, d: 0.31, y: 0.16 };
+/** Heads a touch larger than life: friendlier, and faces read from further away. */
+const HEAD_SCALE = 1.1;
+/** Soles: a pale rubber under casual shoes, dark leather under formal ones. */
+export const SOLE = { light: '#ece6dc', dark: '#4a3a30' } as const;
 
 /** Close-up detail for the full characters; a lighter set for the instanced crowd seen from afar. */
 const SHAPES = {
   full: {
+    // Mid-poly: smooth at the closest zoom, and a third of the triangles of fully round shapes. The
+    // campus draws a couple of dozen people like this, twice over with their shadows.
     box: GEOMETRY.box,
-    sphere: GEOMETRY.sphere,
-    capsule: GEOMETRY.capsule,
-    cylinder: GEOMETRY.cylinder,
+    sphere: new THREE.SphereGeometry(0.5, 14, 10),
+    small: new THREE.SphereGeometry(0.5, 8, 6),
+    capsule: new THREE.CapsuleGeometry(0.5, 1, 3, 10),
+    cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 12),
     lowSphere: GEOMETRY.lowSphere,
-    hairCap: new THREE.SphereGeometry(0.5, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    lens: new THREE.TorusGeometry(0.04, 0.006, 6, 18),
-    band: new THREE.TorusGeometry(0.178, 0.014, 6, 20, Math.PI)
+    // Hair is faceted: chunky solids, flat-shaded.
+    hairCap: new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    hairBlob: new THREE.IcosahedronGeometry(0.5, 1),
+    lens: new THREE.TorusGeometry(0.04, 0.006, 4, 12),
+    band: new THREE.TorusGeometry(0.178, 0.014, 4, 14, Math.PI)
   },
   low: {
     box: GEOMETRY.box,
     sphere: new THREE.SphereGeometry(0.5, 10, 7),
     capsule: new THREE.CapsuleGeometry(0.5, 1, 3, 8),
     cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
+    small: new THREE.SphereGeometry(0.5, 6, 4),
     lowSphere: new THREE.IcosahedronGeometry(0.5, 0),
-    hairCap: new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    hairCap: new THREE.SphereGeometry(0.5, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    hairBlob: new THREE.IcosahedronGeometry(0.5, 1),
     lens: new THREE.TorusGeometry(0.04, 0.006, 3, 10),
     band: new THREE.TorusGeometry(0.178, 0.014, 3, 10, Math.PI)
   }
@@ -63,6 +74,8 @@ export interface HumanoidRig {
   eyes: THREE.Mesh[];
 }
 
+const LAYERED_TOPS: ReadonlySet<Appearance['top']> = new Set(['blazer', 'cardigan', 'suit']);
+
 function joint(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Group {
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -89,10 +102,12 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   const shirt = fabric(look.shirt);
   const outer = fabric(look.jacket ?? look.shirt);
   const trousers = fabric(look.trousers);
-  const hair = mat(look.hair, { roughness: 0.95 });
+  const hair = mat(look.hair, { roughness: 0.95, flat: true });
   const eyeMaterial = mat('#23262b', { roughness: 0.3 });
   const highlight = mat('#ffffff');
   const accent = mat(look.accent, { roughness: 0.5 });
+  const formal = LAYERED_TOPS.has(look.top);
+  const sole = mat(formal ? SOLE.dark : SOLE.light, { roughness: 0.8 });
   const width = look.build;
   // Sleeves: short on a tee, shirt sleeves under a vest, otherwise the outer layer.
   const upperSleeve = look.top === 'vest' || look.top === 'tee' ? shirt : outer;
@@ -107,7 +122,8 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
     const knee = joint(hip, 0, -THIGH, 0);
     add(knee, part(G.capsule, trousers, [0.13, SHIN / 2, 0.13], [0, -SHIN / 2, 0]));
     const foot = joint(knee, 0, -SHIN, 0);
-    add(foot, part(G.sphere, mat(look.shoes, { roughness: 0.6 }), [0.11, 0.075, 0.24], [0, -0.02, 0.05]));
+    add(foot, part(G.sphere, mat(look.shoes, { roughness: 0.6 }), [0.11, 0.07, 0.24], [0, -0.014, 0.05]));
+    add(foot, part(G.box, sole, [0.118, 0.02, 0.25], [0, -0.046, 0.05]));
     return { root: hip, joint: knee, end: foot };
   };
   const legL = leg(1);
@@ -130,7 +146,11 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
     for (const side of [-1, 1])
       spine.add(part(G.box, mat('#f3f1ec'), [0.01, 0.1, 0.008], [side * 0.035, 0.36, 0.13]));
   }
-  if (look.top === 'polo')
+  if (look.top === 'tee' || look.top === 'hoodie')
+    // A ribbed neckband.
+    add(spine, part(G.cylinder, shirt, [0.15, 0.03, 0.13], [0, 0.455, 0.005]), false);
+  else
+    // Collar points either side of the neck.
     for (const side of [-1, 1])
       spine.add(part(G.box, shirt, [0.08, 0.035, 0.05], [side * 0.05, 0.46, 0.08], [0.4, 0, side * 0.35]));
 
@@ -138,11 +158,12 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   const neck = joint(spine, 0, 0.47, 0);
   add(neck, part(G.cylinder, skin, [0.11, 0.07, 0.11], [0, 0.02, 0]));
   const head = joint(neck, 0, 0.05, 0);
+  head.scale.setScalar(HEAD_SCALE);
   add(head, part(G.sphere, skin, [HEAD.w, HEAD.h, HEAD.d], [0, HEAD.y, 0]));
   const faceZ = HEAD.d / 2 - 0.012;
   for (const side of [1, -1]) {
-    add(head, part(G.sphere, skin, [0.05, 0.08, 0.05], [0.148 * side, HEAD.y, 0]));
-    head.add(part(G.sphere, eyeMaterial, [0.034, 0.042, 0.026], [0.058 * side, HEAD.y + 0.025, faceZ]));
+    add(head, part(G.small, skin, [0.05, 0.08, 0.05], [0.148 * side, HEAD.y, 0]));
+    head.add(part(G.small, eyeMaterial, [0.034, 0.042, 0.026], [0.058 * side, HEAD.y + 0.025, faceZ]));
     if (look.glasses)
       head.add(
         part(
@@ -155,21 +176,21 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   }
   if (look.glasses)
     head.add(part(G.box, mat('#2b2f36'), [0.04, 0.008, 0.008], [0, HEAD.y + 0.03, faceZ + 0.014]));
-  add(head, part(G.sphere, skin, [0.045, 0.055, 0.05], [0, HEAD.y - 0.015, faceZ + 0.008]), false);
+  add(head, part(G.small, skin, [0.045, 0.055, 0.05], [0, HEAD.y - 0.015, faceZ + 0.008]), false);
   // Small face details remain warm and legible in close-up.
   for (const side of [-1, 1]) {
-    head.add(part(G.sphere, highlight, [0.009, 0.011, 0.006], [0.055 * side, HEAD.y + 0.033, faceZ + 0.014]));
+    head.add(part(G.small, highlight, [0.009, 0.011, 0.006], [0.055 * side, HEAD.y + 0.033, faceZ + 0.014]));
     head.add(
       part(
         G.box,
         hair,
-        [0.042, 0.009, 0.009],
-        [0.058 * side, HEAD.y + 0.067, faceZ - 0.007],
-        [0, 0, side * -0.1]
+        [0.05, 0.013, 0.012],
+        [0.058 * side, HEAD.y + 0.07, faceZ - 0.008],
+        [0, 0, side * -0.14]
       )
     );
   }
-  head.add(part(G.sphere, mat('#a36d5b'), [0.055, 0.012, 0.01], [0, HEAD.y - 0.065, faceZ - 0.002]));
+  head.add(part(G.small, mat('#a36d5b'), [0.055, 0.012, 0.01], [0, HEAD.y - 0.065, faceZ - 0.002]));
   if (look.jacket)
     for (const side of [-1, 1])
       spine.add(part(G.box, shirt, [0.065, 0.13, 0.014], [side * 0.058, 0.38, 0.137], [0, 0, side * 0.3]));
@@ -177,7 +198,12 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
   if (look.beard)
     add(
       head,
-      part(G.sphere, mat(look.beard, { roughness: 0.95 }), [0.27, 0.15, 0.21], [0, HEAD.y - 0.09, 0.04])
+      part(
+        G.hairBlob,
+        mat(look.beard, { roughness: 0.95, flat: true }),
+        [0.27, 0.15, 0.21],
+        [0, HEAD.y - 0.09, 0.04]
+      )
     );
   if (look.headphones) {
     const phones = mat('#1f2430', { roughness: 0.4 });
@@ -195,6 +221,17 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
     add(shoulder, part(G.capsule, upperSleeve, [0.115, UPPER_ARM / 2, 0.115], [0, -UPPER_ARM / 2, 0]));
     const elbow = joint(shoulder, 0, -UPPER_ARM, 0);
     add(elbow, part(G.capsule, lowerSleeve, [0.1, FOREARM / 2 - 0.01, 0.1], [0, -FOREARM / 2 + 0.01, 0]));
+    if (look.top !== 'tee') {
+      // Cuffs: the shirt shows at the wrist under a layer; otherwise a band in the sleeve's own colour.
+      const cuff = part(
+        G.cylinder,
+        LAYERED_TOPS.has(look.top) ? shirt : lowerSleeve,
+        [0.104, 0.035, 0.104],
+        [0, -FOREARM + 0.03, 0]
+      );
+      cuff.castShadow = false;
+      elbow.add(cuff);
+    }
     const hand = joint(elbow, 0, -FOREARM, 0);
     add(hand, part(G.sphere, skin, [0.095, 0.11, 0.08], [0, 0, 0]));
     return { root: shoulder, joint: elbow, end: hand };
@@ -210,7 +247,12 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
       object.receiveShadow = false;
     }
   });
-  const outlines = consolidate(root, outlined);
+  // Close up every joint is one vertex-coloured mesh; the crowd's templates keep a mesh per material,
+  // which is how their baking tells skin from shirt.
+  const outlines =
+    detail === 'full'
+      ? paintJoints(root, outlined, new Set([eyeMaterial, highlight]))
+      : consolidate(root, outlined);
   const eyes = head.children.filter(
     (child): child is THREE.Mesh =>
       child instanceof THREE.Mesh && (child.material === eyeMaterial || child.material === highlight)
@@ -240,19 +282,19 @@ function buildHair(
   switch (look.hairStyle) {
     case 'short':
       cap(1.08);
-      add(head, part(G.sphere, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
+      add(head, part(G.hairBlob, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
       return;
     case 'bob':
       cap(1.1);
-      add(head, part(G.sphere, hair, [0.35, 0.31, 0.3], [0, y - 0.07, -0.05]));
+      add(head, part(G.hairBlob, hair, [0.35, 0.31, 0.3], [0, y - 0.07, -0.05]));
       return;
     case 'bun':
       cap(1.08);
-      add(head, part(G.sphere, hair, [0.15, 0.14, 0.15], [0, y + 0.17, -0.12]));
+      add(head, part(G.hairBlob, hair, [0.15, 0.14, 0.15], [0, y + 0.17, -0.12]));
       return;
     case 'ponytail':
       cap(1.09);
-      add(head, part(G.sphere, hair, [0.09, 0.09, 0.09], [0, y + 0.06, -0.165]));
+      add(head, part(G.hairBlob, hair, [0.09, 0.09, 0.09], [0, y + 0.06, -0.165]));
       add(head, part(G.capsule, hair, [0.09, 0.12, 0.085], [0, y - 0.1, -0.2], [0.3, 0, 0]));
       return;
     case 'curly':
@@ -269,12 +311,12 @@ function buildHair(
           )
         );
       }
-      add(head, part(G.sphere, hair, [0.34, 0.28, 0.25], [0, y - 0.04, -0.09]));
+      add(head, part(G.hairBlob, hair, [0.34, 0.28, 0.25], [0, y - 0.04, -0.09]));
       return;
     case 'wavy':
       cap(1.09);
-      add(head, part(G.sphere, hair, [0.18, 0.09, 0.13], [0.05, y + 0.15, 0.085], [0, 0, -0.3]));
-      add(head, part(G.sphere, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
+      add(head, part(G.hairBlob, hair, [0.18, 0.09, 0.13], [0.05, y + 0.15, 0.085], [0, 0, -0.3]));
+      add(head, part(G.hairBlob, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
       return;
     case 'crop':
       cap(1.04);
@@ -284,17 +326,17 @@ function buildHair(
       return;
     case 'side-part':
       cap(1.08);
-      add(head, part(G.sphere, hair, [0.2, 0.08, 0.16], [-0.06, y + 0.15, 0.07], [0, 0, 0.35]));
-      add(head, part(G.sphere, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
+      add(head, part(G.hairBlob, hair, [0.2, 0.08, 0.16], [-0.06, y + 0.15, 0.07], [0, 0, 0.35]));
+      add(head, part(G.hairBlob, hair, [0.28, 0.2, 0.15], [0, y - 0.03, -0.095]));
       return;
     case 'long':
       cap(1.1);
-      add(head, part(G.sphere, hair, [0.36, 0.5, 0.2], [0, y - 0.18, -0.08]));
+      add(head, part(G.hairBlob, hair, [0.36, 0.5, 0.2], [0, y - 0.18, -0.08]));
       return;
     case 'afro':
       cap(1.42);
       for (const side of [-1, 1])
-        add(head, part(G.sphere, hair, [0.2, 0.26, 0.26], [0.15 * side, y + 0.02, -0.05]));
+        add(head, part(G.hairBlob, hair, [0.2, 0.26, 0.26], [0.15 * side, y + 0.02, -0.05]));
       return;
     case 'braids':
       cap(1.07);
@@ -325,11 +367,84 @@ export function applyPose(rig: HumanoidRig, pose: Pose): void {
   rig.legR.end.rotation.x = (pose.legR.fwd - pose.legR.bend) * 0.8;
 }
 
+/** The one material every joint of a close-up person shares; colour rides in the geometry. */
+const bodyMaterial = () => mat('#ffffff', { vertexColors: true, roughness: 0.8 });
+
+/** A mesh's geometry in its joint's frame, unindexed, with its material's colour on every vertex. */
+function paintedPart(mesh: THREE.Mesh, withColor: boolean): THREE.BufferGeometry {
+  mesh.updateMatrix();
+  const source = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+  const geometry = source.index ? source.toNonIndexed() : source;
+  for (const name of Object.keys(geometry.attributes))
+    if (name !== 'position' && name !== 'normal') geometry.deleteAttribute(name);
+  const material = mesh.material as THREE.MeshStandardMaterial;
+  // Faceted things (hair) keep their facets through face normals, as the shared material is smooth.
+  if (material.flatShading) geometry.computeVertexNormals();
+  if (withColor) {
+    const count = geometry.getAttribute('position').count;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) material.color.toArray(colors, i * 3);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  }
+  return geometry;
+}
+
+/**
+ * Collapses each joint of a close-up person into one vertex-coloured mesh (eyes apart, so they can
+ * blink): about a third fewer draw calls than a mesh per material. Selection outlines come from
+ * invisible copies of the outlined parts only, so faces never get outlined brows. Returns those.
+ */
+function paintJoints(
+  root: THREE.Object3D,
+  outlinable: Set<THREE.Mesh>,
+  apart: ReadonlySet<THREE.Material>
+): THREE.Mesh[] {
+  const joints: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) joints.push(object);
+  });
+  const outlines: THREE.Mesh[] = [];
+  for (const parent of joints) {
+    const body = parent.children.filter(
+      (child): child is THREE.Mesh =>
+        child instanceof THREE.Mesh && !Array.isArray(child.material) && !apart.has(child.material)
+    );
+    if (!body.length) continue;
+    const merged = new THREE.Mesh(
+      mergeGeometries(body.map((mesh) => paintedPart(mesh, true))),
+      bodyMaterial()
+    );
+    merged.castShadow = body.some((mesh) => mesh.castShadow);
+    merged.receiveShadow = false;
+    merged.userData.ownsGeometry = true;
+    const outlined = body.filter((mesh) => outlinable.has(mesh));
+    if (outlined.length) {
+      const source = new THREE.Mesh(
+        mergeGeometries(outlined.map((mesh) => paintedPart(mesh, false))),
+        bodyMaterial()
+      );
+      source.visible = false;
+      source.userData.ownsGeometry = true;
+      parent.add(source);
+      outlines.push(source);
+    }
+    for (const mesh of body) parent.remove(mesh);
+    parent.add(merged);
+  }
+  // Eyes and their highlights: one mesh per material on the head.
+  consolidate(root, new Set(), apart);
+  return outlines;
+}
+
 /**
  * Merges the meshes that share a joint and a material into one, so a person costs about half the
  * draw calls. Joints still move independently. Returns the meshes that get a selection outline.
  */
-function consolidate(root: THREE.Object3D, outlinable: Set<THREE.Mesh>): THREE.Mesh[] {
+function consolidate(
+  root: THREE.Object3D,
+  outlinable: Set<THREE.Mesh>,
+  only?: ReadonlySet<THREE.Material>
+): THREE.Mesh[] {
   const joints: THREE.Object3D[] = [];
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) joints.push(object);
@@ -339,6 +454,7 @@ function consolidate(root: THREE.Object3D, outlinable: Set<THREE.Mesh>): THREE.M
     const byMaterial = new Map<THREE.Material, THREE.Mesh[]>();
     for (const child of parent.children) {
       if (!(child instanceof THREE.Mesh) || Array.isArray(child.material)) continue;
+      if (only && !only.has(child.material)) continue;
       const list = byMaterial.get(child.material);
       if (list) list.push(child);
       else byMaterial.set(child.material, [child]);

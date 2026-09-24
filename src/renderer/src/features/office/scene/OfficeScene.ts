@@ -441,9 +441,10 @@ export class OfficeScene {
       character.setSelected(id === this.selectedId, this.elapsed);
       character.setWorking(this.statuses.get(id) === 'working');
       this.characters.set(id, character);
-      this.scene.add(character.root);
     }
     this.idleSince.delete(id);
+    // Only people drawn in full are in the scene: the renderer walks every object each frame.
+    if (!character.root.parent) this.scene.add(character.root);
     character.root.visible = true;
     // Snap straight into the current pose, so the swap from the crowd figure is invisible.
     const view = this.simulation.view(id);
@@ -453,7 +454,7 @@ export class OfficeScene {
 
   private demote(id: string): void {
     const character = this.characters.get(id);
-    if (character) character.root.visible = false;
+    if (character) character.root.removeFromParent();
     this.idleSince.set(id, this.elapsed);
     this.crowd.setVisible(id, true);
   }

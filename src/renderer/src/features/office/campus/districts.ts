@@ -1,4 +1,5 @@
 import type { ScreenFlavor } from '../scene/room/materials';
+import type { DeskEquipment } from './builder';
 
 export type DistrictId =
   'commons' | 'engineering' | 'product' | 'design' | 'leadership' | 'ai-data' | 'business' | 'people-ops';
@@ -32,7 +33,7 @@ export interface District {
   /** Catalog department (group) names, in layout order. */
   departments: string[];
   flavor: ScreenFlavor;
-  equipment: 'laptop' | 'laptop-monitor' | 'monitor';
+  equipment: DeskEquipment;
   floor: FloorKind;
 }
 
@@ -74,7 +75,7 @@ export const DISTRICTS: readonly District[] = [
       'Emerging Tech'
     ],
     flavor: 'code',
-    equipment: 'laptop-monitor',
+    equipment: 'dual-monitor',
     floor: 'oak'
   },
   {
@@ -126,7 +127,7 @@ export const DISTRICTS: readonly District[] = [
     grid: [1, 1],
     departments: ['AI, ML & Data'],
     flavor: 'data',
-    equipment: 'laptop-monitor',
+    equipment: 'dual-monitor',
     floor: 'carpet-grey'
   },
   {
@@ -172,6 +173,13 @@ export function districtOf(department: string): DistrictId {
   const id = byDepartment.get(department);
   if (!id) throw new Error(`Department without a district: ${department}`);
   return id;
+}
+
+/** The district whose floor (with its `pad` of inlay margin) holds a point; none in the corridors. */
+export function districtAt(x: number, z: number, pad = 0.6): District | undefined {
+  return DISTRICTS.find(
+    ({ bounds: b }) => x >= b.minX - pad && x <= b.maxX + pad && z >= b.minZ - pad && z <= b.maxZ + pad
+  );
 }
 
 export const boundsCentre = (b: Bounds) => ({ x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 });

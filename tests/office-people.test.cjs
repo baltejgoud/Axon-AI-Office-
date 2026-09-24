@@ -103,3 +103,14 @@ test('time of day: bright at noon, golden at sunset, lamps on in the evening, ne
   }
   assert.deepEqual(lighting.lightingAt(24), lighting.lightingAt(0));
 });
+
+const { DISTRICTS } = require('../src/renderer/src/features/office/campus/districts.ts');
+
+test('every district dresses in colours that go with its own', () => {
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const gap = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+  for (const district of DISTRICTS) {
+    const near = appearance.DRESS_CODES[district.id].colours.filter((c) => gap(c, district.color) < 80);
+    assert.ok(near.length >= 2, `${district.id}: ${near.join(', ')}`);
+  }
+});

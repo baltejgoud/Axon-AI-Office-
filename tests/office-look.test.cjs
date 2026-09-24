@@ -68,3 +68,52 @@ test('perimeter walls thicken outward, keeping their inner face; inner walls sta
   }
   assert.deepEqual(walls.wallSlab(inner, room), { thickness: 0.16, offset: 0 });
 });
+
+const THREE = require('three');
+const batching = require('../src/renderer/src/features/office/scene/room/batching.ts');
+const materials = require('../src/renderer/src/features/office/scene/room/materials.ts');
+
+test('plain colours of one finish merge into one vertex-coloured mesh; glowing and see-through stay apart', () => {
+  const root = new THREE.Group();
+  const add = (color, options, x = 0) => root.add(materials.box(color, [1, 1, 1], [x, 0, 0], options));
+  add('#ff0000');
+  add('#00ff00', undefined, 2);
+  add('#0000ff', { roughness: 0.82 }, 4);
+  add('#ffffff', { emissive: '#ffcc00', emissiveIntensity: 0.6 });
+  add('#d6ebf2', { transparent: true, opacity: 0.3 });
+  batching.batchStatic(root);
+  const meshes = root.children.filter((c) => c.isMesh);
+  assert.equal(meshes.length, 3);
+  const painted = meshes.find((m) => m.geometry.getAttribute('color'));
+  assert.ok(painted.material.vertexColors);
+  const colours = new Set();
+  const attr = painted.geometry.getAttribute('color');
+  for (let i = 0; i < attr.count; i++)
+    colours.add([attr.getX(i), attr.getY(i), attr.getZ(i)].map((v) => v.toFixed(2)).join());
+  assert.equal(colours.size, 3);
+  // Each box keeps its place: the merged mesh spans all three.
+  painted.geometry.computeBoundingBox();
+  assert.ok(Math.abs(painted.geometry.boundingBox.max.x - 4.5) < 1e-6);
+  assert.equal(painted.geometry.index.count, 36 * 3);
+  assert.equal(batching.surfaceKey(materials.mat('#123456', { map: new THREE.Texture() })), null);
+});
+
+test('batching leaves no empty groups behind, but keeps groups that still hold something that moves', () => {
+  const root = new THREE.Group();
+  const nested = new THREE.Group();
+  const deeper = new THREE.Group();
+  deeper.add(materials.box('#ff0000', [1, 1, 1], [0, 0, 0]));
+  nested.add(deeper, materials.box('#00ff00', [1, 1, 1], [1, 0, 0]));
+  const machine = new THREE.Group();
+  const light = materials.box('#ffffff', [0.1, 0.1, 0.1], [0, 0, 0], { emissive: '#ffcc00' });
+  light.userData.dynamic = true;
+  machine.add(materials.box('#333333', [1, 1, 1], [0, 0, 0]), light);
+  root.add(nested, machine);
+  batching.batchStatic(root);
+  let groups = 0;
+  root.traverse((o) => {
+    if (o !== root && !o.isMesh) groups++;
+  });
+  assert.equal(groups, 1, 'only the machine holding its light is left');
+  assert.ok(machine.parent === root && light.parent === machine);
+});

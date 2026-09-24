@@ -46,14 +46,15 @@ export function bevelBox(
   size: Vec3,
   position: Vec3,
   radius = 0.02,
-  options?: MaterialOptions
+  options?: MaterialOptions,
+  segments = radius < 0.012 ? 1 : 2
 ): THREE.Mesh {
   const [w, h, d] = size.map((v) => Math.round(v * 1000) / 1000);
   const r = Math.max(0.001, Math.min(radius, Math.min(w, h, d) / 2 - 0.001));
-  const key = `${w}|${h}|${d}|${r.toFixed(3)}`;
+  const key = `${w}|${h}|${d}|${r.toFixed(3)}|${segments}`;
   let geometry = bevels.get(key);
   if (!geometry) {
-    geometry = new RoundedBoxGeometry(w, h, d, 2, r);
+    geometry = new RoundedBoxGeometry(w, h, d, segments, r);
     bevels.set(key, geometry);
   }
   return part(geometry, mat(color, options), [1, 1, 1], position);
@@ -157,6 +158,43 @@ export function lathe(
     lathes.set(key, geometry);
   }
   return part(geometry, mat(color, options), [1, 1, 1], position);
+}
+
+/** Low-poly solids shared by the small things: an 8-sided can, a 6-sided wheel and two faceted balls. */
+export const LOW = {
+  can: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
+  wheel: new THREE.CylinderGeometry(0.5, 0.5, 1, 6).rotateZ(Math.PI / 2),
+  gem: new THREE.IcosahedronGeometry(0.5, 0),
+  ball: new THREE.IcosahedronGeometry(0.5, 1)
+} as const;
+
+/** `a` blended toward `b` by `t`, in display (sRGB) terms, as a hex colour. */
+export function blend(a: string, b: string, t: number): string {
+  const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [from, to] = [channels(a), channels(b)];
+  return `#${from
+    .map((v, i) =>
+      Math.round(v + (to[i] - v) * t)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')}`;
+}
+
+/** A district's accent family: its colour, lighter and paler tints for fabric, and a deep shade for trim. */
+export function tones(color: string): { base: string; light: string; pale: string; dark: string } {
+  return {
+    base: color,
+    light: blend(color, '#ffffff', 0.3),
+    pale: blend(color, '#ffffff', 0.62),
+    dark: blend(color, '#1f2328', 0.3)
+  };
+}
+
+/** No shadow from `object` or anything in it: small things cost shadow triangles and show none. */
+export function noShadow<T extends THREE.Object3D>(object: T): T {
+  object.traverse((child) => (child.castShadow = false));
+  return object;
 }
 
 /** Greens for foliage, from shade to sun. */

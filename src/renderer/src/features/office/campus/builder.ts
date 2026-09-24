@@ -87,8 +87,22 @@ export interface FurnitureItem {
   busyWith?: string[];
 }
 
-export type DeskEquipment = 'laptop' | 'laptop-monitor' | 'monitor';
-export type DeskProp = 'mug' | 'notebook' | 'lamp' | 'plant' | 'folder' | 'books' | 'tablet' | 'pen-cup';
+export type DeskEquipment = 'laptop' | 'laptop-monitor' | 'monitor' | 'dual-monitor';
+export type DeskProp =
+  | 'mug'
+  | 'notebook'
+  | 'lamp'
+  | 'plant'
+  | 'folder'
+  | 'books'
+  | 'tablet'
+  | 'pen-cup'
+  | 'headphones'
+  | 'bottle'
+  | 'photo'
+  | 'sticky-notes'
+  | 'succulent'
+  | 'figurine';
 
 export interface DeskSetup {
   poiId: string;

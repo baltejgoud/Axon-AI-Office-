@@ -109,3 +109,15 @@ Done before this spec (same branch): the hanging department and room signs are r
 6. **Plinth** is 0.9 m deep, not 0.5 m: 0.5 m did not show from the whole-campus view. The zoom-1 fit includes its foot.
 7. **Light.** Sky light ×0.72 and sun ×1.25 across the time-of-day keys, so tops and sides of objects separate; the sky light never drops below 1.3 (the existing "never dark" rule).
 8. **Desktop check.** The Files room step now waits for the folder wall, which refreshes a moment after the listing (the old immediate count passed only by timing). A failed scene start is now logged to the console before the roster takes over.
+
+### Part 2
+
+Plan: [`2026-09-24-low-poly-parts-2-4.md`](../plans/2026-09-24-low-poly-parts-2-4.md).
+
+1. **Static batching by finish.** Before adding anything, `batchStatic` (`scene/room/batching.ts`) replaced `mergeStatic`: every plain-coloured, opaque static material carries its colour in the geometry and merges into one mesh per finish (roughness, metalness, flat, depth pull). Whole campus: 724 → 474 draw calls with nothing else changed.
+2. **Frame rate: what cost it and what fixed it.** The first Part 2 build read 47 fps at 1080p Balanced. Measured, not guessed (A/B against a baseline build, with CPU time and a GPU timer query): GPU time had *dropped*, but CPU time in `render()` had grown. Merging removed the meshes but left their ~2,700 empty groups in the scene, and three.js walks and updates every object each frame. Fixes: batching prunes groups left empty (5,748 → 908 objects at the opening view); people no longer drawn in full leave the scene instead of hiding in it; full characters use mid-poly shapes (11.7k → 4.2k triangles, far figures 3.3k → 2.7k); pedestals, pod legs and small desk things throw no shadow; chairs are lighter (about 400 triangles).
+3. **Characters draw in fewer calls.** Each joint of a full character is one vertex-coloured mesh (eyes apart, to blink); selection outlines come from invisible copies of the outlined parts only. The selection ring and halo are hidden, not drawn at zero opacity.
+4. **Dual monitors** replace the laptop-and-monitor setup in Engineering and AI & Data (two screens either way); Leadership keeps a laptop on a stand beside its monitor.
+5. **Accent tints are mixed in display (sRGB) terms**; mixed in linear light, 45 % white already read as grey.
+6. **Executive desks** lose their painted papers and brass cup: the desk-life props now sit there.
+7. **Readings** (desktop check, mains power): whole campus 444 draw calls, 1.48M triangles; 1080p Balanced 55 fps (median of ten; baseline 54); 1080p High 41 fps (baseline 36).

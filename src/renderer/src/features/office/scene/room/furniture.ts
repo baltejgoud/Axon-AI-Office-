@@ -1,18 +1,6 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-const roundedSurface = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
-import type { DeskEquipment, DeskProp, FurnitureItem } from '../../simulation/layout';
-import {
-  GEOMETRY,
-  PALETTE,
-  box,
-  cylinder,
-  lampGlow,
-  mat,
-  part,
-  screenCanvas,
-  type ScreenFlavor
-} from './materials';
+import type { FurnitureItem } from '../../simulation/layout';
+import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } from './materials';
 import * as commons from './commonsProps';
 import * as exec from './executive';
 import * as props from './props';
@@ -27,7 +15,9 @@ import {
   seeded,
   type CoffeeMachine
 } from './kit';
-import { DISTRICTS } from '../../campus/districts';
+import { districtAt } from '../../campus/districts';
+import { accentAt, deskPod, singleDesk } from './desks';
+import { ergonomicChair } from './chairs';
 
 export { largePlant, plant };
 
@@ -37,69 +27,6 @@ export { largePlant, plant };
  */
 
 const NOTE_COLORS = ['#ffe08a', '#ffb4c8', '#a7d8ff', '#b9f0c0'];
-
-function deskTop(width: number, depth: number): THREE.Group {
-  const inset = 0.08;
-  const g = group(
-    part(roundedSurface, mat(PALETTE.woodLight, { roughness: 0.52 }), [width, 0.055, depth], [0, 0.74, 0])
-  );
-  for (const x of [-width / 2 + inset, width / 2 - inset])
-    for (const z of [-depth / 2 + inset, depth / 2 - inset])
-      g.add(box(PALETTE.white, [0.04, 0.72, 0.04], [x, 0.36, z]));
-  return g;
-}
-
-function pedestal(x: number, z: number): THREE.Mesh {
-  return box(PALETTE.offWhite, [0.4, 0.56, 0.5], [x, 0.3, z]);
-}
-
-function deskPod(itemDef: FurnitureItem): THREE.Group {
-  const { w, d } = itemDef;
-  const g = group(
-    part(roundedSurface, mat(PALETTE.woodLight, { roughness: 0.52 }), [w, 0.055, d], [0, 0.74, 0])
-  );
-  for (const x of [-w / 2 + 0.06, w / 2 - 0.06]) {
-    g.add(box(PALETTE.white, [0.05, 0.72, d - 0.2], [x, 0.36, 0]));
-    g.add(box(PALETTE.white, [0.06, 0.04, d - 0.1], [x, 0.02, 0]));
-  }
-  for (const x of [-w / 2 + 0.35, w / 2 - 0.35]) for (const z of [-d / 4, d / 4]) g.add(pedestal(x, z));
-  if (itemDef.id === 'pod-a') {
-    // Planter spine down the middle, as in the reference.
-    g.add(box(PALETTE.white, [w - 0.2, 0.2, 0.3], [0, 0.86, 0]));
-    for (let i = 0; i < 6; i++) {
-      const bush = plant(0.55, PALETTE.white, i + 3);
-      bush.position.set(-w / 2 + 0.35 + i * ((w - 0.7) / 5), 0.78, 0);
-      g.add(bush);
-    }
-  } else {
-    g.add(box('#aebfb4', [w - 0.1, 0.4, 0.04], [0, 0.96, 0]));
-    g.add(box(PALETTE.white, [w - 0.06, 0.02, 0.06], [0, 1.17, 0]));
-  }
-  return g;
-}
-
-function officeChair(): THREE.Group {
-  const seat = '#e7e9ec';
-  const g = group(
-    box(seat, [0.48, 0.07, 0.46], [0, 0.46, 0], { roughness: 0.9 }),
-    part(GEOMETRY.box, mat(seat, { roughness: 0.9 }), [0.46, 0.52, 0.06], [0, 0.78, -0.22], [-0.12, 0, 0]),
-    cylinder('#8a9099', 0.022, 0.34, [0, 0.27, 0], { metalness: 0.3, roughness: 0.5 }),
-    cylinder('#8a9099', 0.045, 0.05, [0, 0.07, 0], { metalness: 0.3, roughness: 0.5 })
-  );
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2;
-    g.add(
-      part(
-        GEOMETRY.box,
-        mat('#8a9099', { metalness: 0.3, roughness: 0.5 }),
-        [0.03, 0.025, 0.22],
-        [Math.sin(angle) * 0.1, 0.045, Math.cos(angle) * 0.1],
-        [0, angle, 0]
-      )
-    );
-  }
-  return g;
-}
 
 function meetingChair(): THREE.Group {
   const g = group(
@@ -449,9 +376,7 @@ function lowCabinet(itemDef: FurnitureItem): THREE.Group {
 
 /** Rugs take a soft tint of their district's colour: a light field with a deeper border. */
 function rugTones(x: number, z: number): { field: string; border: string } {
-  const district = DISTRICTS.find(
-    ({ bounds: b }) => x >= b.minX - 0.6 && x <= b.maxX + 0.6 && z >= b.minZ - 0.6 && z <= b.maxZ + 0.6
-  );
+  const district = districtAt(x, z);
   const base = new THREE.Color(RUG_BASE);
   if (!district) return { field: RUG_BASE, border: '#d9d2c6' };
   const tint = new THREE.Color(district.color);
@@ -488,11 +413,11 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     case 'rug':
       return { object: rug(itemDef) };
     case 'desk':
-      return { object: deskTop(itemDef.w, itemDef.d) };
+      return { object: singleDesk(itemDef) };
     case 'desk-pod':
       return { object: deskPod(itemDef) };
     case 'office-chair':
-      return { object: officeChair() };
+      return { object: ergonomicChair(accentAt(itemDef.x, itemDef.z)) };
     case 'meeting-chair':
       return { object: meetingChair() };
     case 'armchair':
@@ -621,138 +546,3 @@ export const SEAT_HEIGHT: Partial<Record<FurnitureItem['kind'], number>> = {
   'cafe-chair': 0.48
 };
 export const SOFA_SEAT_HEIGHT = 0.45;
-
-// ---------------------------------------------------------------- workstations
-
-export interface Workstation {
-  object: THREE.Group;
-  displays: THREE.Mesh[];
-}
-
-const screenPlaceholder = new THREE.MeshBasicMaterial({ visible: false });
-
-/**
- * Where a screen goes. The room collects these and draws every screen as one instanced mesh per
- * style (see screens.ts), so the placeholder itself is never rendered.
- */
-function display(width: number, height: number, flavor: ScreenFlavor): THREE.Mesh {
-  const mesh = new THREE.Mesh(GEOMETRY.plane, screenPlaceholder);
-  mesh.scale.set(width, height, 1);
-  mesh.userData.dynamic = true;
-  mesh.userData.screen = flavor;
-  mesh.castShadow = false;
-  return mesh;
-}
-
-function laptop(flavor: ScreenFlavor): {
-  object: THREE.Group;
-  display: THREE.Mesh;
-} {
-  const screen = display(0.3, 0.19, flavor);
-  screen.position.set(0, 0.11, 0.007);
-  const lid = group(
-    box(PALETTE.metal, [0.34, 0.22, 0.012], [0, 0.11, 0], { metalness: 0.4, roughness: 0.35 }),
-    screen
-  );
-  lid.position.set(0, 0.018, -0.115);
-  lid.rotation.x = -0.28;
-  const object = group(
-    box(PALETTE.metal, [0.34, 0.018, 0.24], [0, 0.009, 0], { metalness: 0.4, roughness: 0.35 }),
-    box('#3a4048', [0.3, 0.004, 0.11], [0, 0.02, 0.02]),
-    lid
-  );
-  return { object, display: screen };
-}
-
-function monitor(flavor: ScreenFlavor): {
-  object: THREE.Group;
-  display: THREE.Mesh;
-} {
-  const screen = display(0.52, 0.3, flavor);
-  screen.position.set(0, 0.37, 0.014);
-  const object = group(
-    box(PALETTE.darkMetal, [0.2, 0.015, 0.16], [0, 0.008, 0]),
-    box(PALETTE.darkMetal, [0.035, 0.3, 0.025], [0, 0.16, -0.02]),
-    box(PALETTE.black, [0.56, 0.34, 0.025], [0, 0.37, 0]),
-    screen
-  );
-  return { object, display: screen };
-}
-
-function deskProp(prop: DeskProp, accent: string): THREE.Object3D {
-  switch (prop) {
-    case 'mug':
-      return cylinder(accent, 0.038, 0.095, [0, 0.048, 0]);
-    case 'notebook':
-      return part(GEOMETRY.box, mat('#6d8b74'), [0.15, 0.012, 0.21], [0, 0.006, 0], [0, 0.3, 0]);
-    case 'lamp':
-      return group(
-        cylinder(PALETTE.darkMetal, 0.06, 0.02, [0, 0.01, 0]),
-        part(GEOMETRY.cylinder, mat(PALETTE.darkMetal), [0.018, 0.36, 0.018], [0, 0.18, 0], [0.25, 0, 0]),
-        part(GEOMETRY.cone, lampGlow.desk(), [0.12, 0.09, 0.12], [0, 0.35, 0.08], [0.5, 0, 0])
-      );
-    case 'plant':
-      return plant(0.3, PALETTE.white, 71);
-    case 'folder':
-      return part(GEOMETRY.box, mat('#e7c77d'), [0.22, 0.02, 0.3], [0, 0.01, 0], [0, -0.2, 0]);
-    case 'books':
-      return group(
-        box('#3d5a80', [0.15, 0.03, 0.21], [0, 0.015, 0]),
-        box('#e0b36a', [0.14, 0.03, 0.2], [0, 0.045, 0]),
-        box('#b5838d', [0.13, 0.03, 0.19], [0, 0.075, 0])
-      );
-    case 'tablet':
-      return group(
-        box(PALETTE.black, [0.17, 0.01, 0.24], [0, 0.005, 0]),
-        box('#9fb7ff', [0.15, 0.002, 0.21], [0, 0.011, 0], { emissive: '#7e9cff', emissiveIntensity: 0.4 })
-      );
-    case 'pen-cup':
-      return group(
-        cylinder(PALETTE.darkMetal, 0.03, 0.09, [0, 0.045, 0]),
-        cylinder('#3b6ff5', 0.005, 0.14, [0.01, 0.1, 0]),
-        cylinder('#ef4444', 0.005, 0.13, [-0.01, 0.1, 0.01])
-      );
-  }
-}
-
-/**
- * Laptop and/or monitor plus a few personal items, placed on the desk in front of a seat.
- * `facing` is the seated person's yaw; the screens face them.
- */
-export function workstation(
-  equipment: DeskEquipment,
-  props: DeskProp[],
-  flavor: ScreenFlavor,
-  accent: string,
-  surfaceY = 0.76
-): Workstation {
-  const g = new THREE.Group();
-  const displays: Workstation['displays'] = [];
-  // Local frame: the person sits at -z looking toward +z; screens face -z (toward them).
-  if (equipment !== 'monitor') {
-    const built = laptop(flavor);
-    built.object.position.set(0, surfaceY, 0.5);
-    built.object.rotation.y = Math.PI;
-    g.add(built.object);
-    displays.push(built.display);
-  }
-  if (equipment !== 'laptop') {
-    const built = monitor(flavor);
-    built.object.position.set(equipment === 'monitor' ? 0 : 0.12, surfaceY, 0.82);
-    built.object.rotation.y = Math.PI;
-    g.add(built.object);
-    displays.push(built.display);
-    if (equipment === 'monitor')
-      g.add(
-        box('#eceef1', [0.38, 0.015, 0.13], [0, surfaceY + 0.008, 0.48]),
-        box('#eceef1', [0.06, 0.02, 0.1], [0.26, surfaceY + 0.01, 0.48])
-      );
-  }
-  props.forEach((prop, index) => {
-    const object = deskProp(prop, accent);
-    const side = index % 2 === 0 ? -1 : 1;
-    object.position.set(side * (0.38 + Math.floor(index / 2) * 0.16), surfaceY, 0.55 + (index % 3) * 0.06);
-    g.add(object);
-  });
-  return { object: g, displays };
-}

@@ -200,7 +200,7 @@ export interface DressCode {
 export const DRESS_CODES: Readonly<Record<DistrictId, DressCode>> = {
   commons: {
     tops: ['shirt', 'blazer', 'cardigan', 'polo'],
-    colours: ['#2f5bd3', '#7a5ac8', '#138a80', '#d9a514'],
+    colours: ['#2f5bd3', '#7a5ac8', '#138a80', '#d9a514', '#b07a3a', '#8a5a2b'],
     shirts: ['#f4f6fb', '#fbfaf6'],
     trousers: ['#3b4250', '#2d3440'],
     shoes: ['#1f2328', '#5a3d2b']
@@ -216,7 +216,8 @@ export const DRESS_CODES: Readonly<Record<DistrictId, DressCode>> = {
       '#c99a2e',
       '#1f7a7a',
       '#ece8df',
-      '#4a5fc1'
+      '#4a5fc1',
+      '#5b7fd9'
     ],
     shirts: ['#f3f1ec', '#dfe6ef'],
     trousers: ['#35507a', '#23272e', '#b8a47e', '#2f3a52'],
@@ -224,42 +225,42 @@ export const DRESS_CODES: Readonly<Record<DistrictId, DressCode>> = {
   },
   'ai-data': {
     tops: ['vest', 'shirt', 'tee', 'hoodie'],
-    colours: ['#4b5565', '#1f7a7a', '#3f3d9e', '#f3f4f6', '#2b2f36', '#5b7fa6'],
+    colours: ['#4b5565', '#1f7a7a', '#3f3d9e', '#f3f4f6', '#2b2f36', '#5b7fa6', '#2b8aa3'],
     shirts: ['#f3f4f6', '#dde7f0', '#e7ecef'],
     trousers: ['#2d3440', '#3b4250', '#45506a'],
     shoes: ['#1f2328', '#f2f2f2', '#2b2f36']
   },
   design: {
     tops: ['tee', 'cardigan', 'shirt', 'tee'],
-    colours: ['#e76f51', '#d9a514', '#a78bdb', '#2a9d74', '#1f1f24', '#6fb3e0', '#e2559a'],
+    colours: ['#e76f51', '#d9a514', '#a78bdb', '#2a9d74', '#1f1f24', '#6fb3e0', '#e2559a', '#c94a8a'],
     shirts: ['#fbfaf6', '#f1ece2'],
     trousers: ['#ece7df', '#1f1f24', '#6b705c', '#35507a'],
     shoes: ['#f3f3f3', '#1f1f24', '#c78d64']
   },
   product: {
     tops: ['shirt', 'cardigan', 'polo', 'blazer'],
-    colours: ['#a9c6e8', '#f4f6fb', '#9fb8a0', '#27334d', '#d8c7a3', '#8c6fb8'],
+    colours: ['#a9c6e8', '#f4f6fb', '#9fb8a0', '#27334d', '#d8c7a3', '#8c6fb8', '#7e57c9'],
     shirts: ['#f4f6fb', '#e8eef7'],
     trousers: ['#3b4250', '#c9b79c', '#2d3440'],
     shoes: ['#5a3d2b', '#1f2328', '#8a5a35']
   },
   business: {
     tops: ['shirt', 'blazer', 'polo', 'blazer'],
-    colours: ['#f8fafc', '#bcd4ee', '#1f2a44', '#3a3f47', '#6e2433', '#2f5bd3'],
+    colours: ['#f8fafc', '#bcd4ee', '#1f2a44', '#3a3f47', '#6e2433', '#2f5bd3', '#c0602f', '#a8502a'],
     shirts: ['#f8fafc', '#dbe8f6'],
     trousers: ['#1f2a44', '#2c3037', '#4a4f57'],
     shoes: ['#1f1f1f', '#5a3d2b']
   },
   'people-ops': {
     tops: ['cardigan', 'shirt', 'polo', 'cardigan'],
-    colours: ['#efe6d6', '#e8b4b8', '#9fb8a0', '#b8a9d9', '#1f7a7a', '#d9a514'],
+    colours: ['#efe6d6', '#e8b4b8', '#9fb8a0', '#b8a9d9', '#1f7a7a', '#d9a514', '#5f8f58', '#4e7f4a'],
     shirts: ['#fbfaf6', '#f3ede3'],
     trousers: ['#3b4250', '#c9b79c', '#5b5f66'],
     shoes: ['#8a5a35', '#1f2328', '#c78d64']
   },
   leadership: {
     tops: ['suit', 'suit', 'blazer'],
-    colours: ['#2e3238', '#1f2a44', '#16181c', '#3a3f47'],
+    colours: ['#2e3238', '#1f2a44', '#16181c', '#3a3f47', '#1f4f4a'],
     shirts: ['#ffffff', '#dbe8f6', '#f3f1ec'],
     trousers: ['#2e3238', '#1f2a44', '#16181c'],
     shoes: ['#16181c', '#3b2a22']

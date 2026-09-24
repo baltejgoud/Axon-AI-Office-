@@ -77,8 +77,8 @@ function render(id: string): string {
   rig.root.rotation.y = 0.32;
   scene.add(rig.root);
   const s = look.height / BASE_HEIGHT;
-  camera.position.set(0.24, 1.53 * s, 1.42);
-  camera.lookAt(0, 1.41 * s, 0);
+  camera.position.set(0.25, 1.55 * s, 1.5);
+  camera.lookAt(0, 1.43 * s, 0);
   renderer.render(scene, camera);
   const url = renderer.domElement.toDataURL('image/webp', 0.92);
   scene.remove(rig.root);

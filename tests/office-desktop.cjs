@@ -197,6 +197,16 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate('window.__axonOffice.focus(0.2, 0.7, 10)');
       await waitFor('document.querySelectorAll(".office-person-label").length >= 3', 'name tags close up');
       await snap('campus-pods.png');
+      // Low-poly Part 2 close-ups: a desk, the core pods and people at work.
+      for (const [name, x, z, span] of [
+        ['p2-desk', -56.2, -21.8, 9],
+        ['p2-pods', -0.6, -0.3, 10],
+        ['p2-people', -42.5, -20.6, 9]
+      ]) {
+        await evaluate(`window.__axonOffice.focus(${x}, ${z}, ${span})`);
+        await pause(1800);
+        await snap(`${name}.png`);
+      }
       // Whole campus: every district sign at full strength, and performance within budget.
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
       await waitFor(
@@ -209,6 +219,8 @@ app.on('web-contents-created', (_, contents) => {
       console.log('CAMPUS_STATS', JSON.stringify(stats), JSON.stringify(tiers));
       // Part A's budget (within 10% of the 666 calls measured before it), read on Balanced quality.
       assert.ok(stats.calls <= 733, `draw calls ${stats.calls}`);
+      // The low-poly work's triangle ceiling (1.72M before Part 2).
+      assert.ok(stats.triangles <= 2.3e6, `triangles ${stats.triangles}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
       await snap('campus-overview.png');
       // Clicking a district sign glides there, like its chip.

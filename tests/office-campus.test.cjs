@@ -324,3 +324,64 @@ test('pods and their chairs stay inside their department', () => {
     assert.ok(inCell(poi.approach.x, poi.approach.z, cell), `${poi.id} approach outside ${poi.department}`);
   }
 });
+
+// ---------------------------------------------------------------- Part 2: workstations
+const placement = require('../src/renderer/src/features/office/campus/deskPlacement.ts');
+
+test('districtAt finds the district under a point, and none in the corridors', () => {
+  assert.equal(districts.districtAt(-42.5, 0).id, 'engineering');
+  assert.equal(districts.districtAt(0, 0).id, 'commons');
+  assert.equal(districts.districtAt(22.5, 0), undefined);
+});
+
+test('only Engineering and AI & Data desks get dual screens', () => {
+  for (const setup of layout.DESK_SETUPS) {
+    const district = layout.poiById(setup.poiId).district;
+    assert.equal(
+      setup.equipment === 'dual-monitor',
+      district === 'engineering' || district === 'ai-data',
+      setup.poiId
+    );
+  }
+  assert.ok(layout.DESK_SETUPS.filter((s) => s.equipment === 'dual-monitor').length >= 100);
+  assert.equal(placement.SCREENS_PER_SETUP['dual-monitor'], 2);
+});
+
+const onDesk = (p, r) =>
+  p.x - p.w / 2 >= r.minX - 1e-9 &&
+  p.x + p.w / 2 <= r.maxX + 1e-9 &&
+  p.z - p.d / 2 >= r.minZ - 1e-9 &&
+  p.z + p.d / 2 <= r.maxZ + 1e-9;
+const overlapping = (a, b) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
+
+test('desk life: everything stays on the desktop and nothing overlaps', () => {
+  for (const setup of layout.DESK_SETUPS) {
+    const poi = layout.poiById(setup.poiId);
+    const surface = placement.surfaceOf(setup.poiId, poi.district);
+    const props = placement.propPlacements(setup.equipment, setup.props, surface);
+    if (poi.district) assert.equal(props.length, setup.props.length, `${setup.poiId}: every prop fits`);
+    const all = [...placement.equipmentPlacements(setup.equipment, surface), ...props];
+    for (const p of all) assert.ok(onDesk(p, surface), `${setup.poiId} ${p.item} is off the desk`);
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++)
+        assert.ok(!overlapping(all[i], all[j]), `${setup.poiId}: ${all[i].item} overlaps ${all[j].item}`);
+  }
+});
+
+test('desk life: neighbouring desks differ, and every new thing appears somewhere', () => {
+  const pods = new Map();
+  for (const setup of layout.DESK_SETUPS) {
+    const match = setup.poiId.match(/^desk-(.+)-(\d+)$/);
+    if (!match || !layout.poiById(setup.poiId).district) continue;
+    const pod = `${match[1]}:${Math.floor(Number(match[2]) / 4)}`;
+    if (!pods.has(pod)) pods.set(pod, []);
+    pods.get(pod).push([...setup.props].sort().join());
+  }
+  assert.ok(pods.size >= 50);
+  for (const [pod, sets] of pods) assert.equal(new Set(sets).size, sets.length, pod);
+  const all = new Set(layout.DESK_SETUPS.flatMap((s) => s.props));
+  for (const prop of ['headphones', 'bottle', 'photo', 'sticky-notes', 'succulent', 'figurine'])
+    assert.ok(all.has(prop), prop);
+  for (const setup of layout.DESK_SETUPS.filter((s) => layout.poiById(s.poiId).district))
+    assert.ok(setup.props.length >= 3, `${setup.poiId} has only ${setup.props.length} things`);
+});
