@@ -1,4 +1,4 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, MCPServerConfig } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, MCPServerConfig, TaskItem } from './types';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -10,6 +10,8 @@ export interface PlatformState {
   chunks: KnowledgeChunk[];
   settings: Settings;
   mcpServers?: MCPServerConfig[];
+  /** Coworkers' tasks and help, and (from Part C) your own to-dos. */
+  tasks: TaskItem[];
 }
 export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   dataPath: string;

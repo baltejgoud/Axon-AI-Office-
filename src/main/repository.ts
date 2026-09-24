@@ -14,7 +14,8 @@ export function initialState(): PlatformState {
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
     settings: { theme: 'light', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
       streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' },
-    mcpServers: []
+    mcpServers: [],
+    tasks: []
   };
 }
 
@@ -60,6 +61,8 @@ export class Repository {
     for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds?: string[]; roleIds?: string[] }[][])
       for (const item of list ?? []) { item.skillIds ??= []; item.roleIds ??= []; }
     state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
+    // Task records arrived with the office's task boards (2026-09).
+    state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
     const codeWs = state.workspaces?.find(w => w.id === 'code');
     if (codeWs && codeWs.name === 'Code') {
       codeWs.name = 'Code Assistant';
@@ -76,6 +79,9 @@ export class Repository {
     const isIdList = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string');
     for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds: unknown; roleIds: unknown }[][])
       for (const item of list) if (!isIdList(item.skillIds) || !isIdList(item.roleIds)) throw new Error('Saved data failed validation.');
+    for (const task of state.tasks)
+      if (typeof task.id !== 'string' || typeof task.title !== 'string' || !['work', 'help', 'todo'].includes(task.kind)
+        || !['open', 'working', 'attention', 'done'].includes(task.status)) throw new Error('Saved data failed validation.');
   }
 
   /** Rolling pre-write backup of the previous good state (keeps BACKUPS_KEPT). */

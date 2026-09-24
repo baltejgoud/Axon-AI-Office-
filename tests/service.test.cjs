@@ -15,14 +15,29 @@ const assert = require('node:assert/strict');
 const { Repository } = require('../src/main/repository.ts');
 const { Service } = require('../src/main/service.ts');
 
-const makeService = () => {
+const makeService = (emit = () => {}) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-service-'));
   fs.mkdirSync(path.join(dir, 'db'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'backups'), { recursive: true });
   const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
   const vault = { has: () => false, get: () => null, set() {}, remove() {} };
-  const service = new Service(repo, vault, dir, () => {}, 'parser-worker-path');
+  const service = new Service(repo, vault, dir, emit, 'parser-worker-path');
   return { dir, repo, service };
+};
+const addProvider = (repo) =>
+  repo.state.providers.push({
+    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true, createdAt: 0, hasApiKey: false
+  });
+/** A conversation with an office coworker, as the office starts one. */
+const coworkerChat = (service, agentId = 'backend-developer') =>
+  service.chatCreate('p1', 'm1', null, agentId, { skillIds: [], roleIds: [] }, null, `You are Axon's ${agentId}.`);
+const mockModel = (t, respond) => {
+  const providersModule = require('../src/main/providers.ts');
+  const original = providersModule.streamChat;
+  t.after(() => { providersModule.streamChat = original; });
+  providersModule.streamChat = respond;
 };
 
 test('chatSelectionSet rejects unknown ids and caps at 50', async (t) => {
@@ -166,3 +181,48 @@ test('context budget: long conversation is trimmed with sliding window rather th
   assert.equal(sentRequests[sentRequests.length - 1].content, 'New user prompt');
 });
 
+
+test('a coworker conversation gets one task record that follows its runs', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service);
+  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('Here is the contract.'); return { toolCalls: [] }; });
+  await service.chatSend(chat.id, 'Design the API contract', []);
+  assert.equal(repo.state.tasks.length, 1);
+  const [task] = repo.state.tasks;
+  assert.deepEqual(
+    { kind: task.kind, status: task.status, title: task.title, coworkerId: task.coworkerId, conversationId: task.conversationId },
+    { kind: 'work', status: 'done', title: 'Design the API contract', coworkerId: 'backend-developer', conversationId: chat.id }
+  );
+  const seen = events.filter((e) => e.channel === 'tasks').map((e) => e.tasks[0].status);
+  assert.deepEqual(seen, ['working', 'done']);
+
+  mockModel(t, async () => { throw new Error('Rate limited'); });
+  await service.chatSend(chat.id, 'Once more', []);
+  assert.equal(repo.state.tasks.length, 1);
+  assert.equal(task.status, 'attention');
+  assert.equal(task.note, 'Rate limited');
+
+  // Chats that belong to no coworker get no record.
+  const plain = await service.chatCreate('p1', 'm1', null);
+  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('Hi.'); return { toolCalls: [] }; });
+  await service.chatSend(plain.id, 'Hello', []);
+  assert.equal(repo.state.tasks.length, 1);
+});
+
+test('an older saved state without task records still loads', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-service-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'db'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'backups'), { recursive: true });
+  const { initialState } = require('../src/main/repository.ts');
+  const old = initialState();
+  delete old.tasks;
+  old.settings.theme = 'dark';
+  fs.writeFileSync(path.join(dir, 'db', 'platform-v1.json'), JSON.stringify(old));
+  const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+  assert.deepEqual(repo.state.tasks, []);
+  assert.equal(repo.state.settings.theme, 'dark', 'loaded the saved file, not a fresh state');
+});

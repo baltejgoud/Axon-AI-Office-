@@ -29,6 +29,12 @@ export function App() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = window.axon.onStream((event) => {
+      // Task records arrive whole after every change: swap them in without a full refresh.
+      if (event.channel === 'tasks') {
+        const current = useApp.getState().data;
+        if (current) useApp.getState().patch({ data: { ...current, tasks: event.tasks } });
+        return;
+      }
       // Sync stream events with office runtime
       if (event.channel === 'chat') {
         const conv = useApp.getState().data?.conversations.find((c) => c.id === event.conversationId);

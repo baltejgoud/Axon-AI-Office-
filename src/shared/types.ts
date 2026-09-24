@@ -279,6 +279,37 @@ export interface ToolApprovalDecision {
   alwaysAllowSession?: boolean;
 }
 
+/* ----------------------------------- Tasks ------------------------------------ */
+
+/** `work`: a coworker's conversation. `help`: a colleague answering them. `todo`: your own to-do. */
+export type TaskKind = 'work' | 'help' | 'todo';
+export type TaskStatus = 'open' | 'working' | 'attention' | 'done';
+
+export interface TaskItem {
+  id: ID;
+  kind: TaskKind;
+  title: string;
+  notes?: string;
+  status: TaskStatus;
+  /** Why the status is what it is: 'Waiting for your approval', 'Stopped', an error. */
+  note?: string;
+  /** Work and help: who is on it. */
+  coworkerId?: string;
+  /** Help: whom they are helping. */
+  forCoworkerId?: string;
+  /** Work: their conversation. Help: the conversation of the coworker they are helping. */
+  conversationId?: ID;
+  /** Work: when the current run began, so help asked for in that run belongs to it. */
+  runStartedAt?: number;
+  /** Local date ('YYYY-MM-DD') or date and time ('YYYY-MM-DDTHH:mm'). */
+  due?: string;
+  remindAt?: number;
+  remindedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+  doneAt?: number;
+}
+
 /* --------------------------------- Streaming ---------------------------------- */
 
 export type StreamEvent =
@@ -297,6 +328,11 @@ export type StreamEvent =
       done: boolean;
       toolCall?: ToolCall;
       approvalRequired?: ToolApprovalRequest;
+    }
+  | {
+      /** Every task record, after any change. */
+      channel: 'tasks';
+      tasks: TaskItem[];
     }
   | {
       channel: 'agent';

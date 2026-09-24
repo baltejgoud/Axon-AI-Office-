@@ -16,6 +16,9 @@ import { dedupe, rolesBlock, skillsBlock } from './prompt';
 import { ToolRegistry } from './tools/registry';
 import { PermissionManager } from './security/permissions';
 import { MCPClientManager } from './mcp/client-manager';
+import { TaskStore } from './tasks/store';
+import { TaskTracker } from './tasks/tracker';
+import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 
 const text = (value: unknown, max = 200000): string => {
   if (typeof value !== 'string' || value.length > max) throw new Error('Invalid text input.');
@@ -32,11 +35,17 @@ export class Service {
   private readonly parsers: ParsePool;
   private schedulerTimer: NodeJS.Timeout | null = null;
   private lastAgentRuns = new Map<string, number>();
+  /** Coworkers' task records, and the tracker that keeps them in step with each run. */
+  readonly tasks: TaskStore;
+  private readonly tracker: TaskTracker;
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
     this.parsers = new ParsePool(parserPath);
     this.mcp = new MCPClientManager(this.tools);
+    this.tasks = new TaskStore(this.state, () => this.repo.id(), (tasks) => this.emit({ channel: 'tasks', tasks }));
+    this.tracker = new TaskTracker(this.tasks, (id) => !!coworkerById(id) && id !== RECEPTIONIST_ID);
+    this.tracker.interrupted();
     if (this.state.mcpServers?.length) {
       void this.mcp.syncServers(this.state.mcpServers);
     }
@@ -268,6 +277,7 @@ export class Service {
     );
     if (chat.title === 'New conversation' && this.state.settings.autoTitleConversations) chat.title = input.slice(0, 65);
     chat.updatedAt = Date.now();
+    this.tracker.runStarted(chat, input);
 
     const agent = chat.agentId ? this.state.agents.find(a => a.id === chat.agentId) : undefined;
     const maxSteps = Math.max(1, Math.min(30, agent?.maxSteps ?? 20));
@@ -403,8 +413,10 @@ export class Service {
               streaming: true,
               done: false
             });
+            this.tracker.approvalPending(id);
 
             shouldExecute = await promise;
+            this.tracker.approvalResolved(id);
             if (!shouldExecute) {
               const rejectMsg: Message = {
                 id: this.repo.id(),
@@ -504,6 +516,8 @@ export class Service {
     } finally {
       activeAssistant.streaming = false;
       this.runs.delete(id);
+      const stopped = controller.signal.aborted;
+      this.tracker.runEnded(id, { stopped, error: stopped ? undefined : activeAssistant.error });
       await this.repo.save();
       this.emit({
         channel: 'chat',
