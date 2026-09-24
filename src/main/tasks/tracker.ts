@@ -8,11 +8,15 @@ const APPROVAL = 'Waiting for your approval';
 
 /** A task's title: the first line you wrote, without the files and attachments sent along with it. */
 export function taskTitle(input: string): string {
-  const visible = input.split('\n\n<file path=')[0].split('\n\nFile context: ')[0].split('\n\n<attachment')[0];
-  const line = visible
-    .split('\n')
-    .map((part) => part.trim())
-    .find(Boolean) ?? 'Untitled task';
+  const visible = input
+    .split('\n\n<file path=')[0]
+    .split('\n\nFile context: ')[0]
+    .split('\n\n<attachment')[0];
+  const line =
+    visible
+      .split('\n')
+      .map((part) => part.trim())
+      .find(Boolean) ?? 'Untitled task';
   return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH - 1)}…` : line;
 }
 

@@ -92,11 +92,13 @@ test('subagent enforces permissions: rejects mutating actions and recursive disp
   providersModule.streamChat = async (provider, key, req, onChunk) => {
     callCount++;
     if (callCount === 1) {
-      // Return a mutating tool call and a dispatch_agent tool call
+      // The sub-agent is never offered a way to dispatch another.
+      assert.ok(!(req.tools ?? []).some((tool) => tool.name === 'dispatch_subagent'));
+      // Return a mutating tool call and a dispatch_subagent tool call
       return {
         toolCalls: [
           { id: 'call_1', name: 'write_file', arguments: JSON.stringify({ path: 'src/malicious.ts', content: 'boom' }) },
-          { id: 'call_2', name: 'dispatch_agent', arguments: JSON.stringify({ role: 'nested', task: 'nested task' }) }
+          { id: 'call_2', name: 'dispatch_subagent', arguments: JSON.stringify({ role: 'nested', task: 'nested task' }) }
         ]
       };
     }
@@ -225,4 +227,67 @@ test('an older saved state without task records still loads', (t) => {
   const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
   assert.deepEqual(repo.state.tasks, []);
   assert.equal(repo.state.settings.theme, 'dark', 'loaded the saved file, not a fresh state');
+});
+
+test('a coworker asks colleagues: three answer, the fourth is turned away, and help is recorded', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service, 'frontend-developer');
+  let consults = 0;
+  let askerCalls = 0;
+  let offered;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (req.system.includes('is asking you a question')) {
+      consults++;
+      onChunk(`Answer ${consults}.`);
+      return { toolCalls: [] };
+    }
+    askerCalls++;
+    if (askerCalls === 1) {
+      offered = (req.tools ?? []).map((tool) => tool.name);
+      const ask = (n) => ({ id: `ask${n}`, name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: `Question ${n}?` }) });
+      return { toolCalls: [ask(1), ask(2), ask(3), ask(4)] };
+    }
+    onChunk('Done, with help.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Build the settings page', []);
+  assert.deepEqual(offered, ['ask_colleague'], 'no folder: only asking a colleague');
+  assert.equal(consults, 3);
+  const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
+  assert.equal(results.length, 4);
+  const answered = results.slice(0, 3).map((m) => JSON.parse(m.content));
+  assert.deepEqual(answered.map((r) => [r.colleague, r.name]), Array(3).fill(['backend-developer', 'Backend Developer']));
+  assert.deepEqual(answered.map((r) => r.answer), ['Answer 1.', 'Answer 2.', 'Answer 3.']);
+  assert.match(results[3].content, /asked three colleagues already/);
+  assert.ok(results[3].error);
+  const help = repo.state.tasks.filter((task) => task.kind === 'help');
+  assert.equal(help.length, 3);
+  assert.ok(help.every((task) => task.status === 'done' && task.coworkerId === 'backend-developer' && task.forCoworkerId === 'frontend-developer' && task.conversationId === chat.id));
+  const work = repo.state.tasks.find((task) => task.kind === 'work');
+  assert.equal(work.status, 'done');
+});
+
+test('a colleague who cannot be reached ends their help with the reason', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service, 'frontend-developer');
+  let askerCalls = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (req.system.includes('is asking you a question')) throw new Error('Provider down');
+    askerCalls++;
+    if (askerCalls === 1)
+      return { toolCalls: [{ id: 'a', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'engineer', question: 'Q?' }) }, { id: 'b', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Security Engineer', question: 'Is this safe?' }) }] };
+    onChunk('Carrying on.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Harden the login', []);
+  const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
+  assert.match(results[0].content, /No single colleague matches "engineer"/);
+  assert.match(results[1].content, /Couldn't reach Security Engineer: Provider down/);
+  const [help] = repo.state.tasks.filter((task) => task.kind === 'help');
+  assert.equal(help.status, 'done');
+  assert.equal(help.note, 'Provider down');
 });

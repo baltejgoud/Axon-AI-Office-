@@ -46,3 +46,89 @@ test('the shared directory holds the whole office, core team first', () => {
     assert.equal(a.department, c.department, a.id);
   }
 });
+
+const colleagues = require('../src/main/colleagues.ts');
+const office = require('../src/main/officeTools.ts');
+
+test('colleagues resolve by name, id or specialty, and ambiguity is explained', () => {
+  assert.equal(colleagues.resolveColleague('Backend Developer', 'frontend-developer').coworker.id, 'backend-developer');
+  assert.equal(colleagues.resolveColleague('backend-developer', 'frontend-developer').coworker.id, 'backend-developer');
+  assert.equal(colleagues.resolveColleague('Site Reliability Engineer', 'x').coworker.name, 'Site Reliability Engineer (SRE)');
+  assert.equal(colleagues.resolveColleague('SRE', 'x').coworker.name, 'Site Reliability Engineer (SRE)');
+  assert.match(colleagues.resolveColleague('engineer', 'x').error, /No single colleague matches "engineer"\. Closest: .+, .+/);
+  assert.match(colleagues.resolveColleague('Frontend Developer', 'frontend-developer').error, /someone other than yourself/);
+  assert.match(colleagues.ASK_COLLEAGUE.description, /Backend & APIs/);
+});
+
+test('toolsFor: coworkers can always ask a colleague; file tools still need a folder', () => {
+  const registry = [{ name: 'read_file' }, { name: 'dispatch_subagent' }, { name: 'write_file' }];
+  const names = (tools) => tools.map((tool) => tool.name).sort();
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), ['ask_colleague']);
+  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), []);
+  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: true, registry })), [
+    'dispatch_subagent',
+    'read_file',
+    'write_file'
+  ]);
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: true, registry })), [
+    'ask_colleague',
+    'read_file',
+    'write_file'
+  ]);
+});
+
+test('a consult speaks as the colleague and cannot ask further', async () => {
+  const backend = shared.coworkerById('backend-developer');
+  let seen;
+  const answer = await colleagues.consult(
+    { id: 'p', kind: 'openai-compatible' },
+    null,
+    'm',
+    backend,
+    'Frontend Developer',
+    'Which status code for a conflict?',
+    {
+      stream: async (_p, _k, req, onChunk) => {
+        seen = req;
+        onChunk('409 Conflict.');
+        return { toolCalls: [] };
+      },
+      tools: [],
+      execute: async () => ''
+    }
+  );
+  assert.equal(answer, '409 Conflict.');
+  assert.match(seen.system, /Backend Developer/);
+  assert.match(seen.system, /Frontend Developer is asking you a question/);
+  assert.match(seen.system, /<roles>/, 'the colleague brings their role profile');
+  assert.equal(seen.tools, undefined);
+  assert.equal(seen.messages[0].content, 'Which status code for a conflict?');
+});
+
+test('a consult may read files when given read-only tools, and nothing else', async () => {
+  const backend = shared.coworkerById('backend-developer');
+  let step = 0;
+  const ran = [];
+  const answer = await colleagues.consult({ id: 'p', kind: 'openai-compatible' }, null, 'm', backend, 'Writer', 'Check the schema', {
+    stream: async (_p, _k, req, onChunk) => {
+      step++;
+      if (step === 1)
+        return {
+          toolCalls: [
+            { id: '1', name: 'read_file', arguments: '{"path":"schema.sql"}' },
+            { id: '2', name: 'ask_colleague', arguments: '{}' }
+          ]
+        };
+      const results = req.messages.filter((m) => m.role === 'tool').map((m) => m.content);
+      onChunk(results.join(' | '));
+      return { toolCalls: [] };
+    },
+    tools: [{ name: 'read_file', description: '', parameters: {} }],
+    execute: async (name, args) => {
+      ran.push([name, args.path]);
+      return 'CREATE TABLE users';
+    }
+  });
+  assert.deepEqual(ran, [['read_file', 'schema.sql']]);
+  assert.equal(answer, 'CREATE TABLE users | Not available to you here.');
+});

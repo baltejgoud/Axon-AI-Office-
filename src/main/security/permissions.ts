@@ -49,6 +49,9 @@ export class PermissionManager {
       return { action: 'allow' };
     }
 
+    // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
+    if (toolName === 'ask_colleague') return { action: 'allow' };
+
     // 2. Path containment check
     if (['read_file', 'write_file', 'list_files'].includes(toolName)) {
       const p = args.path || args.directory || args.directoryPath;

@@ -2,7 +2,7 @@ import { dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { PlatformAPI, Snapshot } from '../shared/platform';
-import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation } from '../shared/types';
+import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
 import { Project } from './project';
@@ -18,6 +18,8 @@ import { PermissionManager } from './security/permissions';
 import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
+import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
+import { READ_ONLY_TOOLS, toolsFor } from './officeTools';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 
 const text = (value: unknown, max = 200000): string => {
@@ -229,7 +231,9 @@ export class Service {
     ].filter(Boolean).join('\n\n');
 
     this.permissions.updateConfig(roots, Boolean(this.state.settings.allowShellExecution));
-    const availableTools = roots.length > 0 ? this.tools.getDefinitions() : [];
+    const availableTools = toolsFor({ agentId: chat.agentId, hasFolder: roots.length > 0, registry: this.tools.getDefinitions() });
+    /** Questions put to colleagues in this run. */
+    const asks = { count: 0 };
 
     const requests: ChatRequestMessage[] = [
       ...history
@@ -364,6 +368,33 @@ export class Service {
             parsedArgs = JSON.parse(tc.arguments);
           } catch {
             parsedArgs = {};
+          }
+
+          // A coworker asking a colleague: answered by a consult, never by the tool registry.
+          if (tc.name === ASK_COLLEAGUE.name && coworkerById(chat.agentId)) {
+            const allowed = this.permissions.check({ toolName: tc.name, args: parsedArgs }).action === 'allow';
+            const asked = allowed
+              ? await this.askColleague(chat, provider, parsedArgs, roots.length > 0, asks, controller.signal)
+              : { content: 'Tool execution denied by security policy.', isError: true };
+            this.state.messages.push({
+              id: this.repo.id(),
+              conversationId: id,
+              role: 'tool',
+              toolCallId: tc.id,
+              content: asked.content,
+              error: asked.isError ? asked.content : undefined,
+              createdAt: Date.now()
+            });
+            requests.push({ role: 'tool', toolCallId: tc.id, content: asked.content });
+            this.emit({
+              channel: 'chat',
+              conversationId: id,
+              messageId: activeAssistant.id,
+              toolCall: { ...tc, result: asked.isError ? undefined : asked.content, error: asked.isError ? asked.content : undefined },
+              streaming: true,
+              done: false
+            });
+            continue;
           }
 
           const toolImpl = this.tools.get(tc.name);
@@ -533,6 +564,54 @@ export class Service {
     }
   }
 
+  /**
+   * A coworker asks a colleague: find them, open a help record, and let the colleague answer with
+   * the asker's model, reading files only if the asker's conversation may. At most three per run.
+   */
+  private async askColleague(
+    chat: Conversation,
+    provider: ProviderConfig,
+    args: Record<string, unknown>,
+    hasFolder: boolean,
+    asks: { count: number },
+    signal: AbortSignal
+  ): Promise<{ content: string; isError?: boolean }> {
+    if (asks.count >= MAX_ASKS) return { content: LIMIT_REACHED, isError: true };
+    const found = resolveColleague(String(args.colleague ?? ''), chat.agentId ?? '');
+    if ('error' in found) return { content: found.error, isError: true };
+    const question = String(args.question ?? '').trim();
+    if (!question) return { content: 'Say what you want to ask them.', isError: true };
+    asks.count++;
+    const colleague = found.coworker;
+    const help = this.tracker.helpStarted(colleague.id, chat.agentId ?? '', chat.id, question);
+    try {
+      const answer = await consult(
+        provider,
+        this.vault.get(provider.id),
+        chat.modelId,
+        colleague,
+        coworkerById(chat.agentId)?.name ?? 'A colleague',
+        question,
+        {
+          stream: streamChat,
+          signal,
+          tools: hasFolder ? this.tools.getDefinitions().filter((tool) => READ_ONLY_TOOLS.includes(tool.name)) : [],
+          execute: async (name, toolArgs) => {
+            const tool = this.tools.get(name);
+            if (!tool || this.permissions.check({ toolName: name, args: toolArgs }).action !== 'allow') return 'Not allowed.';
+            return (await tool.execute(toolArgs, { project: this.project, allowShell: false })).content;
+          }
+        }
+      );
+      this.tracker.helpEnded(help.id);
+      return { content: JSON.stringify({ colleague: colleague.id, name: colleague.name, answer }) };
+    } catch (error) {
+      const reason = signal.aborted ? 'the task was stopped' : error instanceof Error ? error.message : 'no answer';
+      this.tracker.helpEnded(help.id, reason);
+      return { content: `Couldn't reach ${colleague.name}: ${reason}`, isError: true };
+    }
+  }
+
   async runSubagent(
     providerId: string,
     modelId: string,
@@ -552,7 +631,7 @@ export class Service {
 
     let output = '';
     const messages: ChatRequestMessage[] = [{ role: 'user', content: task }];
-    const tools = this.tools.getDefinitions().filter(t => t.name !== 'dispatch_agent');
+    const tools = this.tools.getDefinitions().filter(t => t.name !== 'dispatch_subagent');
     const maxSteps = Math.max(1, Math.min(10, configuredMaxSteps ?? 5));
 
     for (let step = 0; step < maxSteps; step++) {
@@ -576,7 +655,7 @@ export class Service {
       messages.push({ role: 'assistant', content: stepText, toolCalls });
 
       for (const tc of toolCalls) {
-        if (tc.name === 'dispatch_agent') {
+        if (tc.name === 'dispatch_subagent') {
           messages.push({ role: 'tool', toolCallId: tc.id, content: 'Permission denied: Subagents cannot recursively dispatch subagents.' });
           continue;
         }
