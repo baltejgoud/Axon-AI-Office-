@@ -33,11 +33,15 @@ import {
 } from './materials';
 import { DeskScreens, type ScreenSlot } from './screens';
 import type { KitchenFx } from './kitchen';
+import type { MediaWall } from './lounge';
+import { FoosballRods, type RodSlot } from './playProps';
 
 export interface OfficeRoom {
   root: THREE.Group;
   /** The kitchen's flames, steam and pan, for the chefs to drive. */
   kitchen: KitchenFx | null;
+  /** The lounge's TV and the dog, for the scene to animate. */
+  lounge: { media: MediaWall | null; dog: THREE.Mesh | null };
   seatHeight(poiId: string): number;
   /** Contact shadows carry the grounding alone without ambient occlusion, so they darken then. */
   setAmbientOcclusion(on: boolean): void;
@@ -49,6 +53,9 @@ export interface OfficeRoom {
   ): void;
   dispose(): void;
 }
+
+/** People sink into a bean bag. */
+const BEAN_BAG_SEAT_HEIGHT = 0.36;
 
 /** The dark cut-away top every solid and low wall wears, like a sectioned model. */
 const WALL_CAP = '#3d4450';
@@ -148,9 +155,9 @@ function wallDecor(): THREE.Group {
       )
     );
   };
-  // Art over the Lounge sofa, and a clock over the Marketing Strategist's desk.
-  art(-16.3, 1.75, 1.2, 0.8, ['#8fa8c4', '#c9b6a0', '#6d8fb0']);
-  art(-14.5, 1.7, 0.6, 0.8, ['#d5b98a', '#9fb4a1']);
+  // Art either side of the Lounge TV, and a clock over the Marketing Strategist's desk.
+  art(-17.45, 1.7, 0.9, 0.7, ['#8fa8c4', '#c9b6a0', '#6d8fb0']);
+  art(-13.95, 1.75, 0.5, 0.7, ['#d5b98a', '#9fb4a1']);
   const clock = part(
     GEOMETRY.cylinder,
     mat(PALETTE.white),
@@ -265,6 +272,8 @@ export function buildOffice(): OfficeRoom {
 
   const lights: { spots: readonly string[]; mesh: THREE.Mesh; steam?: THREE.Object3D }[] = [];
   let kitchen: KitchenFx | null = null;
+  const lounge: OfficeRoom['lounge'] = { media: null, dog: null };
+  const tables: { item: (typeof FURNITURE)[number]; rods: readonly RodSlot[] }[] = [];
   for (const item of FURNITURE) {
     const built = buildFurniture(item);
     built.object.position.set(item.x, 0, item.z);
@@ -274,6 +283,9 @@ export function buildOffice(): OfficeRoom {
     for (const machine of built.machines ?? [])
       lights.push({ spots: machine.spots, mesh: machine.light, steam: machine.steam });
     if (built.kitchen) kitchen = built.kitchen;
+    if (built.media) lounge.media = built.media;
+    if (built.dog) lounge.dog = built.dog;
+    if (built.foosball) tables.push({ item, rods: built.foosball });
   }
 
   for (const patch of contactShadows(FURNITURE)) root.add(patch);
@@ -304,23 +316,28 @@ export function buildOffice(): OfficeRoom {
 
   batchStatic(root);
   root.add(screens.object);
+  const rods = new FoosballRods(tables);
+  root.add(rods.object);
 
   const seatKinds = new Map(FURNITURE.map((item) => [item.id, item.kind]));
 
   return {
     root,
     kitchen,
+    lounge,
     setAmbientOcclusion(on) {
       const { round, square } = contactMaterials();
       round.opacity = square.opacity = on ? CONTACT_OPACITY.withAO : CONTACT_OPACITY.withoutAO;
     },
     seatHeight(poiId) {
       if (poiId.startsWith('lounge-sofa')) return SOFA_SEAT_HEIGHT;
+      if (poiId.startsWith('game-seat')) return BEAN_BAG_SEAT_HEIGHT;
       const kind = seatKinds.get(`${poiId}-seat`);
       return (kind && SEAT_HEIGHT[kind]) ?? 0.48;
     },
     update(dt, elapsed, screenState, busy) {
       screens.update(dt, elapsed, screenState);
+      rods.update(elapsed, busy);
       for (const { spots, mesh, steam } of lights) {
         const inUse = spots.some(busy);
         const material = mesh.material as THREE.MeshStandardMaterial;
@@ -332,6 +349,8 @@ export function buildOffice(): OfficeRoom {
     },
     dispose() {
       screens.dispose();
+      rods.dispose();
+      lounge.media?.screen.dispose();
       root.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return;
         if (!Object.values(GEOMETRY).includes(object.geometry as never)) object.geometry.dispose();

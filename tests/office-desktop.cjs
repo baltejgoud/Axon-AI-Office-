@@ -7,7 +7,7 @@ console.log = (...args) => {
   if (String(args[0]).startsWith('NOTICE ')) notices.push(args.join(' ').slice(7));
   log(...args);
 };
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, powerMonitor } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -88,7 +88,7 @@ const server = http.createServer((request, response) => {
 const timeout = setTimeout(() => {
   console.error('OFFICE_CHECK_TIMEOUT');
   app.exit(1);
-}, 120000);
+}, 240000);
 app.on('browser-window-created', (_, win) => {
   // Capture the actual sandboxed desktop renderer without interrupting the user's current window.
   win.show = () => {
@@ -207,38 +207,6 @@ app.on('web-contents-created', (_, contents) => {
         await pause(1800);
         await snap(`${name}.png`);
       }
-      // Low-poly Part 3: the café. Someone goes for coffee and the barista pulls a shot as they
-      // reach the bar; the chefs cook in the open kitchen.
-      await evaluate('window.__axonOffice.focus(15.2, -1.6, 10)');
-      await pause(1500);
-      assert.equal((await evaluate('window.__axonOffice.staff()')).length, 3);
-      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => s.visible), 'staff drawn close up');
-      for (const id of ['writer', 'designer', 'research-analyst', 'product-coach'])
-        if (await evaluate(`window.__axonOffice.request('${id}', 'coffee')`)) break;
-      let brewed = false;
-      for (let i = 0; i < 400 && !brewed; i++) {
-        brewed = await evaluate("window.__axonOffice.staff().some((s) => s.id === 'barista' && s.action === 'brew')");
-        if (!brewed) await pause(100);
-      }
-      assert.ok(brewed, 'the barista pulls a shot when someone reaches the bar');
-      await pause(600);
-      await snap('p3-cafe.png');
-      // Staff are not coworkers: clicking the barista selects nobody.
-      const selectedBefore = await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent');
-      const barista = await evaluate("window.__axonOffice.staffPoint('barista')");
-      await evaluate(`(() => {
-        const canvas = document.querySelector('.office-canvas-container canvas');
-        const r = canvas.getBoundingClientRect();
-        const at = { clientX: r.left + ${barista.x}, clientY: r.top + ${barista.y}, button: 0, bubbles: true };
-        canvas.dispatchEvent(new MouseEvent('mousemove', at));
-        canvas.dispatchEvent(new MouseEvent('mousedown', at));
-        window.dispatchEvent(new MouseEvent('mouseup', at));
-      })()`);
-      await pause(200);
-      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent'), selectedBefore);
-      await evaluate('window.__axonOffice.focus(17.8, -1.8, 9)');
-      await pause(1800);
-      await snap('p3-kitchen.png');
       // Whole campus: every district sign at full strength, and performance within budget.
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
       await waitFor(
@@ -271,6 +239,73 @@ app.on('web-contents-created', (_, contents) => {
         'document.querySelector(".office-district-chips > button.active")?.textContent === "Engineering"',
         'sign click glides to Engineering'
       );
+      // The café, the Lounge and a games corner come after the budget reading above: they send
+      // people on breaks, and people away from their desks are drawn in full.
+      // Low-poly Part 3: the café. Someone goes for coffee and the barista pulls a shot as they
+      // reach the bar; the chefs cook in the open kitchen.
+      await evaluate('window.__axonOffice.focus(15.2, -1.6, 10)');
+      await pause(1500);
+      assert.equal((await evaluate('window.__axonOffice.staff()')).length, 3);
+      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => s.visible), 'staff drawn close up');
+      for (const id of ['writer', 'designer', 'research-analyst', 'product-coach'])
+        if (await evaluate(`window.__axonOffice.request('${id}', 'coffee')`)) break;
+      let brewed = false;
+      for (let i = 0; i < 400 && !brewed; i++) {
+        brewed = await evaluate("window.__axonOffice.staff().some((s) => s.id === 'barista' && s.action === 'brew')");
+        if (!brewed) await pause(100);
+      }
+      assert.ok(brewed, 'the barista pulls a shot when someone reaches the bar');
+      await pause(600);
+      await snap('p3-cafe.png');
+      // Staff are not coworkers: clicking the barista selects nobody.
+      const selectedBefore = await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent');
+      const barista = await evaluate("window.__axonOffice.staffPoint('barista')");
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        const at = { clientX: r.left + ${barista.x}, clientY: r.top + ${barista.y}, button: 0, bubbles: true };
+        canvas.dispatchEvent(new MouseEvent('mousemove', at));
+        canvas.dispatchEvent(new MouseEvent('mousedown', at));
+        window.dispatchEvent(new MouseEvent('mouseup', at));
+      })()`);
+      await pause(200);
+      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent'), selectedBefore);
+      await evaluate('window.__axonOffice.focus(17.8, -1.8, 9)');
+      await pause(1800);
+      await snap('p3-kitchen.png');
+      // Low-poly Part 4: a game on the Lounge TV, with a controller in hand.
+      for (const id of ['marketing-strategist', 'writer', 'designer', 'research-analyst', 'product-coach'])
+        if (await evaluate(`window.__axonOffice.request('${id}', 'gaming')`)) break;
+      await evaluate('window.__axonOffice.focus(-15.5, -11.6, 10)');
+      let playing = false;
+      for (let i = 0; i < 500 && !playing; i++) {
+        playing = (await evaluate('window.__axonOffice.lounge()')).players > 0;
+        if (!playing) await pause(100);
+      }
+      assert.ok(playing, 'someone plays on the Lounge TV');
+      await pause(1500);
+      const lounge = await evaluate('window.__axonOffice.lounge()');
+      assert.equal(lounge.tv, 'game');
+      assert.equal(lounge.controllersOnConsole, 2 - lounge.players);
+      await snap('p4-lounge.png');
+      // A play break in Engineering: foosball with a teammate, or the arcade.
+      let player = null;
+      for (const id of ['backend-developer', 'api-developer', 'database-developer', 'frontend-developer', 'react-developer', 'web-developer'])
+        if (await evaluate(`window.__axonOffice.request('${id}', 'play')`)) {
+          player = id;
+          break;
+        }
+      assert.ok(player, 'someone in Engineering takes a play break');
+      let at = null;
+      for (let i = 0; i < 500 && !at; i++) {
+        const view = (await evaluate('window.__axonOffice.views()')).find((v) => v.id === player);
+        if (view.behavior === 'foosball' || view.behavior === 'gaming') at = view.position;
+        else await pause(100);
+      }
+      assert.ok(at, `${player} reaches the games corner`);
+      await evaluate(`window.__axonOffice.focus(${at.x + 0.6}, ${at.z - 0.4}, 9)`);
+      await pause(1800);
+      await snap('p4-engineering-games.png');
       const win = BrowserWindow.fromWebContents(contents);
       win.setContentSize(1100, 740);
       await pause(400);
@@ -736,8 +771,12 @@ app.on('web-contents-created', (_, contents) => {
           const big = { ...(await evaluate('window.__axonOffice.stats()')), fps: [...readings].sort((a, b) => a - b)[5] };
           // Minutes in, people away from their desks are drawn in full, so the count here varies
           // with office life; the draw budget is checked at the controlled moment above.
-          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(readings), JSON.stringify(await evaluate('window.__axonOffice.tiers()')));
-          assert.ok(big.fps >= 50, `fps at 1080p ${big.fps}`);
+          // The 50 fps floor is read on mains power, as agreed: on battery Windows holds the GPU
+          // back, so the reading is reported but not gated.
+          const onBattery = powerMonitor.isOnBatteryPower();
+          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(readings), JSON.stringify(await evaluate('window.__axonOffice.tiers()')), onBattery ? 'ON_BATTERY' : 'ON_MAINS');
+          if (onBattery) console.log(`FPS_FLOOR_NOT_CHECKED_ON_BATTERY: ${big.fps} fps at 1080p`);
+          else assert.ok(big.fps >= 50, `fps at 1080p ${big.fps}`);
           // High is measured and reported, not gated.
           await evaluate("window.__axonOffice.setQuality('high')");
           await pause(3000);

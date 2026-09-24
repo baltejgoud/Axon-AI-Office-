@@ -226,6 +226,37 @@ export function computePose(input: PoseInput): Pose {
       pose.armL = { ...ON_LAP };
       pose.armR = { ...ON_LAP };
       break;
+    case 'gaming': {
+      // Controller in both hands at the chest, thumbs busy, leaning with the turns; now and then
+      // a cheer. Standing at an arcade cabinet the hands sit on the controls instead.
+      const cheer = (t * 0.09 + seed * 3) % 1 < 0.1;
+      if (cheer && seated) {
+        pose.lean = -0.15;
+        pose.headPitch = -0.15;
+        pose.armL = limb(2.6, 0.35, 0.3 + 0.2 * Math.sin(t * 10));
+        pose.armR = limb(2.6, 0.35, 0.3 + 0.2 * Math.sin(t * 10 + 1));
+        break;
+      }
+      const thumbs = 0.05 * Math.sin(t * 7.3);
+      pose.lean = seated ? 0.2 : 0.12;
+      pose.tilt = 0.1 * Math.sin(t * 0.8 + seed * 5);
+      pose.headPitch = seated ? 0.05 : 0.2;
+      pose.armL = seated ? limb(0.8, -0.38, 1.5 + thumbs) : limb(0.7, -0.2, 1.0 + thumbs);
+      pose.armR = seated
+        ? limb(0.8, -0.38, 1.5 - thumbs)
+        : limb(0.7 + 0.08 * Math.sin(t * 5), -0.2, 1.0 - thumbs);
+      break;
+    }
+    case 'foosball': {
+      // Hands on the rods, twisting hard, leaning over the table.
+      const spin = Math.sin(t * 6 + seed * 4);
+      pose.lean = 0.24;
+      pose.headPitch = 0.35;
+      pose.twist = 0.18 * spin;
+      pose.armL = limb(0.62, 0.12, 0.45 + 0.15 * spin);
+      pose.armR = limb(0.62, 0.12, 0.45 - 0.15 * spin);
+      break;
+    }
     // ---- café staff, standing at their stations
     case 'stir':
       // Left hand on the pan's handle, the right stirring in small circles.
@@ -288,7 +319,8 @@ export function computePose(input: PoseInput): Pose {
 
   // ---- whatever is in hand overrides the arm that holds it
   if (held === 'cup' && behavior !== 'coffee') pose.armR = { ...CUP_HOLD };
-  if (held && held !== 'cup' && behavior !== 'reading' && behavior !== 'talking') pose.armL = { ...CARRY };
+  if (held && held !== 'cup' && held !== 'controller' && behavior !== 'reading' && behavior !== 'talking')
+    pose.armL = { ...CARRY };
   return pose;
 }
 

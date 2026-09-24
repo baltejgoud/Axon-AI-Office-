@@ -1,7 +1,17 @@
 import type { HeldItem } from './types';
 
 export type AmbientActivity =
-  'desk' | 'coffee' | 'lounge' | 'whiteboard' | 'bookshelf' | 'printer' | 'cabinet' | 'visit' | 'idle';
+  | 'desk'
+  | 'coffee'
+  | 'lounge'
+  | 'whiteboard'
+  | 'bookshelf'
+  | 'printer'
+  | 'cabinet'
+  | 'visit'
+  | 'idle'
+  | 'gaming'
+  | 'play';
 
 /** Where someone is when the office first opens, so the room is already alive. */
 export type InitialScene =
@@ -40,7 +50,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   'research-analyst': {
     id: 'research-analyst',
-    weights: { desk: 60, coffee: 12, lounge: 8, bookshelf: 8, idle: 5, visit: 4 },
+    weights: { desk: 60, coffee: 12, lounge: 8, bookshelf: 8, idle: 5, visit: 4, gaming: 4 },
     meetingAffinity: 1,
     prop: 'tablet',
     pace: 1,
@@ -48,7 +58,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   writer: {
     id: 'writer',
-    weights: { desk: 58, coffee: 14, lounge: 10, bookshelf: 6, idle: 7, visit: 5 },
+    weights: { desk: 58, coffee: 14, lounge: 10, bookshelf: 6, idle: 7, visit: 5, gaming: 5 },
     meetingAffinity: 0.8,
     prop: 'tablet',
     pace: 0.94,
@@ -56,7 +66,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   designer: {
     id: 'designer',
-    weights: { desk: 56, whiteboard: 16, coffee: 10, lounge: 6, idle: 5, visit: 7 },
+    weights: { desk: 56, whiteboard: 16, coffee: 10, lounge: 6, idle: 5, visit: 7, gaming: 5 },
     meetingAffinity: 1,
     prop: 'tablet',
     pace: 1.05,
@@ -64,7 +74,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   'product-coach': {
     id: 'product-coach',
-    weights: { desk: 55, whiteboard: 14, coffee: 9, visit: 12, idle: 5, lounge: 5 },
+    weights: { desk: 55, whiteboard: 14, coffee: 9, visit: 12, idle: 5, lounge: 5, gaming: 3 },
     meetingAffinity: 1.6,
     prop: 'tablet',
     pace: 1.02,
@@ -80,7 +90,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   'files-agent': {
     id: 'files-agent',
-    weights: { desk: 55, printer: 18, cabinet: 10, coffee: 9, idle: 4, visit: 4 },
+    weights: { desk: 55, printer: 18, cabinet: 10, coffee: 9, idle: 4, visit: 4, gaming: 4 },
     meetingAffinity: 0.6,
     prop: 'folder',
     pace: 1,
@@ -88,7 +98,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
   },
   'marketing-strategist': {
     id: 'marketing-strategist',
-    weights: { desk: 55, lounge: 12, coffee: 11, whiteboard: 9, visit: 8, idle: 5 },
+    weights: { desk: 55, lounge: 12, coffee: 11, whiteboard: 9, visit: 8, idle: 5, gaming: 5 },
     meetingAffinity: 1.1,
     prop: 'clipboard',
     pace: 1.06,
@@ -114,7 +124,9 @@ export const ACTIVITY_DURATIONS: Readonly<Record<AmbientActivity, [number, numbe
   printer: [8, 18],
   cabinet: [10, 20],
   visit: [10, 25],
-  idle: [10, 20]
+  idle: [10, 20],
+  gaming: [40, 90],
+  play: [30, 70]
 };
 
 export const MEETING_DURATION: [number, number] = [30, 90];
@@ -130,7 +142,7 @@ export function specialistProfile(id: string): AgentProfile {
   for (const letter of id) hash = (Math.imul(hash, 31) + letter.charCodeAt(0)) >>> 0;
   return {
     id,
-    weights: { desk: 70, coffee: 6, whiteboard: 8, visit: 8, idle: 4, lounge: 4 },
+    weights: { desk: 70, coffee: 6, whiteboard: 8, visit: 8, idle: 4, lounge: 4, gaming: 2, play: 4 },
     meetingAffinity: 0,
     prop: SPECIALIST_PROPS[hash % SPECIALIST_PROPS.length],
     pace: 0.92 + (hash % 17) / 100,

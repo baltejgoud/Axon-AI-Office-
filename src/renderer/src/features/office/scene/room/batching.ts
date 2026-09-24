@@ -185,7 +185,12 @@ export function bake(
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || Array.isArray(child.material)) return;
     const material = child.material as THREE.MeshStandardMaterial;
-    const geometry = child.geometry.clone().applyMatrix4(toLocal.clone().multiply(child.matrixWorld));
+    let geometry = child.geometry.clone().applyMatrix4(toLocal.clone().multiply(child.matrixWorld));
+    // Faceted parts keep their facets as face normals: the baked mesh's material is smooth.
+    if (material.flatShading) {
+      if (geometry.index) geometry = geometry.toNonIndexed();
+      geometry.computeVertexNormals();
+    }
     painted(
       geometry,
       tint.copy(material.color ?? tint.set('#ffffff')),

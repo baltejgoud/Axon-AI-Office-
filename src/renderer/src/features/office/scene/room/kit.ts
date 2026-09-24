@@ -162,6 +162,8 @@ export function lathe(
 
 /** Low-poly solids shared by the small things: an 8-sided can, a 6-sided wheel and two faceted balls. */
 export const LOW = {
+  /** A soft blob (bean bags, cushions): round enough, a third of a full sphere's triangles. */
+  blob: new THREE.SphereGeometry(0.5, 12, 8),
   can: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
   wheel: new THREE.CylinderGeometry(0.5, 0.5, 1, 6).rotateZ(Math.PI / 2),
   gem: new THREE.IcosahedronGeometry(0.5, 0),
@@ -195,6 +197,45 @@ export function tones(color: string): { base: string; light: string; pale: strin
 export function noShadow<T extends THREE.Object3D>(object: T): T {
   object.traverse((child) => (child.castShadow = false));
   return object;
+}
+
+/**
+ * A small potted plant for tables and shelves: three faceted tufts in a turned pot, a fifth of the
+ * triangles of `plant` at the same size.
+ */
+export function pottedTuft(scale = 1, potColor: string = PALETTE.white, seed = 1): THREE.Group {
+  const random = seeded(seed);
+  const s = Math.round(scale * 1000) / 1000;
+  const g = group(
+    lathe(
+      [
+        [0, 0],
+        [0.05 * s, 0],
+        [0.065 * s, 0.1 * s],
+        [0.07 * s, 0.105 * s],
+        [0, 0.105 * s]
+      ],
+      potColor,
+      [0, 0, 0],
+      8,
+      { roughness: 0.5 }
+    )
+  );
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2 + random();
+    const size = (0.13 + random() * 0.05) * s;
+    g.add(
+      facetPart(
+        LOW.gem,
+        GREENS[(i + seed) % GREENS.length],
+        [size, size * 1.1, size],
+        [Math.sin(angle) * 0.04 * s, (0.16 + random() * 0.05) * s, Math.cos(angle) * 0.04 * s],
+        [random(), random(), 0],
+        seed + i
+      )
+    );
+  }
+  return g;
 }
 
 /** Greens for foliage, from shade to sun. */

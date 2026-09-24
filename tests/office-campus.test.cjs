@@ -385,3 +385,47 @@ test('desk life: neighbouring desks differ, and every new thing appears somewher
   for (const setup of layout.DESK_SETUPS.filter((s) => layout.poiById(s.poiId).district))
     assert.ok(setup.props.length >= 3, `${setup.poiId} has only ${setup.props.length} things`);
 });
+
+// ---------------------------------------------------------------- Part 4: play corners
+const decor = require('../src/renderer/src/features/office/campus/decor.ts');
+
+test('a strip is packed along its long side, evenly spaced, wishes first and a tree after', () => {
+  const wide = decor.packStrip({ side: 'back', minX: 0, maxX: 9.1, minZ: 0, maxZ: 5.7 }, ['nook', 'games', 'snacks'], ['tree']);
+  assert.deepEqual(wide.placed.map((p) => p.arrangement), ['nook', 'games']);
+  assert.ok(wide.bare < 0.2, `bare ${wide.bare}`);
+  for (const p of wide.placed) assert.equal(p.cz, 2.85);
+  const tall = decor.packStrip({ side: 'left', minX: 0, maxX: 7.3, minZ: 0, maxZ: 16.4 }, ['racks', 'data-wall', 'games'], ['tree']);
+  assert.deepEqual(tall.placed.map((p) => p.arrangement), ['racks', 'data-wall', 'games', 'tree']);
+  // A share caps how many wishes one strip takes, so the rest go to other strips.
+  const shared = decor.packStrip({ side: 'left', minX: 0, maxX: 7.3, minZ: 0, maxZ: 16.4 }, ['racks', 'data-wall', 'games'], ['tree'], 2);
+  assert.deepEqual(shared.placed.map((p) => p.arrangement), ['racks', 'data-wall', 'tree']);
+  for (const p of tall.placed) assert.equal(p.cx, 3.65);
+  const zs = tall.placed.map((p) => p.cz);
+  assert.deepEqual([...zs].sort((a, b) => a - b), zs, 'north to south');
+});
+
+test('play corners: every Engineering department gets foosball and an arcade, snacks or a TV corner, and no long bare floor', () => {
+  const engineering = layout.DECOR.filter((plan) => plan.district === 'engineering');
+  assert.equal(engineering.length, 9);
+  for (const plan of engineering) {
+    assert.ok(plan.placed.includes('games'), `${plan.key}: ${plan.placed}`);
+    assert.ok(plan.placed.includes('snacks') || plan.placed.includes('tv-corner'), `${plan.key}: ${plan.placed}`);
+    assert.ok(plan.bare < 4, `${plan.key} keeps ${plan.bare.toFixed(1)} m bare`);
+    const kinds = new Set(layout.FURNITURE.filter((f) => f.id.startsWith(`${plan.key}-`)).map((f) => f.kind));
+    for (const kind of ['foosball', 'arcade', 'dartboard']) assert.ok(kinds.has(kind), `${plan.key} ${kind}`);
+  }
+  const kinds = new Set(layout.FURNITURE.map((f) => f.kind));
+  for (const kind of ['vending-machine', 'snack-shelf', 'tv-corner']) assert.ok(kinds.has(kind), kind);
+});
+
+test('play spots: two ends to every foosball table and one spot per arcade, all in their own department', () => {
+  const spots = layout.POINTS_OF_INTEREST.filter((p) => p.type === 'play');
+  const tables = layout.FURNITURE.filter((f) => f.kind === 'foosball');
+  const arcades = layout.FURNITURE.filter((f) => f.kind === 'arcade');
+  assert.equal(spots.length, tables.length * 2 + arcades.length);
+  for (const spot of spots) {
+    assert.ok(spot.department && spot.district, spot.id);
+    const key = spot.id.slice(0, spot.id.indexOf('-games-'));
+    assert.equal(hood.slug(spot.department), key, spot.id);
+  }
+});

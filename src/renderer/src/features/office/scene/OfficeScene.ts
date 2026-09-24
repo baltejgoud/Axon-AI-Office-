@@ -52,6 +52,8 @@ export interface OfficeDebugHandle {
   /** The café staff: where they are, what they do and whether they are drawn. */
   staff(): { id: StaffId; action: StaffAction; x: number; z: number; visible: boolean }[];
   staffPoint(id: StaffId): { x: number; y: number } | null;
+  /** Who is playing on the Lounge TV, and what it shows. */
+  lounge(): { players: number; tv: 'game' | 'saver'; controllersOnConsole: number };
   seed: number;
 }
 
@@ -86,6 +88,9 @@ const hotspot = (area: { x: number; z: number; w: number; d: number; h: number }
 
 /** The café floor: staff are drawn only while it is close and on screen. */
 const CAFE_AREA = { minX: 8, maxX: 21, minZ: -6.5, maxZ: 7 } as const;
+/** The Lounge, where the TV is: it redraws only while this is close and on screen. */
+const LOUNGE_AREA = { minX: -20, maxX: -11, minZ: -15.5, maxZ: -6 } as const;
+const GAME_SEATS = ['game-seat-1', 'game-seat-2'] as const;
 /** Staff and kitchen fire appear from department zoom inward (as extra full rigs do). */
 const STAFF_DETAIL = 0.06;
 
@@ -244,6 +249,14 @@ export class OfficeScene {
             z: s.z,
             visible: this.staff.object.visible
           })),
+        lounge: () => {
+          const players = this.players();
+          return {
+            players: players.playing,
+            tv: players.playing > 0 ? 'game' : 'saver',
+            controllersOnConsole: this.room.lounge.media?.controllers.filter((c) => c.visible).length ?? 0
+          };
+        },
         staffPoint: (id) =>
           this.staff.screenPoint(
             id,
@@ -640,6 +653,7 @@ export class OfficeScene {
     }
     this.crowd.update(this.elapsed, this.reducedMotion);
     this.updateStaff(dt);
+    this.updateLounge(dt);
     this.room.update(
       dt,
       this.elapsed,
@@ -659,15 +673,47 @@ export class OfficeScene {
     }
   }
 
+  /** Whether `area` is on screen at department zoom or closer. */
+  private closeUp(area: Bounds): boolean {
+    const view = this.cameraRig.viewBounds();
+    return (
+      this.cameraRig.metresPerPixel() < STAFF_DETAIL &&
+      view.maxX > area.minX &&
+      view.minX < area.maxX &&
+      view.maxZ > area.minZ &&
+      view.minZ < area.maxZ
+    );
+  }
+
+  /** Who sits on the gaming seats playing, and how many controllers are in hand. */
+  private players(): { playing: number; holding: number } {
+    let playing = 0;
+    let holding = 0;
+    for (const seat of GAME_SEATS)
+      for (const id of this.simulation.occupantsOf(seat)) {
+        const view = this.simulation.view(id);
+        if (view?.behavior === 'gaming') playing++;
+        if (view?.heldItem === 'controller') holding++;
+      }
+    return { playing, holding };
+  }
+
+  /** The Lounge TV (game or screensaver), its controllers, the record player and the dog. */
+  private updateLounge(dt: number): void {
+    const { media, dog } = this.room.lounge;
+    if (media) {
+      const { playing, holding } = this.players();
+      media.screen.update(this.elapsed, playing > 0, this.closeUp(LOUNGE_AREA));
+      media.controllers.forEach((pad, i) => (pad.visible = i >= holding));
+      if (!this.reducedMotion) media.platter.rotation.y += dt * 3.5;
+    }
+    // Asleep: a slow breath, one every three seconds or so.
+    if (dog && !this.reducedMotion) dog.scale.y = 1 + 0.04 * Math.sin(this.elapsed * 2.1);
+  }
+
   /** The café staff and the kitchen's fire: only drawn while the café is near and on screen. */
   private updateStaff(dt: number): void {
-    const view = this.cameraRig.viewBounds();
-    const near =
-      this.cameraRig.metresPerPixel() < STAFF_DETAIL &&
-      view.maxX > CAFE_AREA.minX &&
-      view.minX < CAFE_AREA.maxX &&
-      view.maxZ > CAFE_AREA.minZ &&
-      view.minZ < CAFE_AREA.maxZ;
+    const near = this.closeUp(CAFE_AREA);
     const waiting = CAFE_PICKUPS.filter((id) => this.simulation.occupantsOf(id).length > 0);
     const grill = this.staff.update(dt, this.elapsed, waiting, near).find((s) => s.id === 'chef-grill');
     this.room.kitchen?.update(

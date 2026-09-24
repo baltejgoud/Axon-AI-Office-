@@ -4,13 +4,16 @@ import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } f
 import * as commons from './commonsProps';
 import * as exec from './executive';
 import * as props from './props';
-import { bevelBox, bookshelf, paintedBox, group, largePlant, plant, seeded } from './kit';
+import { bevelBox, bookshelf, paintedBox, group, largePlant, plant, pottedTuft, seeded } from './kit';
 import { districtAt } from '../../campus/districts';
 import { accentAt, deskPod, singleDesk } from './desks';
 import { ergonomicChair } from './chairs';
 import { bakeryCounter, coffeeBar } from './cafe';
 import { openKitchen, type KitchenFx } from './kitchen';
 import { cupOfCoffee, servedPlate } from './food';
+import { dogBed, mediaConsole, type MediaWall } from './lounge';
+import * as play from './playProps';
+import type { RodSlot } from './playProps';
 
 export { largePlant, plant };
 
@@ -53,8 +56,10 @@ const SOFA_FABRICS = [
 
 function sofa(itemDef: FurnitureItem): THREE.Group {
   const { w, d } = itemDef;
-  // Sofas within the same 10 m square share a fabric, so a room's seating matches.
-  const room = Math.floor((itemDef.x + 100) / 10) * 7 + Math.floor((itemDef.z + 100) / 10) * 3;
+  // Sofas within the same 10 m square share a fabric, so a room's seating matches; the Lounge's
+  // U spans two squares, so its three sofas are named together.
+  const lounge = itemDef.id === 'sofa' || itemDef.id.startsWith('sofa-');
+  const room = lounge ? 0 : Math.floor((itemDef.x + 100) / 10) * 7 + Math.floor((itemDef.z + 100) / 10) * 3;
   const fabric = SOFA_FABRICS[room % SOFA_FABRICS.length];
   const g = group(
     paintedBox(fabric.body, [w, 0.3, d], [0, 0.2, 0], 0.05),
@@ -98,7 +103,7 @@ function coffeeTable(): THREE.Group {
     box('#8d99ae', [0.2, 0.03, 0.26], [0.1, 0.44, 0.05]),
     box('#e0b36a', [0.18, 0.03, 0.24], [0.1, 0.47, 0.05])
   );
-  const bowl = plant(0.28, PALETTE.white, 11);
+  const bowl = pottedTuft(0.9, PALETTE.white, 11);
   bowl.position.set(-0.15, 0.42, -0.1);
   g.add(bowl);
   return g;
@@ -379,6 +384,12 @@ export interface BuiltFurniture {
   machines?: { light: THREE.Mesh; steam: THREE.Object3D; spots: string[] }[];
   /** The kitchen's flames, steam and pan, driven by the chefs. */
   kitchen?: KitchenFx;
+  /** The lounge TV, its controllers and the record player. */
+  media?: MediaWall;
+  /** The sleeping dog, which breathes. */
+  dog?: THREE.Mesh;
+  /** A foosball table's rods, drawn by the shared instanced rods. */
+  foosball?: readonly RodSlot[];
 }
 
 export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
@@ -424,6 +435,28 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     }
     case 'bakery-counter':
       return { object: bakeryCounter(itemDef) };
+    case 'media-console': {
+      const built = mediaConsole(itemDef);
+      return { object: built.group, media: built.media };
+    }
+    case 'foosball': {
+      const built = play.foosballTable(itemDef);
+      return { object: built.group, foosball: built.rods };
+    }
+    case 'arcade':
+      return { object: play.arcadeCabinet(itemDef) };
+    case 'dartboard':
+      return { object: play.dartboard(itemDef) };
+    case 'vending-machine':
+      return { object: play.vendingMachine(itemDef) };
+    case 'snack-shelf':
+      return { object: play.snackShelf(itemDef) };
+    case 'tv-corner':
+      return { object: play.tvCorner(itemDef) };
+    case 'dog-bed': {
+      const built = dogBed(itemDef);
+      return { object: built.group, dog: built.dog };
+    }
     case 'open-kitchen': {
       const built = openKitchen(itemDef);
       return { object: built.group, kitchen: built.fx };

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { hashString } from '../../simulation/random';
 import { yawTowards, type AgentBehaviorState, type AgentView, type HeldItem } from '../../simulation/types';
 import { box, cylinder } from '../room/materials';
+import { controller } from '../room/lounge';
 import { appearanceFor } from './appearance';
 import { applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
 import { WALK_STRIDE, computePose, easePose, neutralPose, type Pose } from './poses';
@@ -36,6 +37,13 @@ function heldProp(item: HeldItem, accent: string): THREE.Object3D {
         box('#262a30', [0.012, 0.25, 0.18], [0, 0, 0.02]),
         box('#9fb7ff', [0.002, 0.22, 0.15], [0.007, 0, 0.02], { emissive: '#7e9cff', emissiveIntensity: 0.4 })
       );
+    case 'controller': {
+      // In the left hand, reaching across to meet the right: level, its face tipped to the player.
+      const pad = controller(accent === '#1f2328' ? '#f3f4f6' : '#1f2328');
+      pad.position.set(-0.075, -0.03, 0.03);
+      pad.rotation.x = -0.6;
+      return new THREE.Group().add(pad);
+    }
     case 'clipboard':
       return new THREE.Group().add(
         box('#9f7549', [0.012, 0.3, 0.22], [0, 0, 0.02]),
@@ -103,7 +111,7 @@ export class OfficeAgentCharacter {
     this.hitBox.userData.agentId = agentId;
     this.root.add(this.hitBox);
 
-    for (const item of ['cup', 'book', 'folder', 'tablet', 'clipboard'] as const) {
+    for (const item of ['cup', 'book', 'folder', 'tablet', 'clipboard', 'controller'] as const) {
       const prop = heldProp(item, look.accent);
       prop.visible = false;
       prop.traverse((o) => (o.castShadow = true));
@@ -219,7 +227,7 @@ export class OfficeAgentCharacter {
     prop.parent!.getWorldQuaternion(this.scratchQuat);
     this.root.getWorldQuaternion(this.scratchQuat2);
     prop.quaternion.copy(this.scratchQuat.invert().multiply(this.scratchQuat2));
-    if (held !== 'cup') prop.quaternion.multiply(HELD_FLAT_TILT);
+    if (held !== 'cup' && held !== 'controller') prop.quaternion.multiply(HELD_FLAT_TILT);
   }
 
   private buildOutlines(): THREE.Mesh[] {

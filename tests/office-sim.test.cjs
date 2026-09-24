@@ -473,6 +473,7 @@ test('specialists only visit people in their own department, and stay in their d
   const office = new OfficeSimulation({ agentIds: ids, seed: 11 });
   for (const id of ids) office.setTaskStatus(id, 'idle');
   let visits = 0;
+  let plays = 0;
   run(office, 20 * 60, 1 / 10, (o) => {
     for (const view of o.views()) {
       const person = byId.get(view.id);
@@ -484,12 +485,18 @@ test('specialists only visit people in their own department, and stay in their d
       }
       if (spot.type === 'whiteboard' || spot.type === 'open-area')
         assert.equal(spot.district, person.district, `${view.id} at ${spot.id}`);
+      // Play corners belong to a department: only its own people play there.
+      if (spot.type === 'play') {
+        plays++;
+        assert.equal(spot.department, person.department, `${view.id} at ${spot.id}`);
+      }
       // Coffee comes from their own district's station, or the café.
       if ((spot.type === 'cafe' || spot.type === 'cafe-stand') && spot.district)
         assert.equal(spot.district, person.district, `${view.id} at ${spot.id}`);
     }
   });
   assert.ok(visits > 0, 'nobody visited a colleague in twenty minutes');
+  assert.ok(plays > 0, 'nobody took a play break in twenty minutes');
 });
 
 test('a colleague walks over to help and stays until released', () => {
@@ -541,4 +548,109 @@ test('café: pickups still work, the Files room door stays reachable, the walkwa
     assert.ok(!grid.isFree(p), `staff floor ${JSON.stringify(p)} is walkable`);
   const kinds = new Set(layout.FURNITURE.map((f) => f.kind));
   for (const kind of ['coffee-bar', 'bakery-counter', 'open-kitchen']) assert.ok(kinds.has(kind), kind);
+});
+
+// ---------------------------------------------------------------- Part 4: lounge and play
+
+test('lounge: the TV on the back wall faces the room, the sofas face it and two gaming seats sit in front', () => {
+  const office = new OfficeSimulation({ agentIds: [] });
+  const grid = office.grid;
+  const tv = layout.FURNITURE.find((f) => f.kind === 'media-console');
+  assert.ok(tv, 'a media console');
+  assert.equal(tv.rotation, 0, 'its screen faces the viewer');
+  assert.ok(tv.z < -14 && tv.x > -19 && tv.x < -12, 'against the lounge back wall');
+  assert.ok(Math.abs(layout.FURNITURE.find((f) => f.id === 'sofa').rotation - Math.PI) < 1e-9, 'the main sofa faces it');
+  const seats = layout.POINTS_OF_INTEREST.filter((p) => p.type === 'game-seat');
+  assert.equal(seats.length, 2);
+  const reception = layout.poiById('desk-reception').approach;
+  for (const seat of seats) {
+    assert.ok(seat.seated);
+    assert.ok(Math.abs(Math.abs(seat.facing) - Math.PI) < 1e-9, `${seat.id} faces the TV`);
+    assert.ok(seat.position.z > tv.z + 1 && seat.position.z < tv.z + 2.2, `${seat.id} sits in front of the TV`);
+    assert.ok(grid.isFree(seat.approach), seat.id);
+    assert.ok(grid.findPath(reception, seat.approach), `${seat.id} reachable`);
+  }
+  for (const id of ['lounge-sofa-1', 'lounge-sofa-2', 'lounge-sofa-3'])
+    assert.ok(Math.abs(layout.poiById(id).facing - Math.PI) < 1e-9, `${id} faces the TV`);
+  assert.ok(layout.FURNITURE.some((f) => f.kind === 'dog-bed'), 'the office dog has a bed');
+});
+
+const GAME_SEATS = ['game-seat-1', 'game-seat-2'];
+const settle = (office, ids) => {
+  for (const id of ids) office.setTaskStatus(id, 'idle');
+  run(office, 1, 0.1);
+};
+
+test('gaming break: a coworker takes a bean bag with a controller, and a friend joins when there is room', () => {
+  const office = new OfficeSimulation({ agentIds: ALL, seed: 21 });
+  settle(office, ALL);
+  for (const id of ALL) office.requestActivity(id, 'desk');
+  run(office, 20, 0.1);
+  assert.ok(office.requestActivity('writer', 'gaming'));
+  runUntil(office, (o) => o.view('writer').behavior === 'gaming', 120, 0.05);
+  const writer = office.view('writer');
+  assert.equal(writer.behavior, 'gaming');
+  assert.ok(GAME_SEATS.includes(writer.poiId));
+  assert.equal(writer.sit, 1);
+  assert.equal(writer.heldItem, 'controller');
+  // Someone settled at their desk near the Commons picked up the other controller.
+  const players = office.views().filter((v) => v.poiId && GAME_SEATS.includes(v.poiId));
+  runUntil(office, (o) => o.views().filter((v) => v.behavior === 'gaming').length === 2, 120, 0.05);
+  assert.equal(office.views().filter((v) => v.behavior === 'gaming').length, 2, 'two players');
+  assert.ok(players.length >= 1);
+});
+
+test('gaming break: only when a seat is free, never during a task, and everyone goes back to their desk', () => {
+  const office = new OfficeSimulation({ agentIds: ALL, seed: 4 });
+  settle(office, ALL);
+  assert.ok(office.requestActivity('writer', 'gaming'));
+  assert.ok(office.requestActivity('designer', 'gaming') || office.views().filter((v) => v.poiId && GAME_SEATS.includes(v.poiId)).length <= 2);
+  runUntil(office, (o) => GAME_SEATS.every((seat) => o.occupantsOf(seat).length === 1), 150, 0.05);
+  const taken = GAME_SEATS.map((seat) => office.occupantsOf(seat)[0]);
+  const third = ALL.find((id) => !taken.includes(id) && id !== 'receptionist');
+  assert.equal(office.requestActivity(third, 'gaming'), false, 'both seats are taken');
+  // A real task pulls a player straight back to work, and nobody games while on a task.
+  office.setTaskStatus(taken[0], 'working');
+  assert.equal(office.requestActivity(taken[0], 'gaming'), false);
+  const home = layout.HOME_DESKS[taken[0]];
+  runUntil(office, (o) => o.view(taken[0]).poiId === home && o.view(taken[0]).sit === 1, 120, 0.05);
+  assert.equal(office.view(taken[0]).poiId, home);
+  assert.notEqual(office.view(taken[0]).heldItem, 'controller');
+  // The other player finishes the game and goes back to their desk too.
+  runUntil(office, (o) => o.view(taken[1]).poiId === layout.HOME_DESKS[taken[1]] && o.view(taken[1]).sit === 1, 240, 0.1);
+  assert.equal(office.view(taken[1]).poiId, layout.HOME_DESKS[taken[1]]);
+});
+
+test('gaming break: people far from the Commons never walk over to play', () => {
+  const far = agents.OFFICE_AGENTS.find((a) => a.district === 'people-ops').id;
+  const office = new OfficeSimulation({ agentIds: [far], seed: 2 });
+  settle(office, [far]);
+  assert.equal(office.requestActivity(far, 'gaming'), false);
+});
+
+test('play break: foosball for two from one department, the arcade for one, then back to their desks', () => {
+  const team = agents.OFFICE_AGENTS.filter((a) => a.department === 'Backend & APIs').map((a) => a.id);
+  const office = new OfficeSimulation({ agentIds: team, seed: 8 });
+  settle(office, team);
+  for (const id of team) office.requestActivity(id, 'desk');
+  run(office, 5, 0.1);
+  const key = 'backend-and-apis';
+  assert.ok(office.requestActivity(team[0], 'play'));
+  const ends = [`${key}-games-foosball-1`, `${key}-games-foosball-2`];
+  runUntil(office, (o) => ends.every((spot) => o.occupantsOf(spot).length === 1 && o.view(o.occupantsOf(spot)[0]).behavior === 'foosball'), 120, 0.05);
+  const players = ends.map((spot) => office.occupantsOf(spot)[0]);
+  assert.equal(players.length, 2);
+  assert.ok(players.includes(team[0]));
+  for (const id of players) assert.equal(office.view(id).behavior, 'foosball');
+  // The table is taken: the next person plays the arcade on their own.
+  const third = team.find((id) => !players.includes(id));
+  assert.ok(office.requestActivity(third, 'play'));
+  runUntil(office, (o) => o.view(third).behavior === 'gaming', 120, 0.05);
+  assert.equal(office.view(third).poiId, `${key}-games-arcade-player`);
+  assert.equal(office.view(third).sit, 0);
+  // Nothing left for a fourth, and everyone is back at their desk afterwards.
+  const fourth = team.find((id) => !players.includes(id) && id !== third);
+  assert.equal(office.requestActivity(fourth, 'play'), false);
+  runUntil(office, (o) => [...players, third].every((id) => o.view(id).poiId === layout.HOME_DESKS[id] && o.view(id).sit === 1), 300, 0.1);
+  for (const id of [...players, third]) assert.equal(office.view(id).poiId, layout.HOME_DESKS[id]);
 });

@@ -160,7 +160,7 @@ function packDepartment(
         seatIndex++;
       }
   }
-  decorateDepartment(b, district, key, region, { centreX, centreZ, cols, rows }, index);
+  b.decor.push(decorateDepartment(b, district, key, region, { centreX, centreZ, cols, rows }, index, tags));
   return homes;
 }
 

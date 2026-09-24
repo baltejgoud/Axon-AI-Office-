@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { FurnitureItem } from '../../simulation/layout';
 import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } from './materials';
-import { GREENS, bevelBox, facetPart, lathe } from './kit';
+import { GREENS, LOW, bevelBox, facetPart, lathe } from './kit';
 
 /**
  * District signature pieces: the things that make each area feel like its own place.
@@ -83,8 +83,8 @@ export function beanBag(item: FurnitureItem): THREE.Group {
   const colour = colours[Math.abs(Math.round(item.x * 3 + item.z * 7)) % colours.length];
   const r = item.w / 2;
   return group(
-    part(GEOMETRY.sphere, mat(colour, { roughness: 0.95 }), [r * 2, 0.5, r * 2], [0, 0.25, 0]),
-    part(GEOMETRY.sphere, mat(colour, { roughness: 0.95 }), [r * 1.5, 0.42, r * 0.9], [0, 0.42, -r * 0.45])
+    part(LOW.blob, mat(colour, { roughness: 0.95 }), [r * 2, 0.5, r * 2], [0, 0.25, 0]),
+    part(LOW.blob, mat(colour, { roughness: 0.95 }), [r * 1.5, 0.42, r * 0.9], [0, 0.42, -r * 0.45])
   );
 }
 

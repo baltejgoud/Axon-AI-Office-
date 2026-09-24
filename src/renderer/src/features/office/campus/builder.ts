@@ -1,6 +1,7 @@
 import { yawTowards, type PointOfInterest, type PoiType, type Vec2, type ZoneId } from '../simulation/types';
 import type { ScreenFlavor } from '../scene/room/materials';
 import type { Bounds, DistrictId } from './districts';
+import type { DecorPlan } from './decor';
 
 export type WallKind = 'solid' | 'glass' | 'low';
 
@@ -30,6 +31,14 @@ export type FurnitureKind =
   | 'coffee-bar'
   | 'bakery-counter'
   | 'open-kitchen'
+  | 'media-console'
+  | 'dog-bed'
+  | 'foosball'
+  | 'arcade'
+  | 'dartboard'
+  | 'vending-machine'
+  | 'snack-shelf'
+  | 'tv-corner'
   | 'cafe-island'
   | 'stool'
   | 'cafe-table'
@@ -149,6 +158,8 @@ export class LayoutBuilder {
   readonly pois: PointOfInterest[] = [];
   readonly setups: DeskSetup[] = [];
   readonly departments: DepartmentArea[] = [];
+  /** What each department's open floor got (see decor.ts). */
+  readonly decor: DecorPlan[] = [];
   /** Standing spots beside home desks, facing the occupant, for coworkers who drop by. */
   private readonly visitSpots: [deskId: string, x: number, z: number][] = [];
 

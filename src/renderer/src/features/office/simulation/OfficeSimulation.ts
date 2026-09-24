@@ -41,7 +41,9 @@ type DoKind =
   | 'idle'
   | 'visit'
   | 'celebrating'
-  | 'thinking';
+  | 'thinking'
+  | 'gaming'
+  | 'foosball';
 
 type Step =
   | { type: 'goto'; poiId: string; fast?: boolean }
@@ -137,7 +139,9 @@ const OUTINGS = new Set<PlanKind>([
   'cabinet',
   'idle',
   'visit',
-  'meeting'
+  'meeting',
+  'gaming',
+  'play'
 ]);
 /** Seconds a visitor waits at an empty desk before heading back. */
 const HOST_AWAY_WAIT = 3;
@@ -520,7 +524,7 @@ export class OfficeSimulation {
       return chosen;
     };
 
-    const commonsOnly: AmbientActivity[] = ['lounge', 'bookshelf', 'printer', 'cabinet'];
+    const commonsOnly: AmbientActivity[] = ['lounge', 'bookshelf', 'printer', 'cabinet', 'gaming'];
     if (commonsOnly.includes(activity) && !agent.nearCommons) return null;
     switch (activity) {
       case 'desk':
@@ -636,6 +640,41 @@ export class OfficeSimulation {
           steps: [leave, { type: 'goto', poiId: spot }, this.doing('idle', duration), leave]
         };
       }
+      case 'gaming': {
+        // A bean bag in front of the Lounge TV, and a friend on the other one when there is room.
+        const seats = this.freeSpots(
+          this.poisOfType((poi) => poi.type === 'game-seat'),
+          agent
+        );
+        if (!seats.length) return null;
+        this.reserve(agent, seats[0]);
+        const partner = seats[1] ? this.partnerFor(agent, (other) => other.nearCommons) : null;
+        if (partner) {
+          this.cancelPlan(partner);
+          this.reserve(partner, seats[1]);
+          this.setPlan(partner, this.playPlan('gaming', seats[1], 'gaming', duration, 'controller'));
+        }
+        return this.playPlan('gaming', seats[0], 'gaming', duration, 'controller');
+      }
+      case 'play': {
+        // The department's own games corner: foosball with a teammate, or the arcade alone.
+        const mine = this.poisOfType(
+          (poi) => poi.type === 'play' && !!agent.department && poi.department === agent.department
+        );
+        for (const one of mine.filter((id) => id.endsWith('-foosball-1'))) {
+          const two = one.replace(/-1$/, '-2');
+          if (!this.hasRoom(one, agent) || !this.hasRoom(two, agent)) continue;
+          const partner = this.partnerFor(agent, (other) => other.department === agent.department);
+          if (!partner) break;
+          this.reserve(agent, one);
+          this.cancelPlan(partner);
+          this.reserve(partner, two);
+          this.setPlan(partner, this.playPlan('play', two, 'foosball', duration, null));
+          return this.playPlan('play', one, 'foosball', duration, null);
+        }
+        const arcade = claim(mine.filter((id) => id.endsWith('-arcade-player')));
+        return arcade ? this.playPlan('play', arcade, 'gaming', duration, null) : null;
+      }
       case 'visit': {
         const hosts = [...this.agents.values()].filter(
           (host) =>
@@ -658,6 +697,39 @@ export class OfficeSimulation {
         };
       }
     }
+  }
+
+  /** A break at a play spot: go there, pick up what it needs, play for `seconds`, put it down. */
+  private playPlan(
+    kind: PlanKind,
+    spot: string,
+    doing: 'gaming' | 'foosball',
+    seconds: number,
+    item: HeldItem | null
+  ): Plan {
+    return {
+      kind,
+      steps: [
+        { type: 'leave' },
+        { type: 'goto', poiId: spot },
+        { type: 'hold', item },
+        this.doing(doing, seconds),
+        { type: 'hold', item: null },
+        { type: 'leave' }
+      ]
+    };
+  }
+
+  /**
+   * Someone to play with: quietly working at their desk, `eligible`, and only while the away budget
+   * has room for both players.
+   */
+  private partnerFor(agent: AgentState, eligible: (other: AgentState) => boolean): AgentState | null {
+    if (this.reducedMotion || this.awayCount() + 2 > this.maxAway) return null;
+    const pool = [...this.agents.values()].filter(
+      (other) => other !== agent && eligible(other) && this.availableForMeeting(other)
+    );
+    return pool.length ? agent.rng.pick(pool) : null;
   }
 
   private setPlan(agent: AgentState, plan: Plan): void {
@@ -690,6 +762,8 @@ export class OfficeSimulation {
     agent.meetingId = null;
     agent.visitHostId = null;
     agent.hostMissedAt = null;
+    // A controller stays with the game.
+    if (agent.heldItem === 'controller') agent.heldItem = null;
   }
 
   // ---------------------------------------------------------------- meetings and visits

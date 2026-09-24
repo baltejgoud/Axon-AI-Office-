@@ -3,6 +3,7 @@ import { COMMONS_ROOMS, CORE_HOME_DESKS, buildCommons } from '../campus/commons'
 import { DISTRICTS, type Bounds } from '../campus/districts';
 import { buildDistricts } from '../campus/neighbourhoods';
 import { buildCoffeeStations } from '../campus/coffee';
+import type { DecorPlan } from '../campus/decor';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import type { PointOfInterest, Vec2, ZoneId } from './types';
 
@@ -62,6 +63,8 @@ export const WALLS: readonly Wall[] = builder.walls;
 export const FURNITURE: readonly FurnitureItem[] = built.furniture;
 export const POINTS_OF_INTEREST: readonly PointOfInterest[] = built.pois;
 export const DESK_SETUPS: readonly DeskSetup[] = builder.setups;
+/** What each department's open floor got: its arrangements and how much bare floor is left. */
+export const DECOR: readonly DecorPlan[] = builder.decor;
 
 const poiIndex = new Map(built.pois.map((poi) => [poi.id, poi]));
 

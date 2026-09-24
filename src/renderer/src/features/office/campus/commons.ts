@@ -78,27 +78,38 @@ export function buildCommons(b: LayoutBuilder): void {
   setUpDesks(b);
 }
 
-/** Three sofas in a U round a coffee table, a bean-bag corner, and the Marketing Strategist's desk. */
+/**
+ * The Lounge: a media wall on the back wall (a TV over a console with a PS5), three sofas in a U
+ * open toward it round a coffee table, two bean bags in front of the screen for whoever is playing,
+ * the office dog asleep in the corner, and the Marketing Strategist's desk. The TV faces the viewer,
+ * so the game on it shows from the camera.
+ */
 function buildLounge(b: LayoutBuilder): void {
   b.rug('rug-lounge', -15.4, -10.6, 6.8, 6.0);
-  b.item('sofa', 'sofa', -15.6, -13.9, 3.3, 0.95);
-  b.item('sofa-left', 'sofa', -18.7, -10.4, 3.0, 0.95, { rotation: FACE_RIGHT });
-  b.item('sofa-right', 'sofa', -12.4, -10.4, 3.0, 0.95, { rotation: FACE_LEFT });
+  b.item('media-console', 'media-console', -15.6, -14.55, 1.8, 0.45);
+  b.item('sofa', 'sofa', -15.6, -7.7, 3.3, 0.95, { rotation: FACE_BACK });
+  b.item('sofa-left', 'sofa', -18.7, -11.0, 3.0, 0.95, { rotation: FACE_RIGHT });
+  b.item('sofa-right', 'sofa', -12.4, -11.0, 3.0, 0.95, { rotation: FACE_LEFT });
   b.item('lounge-table', 'coffee-table', -15.6, -10.6, 0.9, 0.9, { round: true });
   b.item('lounge-lamp-1', 'floor-lamp', -19.0, -14.55, 0.35, 0.35, { round: true });
   b.item('lounge-lamp-2', 'floor-lamp', -13.45, -14.55, 0.35, 0.35, { round: true });
-  b.item('lounge-bag-1', 'bean-bag', -18.5, -7.3, 0.9, 0.9, { round: true });
-  b.item('lounge-bag-2', 'bean-bag', -17.3, -7.1, 0.9, 0.9, { round: true });
+  b.item('lounge-dog', 'dog-bed', -18.0, -13.95, 0.8, 0.8, { round: true });
   b.plant('plant-lounge', -11.6, -6.6);
   b.item('board-lounge', 'whiteboard', -12.9, -6.4, 1.6, 0.1);
   b.item('desk-marketing-surface', 'desk', -12.1, -14.5, 1.4, 0.7);
   b.deskSeat('desk-marketing', 'chat', -12.1, -13.8, FACE_BACK);
 
-  for (const [index, x] of [-16.7, -15.6, -14.5].entries())
-    b.seat(`lounge-sofa-${index + 1}`, 'lounge', 'chat', x, -13.25, FACE_FRONT, { x, z: -12.65 }, null);
-  for (const [index, z] of [-11.0, -9.8].entries()) {
+  // The main sofa faces the TV across the room; the side sofas face each other.
+  for (const [index, x] of [-14.5, -15.6, -16.7].entries())
+    b.seat(`lounge-sofa-${index + 1}`, 'lounge', 'chat', x, -8.35, FACE_BACK, { x, z: -8.95 }, null);
+  for (const [index, z] of [-11.6, -10.4].entries()) {
     b.seat(`lounge-sofa-${index + 4}`, 'lounge', 'chat', -18.05, z, FACE_RIGHT, { x: -17.45, z }, null);
     b.seat(`lounge-sofa-${index + 6}`, 'lounge', 'chat', -13.05, z, FACE_LEFT, { x: -13.65, z }, null);
+  }
+  // Two bean bags in front of the screen: the players' seats.
+  for (const [index, x] of [-16.3, -14.9].entries()) {
+    b.item(`lounge-bag-${index + 1}`, 'bean-bag', x, -12.95, 0.9, 0.9, { round: true });
+    b.seat(`game-seat-${index + 1}`, 'game-seat', 'chat', x, -12.95, FACE_BACK, { x, z: -12.15 }, null);
   }
 }
 

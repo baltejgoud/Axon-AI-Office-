@@ -18,9 +18,11 @@ export type AgentBehaviorState =
   | 'sitting'
   | 'waiting'
   | 'whiteboard'
-  | 'celebrating';
+  | 'celebrating'
+  | 'gaming'
+  | 'foosball';
 
-export type HeldItem = 'cup' | 'book' | 'folder' | 'tablet' | 'clipboard';
+export type HeldItem = 'cup' | 'book' | 'folder' | 'tablet' | 'clipboard' | 'controller';
 
 /** Mirrors the office store's real task status; the simulation never invents one. */
 export type TaskStatus = 'idle' | 'working' | 'waiting' | 'completed' | 'error';
@@ -36,6 +38,8 @@ export type PoiType =
   | 'meeting'
   | 'whiteboard'
   | 'lounge'
+  | 'game-seat'
+  | 'play'
   | 'bookshelf'
   | 'printer'
   | 'files'
