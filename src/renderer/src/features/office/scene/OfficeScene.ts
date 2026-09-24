@@ -22,6 +22,8 @@ import { buildOffice, type OfficeRoom } from './room/buildOffice';
 import { MIDDAY, followsTimeOfDay, lightingAt, type Lighting } from './room/lighting';
 import { LAMP_BASE, windowGlass } from './room/materials';
 import { RACK_LIGHTS } from './room/props';
+import { RenderPipeline } from './render/pipeline';
+import { AutoQuality, qualityPreference, type QualityLevel, type QualityMode } from './render/quality';
 
 /** Opt-in inspection handle for automated checks (set localStorage `axon.officeDebug` to "1"). */
 export interface OfficeDebugHandle {
@@ -33,6 +35,9 @@ export interface OfficeDebugHandle {
   focus(x: number, z: number, span: number): void;
   breakdown(): Record<string, { meshes: number; triangles: number }>;
   shadows(on: boolean): void;
+  /** The chosen quality and what is drawn now; `setQuality` overrides the choice until reload. */
+  quality(): { mode: QualityMode; level: QualityLevel };
+  setQuality(mode: QualityMode): void;
   view(): OfficeView;
   /** Every sign with its current opacity and scale. */
   signs(): { id: string; kind: SignKind; target: string; opacity: number; scale: number }[];
@@ -75,6 +80,8 @@ const hotspot = (area: { x: number; z: number; w: number; d: number; h: number }
 };
 
 const LOUNGE_SEATS = new Set(POINTS_OF_INTEREST.filter((poi) => poi.type === 'lounge').map((poi) => poi.id));
+/** Seconds after loading before Auto quality starts judging the frame rate (shaders are still warming up). */
+const QUALITY_WARMUP = 3;
 /** Seconds between decisions about who is drawn in full. */
 const TIER_INTERVAL = 0.25;
 /** A rig that stays unused this long is released. */
@@ -108,6 +115,10 @@ export class OfficeScene {
   private readonly idleSince = new Map<string, number>();
   private readonly statuses = new Map<string, AgentStatus>();
   private readonly room: OfficeRoom;
+  private readonly pipeline: RenderPipeline;
+  private qualityMode: QualityMode = qualityPreference();
+  private autoQuality = new AutoQuality();
+  private qualityLevel: QualityLevel | null = null;
   private readonly reducedMotion: boolean;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -160,6 +171,7 @@ export class OfficeScene {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    this.pipeline = new RenderPipeline(this.renderer, this.scene, this.cameraRig.camera);
     this.renderer.domElement.setAttribute('role', 'img');
     this.renderer.domElement.setAttribute(
       'aria-label',
@@ -225,6 +237,11 @@ export class OfficeScene {
         }),
         shadows: (on) => {
           this.sun.castShadow = on;
+        },
+        quality: () => ({ mode: this.qualityMode, level: this.qualityLevel ?? 'high' }),
+        setQuality: (mode) => {
+          this.qualityMode = mode;
+          this.autoQuality = new AutoQuality();
         },
         breakdown: () => {
           const out: Record<string, { meshes: number; triangles: number }> = {};
@@ -527,6 +544,11 @@ export class OfficeScene {
     const onLeave = () => this.setHovered(null);
     const onLightingChange = () => this.applyLighting();
     window.addEventListener('axon-office-lighting', onLightingChange);
+    const onQualityChange = () => {
+      this.qualityMode = qualityPreference();
+      this.autoQuality = new AutoQuality();
+    };
+    window.addEventListener('axon-office-quality', onQualityChange);
     const onContextLost = (event: Event) => {
       event.preventDefault();
       this.onFailure();
@@ -545,6 +567,7 @@ export class OfficeScene {
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       window.removeEventListener('axon-office-lighting', onLightingChange);
+      window.removeEventListener('axon-office-quality', onQualityChange);
     };
   }
 
@@ -595,7 +618,8 @@ export class OfficeScene {
     );
     this.cameraRig.update(dt, this.reducedMotion);
     this.updateSigns();
-    this.renderer.render(this.scene, this.cameraRig.camera);
+    this.updateQuality(dt);
+    this.pipeline.render();
     this.placeLabels();
     this.notifyView(dt);
     if (!this.ready) {
@@ -686,12 +710,25 @@ export class OfficeScene {
     }
   }
 
+  /** High draws ambient occlusion; Auto judges the frame rate once the view has settled. */
+  private updateQuality(dt: number): void {
+    let level: QualityLevel;
+    if (this.qualityMode !== 'auto') level = this.qualityMode;
+    else if (this.elapsed < QUALITY_WARMUP) level = this.autoQuality.level;
+    else level = this.autoQuality.sample(this.fps, dt, this.cameraRig.settled());
+    if (level === this.qualityLevel) return;
+    this.qualityLevel = level;
+    this.pipeline.ao = level === 'high';
+    this.room.setAmbientOcclusion(level === 'high');
+  }
+
   public handleResize(): void {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     if (!width || !height) return;
     this.cameraRig.resize(width, height);
     this.renderer.setSize(width, height);
+    this.pipeline.setSize(width, height);
   }
 
   public destroy(): void {
@@ -707,6 +744,7 @@ export class OfficeScene {
       (spot.material as THREE.Material).dispose();
     }
     this.room.dispose();
+    this.pipeline.dispose();
     this.renderer.dispose();
     if (this.container.contains(this.renderer.domElement))
       this.container.removeChild(this.renderer.domElement);

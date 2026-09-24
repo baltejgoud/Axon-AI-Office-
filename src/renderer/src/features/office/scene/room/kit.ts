@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { FurnitureItem } from '../../simulation/layout';
-import { GEOMETRY, PALETTE, cylinder, box, mat, part } from './materials';
+import { GEOMETRY, PALETTE, cylinder, box, mat, part, type MaterialOptions } from './materials';
 
 /**
  * Small pieces shared by the furniture builders: seeded randomness, plants and books.
@@ -30,71 +31,218 @@ export function group(...children: THREE.Object3D[]): THREE.Group {
   return g;
 }
 
-function leaf(
+type Vec3 = [number, number, number];
+
+// ---------------------------------------------------------------- style kit
+
+const bevels = new Map<string, THREE.BufferGeometry>();
+
+/**
+ * A box with softly rounded edges, for anything made: desks, cabinets, counters, cushions. The
+ * geometry is built at its true size (cached), so corners stay round however the box is proportioned.
+ */
+export function bevelBox(
   color: string,
-  size: [number, number, number],
-  position: [number, number, number],
-  tilt: [number, number, number]
-) {
-  return part(GEOMETRY.lowSphere, mat(color, { flat: true, roughness: 0.9 }), size, position, tilt);
+  size: Vec3,
+  position: Vec3,
+  radius = 0.02,
+  options?: MaterialOptions
+): THREE.Mesh {
+  const [w, h, d] = size.map((v) => Math.round(v * 1000) / 1000);
+  const r = Math.max(0.001, Math.min(radius, Math.min(w, h, d) / 2 - 0.001));
+  const key = `${w}|${h}|${d}|${r.toFixed(3)}`;
+  let geometry = bevels.get(key);
+  if (!geometry) {
+    geometry = new RoundedBoxGeometry(w, h, d, 2, r);
+    bevels.set(key, geometry);
+  }
+  return part(geometry, mat(color, options), [1, 1, 1], position);
 }
 
-/** A pot with a loose crown of leaves. `scale` 1 is a desk-side floor plant. */
+/** Soft goods share one material per roughness; their colour rides in the geometry. */
+const paintMaterials = (roughness: number, depthPull?: number) =>
+  mat('#ffffff', { vertexColors: true, roughness, depthPull });
+
+/** A copy of `geometry` with every vertex in `color`. */
+function painted(geometry: THREE.BufferGeometry, color: string): THREE.BufferGeometry {
+  const copy = geometry.clone();
+  const count = copy.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  const c = new THREE.Color(color);
+  for (let i = 0; i < count; i++) c.toArray(colors, i * 3);
+  copy.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return copy;
+}
+
+/**
+ * `bevelBox` for the many-coloured things (fabrics, rugs, cushions): every colour shares one
+ * material, so a room full of colours still draws in a single call once merged.
+ */
+export function paintedBox(
+  color: string,
+  size: Vec3,
+  position: Vec3,
+  radius = 0.02,
+  roughness = 0.95,
+  depthPull?: number
+): THREE.Mesh {
+  const shape = bevelBox('#ffffff', size, position, radius).geometry;
+  return part(painted(shape, color), paintMaterials(roughness, depthPull), [1, 1, 1], position);
+}
+
+/** One material for everything faceted: its colours live in the geometry, so it all merges into one mesh. */
+const facetMaterial = () => mat('#ffffff', { flat: true, vertexColors: true, roughness: 0.85 });
+
+/**
+ * A faceted copy of `geometry` in `color`: flat-shaded, each face a touch lighter or darker
+ * (up to ±`variation` in lightness, seeded), for things that grow or are baked: leaves, fruit, bread.
+ */
+export function facet(
+  geometry: THREE.BufferGeometry,
+  color: string,
+  variation = 0.06,
+  seed = 1
+): THREE.BufferGeometry {
+  const faceted = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const random = seeded(seed * 7.31 + 1);
+  const base = new THREE.Color(color);
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl, THREE.SRGBColorSpace);
+  const count = faceted.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  const shade = new THREE.Color();
+  for (let face = 0; face < count / 3; face++) {
+    shade.setHSL(
+      hsl.h,
+      hsl.s,
+      THREE.MathUtils.clamp(hsl.l + (random() * 2 - 1) * variation, 0, 1),
+      THREE.SRGBColorSpace
+    );
+    for (let v = 0; v < 3; v++) shade.toArray(colors, (face * 3 + v) * 3);
+  }
+  faceted.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return faceted;
+}
+
+/** A faceted solid placed like `part`: a unit `geometry` scaled to `size`. */
+export function facetPart(
+  geometry: THREE.BufferGeometry,
+  color: string,
+  size: Vec3,
+  position: Vec3,
+  rotation: Vec3 = [0, 0, 0],
+  seed = 1,
+  variation = 0.06
+): THREE.Mesh {
+  return part(facet(geometry, color, variation, seed), facetMaterial(), size, position, rotation);
+}
+
+const lathes = new Map<string, THREE.LatheGeometry>();
+
+/** A turned shape from a profile of [radius, height] points, bottom to top: pots, cups, lamps, bottles. */
+export function lathe(
+  profile: readonly (readonly [number, number])[],
+  color: string,
+  position: Vec3 = [0, 0, 0],
+  segments = 16,
+  options?: MaterialOptions
+): THREE.Mesh {
+  const key = `${segments}|${profile.map((p) => p.join(',')).join(';')}`;
+  let geometry = lathes.get(key);
+  if (!geometry) {
+    geometry = new THREE.LatheGeometry(
+      profile.map(([r, y]) => new THREE.Vector2(r, y)),
+      segments
+    );
+    lathes.set(key, geometry);
+  }
+  return part(geometry, mat(color, options), [1, 1, 1], position);
+}
+
+/** Greens for foliage, from shade to sun. */
+export const GREENS = ['#3f8541', '#4f9a4a', '#5fae55', '#72bd62'] as const;
+/** A crown or a shrub: a subdivided icosahedron, faceted. */
+const CROWN = new THREE.IcosahedronGeometry(0.5, 1);
+/** A crisper, chunkier solid for big leaves and rocks. */
+const GEM = new THREE.IcosahedronGeometry(0.5, 0);
+
+/**
+ * A turned pot `radius` wide and `height` tall at the rim, with a lip and a foot, and soil just
+ * under the rim. Returns the pot and its soil.
+ */
+export function pot(radius: number, height: number, color: string): THREE.Group {
+  const r = Math.round(radius * 1000) / 1000;
+  const h = Math.round(height * 1000) / 1000;
+  return group(
+    lathe(
+      [
+        [0, 0],
+        [r * 0.72, 0],
+        [r * 0.76, h * 0.06],
+        [r * 0.96, h * 0.86],
+        [r * 1.04, h * 0.88],
+        [r * 1.04, h],
+        [r * 0.9, h],
+        [r * 0.88, h * 0.9],
+        [0, h * 0.9]
+      ],
+      color,
+      [0, 0, 0],
+      18,
+      { roughness: 0.7 }
+    ),
+    cylinder('#5b4636', r * 0.88, 0.01, [0, h * 0.905, 0], { roughness: 1 })
+  );
+}
+
+/** A potted bush: a cluster of faceted crowns over a turned pot. `scale` 1 is a desk-side floor plant. */
 export function plant(scale = 1, potColor: string = PALETTE.pot, seed = 1): THREE.Group {
   const random = seeded(seed);
-  const g = group(
-    part(GEOMETRY.cone, mat(potColor), [0.36 * scale, 0.34 * scale, 0.36 * scale], [0, 0.17 * scale, 0]),
-    cylinder('#5b4636', 0.16 * scale, 0.02, [0, 0.335 * scale, 0])
-  );
-  const count = 9;
+  const g = pot(0.18 * scale, 0.34 * scale, potColor);
+  const count = 5;
   for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + random() * 0.4;
-    const reach = (0.14 + random() * 0.08) * scale;
-    const height = (0.45 + random() * 0.35) * scale;
+    const angle = (i / count) * Math.PI * 2 + random() * 0.6;
+    const reach = (0.07 + random() * 0.06) * scale;
+    const size = (0.2 + random() * 0.08) * scale;
     g.add(
-      leaf(
-        [PALETTE.leaf, PALETTE.leafLight, PALETTE.leafDark][i % 3],
-        [0.16 * scale, 0.09 * scale, 0.34 * scale],
-        [Math.sin(angle) * reach, height, Math.cos(angle) * reach],
-        [-0.7 - random() * 0.4, angle, 0]
+      facetPart(
+        CROWN,
+        GREENS[Math.floor(random() * GREENS.length)],
+        [size, size * 0.9, size],
+        [Math.sin(angle) * reach, (0.42 + random() * 0.12) * scale, Math.cos(angle) * reach],
+        [random(), random(), 0],
+        seed * 13 + i
       )
     );
   }
-  g.add(leaf(PALETTE.leafLight, [0.2 * scale, 0.2 * scale, 0.2 * scale], [0, 0.72 * scale, 0], [0, 0, 0]));
+  const top = 0.26 * scale;
+  g.add(facetPart(CROWN, GREENS[2], [top, top * 0.9, top], [0, 0.6 * scale, 0], [0, random(), 0], seed * 17));
   return g;
 }
 
-/** A tall statement plant with broad leaves on thin stems. */
+/** A tall statement plant: a slim trunk and three chunky faceted crowns in a clay pot. */
 export function largePlant(seed = 1): THREE.Group {
   const random = seeded(seed);
-  const g = group(
-    part(GEOMETRY.cone, mat(PALETTE.clay), [0.5, 0.46, 0.5], [0, 0.23, 0]),
-    cylinder('#4d3b2d', 0.22, 0.02, [0, 0.45, 0])
+  const g = pot(0.25, 0.44, PALETTE.clay);
+  g.add(part(GEOMETRY.cylinder, mat('#6b4f36', { roughness: 0.9 }), [0.05, 0.9, 0.05], [0, 0.85, 0]));
+  const crowns: [number, number, number][] = [
+    [0.52, 1.05, 0.12],
+    [0.46, 1.32, -0.1],
+    [0.36, 1.56, 0.04]
+  ];
+  crowns.forEach(([size, y, offset], i) =>
+    g.add(
+      facetPart(
+        GEM,
+        GREENS[(i + Math.floor(random() * 2)) % GREENS.length],
+        [size, size * 0.85, size],
+        [offset * Math.cos(seed + i), y, offset * Math.sin(seed + i)],
+        [random(), random() * 3, random()],
+        seed * 5 + i,
+        0.07
+      )
+    )
   );
-  for (let i = 0; i < 7; i++) {
-    const angle = (i / 7) * Math.PI * 2 + random() * 0.5;
-    const reach = 0.12 + random() * 0.22;
-    const height = 0.7 + random() * 0.7;
-    const stemX = Math.sin(angle) * reach * 0.5;
-    const stemZ = Math.cos(angle) * reach * 0.5;
-    g.add(
-      part(
-        GEOMETRY.cylinder,
-        mat(PALETTE.leafDark),
-        [0.02, height - 0.4, 0.02],
-        [stemX, 0.45 + (height - 0.4) / 2, stemZ],
-        [Math.cos(angle) * 0.2, 0, -Math.sin(angle) * 0.2]
-      )
-    );
-    g.add(
-      leaf(
-        i % 2 ? PALETTE.leaf : PALETTE.leafLight,
-        [0.34, 0.08, 0.42],
-        [Math.sin(angle) * reach, height, Math.cos(angle) * reach],
-        [-0.5 - random() * 0.5, angle, 0.2]
-      )
-    );
-  }
   return g;
 }
 

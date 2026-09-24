@@ -4,6 +4,11 @@ import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared
 import { useApp, perform } from './state';
 import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
+import {
+  qualityPreference,
+  setQualityPreference,
+  type QualityMode
+} from './features/office/scene/render/quality';
 
 interface PresetInfo {
   kind: ProviderKind;
@@ -420,6 +425,7 @@ export function SettingsPanel() {
               </select>
             </Field>
             <OfficeLightingField />
+            <OfficeQualityField />
             <Field label="Maximum output tokens" hint="256 – 32,768. Applies to new messages.">
               <input
                 className="input"
@@ -819,6 +825,31 @@ export function SettingsPanel() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** How much shading the office draws; Auto steps down on a slow machine. */
+function OfficeQualityField() {
+  const [mode, setMode] = useState(qualityPreference);
+  return (
+    <Field
+      label="Office quality"
+      hint="High adds soft shading where things meet. Auto switches to Balanced if the office runs slowly."
+    >
+      <select
+        className="select"
+        value={mode}
+        onChange={(e) => {
+          const next = e.target.value as QualityMode;
+          setMode(next);
+          setQualityPreference(next);
+        }}
+      >
+        <option value="auto">Auto</option>
+        <option value="high">High</option>
+        <option value="balanced">Balanced</option>
+      </select>
+    </Field>
   );
 }
 

@@ -14,6 +14,8 @@ import { DISTRICTS, type FloorKind } from '../../campus/districts';
 import { COMMONS_BACK_Z } from '../../campus/commons';
 import { SEAT_HEIGHT, SOFA_SEAT_HEIGHT, buildFurniture, workstation } from './furniture';
 import { animateSteam } from './kit';
+import { CONTACT_OPACITY, contactMaterials, contactShadows } from './grounding';
+import { wallOutward, wallSlab } from './walls';
 import {
   GEOMETRY,
   PALETTE,
@@ -32,6 +34,8 @@ import { DeskScreens, type ScreenSlot } from './screens';
 export interface OfficeRoom {
   root: THREE.Group;
   seatHeight(poiId: string): number;
+  /** Contact shadows carry the grounding alone without ambient occlusion, so they darken then. */
+  setAmbientOcclusion(on: boolean): void;
   update(
     dt: number,
     elapsed: number,
@@ -41,11 +45,18 @@ export interface OfficeRoom {
   dispose(): void;
 }
 
+/** The dark cut-away top every solid and low wall wears, like a sectioned model. */
+const WALL_CAP = '#3d4450';
+/** Sills and top rails of the glass walls. */
+const GLASS_TRIM = '#8a7a66';
+
 function wallMesh(w: Wall): THREE.Group {
   const g = new THREE.Group();
   const length = Math.hypot(w.to.x - w.from.x, w.to.z - w.from.z);
   const alongX = Math.abs(w.to.x - w.from.x) > Math.abs(w.to.z - w.from.z);
-  g.position.set((w.from.x + w.to.x) / 2, 0, (w.from.z + w.to.z) / 2);
+  const { thickness, offset } = wallSlab(w, ROOM);
+  const out = wallOutward(w, ROOM);
+  g.position.set((w.from.x + w.to.x) / 2 + out.x * offset, 0, (w.from.z + w.to.z) / 2 + out.z * offset);
   g.rotation.y = alongX ? 0 : Math.PI / 2;
   if (w.kind === 'glass') {
     const pane = part(
@@ -58,8 +69,8 @@ function wallMesh(w: Wall): THREE.Group {
     pane.renderOrder = 1;
     g.add(pane);
     const frame = mat(PALETTE.bronze, { metalness: 0.5, roughness: 0.4 });
-    g.add(part(GEOMETRY.box, frame, [length, 0.05, 0.06], [0, w.height, 0]));
-    g.add(part(GEOMETRY.box, frame, [length, 0.06, 0.06], [0, 0.03, 0]));
+    g.add(box(GLASS_TRIM, [length, 0.06, 0.1], [0, w.height, 0], { roughness: 0.6 }));
+    g.add(box(GLASS_TRIM, [length, 0.08, 0.1], [0, 0.04, 0], { roughness: 0.6 }));
     const mullions = Math.max(1, Math.round(length / 1.3));
     for (let i = 0; i <= mullions; i++)
       g.add(
@@ -73,12 +84,16 @@ function wallMesh(w: Wall): THREE.Group {
     return g;
   }
   const color = w.kind === 'low' ? PALETTE.slab : PALETTE.wall;
-  g.add(box(color, [length + WALL_THICKNESS, w.height, WALL_THICKNESS], [0, w.height / 2, 0]));
+  // Long enough to close the corners, including the part a thicker wall grows outward.
+  const run = length + thickness + offset * 2;
+  g.add(box(color, [run, w.height, thickness], [0, w.height / 2, 0]));
   g.add(
-    box(PALETTE.wallCap, [length + WALL_THICKNESS, 0.04, WALL_THICKNESS + 0.01], [0, w.height + 0.02, 0])
+    box(WALL_CAP, [run + 0.004, 0.035, thickness + 0.004], [0, w.height + 0.0175, 0], { roughness: 0.7 })
   );
   return g;
 }
+
+const WINDOW_FRAME = '#5a6270';
 
 /** A run of tall windows along one of the two full-height perimeter walls. */
 function windowBays(g: THREE.Group, alongX: boolean, fixed: number, from: number, to: number): void {
@@ -93,11 +108,16 @@ function windowBays(g: THREE.Group, alongX: boolean, fixed: number, from: number
       alongX ? [length, height, thick] : [thick, height, length];
     const pane = part(GEOMETRY.box, glassMat, size(bay, 1.9, 0.02), at(centre, 1.45));
     pane.castShadow = false;
-    g.add(pane, box(PALETTE.white, size(bay + 0.1, 0.05, 0.08), at(centre, 0.48, 0.03)));
+    // A deep sill, a head over the bay and slim mullions.
+    g.add(
+      pane,
+      box(PALETTE.white, size(bay + 0.16, 0.06, 0.14), at(centre, 0.47, 0.06)),
+      box(PALETTE.white, size(bay + 0.1, 0.07, 0.07), at(centre, 2.43, 0.03))
+    );
     const mullions = 3;
     for (let i = 0; i <= mullions; i++)
-      g.add(box(PALETTE.darkMetal, size(0.04, 1.9, 0.03), at(start + (i * bay) / mullions, 1.45, 0.01)));
-    g.add(box(PALETTE.darkMetal, size(bay, 0.04, 0.03), at(centre, 2.4, 0.01)));
+      g.add(box(WINDOW_FRAME, size(0.045, 1.9, 0.04), at(start + (i * bay) / mullions, 1.45, 0.015)));
+    g.add(box(WINDOW_FRAME, size(bay, 0.04, 0.04), at(centre, 1.95, 0.015)));
   }
 }
 
@@ -145,10 +165,10 @@ function wallDecor(): THREE.Group {
 const FLOORS: Record<FloorKind | 'corridor', { texture: () => THREE.Texture; tint: string; tile: number }> = {
   corridor: { texture: concreteTexture, tint: '#f7f4ef', tile: 6 },
   oak: { texture: woodFloorTexture, tint: '#ffffff', tile: 4 },
-  walnut: { texture: woodFloorTexture, tint: '#a9876a', tile: 4 },
-  'carpet-blue': { texture: carpetTexture, tint: '#c4cfdc', tile: 2 },
-  'carpet-sage': { texture: carpetTexture, tint: '#c9d6c2', tile: 2 },
-  'carpet-grey': { texture: carpetTexture, tint: '#d0d3d7', tile: 2 },
+  walnut: { texture: woodFloorTexture, tint: '#bb9d80', tile: 4 },
+  'carpet-blue': { texture: carpetTexture, tint: '#cdd6e2', tile: 2 },
+  'carpet-sage': { texture: carpetTexture, tint: '#d0dbc8', tile: 2 },
+  'carpet-grey': { texture: carpetTexture, tint: '#d9dadd', tile: 2 },
   concrete: { texture: concreteTexture, tint: '#ffffff', tile: 6 },
   terrazzo: { texture: terrazzoTexture, tint: '#ffffff', tile: 3 }
 };
@@ -185,6 +205,12 @@ function floorPlane(
   return surface;
 }
 
+/** How far the plinth reaches beyond the campus walls, and its colours. */
+const PLINTH_MARGIN = 0.35;
+/** Deep enough to read as a base from the whole-campus view. */
+export const PLINTH_DEPTH = 0.9;
+const PLINTH = { side: '#c9bfb2', lip: '#efe8dd' } as const;
+
 /** Pale stone corridors, and each district on its own floor with a thin inlay in its colour. */
 function floor(): THREE.Group {
   const g = new THREE.Group();
@@ -209,10 +235,21 @@ function floor(): THREE.Group {
       g.add(line);
     }
   }
-  // The slab's top sits just under the floor; coplanar faces would z-fight into grey streaks.
-  const slab = box(PALETTE.slab, [width + 0.3, 0.32, depth + 0.3], [(ROOM.minX + ROOM.maxX) / 2, -0.18, 0]);
-  slab.castShadow = false;
-  g.add(slab);
+  // The diorama's plinth: a deep base with a light lip, its top just under the floor (coplanar
+  // faces would z-fight into grey streaks).
+  const centre = (ROOM.minX + ROOM.maxX) / 2;
+  const rim = PLINTH_MARGIN * 2;
+  const plinth = box(
+    PLINTH.side,
+    [width + rim, PLINTH_DEPTH, depth + rim],
+    [centre, -0.004 - PLINTH_DEPTH / 2, 0],
+    {
+      roughness: 0.9
+    }
+  );
+  const lip = box(PLINTH.lip, [width + rim + 0.02, 0.06, depth + rim + 0.02], [centre, -0.034, 0]);
+  plinth.castShadow = lip.castShadow = false;
+  g.add(plinth, lip);
   return g;
 }
 
@@ -233,8 +270,11 @@ function mergeStatic(root: THREE.Group): void {
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh) || object.userData.dynamic || Array.isArray(object.material)) return;
     const geometry = object.geometry.clone().applyMatrix4(object.matrixWorld);
+    const keep = (object.material as THREE.MeshStandardMaterial).vertexColors
+      ? ['position', 'normal', 'uv', 'color']
+      : ['position', 'normal', 'uv'];
     for (const name of Object.keys(geometry.attributes))
-      if (!['position', 'normal', 'uv'].includes(name)) geometry.deleteAttribute(name);
+      if (!keep.includes(name)) geometry.deleteAttribute(name);
     const key = `${object.material.uuid}|${object.castShadow}|${object.receiveShadow}|${geometry.index ? 'i' : 'n'}`;
     let bucket = buckets.get(key);
     if (!bucket) {
@@ -278,6 +318,8 @@ export function buildOffice(): OfficeRoom {
     if (built.light) lights.push({ spots: item.busyWith ?? [], mesh: built.light, steam: built.steam });
   }
 
+  for (const patch of contactShadows(FURNITURE)) root.add(patch);
+
   const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
   for (const setup of DESK_SETUPS) {
     const seat = poiById(setup.poiId);
@@ -314,6 +356,10 @@ export function buildOffice(): OfficeRoom {
 
   return {
     root,
+    setAmbientOcclusion(on) {
+      const { round, square } = contactMaterials();
+      round.opacity = square.opacity = on ? CONTACT_OPACITY.withAO : CONTACT_OPACITY.withoutAO;
+    },
     seatHeight(poiId) {
       if (poiId.startsWith('lounge-sofa')) return SOFA_SEAT_HEIGHT;
       const kind = seatKinds.get(`${poiId}-seat`);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 /** Warm, light office palette taken from the reference artwork. */
 export const PALETTE = {
-  floor: '#dcc09a',
+  floor: '#e8d4b2',
   wall: '#f3efe9',
   wallCap: '#aab3bd',
   slab: '#b9c1ca',
@@ -41,6 +41,13 @@ export interface MaterialOptions {
   opacity?: number;
   flat?: boolean;
   map?: THREE.Texture;
+  /** Colour comes from the geometry's per-vertex colours (faceted things), tinted by `color`. */
+  vertexColors?: boolean;
+  /**
+   * Pulls the surface toward the camera in the depth test, for things lying just on the floor
+   * (rugs, contact shadows): the floors themselves are pulled by 1, so these need more.
+   */
+  depthPull?: number;
 }
 
 /** Shared material per look; building eight people and a whole office reuses these. */
@@ -54,7 +61,9 @@ export function mat(color: string, options: MaterialOptions = {}): THREE.MeshSta
     options.transparent,
     options.opacity,
     options.flat,
-    options.map?.uuid
+    options.map?.uuid,
+    options.vertexColors,
+    options.depthPull
   ]);
   let material = materials.get(key);
   if (!material) {
@@ -68,6 +77,10 @@ export function mat(color: string, options: MaterialOptions = {}): THREE.MeshSta
       opacity: options.opacity ?? 1,
       flatShading: options.flat ?? false,
       map: options.map ?? null,
+      vertexColors: options.vertexColors ?? false,
+      polygonOffset: !!options.depthPull,
+      polygonOffsetFactor: -(options.depthPull ?? 0),
+      polygonOffsetUnits: -(options.depthPull ?? 0),
       depthWrite: !(options.transparent ?? false)
     });
     materials.set(key, material);
@@ -121,7 +134,7 @@ export const cylinder = (
 
 let floorTexture: THREE.CanvasTexture | null = null;
 
-/** Light oak planks with staggered joints, drawn once. One tile covers 4 m. */
+/** Wide, pale oak planks with quiet joints, drawn once. One tile covers 4 m. */
 export function woodFloorTexture(): THREE.CanvasTexture {
   if (floorTexture) return floorTexture;
   const size = 1024;
@@ -130,33 +143,33 @@ export function woodFloorTexture(): THREE.CanvasTexture {
   const g = canvas.getContext('2d')!;
   g.fillStyle = PALETTE.floor;
   g.fillRect(0, 0, size, size);
-  const rows = 20;
+  const rows = 12;
   const rowHeight = size / rows;
   let seed = 7;
   const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   for (let row = 0; row < rows; row++) {
-    let x = -random() * 400;
+    let x = -random() * 500;
     while (x < size) {
-      const length = 260 + random() * 320;
-      const shade = 0.93 + random() * 0.12;
-      g.fillStyle = `rgb(${Math.round(220 * shade)}, ${Math.round(192 * shade)}, ${Math.round(154 * shade)})`;
+      const length = 380 + random() * 420;
+      const shade = 0.975 + random() * 0.05;
+      g.fillStyle = `rgb(${Math.round(232 * shade)}, ${Math.round(212 * shade)}, ${Math.round(178 * shade)})`;
       g.fillRect(x, row * rowHeight, length, rowHeight);
-      g.globalAlpha = 0.12;
+      g.globalAlpha = 0.05;
       g.strokeStyle = '#a57d51';
-      for (let grain = 0; grain < 3; grain++) {
-        const y = row * rowHeight + rowHeight * (0.2 + random() * 0.6);
+      for (let grain = 0; grain < 2; grain++) {
+        const y = row * rowHeight + rowHeight * (0.25 + random() * 0.5);
         g.beginPath();
         g.moveTo(x, y);
         g.bezierCurveTo(x + length * 0.3, y + 3, x + length * 0.7, y - 3, x + length, y + 1);
         g.stroke();
       }
-      g.globalAlpha = 0.45;
+      g.globalAlpha = 0.25;
       g.fillStyle = '#b08a5f';
       g.fillRect(x, row * rowHeight, 2, rowHeight);
       g.globalAlpha = 1;
       x += length;
     }
-    g.fillStyle = 'rgba(150, 115, 78, 0.45)';
+    g.fillStyle = 'rgba(150, 115, 78, 0.22)';
     g.fillRect(0, row * rowHeight, size, 1.5);
   }
   floorTexture = new THREE.CanvasTexture(canvas);
@@ -249,12 +262,12 @@ export function carpetTexture(): THREE.CanvasTexture {
   return canvasTexture('carpet', 512, (g, random) => {
     g.fillStyle = '#e4e4e4';
     g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 9000; i++) {
-      const shade = 200 + Math.floor(random() * 55);
+    for (let i = 0; i < 5000; i++) {
+      const shade = 218 + Math.floor(random() * 37);
       g.fillStyle = `rgb(${shade},${shade},${shade})`;
       g.fillRect(random() * 512, random() * 512, 1.6, 1.6);
     }
-    g.fillStyle = 'rgba(120,120,120,0.18)';
+    g.fillStyle = 'rgba(120,120,120,0.1)';
     g.fillRect(0, 0, 512, 2);
     g.fillRect(0, 0, 2, 512);
     g.fillRect(0, 255, 512, 1.5);
@@ -290,7 +303,8 @@ export function terrazzoTexture(): THREE.CanvasTexture {
     g.fillStyle = '#f1ece4';
     g.fillRect(0, 0, 512, 512);
     const chips = ['#c9b8a3', '#9fb0b8', '#d9a88a', '#b9c2a5', '#8f8a86', '#e8d8c4'];
-    for (let i = 0; i < 900; i++) {
+    g.globalAlpha = 0.55;
+    for (let i = 0; i < 380; i++) {
       g.fillStyle = chips[Math.floor(random() * chips.length)];
       g.beginPath();
       const x = random() * 512;
@@ -318,6 +332,33 @@ export const LAMP_BASE: ReadonlyMap<THREE.MeshStandardMaterial, number> = new Ma
   [lampGlow.desk(), 0.7]
 ]);
 
-/** The window panes on the tall walls. */
-export const windowGlass = () =>
-  mat(PALETTE.window, { emissive: '#e8f3fb', emissiveIntensity: 0.35, roughness: 0.2 });
+let skyTexture: THREE.CanvasTexture | null = null;
+
+/** A soft sky in the panes: bright at the top, a touch deeper toward the sill. */
+function windowSky(): THREE.CanvasTexture {
+  if (skyTexture) return skyTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 4;
+  canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  const gradient = g.createLinearGradient(0, 0, 0, 128);
+  gradient.addColorStop(0, '#ffffff');
+  gradient.addColorStop(1, '#bccbd8');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 4, 128);
+  skyTexture = new THREE.CanvasTexture(canvas);
+  skyTexture.colorSpace = THREE.SRGBColorSpace;
+  return skyTexture;
+}
+
+/** The window panes on the tall walls; the time of day tints them. */
+export const windowGlass = () => {
+  const material = mat(PALETTE.window, {
+    emissive: '#e8f3fb',
+    emissiveIntensity: 0.35,
+    roughness: 0.2,
+    map: windowSky()
+  });
+  material.emissiveMap = material.map;
+  return material;
+};

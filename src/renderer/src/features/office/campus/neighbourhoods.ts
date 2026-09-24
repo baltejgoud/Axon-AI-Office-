@@ -90,7 +90,6 @@ function packDepartment(
   b.spot(`open-${key}`, 'open-area', 'agents', cell.minX + 1.2, cell.minZ + 1.1, FACE_FRONT, tags);
   b.plant(`plant-${key}-nw`, cell.minX + 0.5, cell.minZ + 0.5, true);
   b.plant(`plant-${key}-ne`, cell.maxX - 0.5, cell.minZ + 0.5, true);
-  b.plant(`plant-${key}-se`, cell.maxX - 0.5, cell.maxZ - 0.5);
 
   const region = {
     minX: cell.minX + EDGE,

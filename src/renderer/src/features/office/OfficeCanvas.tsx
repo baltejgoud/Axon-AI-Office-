@@ -87,7 +87,9 @@ export function OfficeCanvas() {
       );
       helping.current = new Map();
       syncHelp(world, activeHelp(useApp.getState().data?.tasks ?? []));
-    } catch {
+    } catch (error) {
+      // The roster stands in for the office; say why, for anyone reading the console.
+      console.error('Office graphics could not start:', error);
       host.replaceChildren();
       setFailed(true);
       return;

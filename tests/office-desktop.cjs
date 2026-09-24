@@ -153,6 +153,13 @@ app.on('web-contents-created', (_, contents) => {
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 9);
+      // Quality: Auto starts on High (soft shading where things meet); Balanced leaves the shading out.
+      assert.deepEqual(await evaluate('window.__axonOffice.quality()'), { mode: 'auto', level: 'high' });
+      await snap('look-high.png');
+      await evaluate("window.__axonOffice.setQuality('balanced')");
+      await pause(300);
+      assert.equal((await evaluate('window.__axonOffice.quality()')).level, 'balanced');
+      await snap('look-balanced.png');
       // Portraits are rendered from each person's 3D figure.
       await waitFor(
         'document.querySelectorAll(".office-team-people .office-portrait img").length === 9',
@@ -200,7 +207,7 @@ app.on('web-contents-created', (_, contents) => {
       const stats = await evaluate('window.__axonOffice.stats()');
       const tiers = await evaluate('window.__axonOffice.tiers()');
       console.log('CAMPUS_STATS', JSON.stringify(stats), JSON.stringify(tiers));
-      // Part A's budget: within 10% of the 666 calls measured before it.
+      // Part A's budget (within 10% of the 666 calls measured before it), read on Balanced quality.
       assert.ok(stats.calls <= 733, `draw calls ${stats.calls}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
       await snap('campus-overview.png');
@@ -318,6 +325,20 @@ app.on('web-contents-created', (_, contents) => {
         `[...document.querySelectorAll('.office-overlay label.checkbox')].find((l) => l.textContent.includes(${JSON.stringify(label)})).querySelector('input')`;
       assert.equal(await evaluate(`${trayBox('Keep running in the tray')}.checked`), true);
       assert.equal(await evaluate(`${trayBox('Start with Windows')}.disabled`), true);
+      // The office quality setting reaches the scene at once.
+      const qualitySelect = `[...document.querySelectorAll('.office-overlay .select')].find((s) => [...s.options].some((o) => o.value === 'balanced'))`;
+      assert.equal(await evaluate(`${qualitySelect}.value`), 'auto');
+      await evaluate(
+        `(() => { const s = ${qualitySelect}; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'high'); s.dispatchEvent(new Event('change', { bubbles: true })); })()`
+      );
+      await pause(100);
+      assert.deepEqual(await evaluate('window.__axonOffice.quality()'), { mode: 'high', level: 'high' });
+      await evaluate(
+        `(() => { const s = ${qualitySelect}; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'auto'); s.dispatchEvent(new Event('change', { bubbles: true })); })()`
+      );
+      await pause(100);
+      assert.equal((await evaluate('window.__axonOffice.quality()')).mode, 'auto');
+      await evaluate("window.__axonOffice.setQuality('balanced')");
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await pause(80);
       assert.equal(await evaluate('document.querySelector(".office-overlay")'), null);
@@ -429,7 +450,8 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor('document.querySelector(".office-files-hub .office-file-open")', 'folder wall');
       await evaluate('document.querySelector(".office-file-open").click()');
       await waitFor('document.querySelector(".office-file-entry")', 'folder listing');
-      assert.equal(await evaluate('document.querySelectorAll(".office-folder-cabinet:not(.add)").length'), 1);
+      // The wall refreshes a moment after the listing appears.
+      await waitFor('document.querySelectorAll(".office-folder-cabinet:not(.add)").length === 1', 'folder on the wall');
       await evaluate(
         '[...document.querySelectorAll(".office-file-entry")].find(button => button.textContent.includes("notes")).click()'
       );
@@ -656,12 +678,26 @@ app.on('web-contents-created', (_, contents) => {
         await pause(2000);
         await snap(`a-${width}-campus.png`);
         if (width === 1920) {
+          await evaluate("window.__axonOffice.setQuality('balanced')");
           await pause(2000);
-          const big = await evaluate('window.__axonOffice.stats()');
+          // The frame rate is the median of ten readings over five seconds: one reading swings
+          // with whatever else the machine is doing.
+          const readings = [];
+          for (let i = 0; i < 10; i++) {
+            await pause(500);
+            readings.push((await evaluate('window.__axonOffice.stats()')).fps);
+          }
+          const big = { ...(await evaluate('window.__axonOffice.stats()')), fps: [...readings].sort((a, b) => a - b)[5] };
           // Minutes in, people away from their desks are drawn in full, so the count here varies
           // with office life; the draw budget is checked at the controlled moment above.
-          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(await evaluate('window.__axonOffice.tiers()')));
+          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(readings), JSON.stringify(await evaluate('window.__axonOffice.tiers()')));
           assert.ok(big.fps >= 50, `fps at 1080p ${big.fps}`);
+          // High is measured and reported, not gated.
+          await evaluate("window.__axonOffice.setQuality('high')");
+          await pause(3000);
+          console.log('CAMPUS_STATS_1080P_HIGH', JSON.stringify(await evaluate('window.__axonOffice.stats()')));
+          await snap('a-1920-campus-high.png');
+          await evaluate("window.__axonOffice.setQuality('balanced')");
         }
       }
       await evaluate("document.documentElement.dataset.theme = 'dark'");

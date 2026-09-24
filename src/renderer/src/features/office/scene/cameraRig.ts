@@ -51,7 +51,7 @@ export class OfficeCameraRig {
     let extentY = 0;
     for (const x of [ROOM.minX, ROOM.maxX])
       for (const z of [ROOM.minZ, ROOM.maxZ])
-        for (const y of [0, 2.7]) {
+        for (const y of [-0.9, 2.7]) {
           const corner = new THREE.Vector3(x, y, z).sub(CAMPUS_CENTRE);
           extentX = Math.max(extentX, Math.abs(corner.dot(this.right)));
           extentY = Math.max(extentY, Math.abs(corner.dot(up)));
@@ -134,6 +134,14 @@ export class OfficeCameraRig {
     this.targetPoint.lerp(this.desiredTarget, ease);
     this.zoom += (this.desiredZoom - this.zoom) * ease;
     this.place();
+  }
+
+  /** True once the camera has arrived where it was last sent. */
+  settled(): boolean {
+    return (
+      this.targetPoint.distanceTo(this.desiredTarget) < 0.01 &&
+      Math.abs(this.zoom - this.desiredZoom) < this.desiredZoom * 0.001
+    );
   }
 
   /** Floor point at the centre of the view. */

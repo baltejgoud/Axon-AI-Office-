@@ -16,7 +16,18 @@ import {
 import * as commons from './commonsProps';
 import * as exec from './executive';
 import * as props from './props';
-import { bookshelf, coffeeMachine, group, largePlant, plant, seeded, type CoffeeMachine } from './kit';
+import {
+  bevelBox,
+  bookshelf,
+  paintedBox,
+  coffeeMachine,
+  group,
+  largePlant,
+  plant,
+  seeded,
+  type CoffeeMachine
+} from './kit';
+import { DISTRICTS } from '../../campus/districts';
 
 export { largePlant, plant };
 
@@ -112,37 +123,44 @@ function armchair(): THREE.Group {
   );
 }
 
+/** Sofa fabrics: teal, rust, denim and olive, with cushions and throws that pick each other out. */
+const SOFA_FABRICS = [
+  { body: '#4f8a8b', seat: '#5e9a9b', throws: ['#e9b949', '#f1e6d2'] },
+  { body: '#b8663f', seat: '#c7774f', throws: ['#f1e6d2', '#4f8a8b'] },
+  { body: '#56709a', seat: '#6682ab', throws: ['#e9b949', '#e98a6b'] },
+  { body: '#7d8a4f', seat: '#8d9a5d', throws: ['#f1e6d2', '#b8663f'] }
+] as const;
+
 function sofa(itemDef: FurnitureItem): THREE.Group {
   const { w, d } = itemDef;
-  const fabric = PALETTE.fabricCream;
+  // Sofas within the same 10 m square share a fabric, so a room's seating matches.
+  const room = Math.floor((itemDef.x + 100) / 10) * 7 + Math.floor((itemDef.z + 100) / 10) * 3;
+  const fabric = SOFA_FABRICS[room % SOFA_FABRICS.length];
   const g = group(
-    box(fabric, [w, 0.3, d], [0, 0.2, 0]),
-    box(fabric, [w, 0.72, 0.22], [0, 0.48, -d / 2 + 0.11]),
-    box(fabric, [0.2, 0.56, d], [-w / 2 + 0.1, 0.3, 0]),
-    box(fabric, [0.2, 0.56, d], [w / 2 - 0.1, 0.3, 0])
+    paintedBox(fabric.body, [w, 0.3, d], [0, 0.2, 0], 0.05),
+    paintedBox(fabric.body, [w, 0.72, 0.22], [0, 0.48, -d / 2 + 0.11], 0.06),
+    paintedBox(fabric.body, [0.2, 0.56, d], [-w / 2 + 0.1, 0.3, 0], 0.06),
+    paintedBox(fabric.body, [0.2, 0.56, d], [w / 2 - 0.1, 0.3, 0], 0.06),
+    box(PALETTE.woodDark, [0.05, 0.06, 0.05], [-w / 2 + 0.1, 0.03, d / 2 - 0.1]),
+    box(PALETTE.woodDark, [0.05, 0.06, 0.05], [w / 2 - 0.1, 0.03, d / 2 - 0.1])
   );
   const cushions = 3;
   const cushionWidth = (w - 0.44) / cushions;
   for (let i = 0; i < cushions; i++)
     g.add(
-      box(
-        '#f3eee4',
-        [cushionWidth - 0.03, 0.1, d - 0.3],
-        [-w / 2 + 0.22 + cushionWidth * (i + 0.5), 0.4, 0.08]
+      paintedBox(
+        fabric.seat,
+        [cushionWidth - 0.03, 0.12, d - 0.3],
+        [-w / 2 + 0.22 + cushionWidth * (i + 0.5), 0.4, 0.08],
+        0.04
       )
     );
-  g.add(
-    part(
-      GEOMETRY.box,
-      mat(PALETTE.fabricBlue),
-      [0.4, 0.34, 0.12],
-      [-w / 2 + 0.5, 0.6, -d / 2 + 0.3],
-      [-0.25, 0.2, 0]
-    )
-  );
-  g.add(
-    part(GEOMETRY.box, mat('#d8c7a8'), [0.36, 0.32, 0.12], [w / 2 - 0.5, 0.6, -d / 2 + 0.3], [-0.25, -0.2, 0])
-  );
+  const pillow = (color: string, x: number, turn: number) => {
+    const mesh = paintedBox(color, [0.38, 0.34, 0.12], [x, 0.62, -d / 2 + 0.3], 0.05);
+    mesh.rotation.set(-0.25, turn, 0);
+    return mesh;
+  };
+  g.add(pillow(fabric.throws[0], -w / 2 + 0.5, 0.2), pillow(fabric.throws[1], w / 2 - 0.5, -0.2));
   return g;
 }
 
@@ -429,25 +447,32 @@ function lowCabinet(itemDef: FurnitureItem): THREE.Group {
   return g;
 }
 
-const rugMaterial = new THREE.MeshStandardMaterial({
-  color: PALETTE.rug,
-  roughness: 1,
-  // Pulled toward the camera in the depth test so it never z-fights the floor beneath.
-  polygonOffset: true,
-  polygonOffsetFactor: -2,
-  polygonOffsetUnits: -2
-});
-
-function rug(itemDef: FurnitureItem): THREE.Mesh {
-  const mesh = part(
-    GEOMETRY.plane,
-    rugMaterial,
-    [itemDef.w, itemDef.d, 1],
-    [0, 0.012, 0],
-    [-Math.PI / 2, 0, 0]
+/** Rugs take a soft tint of their district's colour: a light field with a deeper border. */
+function rugTones(x: number, z: number): { field: string; border: string } {
+  const district = DISTRICTS.find(
+    ({ bounds: b }) => x >= b.minX - 0.6 && x <= b.maxX + 0.6 && z >= b.minZ - 0.6 && z <= b.maxZ + 0.6
   );
-  mesh.castShadow = false;
-  return mesh;
+  const base = new THREE.Color(RUG_BASE);
+  if (!district) return { field: RUG_BASE, border: '#d9d2c6' };
+  const tint = new THREE.Color(district.color);
+  return {
+    field: `#${base.clone().lerp(tint, 0.16).getHexString()}`,
+    border: `#${base.clone().lerp(tint, 0.34).getHexString()}`
+  };
+}
+const RUG_BASE = '#ece6dc';
+/** Floors are pulled toward the camera by 1 in the depth test; rugs by more, so they show from afar. */
+const RUG_PULL = 2;
+
+/** A low, soft-edged rug with a border. */
+function rug(itemDef: FurnitureItem): THREE.Group {
+  const { w, d } = itemDef;
+  const tones = rugTones(itemDef.x, itemDef.z);
+  // Pulled forward in the depth test like the flat rugs were, or the floor beneath wins from afar.
+  const border = paintedBox(tones.border, [w, 0.016, d], [0, 0.008, 0], 0.008, 1, RUG_PULL);
+  const field = paintedBox(tones.field, [w - 0.18, 0.006, d - 0.18], [0, 0.015, 0], 0.003, 1, RUG_PULL + 1);
+  border.castShadow = field.castShadow = false;
+  return group(border, field);
 }
 
 export interface BuiltFurniture {

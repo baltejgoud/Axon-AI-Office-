@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { FurnitureItem } from '../../simulation/layout';
 import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } from './materials';
+import { GREENS, bevelBox, facetPart, lathe } from './kit';
 
 /**
  * District signature pieces: the things that make each area feel like its own place.
@@ -18,32 +19,61 @@ const group = (...children: THREE.Object3D[]) => {
   return g;
 };
 
-const foliage = (color: string, size: [number, number, number], position: [number, number, number]) =>
-  part(GEOMETRY.lowSphere, mat(color, { flat: true, roughness: 0.9 }), size, position);
+const CROWN = new THREE.IcosahedronGeometry(0.5, 1);
 
 /** A tall indoor tree in a round planter: the campus's landmarks along the corridors. */
 export function tree(item: FurnitureItem): THREE.Group {
   const random = seeded(item.x * 5 + item.z * 11);
-  const r = item.w / 2;
+  const r = Math.round((item.w / 2) * 1000) / 1000;
   const g = group(
-    cylinder('#e9e4db', r, 0.46, [0, 0.23, 0]),
-    cylinder('#5b4636', r - 0.05, 0.02, [0, 0.47, 0]),
-    part(GEOMETRY.cylinder, mat('#7a5a3e', { roughness: 0.9 }), [0.1, 1.5, 0.1], [0, 1.2, 0])
+    lathe(
+      [
+        [0, 0],
+        [r * 0.9, 0],
+        [r, 0.06],
+        [r, 0.46],
+        [r * 0.9, 0.46],
+        [r * 0.9, 0.44],
+        [0, 0.44]
+      ],
+      '#ece6dc',
+      [0, 0, 0],
+      24,
+      { roughness: 0.75 }
+    ),
+    cylinder('#5b4636', r * 0.9, 0.01, [0, 0.445, 0], { roughness: 1 }),
+    lathe(
+      [
+        [0.09, 0],
+        [0.07, 0.6],
+        [0.045, 1.6],
+        [0, 1.62]
+      ],
+      '#7a5a3e',
+      [0, 0.44, 0],
+      7,
+      { flat: true, roughness: 0.9 }
+    )
   );
-  const greens = [PALETTE.leaf, PALETTE.leafLight, PALETTE.leafDark, '#5f9a4f'];
-  for (let i = 0; i < 7; i++) {
-    const angle = (i / 7) * Math.PI * 2 + random();
-    const reach = 0.25 + random() * 0.25;
-    const size = 0.6 + random() * 0.35;
+  const shade = Math.floor(random() * 2);
+  const crowns: [number, number, number][] = [
+    [1.25, 2.0, 0.08],
+    [1.0, 2.45, -0.1],
+    [0.7, 2.85, 0.05]
+  ];
+  crowns.forEach(([size, y, offset], i) =>
     g.add(
-      foliage(
-        greens[i % greens.length],
+      facetPart(
+        CROWN,
+        GREENS[(shade + i) % GREENS.length],
         [size, size * 0.8, size],
-        [Math.sin(angle) * reach, 2.0 + random() * 0.55, Math.cos(angle) * reach]
+        [offset * Math.cos(item.x + i), y, offset * Math.sin(item.z + i)],
+        [random(), random() * 3, 0],
+        Math.abs(item.x * 3 + item.z) + i,
+        0.06
       )
-    );
-  }
-  g.add(foliage(PALETTE.leafLight, [0.8, 0.7, 0.8], [0, 2.65, 0]));
+    )
+  );
   return g;
 }
 
@@ -278,27 +308,32 @@ export function planter(item: FurnitureItem): THREE.Group {
   const { w, d } = item;
   const random = seeded(item.x * 3 + item.z * 17);
   const g = group(
-    box('#e9e4db', [w, 0.45, d], [0, 0.225, 0]),
+    bevelBox('#ece6dc', [w, 0.45, d], [0, 0.225, 0], 0.04, { roughness: 0.75 }),
     box('#5b4636', [w - 0.08, 0.02, d - 0.08], [0, 0.45, 0])
   );
   const count = Math.max(3, Math.round(w * 3));
   for (let i = 0; i < count; i++) {
     const x = -w / 2 + 0.15 + random() * (w - 0.3);
-    const s = 0.22 + random() * 0.2;
+    const s = 0.24 + random() * 0.2;
     g.add(
-      foliage(
-        [PALETTE.leaf, PALETTE.leafLight, '#6aa85a'][i % 3],
-        [s, s * 1.2, s],
-        [x, 0.5 + s * 0.4, (random() - 0.5) * (d - 0.2)]
+      facetPart(
+        CROWN,
+        GREENS[i % GREENS.length],
+        [s, s * 1.1, s],
+        [x, 0.5 + s * 0.4, (random() - 0.5) * (d - 0.2)],
+        [random(), random(), 0],
+        Math.abs(item.x * 7 + i)
       )
     );
-    if (random() > 0.7)
+    if (random() > 0.6)
       g.add(
-        part(
-          GEOMETRY.sphere,
-          mat(['#f2cf7a', '#e8a8c0', '#ffffff'][i % 3]),
-          [0.07, 0.07, 0.07],
-          [x, 0.62 + s * 0.6, (random() - 0.5) * (d - 0.3)]
+        facetPart(
+          CROWN,
+          ['#f2cf7a', '#e8a8c0', '#ffffff', '#c9a6e8'][i % 4],
+          [0.08, 0.08, 0.08],
+          [x + 0.05, 0.6 + s * 0.7, (random() - 0.5) * (d - 0.3)],
+          [0, 0, 0],
+          i
         )
       );
   }
