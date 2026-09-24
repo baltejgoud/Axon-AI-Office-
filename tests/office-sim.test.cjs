@@ -491,3 +491,26 @@ test('specialists only visit people in their own department, and stay in their d
   });
   assert.ok(visits > 0, 'nobody visited a colleague in twenty minutes');
 });
+
+test('a colleague walks over to help and stays until released', () => {
+  const office = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3 });
+  office.setTaskStatus('frontend-developer', 'working');
+  office.step(1 / 60);
+  assert.ok(office.startHelp('backend-developer', 'frontend-developer'));
+  const spot = `visit-${layout.HOME_DESKS['frontend-developer']}`;
+  runUntil(office, (o) => o.view('backend-developer').poiId === spot, 120, 0.05);
+  assert.equal(office.view('backend-developer').poiId, spot);
+  run(office, 30, 0.1);
+  assert.equal(office.view('backend-developer').poiId, spot, 'stays while helping, even though the host is busy');
+  assert.ok(['talking', 'idle'].includes(office.view('backend-developer').behavior));
+  office.endHelp('backend-developer');
+  const home = layout.HOME_DESKS['backend-developer'];
+  runUntil(office, (o) => o.view('backend-developer').poiId === home && o.view('backend-developer').sit === 1, 120, 0.05);
+  assert.equal(office.view('backend-developer').poiId, home);
+  // Nobody walks with reduced motion, and a colleague on their own task stays put.
+  const calm = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3, reducedMotion: true });
+  assert.equal(calm.startHelp('backend-developer', 'frontend-developer'), false);
+  const busy = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3 });
+  busy.setTaskStatus('backend-developer', 'working');
+  assert.equal(busy.startHelp('backend-developer', 'frontend-developer'), false);
+});

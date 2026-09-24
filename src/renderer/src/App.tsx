@@ -47,15 +47,14 @@ export function App() {
           if (event.contentSoFar !== undefined) {
             office.setLastResponse(agentId, event.contentSoFar);
           }
+          // Status comes from the task records; the feed keeps its own entries.
           if (event.done && event.error) {
-            office.setAgentStatus(agentId, 'error');
             office.pushActivity(agentId, {
               type: 'error',
               title: 'Task error',
               detail: event.error
             });
           } else if (event.done) {
-            office.setAgentStatus(agentId, 'completed');
             office.pushActivity(agentId, {
               type: 'completed',
               title: 'Task completed',

@@ -49,7 +49,7 @@ type Step =
   | { type: 'do'; kind: DoKind; seconds: number | null }
   | { type: 'hold'; item: HeldItem | null };
 
-type PlanKind = AmbientActivity | 'task' | 'wrap-up' | 'meeting' | 'return' | 'initial';
+type PlanKind = AmbientActivity | 'task' | 'wrap-up' | 'meeting' | 'return' | 'initial' | 'help';
 
 interface Plan {
   kind: PlanKind;
@@ -293,6 +293,39 @@ export class OfficeSimulation {
     steps.push({ type: 'do', kind: 'desk', seconds: agent.rng.range(5, 10) });
     this.cancelPlan(agent);
     this.setPlan(agent, { kind: 'wrap-up', steps });
+  }
+
+  /**
+   * A colleague walks over to someone's desk to help with their task, and stays until `endHelp`.
+   * Real work, so it is not held back by the away budget; refused with reduced motion, while the
+   * helper has a task of their own, or when someone already stands at that desk.
+   */
+  startHelp(helperId: string, hostId: string): boolean {
+    const helper = this.agents.get(helperId);
+    const host = this.agents.get(hostId);
+    if (!helper || !host || helper === host || this.reducedMotion || helper.onTask) return false;
+    if (helper.plan.kind === 'help' && helper.visitHostId === host.id) return true;
+    const spot = `visit-${host.home}`;
+    if (!this.hasRoom(spot, helper)) return false;
+    this.cancelPlan(helper);
+    this.reserve(helper, spot);
+    helper.visitHostId = host.id;
+    helper.visitorSpeaks = true;
+    helper.turnUntil = 0;
+    const carry: Step[] = helper.profile.prop ? [{ type: 'hold', item: helper.profile.prop }] : [];
+    this.setPlan(helper, {
+      kind: 'help',
+      steps: [{ type: 'leave' }, ...carry, { type: 'goto', poiId: spot }, this.doing('visit', null)]
+    });
+    return true;
+  }
+
+  /** The help is over: back to their own desk. */
+  endHelp(helperId: string): void {
+    const helper = this.agents.get(helperId);
+    if (!helper || helper.plan.kind !== 'help') return;
+    this.cancelPlan(helper);
+    this.setPlan(helper, this.deskPlan(helper, helper.rng.range(20, 60)));
   }
 
   /** Start a specific ambient activity now. Ignored while a real task is running. */
@@ -893,7 +926,7 @@ export class OfficeSimulation {
         return true;
       case 'do':
         if (step.kind === 'meeting') return agent.meetingId === null;
-        if (step.kind === 'visit' && !this.hostIsAvailable(agent)) {
+        if (step.kind === 'visit' && agent.plan.kind !== 'help' && !this.hostIsAvailable(agent)) {
           // Nobody at the desk: look around for a moment, then head back.
           agent.hostMissedAt ??= this.time;
           return this.time - agent.hostMissedAt >= HOST_AWAY_WAIT;
@@ -1045,7 +1078,8 @@ export class OfficeSimulation {
       case 'meeting':
         return this.meeting?.speakerId === agent.id ? 'talking' : 'meeting';
       case 'visit':
-        if (!this.hostIsAvailable(agent)) return 'waiting';
+        // A social visit to an empty desk is a wait; helping someone at work is a conversation.
+        if (agent.plan.kind !== 'help' && !this.hostIsAvailable(agent)) return 'waiting';
         if (this.time >= agent.turnUntil) {
           agent.visitorSpeaks = !agent.visitorSpeaks;
           agent.turnUntil = this.time + agent.rng.range(3, 6);

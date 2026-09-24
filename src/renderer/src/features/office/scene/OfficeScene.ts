@@ -335,6 +335,15 @@ export class OfficeScene {
     this.simulation.requestActivity(agentId, activity);
   }
 
+  /** A colleague walks over to help someone; false when they can't (see the simulation). */
+  public startHelp(helperId: string, hostId: string): boolean {
+    return this.simulation.startHelp(helperId, hostId);
+  }
+
+  public endHelp(helperId: string): void {
+    this.simulation.endHelp(helperId);
+  }
+
   public updateAgentStatus(agentId: string, status: AgentStatus): void {
     this.statuses.set(agentId, status);
     this.simulation.setTaskStatus(agentId, status);

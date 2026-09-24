@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { HandedFile } from '../activity/fileContext';
+import type { TaskItem } from '../../../../../shared/types';
+import { statusesFromTasks } from '../tasks';
 
 export interface AgentActivity {
   id: string;
@@ -34,6 +36,8 @@ interface OfficeStoreState {
 
   selectAgent: (id: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
+  /** Everyone with a task record looks the way their newest work record says. */
+  syncTaskStatuses: (tasks: readonly TaskItem[]) => void;
   setAgentTask: (agentId: string, task: string) => void;
   setAgentConversation: (agentId: string, conversationId: string) => void;
   setLastResponse: (agentId: string, text: string) => void;
@@ -84,6 +88,18 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
         [agentId]: { ...current, status }
       }
     });
+  },
+
+  syncTaskStatuses: (tasks) => {
+    const runtime = { ...get().agentRuntime };
+    let changed = false;
+    for (const [id, status] of Object.entries(statusesFromTasks(tasks))) {
+      const current = runtime[id];
+      if (!current || current.status === status) continue;
+      runtime[id] = { ...current, status };
+      changed = true;
+    }
+    if (changed) set({ agentRuntime: runtime });
   },
 
   setAgentTask: (agentId: string, task: string) => {

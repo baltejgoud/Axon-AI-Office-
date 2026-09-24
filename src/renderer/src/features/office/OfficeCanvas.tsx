@@ -15,6 +15,8 @@ import { TeamStrip } from './shell/TeamStrip';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
+import { useApp } from '../../state';
+import { activeHelp } from './tasks';
 
 export function OfficeCanvas() {
   const container = useRef<HTMLDivElement>(null);
@@ -24,6 +26,16 @@ export function OfficeCanvas() {
   const [loading, setLoading] = useState(true);
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<OfficeView | null>(null);
+  const tasks = useApp((s) => s.data?.tasks);
+  /** Colleagues over at someone's desk, helper → host, as last sent to the scene. */
+  const helping = useRef(new Map<string, string>());
+  const syncHelp = useCallback((world: OfficeScene, pairs: { helper: string; host: string }[]) => {
+    const next = new Map(pairs.map((pair) => [pair.helper, pair.host]));
+    for (const [helper, host] of helping.current) if (next.get(helper) !== host) world.endHelp(helper);
+    for (const [helper, host] of next)
+      if (helping.current.get(helper) !== host) world.startHelp(helper, host);
+    helping.current = next;
+  }, []);
   /** The latest sign handler; the scene is created once and calls through this. */
   const signClick = useRef<(sign: SignSpec) => void>(() => {});
   const {
@@ -65,6 +77,8 @@ export function OfficeCanvas() {
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)
       );
+      helping.current = new Map();
+      syncHelp(world, activeHelp(useApp.getState().data?.tasks ?? []));
     } catch {
       host.replaceChildren();
       setFailed(true);
@@ -77,7 +91,7 @@ export function OfficeCanvas() {
       world.destroy();
       scene.current = null;
     };
-  }, [roster, selectAgent]);
+  }, [roster, selectAgent, syncHelp]);
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);
@@ -94,6 +108,11 @@ export function OfficeCanvas() {
   useEffect(() => {
     if (flyTo) scene.current?.setSelectedAgent(flyTo.agentId, true);
   }, [flyTo]);
+
+  // Colleagues walk over while they help, and back once the run that asked is over.
+  useEffect(() => {
+    if (scene.current) syncHelp(scene.current, activeHelp(tasks ?? []));
+  }, [tasks, syncHelp]);
 
   useEffect(() => {
     Object.entries(agentRuntime).forEach(([id, runtime]) =>

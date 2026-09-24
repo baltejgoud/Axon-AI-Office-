@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { Copy, Sparkles, User, Wrench } from 'lucide-react';
-import type { Message } from '../../../shared/types';
+import type { Message, ToolCall } from '../../../shared/types';
 import { perform } from '../state';
 import { timeAgo } from '../format';
 import { Button, Icon } from '../ui';
@@ -18,11 +18,14 @@ export function visibleUserText(content: string): string {
 export function MessageView({
   message: m,
   authorName = 'Axon',
-  actions
+  actions,
+  renderToolCall
 }: {
   message: Message;
   authorName?: string;
   actions?: ReactNode;
+  /** A card of its own for some tool calls; return nothing to use the standard one. */
+  renderToolCall?: (call: ToolCall) => ReactNode;
 }) {
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
   return (
@@ -55,32 +58,36 @@ export function MessageView({
         )}
         {m.toolCalls && m.toolCalls.length > 0 && (
           <div className="tool-calls">
-            {m.toolCalls.map((tc) => (
-              <details key={tc.id} className="tool-call-item">
-                <summary className="tool-call-summary">
-                  <span className="tool-call-name">
-                    <Icon icon={Wrench} size="sm" />
-                    <strong>{tc.name}</strong>
-                  </span>
-                  <span
-                    className={`tool-call-status ${tc.error ? 'failed' : tc.result ? 'completed' : 'running'}`}
-                  >
-                    {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
-                  </span>
-                </summary>
-                <div className="tool-call-body">
-                  <div className="tool-call-label">Arguments</div>
-                  <pre className="tool-call-pre">{tc.arguments}</pre>
-                  {tc.result && (
-                    <>
-                      <div className="tool-call-label">Result</div>
-                      <pre className="tool-call-pre scrollable">{tc.result}</pre>
-                    </>
-                  )}
-                  {tc.error && <div className="tool-call-error">{tc.error}</div>}
-                </div>
-              </details>
-            ))}
+            {m.toolCalls.map((tc) => {
+              const custom = renderToolCall?.(tc);
+              if (custom) return <Fragment key={tc.id}>{custom}</Fragment>;
+              return (
+                <details key={tc.id} className="tool-call-item">
+                  <summary className="tool-call-summary">
+                    <span className="tool-call-name">
+                      <Icon icon={Wrench} size="sm" />
+                      <strong>{tc.name}</strong>
+                    </span>
+                    <span
+                      className={`tool-call-status ${tc.error ? 'failed' : tc.result ? 'completed' : 'running'}`}
+                    >
+                      {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
+                    </span>
+                  </summary>
+                  <div className="tool-call-body">
+                    <div className="tool-call-label">Arguments</div>
+                    <pre className="tool-call-pre">{tc.arguments}</pre>
+                    {tc.result && (
+                      <>
+                        <div className="tool-call-label">Result</div>
+                        <pre className="tool-call-pre scrollable">{tc.result}</pre>
+                      </>
+                    )}
+                    {tc.error && <div className="tool-call-error">{tc.error}</div>}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         )}
         <div className="message-content">

@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { Conversation as Thread, Message } from '../../../../../shared/types';
+import type { Conversation as Thread, Message, ToolCall } from '../../../../../shared/types';
 import { useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
+import { ColleagueCard } from './ColleagueCard';
+
+/** Colleagues' answers get their own card in the thread. */
+const officeToolCard = (call: ToolCall) =>
+  call.name === 'ask_colleague' ? <ColleagueCard call={call} /> : null;
 
 /** The whole thread with the selected coworker, following new output unless the user scrolled up. */
 export function Conversation({
@@ -69,7 +74,7 @@ export function Conversation({
         <section className="office-thread" aria-label={`Conversation with ${agentName}`}>
           <div className="messages">
             {shown.map((m) => (
-              <MessageView key={m.id} message={m} authorName={agentName} />
+              <MessageView key={m.id} message={m} authorName={agentName} renderToolCall={officeToolCard} />
             ))}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>
