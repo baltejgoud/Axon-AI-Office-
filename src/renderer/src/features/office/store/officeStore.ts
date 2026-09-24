@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { HandedFile } from '../activity/fileContext';
-import type { TaskItem } from '../../../../../shared/types';
+import type { FocusTarget, TaskItem } from '../../../../../shared/types';
+import type { Briefing } from '../../../../../shared/planner';
 import { statusesFromTasks, type Team } from '../tasks';
 
 export interface AgentActivity {
@@ -56,6 +57,14 @@ interface OfficeStoreState {
   flyTo: { agentId: string; at: number } | null;
   flyToAgent: (agentId: string) => void;
   startFresh: (agentId: string) => void;
+  /** The morning briefing, at the top of the receptionist's thread until dismissed. */
+  briefing: Briefing | null;
+  setBriefing: (briefing: Briefing | null) => void;
+  /** The receptionist's planner, open above her conversation. */
+  plannerOpen: boolean;
+  setPlannerOpen: (open: boolean) => void;
+  /** Goes where a notification, the tray or the Today board points: someone, their thread, the planner. */
+  focusOn: (target: FocusTarget) => void;
 }
 
 const initialRuntime: Record<string, AgentRuntime> = {};
@@ -77,6 +86,15 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   flyTo: null,
   teamBoard: null,
   openTeamBoard: (team) => set({ teamBoard: team }),
+  briefing: null,
+  setBriefing: (briefing) => set({ briefing }),
+  plannerOpen: true,
+  setPlannerOpen: (open) => set({ plannerOpen: open }),
+  focusOn: (target) => {
+    get().flyToAgent(target.agentId);
+    if (target.conversationId) get().setAgentConversation(target.agentId, target.conversationId);
+    if (target.planner) set({ plannerOpen: true });
+  },
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);

@@ -8,6 +8,7 @@ import { ModelSelect } from '../../../chat/ModelSelect';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
+import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 
 interface AgentComposerProps {
   agentId: string;
@@ -29,6 +30,13 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
   const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
   const needsModel = !conversation && !model;
+  // The receptionist keeps the planner with tools; a model marked as having none can't.
+  const chosen = conversation ? `${conversation.providerId}::${conversation.modelId}` : model;
+  const [chosenProvider, ...chosenModel] = chosen.split('::');
+  const noTools =
+    agentId === RECEPTIONIST_ID &&
+    data?.providers.find((p) => p.id === chosenProvider)?.models.find((m) => m.id === chosenModel.join('::'))
+      ?.supportsTools === false;
 
   const handleAttach = async () => {
     try {
@@ -142,6 +150,11 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
         Message {agent?.name}
       </div>
+      {noTools && (
+        <p className="composer-notice" role="note">
+          This model can’t use tools, so I can’t keep your planner. Pick another model.
+        </p>
+      )}
       {handed.length > 0 && (
         <div className="composer-attachments-preview composer-handed" aria-label="Files handed over">
           {handed.map((file) => (

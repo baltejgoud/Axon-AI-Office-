@@ -4,10 +4,16 @@ import { useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
+import { PlannerToolCard } from './PlannerToolCard';
+import { isPlannerCall } from '../tasks';
 
-/** Colleagues' answers get their own card in the thread. */
+/** Colleagues' answers and the receptionist's planner changes get their own cards in the thread. */
 const officeToolCard = (call: ToolCall) =>
-  call.name === 'ask_colleague' ? <ColleagueCard call={call} /> : null;
+  call.name === 'ask_colleague' ? (
+    <ColleagueCard call={call} />
+  ) : isPlannerCall(call) ? (
+    <PlannerToolCard call={call} />
+  ) : null;
 
 /** The whole thread with the selected coworker, following new output unless the user scrolled up. */
 export function Conversation({

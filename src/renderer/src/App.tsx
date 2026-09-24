@@ -4,12 +4,30 @@ import { useApp, perform } from './state';
 import { AxonLogo, Button, ToastStack } from './ui';
 import { OfficePage } from './features/office/OfficePage';
 import { useOfficeStore } from './features/office/store/officeStore';
+import { RECEPTIONIST_ID } from '../../shared/coworkers';
 
 export function App() {
   const { data, error, patch, refresh } = useApp();
 
   useEffect(() => {
     void perform(refresh);
+  }, []);
+
+  // A new window: the morning briefing (once a day), and where a notification or the tray pointed.
+  useEffect(() => {
+    window.axon
+      .officeStart()
+      .then(({ briefing, focus }) => {
+        const office = useOfficeStore.getState();
+        // The briefing leads; the planner opens once it is dismissed.
+        if (briefing) {
+          office.setBriefing(briefing);
+          office.focusOn({ agentId: RECEPTIONIST_ID });
+          office.setPlannerOpen(false);
+        }
+        if (focus) office.focusOn(focus);
+      })
+      .catch(() => undefined);
   }, []);
 
   // Theme: resolve 'system' against the OS preference and keep it in sync.
@@ -29,6 +47,11 @@ export function App() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = window.axon.onStream((event) => {
+      // A notification or the tray, with the window already open.
+      if (event.channel === 'focus') {
+        useOfficeStore.getState().focusOn(event);
+        return;
+      }
       // Task records arrive whole after every change: swap them in without a full refresh.
       if (event.channel === 'tasks') {
         const current = useApp.getState().data;

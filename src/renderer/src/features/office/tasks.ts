@@ -1,4 +1,13 @@
 import { RECEPTIONIST_ID, coworkerById } from '../../../../shared/coworkers';
+import {
+  addDays,
+  dayKey,
+  dueLabel,
+  momentLabel,
+  nextUp,
+  parseLocal,
+  shortDate
+} from '../../../../shared/planner';
 import type { TaskItem, ToolCall } from '../../../../shared/types';
 import type { AgentStatus } from './data/officeAgents';
 
@@ -132,4 +141,82 @@ export function parseColleagueCall(call: ToolCall): ColleagueCall {
   } catch {
     return { ...asked, answer: call.result, pending: false };
   }
+}
+
+/** One line on the Today board: when, and what. */
+export interface TodayLine {
+  label: string;
+  title: string;
+  overdue: boolean;
+}
+
+/** What the Today board behind the front desk lists: the next few dated to-dos. */
+export function todayLines(tasks: readonly TaskItem[], now: Date): TodayLine[] {
+  const today = dayKey(now);
+  return nextUp(tasks).map((task) => {
+    const due = parseLocal(task.due ?? '')!;
+    const overdue = due.date < today;
+    const label = overdue
+      ? 'Overdue'
+      : due.date === today
+        ? (due.time ?? 'Today')
+        : due.date === addDays(today, 1)
+          ? 'Tomorrow'
+          : due.date <= addDays(today, 6)
+            ? shortDate(due.date, now).split(' ')[0]
+            : shortDate(due.date, now).split(' ').slice(1).join(' ');
+    return { label, title: task.title, overdue };
+  });
+}
+
+export interface PlannerCall {
+  /** 'Added', 'Updated', 'Done', 'Checked the plan'. */
+  verb: string;
+  title: string;
+  /** 'due Tomorrow 10:00 · reminder Tomorrow 09:30' */
+  detail: string;
+  error?: string;
+  pending: boolean;
+}
+
+const PLANNER_VERBS: Record<string, [done: string, pending: string, failed: string]> = {
+  add_task: ['Added', 'Adding…', 'Couldn’t add'],
+  update_task: ['Updated', 'Updating…', 'Couldn’t update'],
+  complete_task: ['Done', 'Marking done…', 'Couldn’t mark done'],
+  list_tasks: ['Checked the plan', 'Checking the plan…', 'Couldn’t check the plan']
+};
+
+export const isPlannerCall = (call: ToolCall): boolean => call.name in PLANNER_VERBS;
+
+/** One of the receptionist's planner tool calls, read for its card. Dates are labelled as of `now`. */
+export function parsePlannerCall(call: ToolCall, now: Date): PlannerCall {
+  let args: Record<string, unknown> = {};
+  try {
+    args = JSON.parse(call.arguments);
+  } catch {
+    // Still streaming in.
+  }
+  const [done, working, failed] = PLANNER_VERBS[call.name] ?? ['Planner', 'Working…', 'Planner'];
+  const quoted = /"(.+?)"/.exec(call.result ?? '')?.[1];
+  const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim() : (quoted ?? '');
+  const parts: string[] = [];
+  if (call.name === 'add_task' || call.name === 'update_task') {
+    if (typeof args.due === 'string')
+      parts.push(
+        args.due && parseLocal(args.due)
+          ? `due ${dueLabel({ id: '', kind: 'todo', title, status: 'open', due: args.due, createdAt: 0, updatedAt: 0 }, now)}`
+          : 'no due date'
+      );
+    if (typeof args.remind_at === 'string' || args.remind_at === null) {
+      const at = typeof args.remind_at === 'string' ? parseLocal(args.remind_at)?.at : undefined;
+      parts.push(at ? `reminder ${momentLabel(at, now)}` : 'no reminder');
+    }
+  }
+  if (call.error) return { verb: failed, title, detail: '', error: call.error, pending: false };
+  return {
+    verb: call.result === undefined ? working : done,
+    title,
+    detail: parts.join(' · '),
+    pending: call.result === undefined
+  };
 }

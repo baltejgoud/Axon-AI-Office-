@@ -479,6 +479,37 @@ export function SettingsPanel() {
               />
               Allow shell execution (asks for confirmation in project workspace)
             </label>
+            <div className="stack" style={{ gap: 'var(--space-2)' }}>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.keepInTray}
+                  onChange={(e) =>
+                    void perform(() =>
+                      window.axon.settingsSave({ ...settings, keepInTray: e.target.checked })
+                    )
+                  }
+                />
+                Keep running in the tray when the window is closed
+              </label>
+              <p className="text-caption">Reminders only arrive while Axon is running.</p>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.startWithWindows}
+                  disabled={!data?.startWithWindowsAvailable}
+                  onChange={(e) =>
+                    void perform(() =>
+                      window.axon.settingsSave({ ...settings, startWithWindows: e.target.checked })
+                    )
+                  }
+                />
+                Start with Windows, in the tray
+              </label>
+              {!data?.startWithWindowsAvailable && (
+                <p className="text-caption">Available in the installed app.</p>
+              )}
+            </div>
             <div>
               <h3 className="section-title">Keyboard shortcuts</h3>
               <div className="stack" style={{ gap: 'var(--space-2)' }}>

@@ -4,12 +4,14 @@ import type { TaskBoard } from '../../campus/boards';
 import { OFFICE_AGENTS } from '../../data/officeAgents';
 import { shortName } from '../../shell/framing';
 import type { FurnitureItem } from '../../simulation/layout';
-import { boardCards, type Team } from '../../tasks';
+import { boardCards, todayLines, type Team, type TodayLine } from '../../tasks';
+import { dayKey, shortDate } from '../../../../../../shared/planner';
 
 /**
- * Every task board's face, drawn into one atlas and shown by one mesh (a single draw call). A face
- * is the team's name on its colour and up to four cards, each tinted by status, with a short title
- * and who is on it. Only boards whose cards changed are redrawn.
+ * Every task board's face, drawn into one atlas and shown by one mesh (a single draw call). A team's
+ * face is its name on its colour and up to four cards, each tinted by status, with a short title
+ * and who is on it. The Today board behind the front desk lists the next dated to-dos instead.
+ * Only boards whose content changed are redrawn.
  */
 
 /** The face sits over the board's writing surface. */
@@ -38,6 +40,9 @@ interface Placed {
   item: FurnitureItem;
   slot: Slot;
   cards: TaskItem[];
+  /** The Today board's lines, and the day they were drawn for. */
+  lines: TodayLine[];
+  day: Date;
   signature: string;
 }
 
@@ -79,7 +84,15 @@ export class BoardLayer {
         x = 0;
         y += SLOT_HEIGHT;
       }
-      this.placed.push({ board, item, slot: { x, y, w, h: SLOT_HEIGHT }, cards: [], signature: '' });
+      this.placed.push({
+        board,
+        item,
+        slot: { x, y, w, h: SLOT_HEIGHT },
+        cards: [],
+        lines: [],
+        day: new Date(),
+        signature: ''
+      });
       x += w;
     }
     this.canvas.width = ATLAS_WIDTH;
@@ -100,14 +113,26 @@ export class BoardLayer {
     });
   }
 
-  /** Shows the latest cards; boards whose cards did not change are left alone. */
-  setTasks(tasks: readonly TaskItem[]): void {
+  /**
+   * Shows the latest cards; boards whose cards did not change are left alone. Called again each
+   * minute, so the Today board's 'Today' and 'Tomorrow' move on with the clock.
+   */
+  setTasks(tasks: readonly TaskItem[], now = new Date()): void {
     let changed = false;
     for (const place of this.placed) {
-      const cards = boardCards(tasks, place.board.team);
-      const signature = cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
+      let signature: string;
+      if (place.board.kind === 'today') {
+        place.lines = todayLines(tasks, now);
+        place.day = now;
+        signature = [
+          dayKey(now),
+          ...place.lines.map((line) => `${line.label}:${line.overdue}:${line.title}`)
+        ].join('|');
+      } else {
+        place.cards = boardCards(tasks, place.board.team);
+        signature = place.cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
+      }
       if (signature === place.signature) continue;
-      place.cards = cards;
       place.signature = signature;
       this.draw(place);
       changed = true;
@@ -135,11 +160,17 @@ export class BoardLayer {
     return { x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 };
   }
 
-  /** What each board shows, for the debug handle. */
+  /** What each board shows, for the debug handle. The Today board's lines read "10:00 — Title". */
   info(): { team: Team; cards: { title: string; status: TaskStatus }[] }[] {
     return this.placed.map((place) => ({
       team: place.board.team,
-      cards: place.cards.map((card) => ({ title: this.cardTitle(card), status: card.status }))
+      cards:
+        place.board.kind === 'today'
+          ? place.lines.map((line) => ({
+              title: `${line.label} — ${line.title}`,
+              status: line.overdue ? ('attention' as const) : ('open' as const)
+            }))
+          : place.cards.map((card) => ({ title: this.cardTitle(card), status: card.status }))
     }));
   }
 
@@ -194,14 +225,15 @@ export class BoardLayer {
     return geometry;
   }
 
-  private draw({ board, slot, cards }: Placed): void {
+  private draw(place: Placed): void {
+    const { board, slot, cards } = place;
     const ctx = this.canvas.getContext('2d');
     if (!ctx) return;
     const { x, y, w, h } = slot;
     ctx.clearRect(x, y, w, h);
     ctx.fillStyle = '#fbfaf6';
     ctx.fillRect(x, y, w, h);
-    // Header: the team's name on its colour.
+    // Header: the team's name on its colour (the Today board adds the date).
     const header = 34;
     ctx.fillStyle = board.color;
     ctx.fillRect(x, y, w, header);
@@ -209,7 +241,10 @@ export class BoardLayer {
     ctx.font = `650 19px ${FONT}`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(fitted(ctx, board.title, w - 20), x + 10, y + header / 2 + 1);
+    const title =
+      board.kind === 'today' ? `${board.title} · ${shortDate(dayKey(place.day), place.day)}` : board.title;
+    ctx.fillText(fitted(ctx, title, w - 20), x + 10, y + header / 2 + 1);
+    if (board.kind === 'today') return this.drawToday(ctx, place, header);
     // Four tiles, two by two.
     const pad = 6;
     const tileW = (w - pad * 3) / 2;
@@ -258,5 +293,36 @@ export class BoardLayer {
       const line = `${shortName(person?.name ?? '')} · ${status.label}`;
       ctx.fillText(fitted(ctx, line, tileW - 44), dotX + 16, dotY + 1);
     }
+  }
+
+  /** The day's list: when on the left in the board's colour (amber when overdue), then what. */
+  private drawToday(ctx: CanvasRenderingContext2D, { board, slot, lines }: Placed, header: number): void {
+    const { x, y, w, h } = slot;
+    const top = y + header + 4;
+    const rowH = (h - header - 8) / 5;
+    if (!lines.length) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#67758e';
+      ctx.font = `600 17px ${FONT}`;
+      ctx.fillText('Nothing scheduled', x + w / 2, top + rowH * 2);
+      ctx.font = `500 13px ${FONT}`;
+      ctx.fillText('Ask the receptionist to plan your day', x + w / 2, top + rowH * 3);
+      ctx.textAlign = 'left';
+      return;
+    }
+    const labelW = 96;
+    lines.forEach((line, i) => {
+      const cy = top + rowH * i + rowH / 2;
+      if (i > 0) {
+        ctx.fillStyle = '#ece8e1';
+        ctx.fillRect(x + 10, top + rowH * i, w - 20, 1);
+      }
+      ctx.fillStyle = line.overdue ? '#d97706' : board.color;
+      ctx.font = `700 14px ${FONT}`;
+      ctx.fillText(fitted(ctx, line.label, labelW - 8), x + 12, cy + 1);
+      ctx.fillStyle = '#16233b';
+      ctx.font = `600 15px ${FONT}`;
+      ctx.fillText(fitted(ctx, line.title, w - labelW - 22), x + 12 + labelW, cy + 1);
+    });
   }
 }

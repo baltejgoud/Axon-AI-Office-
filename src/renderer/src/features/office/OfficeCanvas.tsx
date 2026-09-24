@@ -17,6 +17,8 @@ import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
 import { useApp } from '../../state';
 import { activeHelp } from './tasks';
+import { TASK_BOARDS } from './campus/boards';
+import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 
 export function OfficeCanvas() {
   const container = useRef<HTMLDivElement>(null);
@@ -73,7 +75,11 @@ export function OfficeCanvas() {
       world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.onSignClick = (sign) => signClick.current(sign);
-      world.onBoardClick = (team) => useOfficeStore.getState().openTeamBoard(team);
+      // A team's board opens its task list; the Today board goes to the receptionist's planner.
+      world.onBoardClick = (team) =>
+        TASK_BOARDS.find((board) => board.team === team)?.kind === 'today'
+          ? useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true })
+          : useOfficeStore.getState().openTeamBoard(team);
       world.setTasks(useApp.getState().data?.tasks ?? []);
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
@@ -117,6 +123,12 @@ export function OfficeCanvas() {
     scene.current.setTasks(tasks ?? []);
     syncHelp(scene.current, activeHelp(tasks ?? []));
   }, [tasks, syncHelp]);
+
+  // The Today board's day labels move on with the clock.
+  useEffect(() => {
+    const timer = setInterval(() => scene.current?.setTasks(useApp.getState().data?.tasks ?? []), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     Object.entries(agentRuntime).forEach(([id, runtime]) =>

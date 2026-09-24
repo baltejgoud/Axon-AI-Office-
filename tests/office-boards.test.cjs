@@ -140,3 +140,55 @@ test('a board for every department and every core team room, and one for everyon
   const backend = layout.FURNITURE.find((f) => f.id === boards.TASK_BOARDS.find((b) => b.team === 'Backend & APIs').itemId);
   assert.equal(backend.w, 2.4);
 });
+
+test('the Today board lists the next dated to-dos, overdue first', () => {
+  const now = new Date(2026, 8, 24, 14, 5); // Thursday
+  const todo = (id, due, over) => ({ id, kind: 'todo', title: id, status: 'open', due, createdAt: 0, updatedAt: 0, ...over });
+  const lines = t.todayLines(
+    [
+      todo('Deck', '2026-09-24T10:00'),
+      todo('Bank', '2026-09-21'),
+      todo('Groceries', '2026-09-24'),
+      todo('Dentist', '2026-09-25T08:30'),
+      todo('Review', '2026-09-28'),
+      todo('Taxes', '2026-10-15'),
+      todo('Done', '2026-09-24', { status: 'done' }),
+      todo('Someday', undefined)
+    ],
+    now
+  );
+  assert.deepEqual(lines, [
+    { label: 'Overdue', title: 'Bank', overdue: true },
+    { label: '10:00', title: 'Deck', overdue: false },
+    { label: 'Today', title: 'Groceries', overdue: false },
+    { label: 'Tomorrow', title: 'Dentist', overdue: false },
+    { label: 'Mon', title: 'Review', overdue: false }
+  ]);
+  assert.equal(t.todayLines([todo('Taxes', '2026-10-15')], now)[0].label, '15 Oct');
+  assert.deepEqual(t.todayLines([], now), []);
+});
+
+test('planner tool cards read what the receptionist did', () => {
+  const now = new Date(2026, 8, 24, 14, 5);
+  const call = (name, args, outcome = {}) => ({ id: 'c', name, arguments: JSON.stringify(args), ...outcome });
+  assert.deepEqual(
+    t.parsePlannerCall(
+      call('add_task', { title: 'Prep the investor deck', due: '2026-09-25T10:00', remind_at: '2026-09-25T09:30' }, { result: 'Added "Prep the investor deck" (id x).' }),
+      now
+    ),
+    { verb: 'Added', title: 'Prep the investor deck', detail: 'due Tomorrow 10:00 · reminder Tomorrow 09:30', pending: false }
+  );
+  assert.deepEqual(t.parsePlannerCall(call('update_task', { id: 'x', remind_at: '' }, { result: 'Updated "Prep the deck".' }), now), {
+    verb: 'Updated',
+    title: 'Prep the deck',
+    detail: 'no reminder',
+    pending: false
+  });
+  assert.equal(t.parsePlannerCall(call('complete_task', { id: 'x' }, { result: 'Done: "Call the bank".' }), now).title, 'Call the bank');
+  assert.equal(t.parsePlannerCall(call('list_tasks', {}), now).verb, 'Checking the plan…');
+  const failed = t.parsePlannerCall(call('add_task', { title: 'x', remind_at: '2026-09-24T09:00' }, { error: 'That time has passed; ask the user.' }), now);
+  assert.equal(failed.error, 'That time has passed; ask the user.');
+  assert.equal(failed.verb, 'Couldn’t add');
+  assert.equal(t.isPlannerCall(call('ask_colleague', {})), false);
+  assert.equal(t.isPlannerCall(call('add_task', {})), true);
+});

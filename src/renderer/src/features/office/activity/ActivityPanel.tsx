@@ -12,6 +12,9 @@ import { Conversation } from './Conversation';
 import { activeThread, agentThreads } from './thread';
 import { LIBRARY_RESIDENTS } from '../library';
 import { useEscape } from '../../../ui/escape';
+import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
+import { Planner } from './Planner';
+import { Briefing } from './Briefing';
 
 const FEED_PREVIEW = 3;
 
@@ -19,8 +22,15 @@ export function ActivityPanel() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const data = useApp((s) => s.data);
-  const { selectedAgentId, agentRuntime, startFresh, setAgentConversation, openOverlay, teamBoard } =
-    useOfficeStore();
+  const {
+    selectedAgentId,
+    agentRuntime,
+    startFresh,
+    setAgentConversation,
+    openOverlay,
+    teamBoard,
+    briefing
+  } = useOfficeStore();
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
   const runtime = agentRuntime[agent.id];
   const conversations = data?.conversations ?? [];
@@ -40,6 +50,7 @@ export function ActivityPanel() {
   const activities = runtime?.activities ?? [];
   const shownActivities = feedOpen ? activities : activities.slice(0, FEED_PREVIEW);
   const libraryResident = LIBRARY_RESIDENTS.includes(agent.id);
+  const reception = agent.id === RECEPTIONIST_ID;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -111,9 +122,11 @@ export function ActivityPanel() {
           ]}
         />
       </div>
+      {reception && <Planner />}
       <div className="activity-body">
         {agent.id === 'files-agent' && <FilesPanel />}
-        {!conversation && (
+        {reception && briefing && <Briefing briefing={briefing} />}
+        {!conversation && !(reception && briefing) && (
           <section className="current-task-card">
             <div className="activity-section-heading">
               <FileText size={15} />
@@ -159,7 +172,7 @@ export function ActivityPanel() {
           conversation={conversation}
           pendingTask={streaming ? runtime?.currentTask : undefined}
         />
-        {!conversation && !activities.length && (
+        {!conversation && !activities.length && !(reception && briefing) && (
           <div className="activity-empty">
             <span>
               <Sparkles size={20} />

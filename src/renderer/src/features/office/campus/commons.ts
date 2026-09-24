@@ -352,10 +352,10 @@ function buildLobby(b: LayoutBuilder): void {
   }
   b.deskSeat('desk-reception', 'reception', 0, 12.5, FACE_FRONT);
   b.visit('desk-reception', 0, 14.25);
-  // The day's plan, behind the receptionist.
-  b.item('board-today', 'whiteboard', 0, 11.0, 2.0, 0.1);
+  // The day's plan, behind the front desk and clear of the Reception sign.
+  b.item('board-today', 'whiteboard', 2.4, 11.0, 2.0, 0.1);
   b.plant('plant-reception', -2.6, 13.0, true);
-  b.item('coat-rack', 'coat-rack', 3.2, 12.4, 0.5, 0.5, { round: true });
+  b.item('coat-rack', 'coat-rack', -3.6, 11.4, 0.5, 0.5, { round: true });
   b.item('lobby-bench-1', 'bench', -7.5, 15.9, 2.2, 0.5);
   b.item('lobby-bench-2', 'bench', 7.5, 15.9, 2.2, 0.5);
   b.item('bike-rack', 'bike-rack', -15.5, 15.6, 2.4, 0.8);
