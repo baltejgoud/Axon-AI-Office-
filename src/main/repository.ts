@@ -13,9 +13,11 @@ export function initialState(): PlatformState {
       skillIds: [], roleIds: [],
       fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now, builtin: true }],
     settings: { theme: 'light', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096,
-      streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' },
+      streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '',
+      keepInTray: true, startWithWindows: false },
     mcpServers: [],
-    tasks: []
+    tasks: [],
+    reception: {}
   };
 }
 
@@ -63,6 +65,12 @@ export class Repository {
     state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
     // Task records arrived with the office's task boards (2026-09).
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
+    // The receptionist and the tray arrived with the planner (2026-09).
+    state.reception = state.reception && typeof state.reception === 'object' ? state.reception : {};
+    if (state.settings) {
+      state.settings.keepInTray ??= true;
+      state.settings.startWithWindows ??= false;
+    }
     const codeWs = state.workspaces?.find(w => w.id === 'code');
     if (codeWs && codeWs.name === 'Code') {
       codeWs.name = 'Code Assistant';

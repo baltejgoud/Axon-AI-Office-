@@ -1,7 +1,8 @@
-import { dialog } from 'electron';
+import { app, dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { PlatformAPI, Snapshot } from '../shared/platform';
+import type { PlatformAPI, Snapshot, TaskPatch } from '../shared/platform';
+import type { FocusTarget, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
@@ -20,8 +21,8 @@ import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
 import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
 import { READ_ONLY_TOOLS, toolsFor } from './officeTools';
-import { PLANNER_TOOL_NAMES, runPlannerTool } from './tasks/tools';
-import { plannerNow } from '../shared/planner';
+import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
+import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 
 /** What the receptionist says when her model can't call tools, so she can't keep the planner. */
@@ -47,6 +48,8 @@ export class Service {
   /** Coworkers' task records, and the tracker that keeps them in step with each run. */
   readonly tasks: TaskStore;
   private readonly tracker: TaskTracker;
+  /** Where a notification or the tray wanted the next window to open. */
+  private pendingFocus: FocusTarget | null = null;
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
@@ -72,7 +75,9 @@ export class Service {
       skillSources: bundled.sources,
       roles: roles(),
       mcpServers: this.state.mcpServers || [],
-      projectRoot: this.project.root
+      projectRoot: this.project.root,
+      pendingApprovals: this.permissions.pending(),
+      startWithWindowsAvailable: process.platform === 'win32' && app.isPackaged
     };
   }
   /** Validates a selection against the bundled catalogs. Unknown ids are rejected on save. */
@@ -131,8 +136,68 @@ export class Service {
   }
   async settingsSave(s: Parameters<PlatformAPI['settingsSave']>[0]): Promise<void> {
     if (!['dark', 'light', 'system'].includes(s.theme) || !Number.isInteger(s.defaultMaxTokens) || s.defaultMaxTokens < 256 || s.defaultMaxTokens > 32768) throw new Error('Invalid settings.');
-    this.state.settings = { ...s, allowShellExecution: Boolean(s.allowShellExecution), shellAllowlist: s.shellAllowlist || [], sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics) };
+    this.state.settings = { ...s, allowShellExecution: Boolean(s.allowShellExecution), shellAllowlist: s.shellAllowlist || [], sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
+      keepInTray: s.keepInTray !== false, startWithWindows: Boolean(s.startWithWindows) };
     await this.repo.save();
+  }
+
+  /** The planner adds a to-do. Same checks as the receptionist's tools. */
+  async taskAdd(input: Parameters<PlatformAPI['taskAdd']>[0]): Promise<TaskItem> {
+    const checked = validateTaskInput({ title: input?.title, due: input?.due, remindAt: input?.remindAt, notes: input?.notes }, new Date(), false);
+    if (!checked.ok) throw new Error(checked.error);
+    const fields = Object.fromEntries(Object.entries(checked.value).filter(([, value]) => value !== undefined));
+    const task = this.tasks.add({ kind: 'todo', status: 'open', title: checked.value.title!, ...fields });
+    await this.repo.save();
+    return { ...task };
+  }
+  /** The planner ticks, renames or reschedules one of your to-dos. */
+  async taskUpdate(id: string, patch: TaskPatch): Promise<TaskItem> {
+    const task = this.ownTodo(id);
+    const { status, ...fields } = patch ?? {};
+    const checked = validateTaskInput({ title: fields.title, due: fields.due, remindAt: fields.remindAt, notes: fields.notes }, new Date(), true);
+    if (!checked.ok) throw new Error(checked.error);
+    const change: Partial<TaskItem> = withReminderReset(checked.value);
+    if (status !== undefined) {
+      if (status !== 'open' && status !== 'done') throw new Error('Invalid status.');
+      change.status = status;
+      change.doneAt = status === 'done' ? Date.now() : undefined;
+    }
+    const updated = this.tasks.update(task.id, change);
+    await this.repo.save();
+    return { ...updated };
+  }
+  async taskDelete(id: string): Promise<void> {
+    this.tasks.remove(this.ownTodo(id).id);
+    await this.repo.save();
+  }
+  private ownTodo(id: string): TaskItem {
+    text(id, 100);
+    const task = this.tasks.find((item) => item.id === id);
+    if (!task) throw new Error('Task not found.');
+    if (task.kind !== 'todo') throw new Error('Only your own to-dos can be changed.');
+    return task;
+  }
+
+  /**
+   * A window has opened. The first time each day it gets the morning briefing (when there is
+   * anything to brief), and it learns where a notification or the tray wanted it to look.
+   */
+  async officeStart(): Promise<{ briefing: Briefing | null; focus: FocusTarget | null }> {
+    const now = new Date();
+    let brief: Briefing | null = null;
+    if (this.state.reception.briefedOn !== dayKey(now)) {
+      this.state.reception.briefedOn = dayKey(now);
+      const today = briefing(this.state.tasks, now);
+      brief = today.empty ? null : today;
+      await this.repo.save();
+    }
+    const focus = this.pendingFocus;
+    this.pendingFocus = null;
+    return { briefing: brief, focus };
+  }
+  /** Remembers where the next window should open, for a window that doesn't exist yet. */
+  setPendingFocus(target: FocusTarget | null): void {
+    this.pendingFocus = target;
   }
   async mcpServerSave(server: MCPServerConfig): Promise<void> {
     text(server.id, 100);

@@ -197,6 +197,10 @@ export interface Settings {
   shellAllowlist: string[];
   sendCrashDiagnostics: boolean;
   dataDirectoryNote: string;
+  /** Closing the window leaves Axon in the tray, so reminders still arrive. */
+  keepInTray: boolean;
+  /** Start in the tray when Windows starts (installed app only). */
+  startWithWindows: boolean;
 }
 
 /* ------------------------------------ MCP ------------------------------------- */
@@ -285,6 +289,14 @@ export interface ToolApprovalDecision {
 export type TaskKind = 'work' | 'help' | 'todo';
 export type TaskStatus = 'open' | 'working' | 'attention' | 'done';
 
+/** Where a notification or the tray opens the office: a coworker, their conversation, the planner. */
+export interface FocusTarget {
+  agentId: string;
+  conversationId?: ID;
+  /** Open the receptionist's planner. */
+  planner?: boolean;
+}
+
 export interface TaskItem {
   id: ID;
   kind: TaskKind;
@@ -334,6 +346,10 @@ export type StreamEvent =
       channel: 'tasks';
       tasks: TaskItem[];
     }
+  | ({
+      /** A notification or the tray asks the office to show someone. */
+      channel: 'focus';
+    } & FocusTarget)
   | {
       channel: 'agent';
       agentId: ID;

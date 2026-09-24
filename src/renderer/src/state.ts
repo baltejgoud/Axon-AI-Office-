@@ -36,7 +36,12 @@ export const useApp = create<UIState>((set, get) => ({
     const models = data.providers
       .filter((p) => p.enabled)
       .flatMap((p) => p.models.map((m) => `${p.id}::${m.id}`));
-    set({ data, model: models.includes(get().model) ? get().model : models[0] || '' });
+    set({
+      data,
+      model: models.includes(get().model) ? get().model : models[0] || '',
+      // Main keeps the approvals, so a window opened later can still answer them.
+      pendingApprovals: Object.fromEntries(data.pendingApprovals.map((request) => [request.id, request]))
+    });
   },
   pushToast: (message, tone = 'success') => {
     const id = crypto.randomUUID();

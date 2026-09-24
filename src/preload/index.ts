@@ -13,6 +13,7 @@ const api: PlatformAPI = {
   knowledgeImport: invoke('knowledgeImport'), knowledgeDelete: invoke('knowledgeDelete'), knowledgeSearch: invoke('knowledgeSearch'),
   projectChoose: invoke('projectChoose'), projectRecent: invoke('projectRecent'), projectOpen: invoke('projectOpen'), projectForget: invoke('projectForget'), projectList: invoke('projectList'), projectRead: invoke('projectRead'),
   projectWrite: invoke('projectWrite'), projectSearch: invoke('projectSearch'),
+  taskAdd: invoke('taskAdd'), taskUpdate: invoke('taskUpdate'), taskDelete: invoke('taskDelete'), officeStart: invoke('officeStart'),
   onStream(callback) {
     const listener = (_: Electron.IpcRendererEvent, event: StreamEvent) => callback(event);
     ipcRenderer.on('platform:stream', listener);

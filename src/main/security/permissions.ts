@@ -123,6 +123,11 @@ export class PermissionManager {
     return { request, promise };
   }
 
+  /** Every request still waiting for the user. */
+  pending(): ToolApprovalRequest[] {
+    return [...this.pendingApprovals.values()].map((pending) => pending.request);
+  }
+
   resolveApproval(decision: ToolApprovalDecision): boolean {
     const pending = this.pendingApprovals.get(decision.requestId);
     if (!pending) return false;

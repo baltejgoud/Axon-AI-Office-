@@ -41,6 +41,13 @@ export class TaskStore {
     return task;
   }
 
+  remove(id: string): void {
+    const index = this.state.tasks.findIndex((item) => item.id === id);
+    if (index < 0) throw new Error('Task not found.');
+    this.state.tasks.splice(index, 1);
+    this.changed();
+  }
+
   private changed(): void {
     this.emit(this.state.tasks.map((task) => ({ ...task })));
   }

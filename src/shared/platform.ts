@@ -1,4 +1,5 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, MCPServerConfig, TaskItem } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget } from './types';
+import type { Briefing } from './planner';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -10,8 +11,10 @@ export interface PlatformState {
   chunks: KnowledgeChunk[];
   settings: Settings;
   mcpServers?: MCPServerConfig[];
-  /** Coworkers' tasks and help, and (from Part C) your own to-dos. */
+  /** Coworkers' tasks and help, and your own to-dos. */
   tasks: TaskItem[];
+  /** The front desk's memory: the last day briefed, and whether the tray was explained. */
+  reception: { briefedOn?: string; trayHintShown?: boolean };
 }
 export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   dataPath: string;
@@ -20,6 +23,18 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   roles: Role[];
   mcpServers: MCPServerConfig[];
   projectRoot?: string | null;
+  /** Tool calls waiting for the user, so a reopened window can still answer them. */
+  pendingApprovals: ToolApprovalRequest[];
+  /** Start with Windows needs the installed app. */
+  startWithWindowsAvailable: boolean;
+}
+/** What the planner may write to a to-do. `null` clears a field. */
+export interface TaskPatch {
+  title?: string;
+  due?: string | null;
+  remindAt?: number | null;
+  notes?: string | null;
+  status?: 'open' | 'done';
 }
 export interface PlatformAPI {
   snapshot(): Promise<Snapshot>;
@@ -53,6 +68,11 @@ export interface PlatformAPI {
   projectRead(path: string): Promise<string>;
   projectWrite(path: string, text: string): Promise<void>;
   projectSearch(query: string): Promise<{ path: string; line: number; text: string }[]>;
+  taskAdd(input: { title: string; due?: string; remindAt?: number; notes?: string }): Promise<TaskItem>;
+  taskUpdate(id: string, patch: TaskPatch): Promise<TaskItem>;
+  taskDelete(id: string): Promise<void>;
+  /** Called once when a window opens: the day's briefing (once a day) and where to look first. */
+  officeStart(): Promise<{ briefing: Briefing | null; focus: FocusTarget | null }>;
   onStream(callback: (event: StreamEvent) => void): () => void;
 }
 declare global { interface Window { axon: PlatformAPI } }
