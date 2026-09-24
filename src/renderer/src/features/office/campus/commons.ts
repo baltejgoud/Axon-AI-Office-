@@ -36,29 +36,6 @@ export const COMMONS_ROOMS: Readonly<Record<ZoneId, Vec2>> = {
   reception: { x: 0, z: 13.5 }
 };
 
-/** What each room's sign says. */
-export const COMMONS_ROOM_NAMES: Readonly<Record<ZoneId, string>> = {
-  chat: 'Lounge',
-  workspaces: 'Planning',
-  knowledge: 'Library',
-  files: 'Files room',
-  agents: 'Core team',
-  cafe: 'Café',
-  reception: 'Reception'
-};
-
-/** Where each room's sign hangs: the bottom centre of the panel, just outside its door. */
-export const ROOM_SIGN_POINTS: Readonly<
-  Record<Exclude<ZoneId, 'agents'>, { x: number; y: number; z: number }>
-> = {
-  chat: { x: -15.2, y: 2.45, z: -5.7 },
-  workspaces: { x: -4.6, y: 2.45, z: -5.7 },
-  knowledge: { x: 6.7, y: 2.45, z: -5.7 },
-  files: { x: 15.6, y: 2.45, z: -5.7 },
-  cafe: { x: 13.8, y: 2.45, z: 0.3 },
-  reception: { x: 0, y: 2.45, z: 13.2 }
-};
-
 /** Click targets over the Files room's cabinet wall and the Library's shelves. */
 export const FILES_HOTSPOT = { x: 15.8, z: -14.6, w: 6.8, d: 0.8, h: 2.4 } as const;
 export const LIBRARY_HOTSPOT = { x: 6.65, z: -14.65, w: 10, d: 0.8, h: 2.6 } as const;

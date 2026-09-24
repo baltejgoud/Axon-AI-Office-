@@ -188,8 +188,6 @@ export function OfficeCanvas() {
   };
   signClick.current = (sign) => {
     if (sign.kind === 'district') chooseDistrict(sign.target as DistrictId);
-    else if (sign.kind === 'department') chooseDepartment(sign.target);
-    else if (sign.kind === 'room') chooseRoom(sign.target as ZoneId);
   };
   const chooseFromMenu = (choice: DepartmentChoice) =>
     choice.kind === 'department' ? chooseDepartment(choice.name) : chooseRoom(choice.zone);

@@ -2,23 +2,21 @@ import * as THREE from 'three';
 import { signOpacity, signScale, type SignKind, type SignSpec, type SignTier } from '../../campus/signs';
 
 /**
- * Draws every sign in the office from one shared text atlas: a mesh of quads per kind (four draw
+ * Draws every sign in the office from one shared text atlas: a mesh of quads per kind (two draw
  * calls in all), rebuilt only when the zoom or the hovered sign changes. Each sign is a face with
- * a dark rim behind it; hanging signs lean toward the camera on two thin cables.
+ * a dark rim behind it.
  */
 
-const KINDS: readonly SignKind[] = ['district', 'department', 'room', 'nameplate'];
-const PICKABLE = new Set<SignKind>(['district', 'department', 'room']);
+const KINDS: readonly SignKind[] = ['district', 'nameplate'];
+const PICKABLE = new Set<SignKind>(['district']);
 /** Pixel size of each kind's slot in the atlas; the same shape as the panel. */
 const SLOT: Record<SignKind, [number, number]> = {
   district: [512, 170],
-  department: [512, 80],
-  room: [384, 82],
   nameplate: [256, 82]
 };
 const ATLAS_WIDTH = 2048;
-const LEAN = 0.2;
-const CABLE = 0.7;
+/** Quads per sign: the rim and the face. */
+const QUADS = 2;
 const RIM = 0.03;
 const HOVER_GROWTH = 1.06;
 const FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
@@ -35,18 +33,6 @@ interface Layer {
   signs: SignSpec[];
   mesh: THREE.Mesh;
   material: THREE.MeshBasicMaterial;
-  /** Quads per sign: rim and face, plus two cables when hanging. */
-  quads: number;
-}
-
-/** Splits a long name at the space nearest its middle. */
-function lines(title: string, kind: SignKind): string[] {
-  if (kind !== 'department' || title.length <= 22) return [title];
-  const middle = title.length / 2;
-  let best = -1;
-  for (let i = 0; i < title.length; i++)
-    if (title[i] === ' ' && (best < 0 || Math.abs(i - middle) < Math.abs(best - middle))) best = i;
-  return best < 0 ? [title] : [title.slice(0, best), title.slice(best + 1)];
 }
 
 export class SignLayer {
@@ -75,11 +61,10 @@ export class SignLayer {
     for (const kind of KINDS) {
       const own = signs.filter((sign) => sign.kind === kind);
       if (!own.length) continue;
-      const quads = own[0].hanging ? 4 : 2;
       const geometry = new THREE.BufferGeometry();
-      const count = own.length * quads;
+      const count = own.length * QUADS;
       geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 12), 3));
-      geometry.setAttribute('uv', new THREE.BufferAttribute(this.uvs(own, quads), 2));
+      geometry.setAttribute('uv', new THREE.BufferAttribute(this.uvs(own), 2));
       const index: number[] = [];
       for (let q = 0; q < count; q++) index.push(q * 4, q * 4 + 1, q * 4 + 2, q * 4, q * 4 + 2, q * 4 + 3);
       geometry.setIndex(index);
@@ -95,7 +80,7 @@ export class SignLayer {
       mesh.renderOrder = 2;
       mesh.frustumCulled = false;
       this.object.add(mesh);
-      this.layers.push({ kind, signs: own, mesh, material, quads });
+      this.layers.push({ kind, signs: own, mesh, material });
     }
     this.rebuild();
     // Draw again once the UI font has loaded, so signs match the rest of the app.
@@ -126,7 +111,7 @@ export class SignLayer {
       const hit = raycaster.intersectObject(layer.mesh, false)[0];
       if (!hit || hit.faceIndex == null) continue;
       if (best && best.distance <= hit.distance) continue;
-      best = { distance: hit.distance, sign: layer.signs[Math.floor(hit.faceIndex / (layer.quads * 2))] };
+      best = { distance: hit.distance, sign: layer.signs[Math.floor(hit.faceIndex / (QUADS * 2))] };
     }
     return best?.sign ?? null;
   }
@@ -224,21 +209,16 @@ export class SignLayer {
     ctx.fillStyle = plate ? '#2b2f36' : '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const text = lines(sign.title, sign.kind);
     const pad = h * 0.14;
-    let size = (sign.letter / sign.height) * slot.h * (text.length > 1 ? 0.78 : 1);
     const fit = (weight: number, value: string, px: number) => {
       ctx.font = `${weight} ${px}px ${FONT}`;
       while (px > 10 && ctx.measureText(value).width > w - pad * 2)
         ctx.font = `${weight} ${(px -= 2)}px ${FONT}`;
       return px;
     };
-    for (const line of text) size = Math.min(size, fit(650, line, size));
+    const size = fit(650, sign.title, (sign.letter / sign.height) * slot.h);
     ctx.font = `650 ${size}px ${FONT}`;
-    const centre = y + h / 2 - (sign.subtitle ? h * 0.13 : 0);
-    text.forEach((line, i) =>
-      ctx.fillText(line, x + w / 2, centre + (i - (text.length - 1) / 2) * size * 1.08)
-    );
+    ctx.fillText(sign.title, x + w / 2, y + h / 2 - (sign.subtitle ? h * 0.13 : 0));
     if (sign.subtitle) {
       const small = fit(550, sign.subtitle, size * 0.55);
       ctx.font = `500 ${small}px ${FONT}`;
@@ -250,8 +230,8 @@ export class SignLayer {
 
   // ---------------------------------------------------------------- geometry
 
-  private uvs(signs: SignSpec[], quads: number): Float32Array {
-    const out = new Float32Array(signs.length * quads * 8);
+  private uvs(signs: SignSpec[]): Float32Array {
+    const out = new Float32Array(signs.length * QUADS * 8);
     const W = this.canvas.width;
     const H = this.canvas.height;
     const rect = (slot: Slot, inset = 0) => {
@@ -265,7 +245,7 @@ export class SignLayer {
     let offset = 0;
     for (const sign of signs) {
       const face = rect(this.slots.get(sign.id)!, 3);
-      for (let q = 0; q < quads; q++) {
+      for (let q = 0; q < QUADS; q++) {
         out.set(q === 1 ? face : ink, offset);
         offset += 8;
       }
@@ -273,15 +253,13 @@ export class SignLayer {
     return out;
   }
 
-  /** The panel's axes: along its width, up its face (leaning back if it hangs) and out of its face. */
+  /** The panel's axes: along its width, up its face and out of its face. */
   private frame(sign: SignSpec): { along: THREE.Vector3; up: THREE.Vector3; normal: THREE.Vector3 } {
     const yaw = sign.faceCamera ? this.yaw : 0;
-    const lean = sign.hanging ? LEAN : 0;
-    const out = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     return {
       along: new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)),
-      up: new THREE.Vector3(0, Math.cos(lean), 0).addScaledVector(out, -Math.sin(lean)),
-      normal: new THREE.Vector3(0, Math.sin(lean), 0).addScaledVector(out, Math.cos(lean))
+      up: new THREE.Vector3(0, 1, 0),
+      normal: new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     };
   }
 
@@ -325,11 +303,6 @@ export class SignLayer {
         const half = sign.width / 2;
         quad(sign, scale, -half - RIM, half + RIM, -RIM, sign.height + RIM, -0.012);
         quad(sign, scale, -half, half, 0, sign.height, 0.012);
-        if (sign.hanging)
-          for (const side of [-1, 1]) {
-            const c = side * (half - 0.2);
-            quad(sign, scale, c - 0.008, c + 0.008, sign.height + RIM, sign.height + CABLE, -0.006);
-          }
       }
       position.needsUpdate = true;
       layer.mesh.geometry.computeBoundingSphere();

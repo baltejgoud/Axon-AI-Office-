@@ -163,6 +163,7 @@
   z-index: 4;
 }
 .person-status {
+  flex: none;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -184,11 +185,15 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
+  min-width: 0;
   line-height: 1.15;
+  text-align: left;
 }
 .person-label-detail strong {
   font-size: 11px;
   font-weight: 650;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 .person-label-detail small {
   color: #687797;
@@ -1152,7 +1157,14 @@ sized for the side panel. */
 .office-person-label {
   max-width: 150px;
 }
-.office-person-label:not(.selected) {
+/* The selected tag names the whole role on one line; a longer one wraps rather than spilling out. */
+.office-person-label.selected {
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+}
+.person-label-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

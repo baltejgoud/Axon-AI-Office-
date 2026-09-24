@@ -147,8 +147,9 @@ app.on('web-contents-created', (_, contents) => {
         'scene after reload'
       );
       await pause(800);
-      // The opening view shows the Commons room signs and the district signs around them.
-      assert.ok(await evaluate('window.__axonOffice.signs().filter((s) => s.opacity > 0).length > 6'));
+      // The opening view shows the district signs; nothing hangs over departments or rooms.
+      assert.equal(await evaluate("window.__axonOffice.signs().filter((s) => s.kind === 'district' && s.opacity > 0).length"), 8);
+      assert.equal(await evaluate("window.__axonOffice.signs().filter((s) => s.kind !== 'district' && s.kind !== 'nameplate').length"), 0);
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 9);
@@ -396,6 +397,33 @@ app.on('web-contents-created', (_, contents) => {
         await evaluate('document.querySelector(".office-search-results > button").click()');
         await pause(100);
       };
+      // The selected person's tag holds their whole role, however long, inside its box.
+      const tagFits = `(() => {
+        const tag = document.querySelector('.office-person-label.selected');
+        if (!tag || tag.style.visibility === 'hidden') return false;
+        const box = tag.getBoundingClientRect();
+        return [...tag.querySelectorAll('strong, small')].every((text) => {
+          const r = text.getBoundingClientRect();
+          return r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.bottom <= box.bottom + 0.5;
+        });
+      })()`;
+      for (const [query, role] of [
+        ['distributed systems', 'Distributed Systems Engineer'],
+        ['organizational development', 'Organizational Development Manager']
+      ]) {
+        await searchFor(query);
+        await waitFor(
+          `document.querySelector(".activity-agent-meta h3").textContent === ${JSON.stringify(role)}`,
+          `search selects ${role}`
+        );
+        await waitFor(
+          `document.querySelector('.office-person-label.selected strong')?.textContent === ${JSON.stringify(role)}`,
+          `tag for ${role}`
+        );
+        await pause(1500);
+        assert.ok(await evaluate(tagFits), `${role} fits its tag`);
+        await snap(`tag-${role.split(' ')[0].toLowerCase()}.png`);
+      }
       // Files room: open a folder, tick a file and hand it to the Frontend Developer.
       await searchFor('files agent');
       await waitFor('document.querySelector(".office-files-hub .office-file-open")', 'folder wall');

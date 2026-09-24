@@ -80,7 +80,7 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
                 <small>{STATUS_LABELS[status]}</small>
               </span>
             ) : (
-              shortName(agent.name)
+              <span className="person-label-name">{shortName(agent.name)}</span>
             )}
           </button>
         );

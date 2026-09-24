@@ -157,22 +157,17 @@ test('each executive office is furnished', () => {
 
 const signs = require('../src/renderer/src/features/office/campus/signs.ts');
 
-test('signs: one per district, per department in shared districts, per Commons room, per executive', () => {
+test('signs: one per district and one per executive, and nothing hangs overhead', () => {
   const of = (k) => signs.SIGNS.filter((s) => s.kind === k);
   assert.equal(of('district').length, 8);
-  assert.equal(of('department').length, 19);
-  assert.deepEqual(
-    of('room')
-      .map((s) => s.target)
-      .sort(),
-    ['cafe', 'chat', 'files', 'knowledge', 'reception', 'workspaces']
-  );
   assert.deepEqual(
     of('nameplate')
       .map((s) => s.title)
       .sort(),
     ['CEO', 'CFO', 'CGO', 'CIO', 'CMO', 'COO', 'CPO', 'CRO', 'CSO', 'CTO']
   );
+  assert.equal(signs.SIGNS.length, 18);
+  assert.ok(signs.SIGNS.every((s) => !('hanging' in s)));
   assert.equal(new Set(signs.SIGNS.map((s) => s.id)).size, signs.SIGNS.length);
 });
 
@@ -188,14 +183,6 @@ test('district signs stand in the corridor beside their own district', () => {
   }
 });
 
-test('department signs hang over their department’s back strip', () => {
-  for (const s of signs.SIGNS.filter((x) => x.kind === 'department')) {
-    const b = layout.DEPARTMENT_BOUNDS[s.target];
-    assert.ok(s.x > b.minX && s.x < b.maxX && s.z > b.minZ && s.z < b.minZ + 2.2, s.id);
-    assert.ok(s.width * s.maxScale <= b.maxX - b.minX + 1e-6, s.id);
-  }
-});
-
 test('signs are true size up close and readable from afar, within their cap', () => {
   const px = (s, mpp) => (signs.signScale(s, mpp) * s.letter * 0.77) / mpp;
   for (const s of signs.SIGNS) {
@@ -208,9 +195,6 @@ test('signs are true size up close and readable from afar, within their cap', ()
 test('sign visibility by zoom tier, and executive titles', () => {
   assert.equal(signs.signOpacity('district', 'far'), 1);
   assert.equal(signs.signOpacity('district', 'near'), 0.25);
-  assert.equal(signs.signOpacity('department', 'far'), 0);
-  assert.equal(signs.signOpacity('department', 'middle'), 1);
-  assert.equal(signs.signOpacity('room', 'far'), 0);
   assert.equal(signs.signOpacity('nameplate', 'middle'), 0);
   assert.equal(signs.signOpacity('nameplate', 'near'), 1);
   assert.equal(signs.titleAbbreviation('Chief Executive Officer (CEO)'), 'CEO');
