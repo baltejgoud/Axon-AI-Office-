@@ -207,6 +207,38 @@ app.on('web-contents-created', (_, contents) => {
         await pause(1800);
         await snap(`${name}.png`);
       }
+      // Low-poly Part 3: the café. Someone goes for coffee and the barista pulls a shot as they
+      // reach the bar; the chefs cook in the open kitchen.
+      await evaluate('window.__axonOffice.focus(15.2, -1.6, 10)');
+      await pause(1500);
+      assert.equal((await evaluate('window.__axonOffice.staff()')).length, 3);
+      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => s.visible), 'staff drawn close up');
+      for (const id of ['writer', 'designer', 'research-analyst', 'product-coach'])
+        if (await evaluate(`window.__axonOffice.request('${id}', 'coffee')`)) break;
+      let brewed = false;
+      for (let i = 0; i < 400 && !brewed; i++) {
+        brewed = await evaluate("window.__axonOffice.staff().some((s) => s.id === 'barista' && s.action === 'brew')");
+        if (!brewed) await pause(100);
+      }
+      assert.ok(brewed, 'the barista pulls a shot when someone reaches the bar');
+      await pause(600);
+      await snap('p3-cafe.png');
+      // Staff are not coworkers: clicking the barista selects nobody.
+      const selectedBefore = await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent');
+      const barista = await evaluate("window.__axonOffice.staffPoint('barista')");
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        const at = { clientX: r.left + ${barista.x}, clientY: r.top + ${barista.y}, button: 0, bubbles: true };
+        canvas.dispatchEvent(new MouseEvent('mousemove', at));
+        canvas.dispatchEvent(new MouseEvent('mousedown', at));
+        window.dispatchEvent(new MouseEvent('mouseup', at));
+      })()`);
+      await pause(200);
+      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent'), selectedBefore);
+      await evaluate('window.__axonOffice.focus(17.8, -1.8, 9)');
+      await pause(1800);
+      await snap('p3-kitchen.png');
       // Whole campus: every district sign at full strength, and performance within budget.
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
       await waitFor(
@@ -222,6 +254,8 @@ app.on('web-contents-created', (_, contents) => {
       // The low-poly work's triangle ceiling (1.72M before Part 2).
       assert.ok(stats.triangles <= 2.3e6, `triangles ${stats.triangles}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
+      // The café staff are hidden from afar; they never count as coworkers.
+      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => !s.visible), 'staff hidden from afar');
       await snap('campus-overview.png');
       // Clicking a district sign glides there, like its chip.
       const sign = await evaluate("window.__axonOffice.signPoint('district:engineering')");

@@ -48,7 +48,7 @@ export const DISTRICTS: readonly District[] = [
     short: 'Commons',
     color: '#9a6414',
     bounds: { minX: -20, maxX: 20, minZ: -15, maxZ: 17 },
-    sign: { x: 20.9, z: 1 },
+    sign: { x: 20.9, z: 8.5 },
     grid: [1, 1],
     departments: [],
     flavor: 'document',

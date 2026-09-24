@@ -169,3 +169,43 @@ export function batchStatic(root: THREE.Group): void {
     root.add(mesh);
   }
 }
+
+/**
+ * One vertex-coloured mesh from everything under `object`, in its own frame: for things that move
+ * or hide as a whole (a pan, a dog) and should cost a single draw call. `finish` is its surface.
+ */
+export function bake(
+  object: THREE.Object3D,
+  finish: { roughness?: number; metalness?: number } = {}
+): THREE.Mesh {
+  object.updateMatrixWorld(true);
+  const toLocal = object.matrixWorld.clone().invert();
+  const tint = new THREE.Color();
+  const parts: THREE.BufferGeometry[] = [];
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh) || Array.isArray(child.material)) return;
+    const material = child.material as THREE.MeshStandardMaterial;
+    const geometry = child.geometry.clone().applyMatrix4(toLocal.clone().multiply(child.matrixWorld));
+    painted(
+      geometry,
+      tint.copy(material.color ?? tint.set('#ffffff')),
+      !!material.vertexColors && !!geometry.getAttribute('color')
+    );
+    for (const name of Object.keys(geometry.attributes))
+      if (!['position', 'normal', 'color'].includes(name)) geometry.deleteAttribute(name);
+    parts.push(geometry);
+  });
+  const mesh = new THREE.Mesh(
+    concat(parts, ['position', 'normal', 'color']),
+    mat('#ffffff', {
+      vertexColors: true,
+      roughness: finish.roughness ?? 0.7,
+      metalness: finish.metalness ?? 0
+    })
+  );
+  parts.forEach((g) => g.dispose());
+  mesh.geometry.computeBoundingSphere();
+  mesh.userData.dynamic = true;
+  mesh.userData.ownsGeometry = true;
+  return mesh;
+}

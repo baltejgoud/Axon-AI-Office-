@@ -15,7 +15,9 @@ const NO_SHADOW = new Set<FurnitureItem['kind']>([
   'pendant-lamp',
   'wall-art',
   'ledge-art',
-  'sign-post'
+  'sign-post',
+  // The kitchen stands on its own tiled floor; its counters sit tight to it.
+  'open-kitchen'
 ]);
 /** Seats read better with a round patch, whatever their footprint. */
 const ROUND = new Set<FurnitureItem['kind']>(['office-chair', 'exec-chair', 'stool', 'cafe-chair']);

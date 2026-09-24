@@ -514,3 +514,31 @@ test('a colleague walks over to help and stays until released', () => {
   busy.setTaskStatus('backend-developer', 'working');
   assert.equal(busy.startHelp('backend-developer', 'frontend-developer'), false);
 });
+
+// ---------------------------------------------------------------- Part 3: café and kitchen
+
+test('café: pickups still work, the Files room door stays reachable, the walkway behind the bar stays clear', () => {
+  const office = new OfficeSimulation({ agentIds: [] });
+  const grid = office.grid;
+  // The pickups keep their places in front of the bar.
+  assert.deepEqual(layout.poiById('cafe-machine').position, { x: 15.4, z: -2.8 });
+  for (const id of CAFE_PICKUP) assert.ok(grid.isFree(layout.poiById(id).approach), id);
+  // The walkway between the bar and the Files room's glass front is open end to end.
+  for (let x = 9.5; x <= 19.5; x += 0.25) assert.ok(grid.isFree({ x, z: -5.25 }), `walkway blocked at x ${x}`);
+  for (const target of ['file-cabinet', 'printer'])
+    for (const from of [...CAFE_PICKUP, 'cafe-t3-b', 'cafe-c1', 'cafe-stool-2']) {
+      const path = grid.findPath(layout.poiById(from).approach, layout.poiById(target).approach);
+      assert.ok(path, `${from} -> ${target}`);
+      for (let i = 1; i < path.length; i++) assert.ok(grid.isClearLine(path[i - 1], path[i]), `${from} -> ${target}`);
+    }
+  // Nobody walks into the kitchen or behind the bar, where the staff work.
+  for (const p of [
+    { x: 18.3, z: -2 },
+    { x: 18.3, z: -0.3 },
+    { x: 14, z: -4.2 },
+    { x: 12.5, z: -4.2 }
+  ])
+    assert.ok(!grid.isFree(p), `staff floor ${JSON.stringify(p)} is walkable`);
+  const kinds = new Set(layout.FURNITURE.map((f) => f.kind));
+  for (const kind of ['coffee-bar', 'bakery-counter', 'open-kitchen']) assert.ok(kinds.has(kind), kind);
+});

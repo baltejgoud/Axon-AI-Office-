@@ -68,41 +68,6 @@ export function cabinetWall(item: FurnitureItem): THREE.Group {
   return g;
 }
 
-/** A glass-fronted counter with rows of pastries. */
-export function pastryCase(item: FurnitureItem): THREE.Group {
-  const { w, d } = item;
-  const g = group(
-    box(PALETTE.woodLight, [w, 0.86, d], [0, 0.43, 0]),
-    box(PALETTE.white, [w + 0.04, 0.04, d + 0.04], [0, 0.88, 0], { roughness: 0.35 })
-  );
-  const glass = part(
-    GEOMETRY.box,
-    mat(PALETTE.glass, { transparent: true, opacity: 0.25, roughness: 0.1 }),
-    [w - 0.06, 0.42, d - 0.08],
-    [0, 1.11, 0]
-  );
-  glass.castShadow = false;
-  glass.renderOrder = 1;
-  g.add(glass, box(PALETTE.white, [w - 0.1, 0.02, d - 0.14], [0, 1.1, 0]));
-  const colours = ['#d9a066', '#c7803f', '#f2d49b', '#b5543c', '#e8c77a'];
-  const random = seeded(item.x + item.z * 5);
-  for (const [shelf, y] of [
-    [0, 0.93],
-    [1, 1.13]
-  ] as const)
-    for (let i = 0; i < 6; i++) {
-      const x = -w / 2 + 0.16 + i * ((w - 0.32) / 5);
-      const colour = colours[Math.floor(random() * colours.length)];
-      const round = (i + shelf) % 2 === 0;
-      const pastry = round
-        ? part(GEOMETRY.sphere, mat(colour, { roughness: 0.7 }), [0.12, 0.07, 0.12], [x, y + 0.035, 0])
-        : cylinder(colour, 0.06, 0.05, [x, y + 0.025, 0], { roughness: 0.7 });
-      pastry.castShadow = false;
-      g.add(pastry);
-    }
-  return g;
-}
-
 /** A work table stacked with paper and folders, for sorting what comes out of the cabinets. */
 export function sortingTable(item: FurnitureItem): THREE.Group {
   const { w, d } = item;

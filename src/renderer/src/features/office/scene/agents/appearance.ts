@@ -41,6 +41,8 @@ export interface Appearance {
   /** Beard colour, or none. */
   beard: string | null;
   headphones: boolean;
+  /** Work clothes for the café staff: a chef's whites and toque, or a barista's apron and cap. */
+  uniform?: 'chef' | 'barista';
 }
 
 /** Tops with an outer layer drawn over the shirt. */

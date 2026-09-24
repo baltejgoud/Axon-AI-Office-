@@ -40,7 +40,8 @@ export const COMMONS_ROOMS: Readonly<Record<ZoneId, Vec2>> = {
 export const FILES_HOTSPOT = { x: 15.8, z: -14.6, w: 6.8, d: 0.8, h: 2.4 } as const;
 export const LIBRARY_HOTSPOT = { x: 6.65, z: -14.65, w: 10, d: 0.8, h: 2.6 } as const;
 
-const CAFE_PICKUPS = ['cafe-machine', 'cafe-counter-1', 'cafe-counter-2'];
+/** Where coffee is picked up at the café bar. */
+export const CAFE_PICKUPS = ['cafe-machine', 'cafe-counter-1', 'cafe-counter-2'] as const;
 
 /** A glass wall along z with a 1.6 m door centred on `door`. */
 function glassFront(b: LayoutBuilder, id: string, fromX: number, toX: number, door: number): void {
@@ -266,10 +267,23 @@ function buildPods(b: LayoutBuilder): void {
   b.visit('desk-ops', 2.0, -2.05);
 }
 
-/** Counter and pastry case, an island with stools, six small tables and a long communal table. */
+/** The coffee bar: its counter keeps the old front line, with the barista's strip behind it. */
+export const COFFEE_BAR = { x: 14.0, z: -3.875, w: 4.6, d: 1.2 } as const;
+/** The open kitchen at the café's east end, from the bar to the Commons' edge. */
+export const KITCHEN = { x: 18.06, z: -1.75, w: 3.48, d: 4.4 } as const;
+
+/**
+ * A coffee bar with the bakery counter at its west end, the open kitchen at the east end, an island
+ * with stools, six small tables and a long communal table. Behind the bar the walkway to the Files
+ * room stays open; the barista's strip and the kitchen are furniture as far as walking goes, so
+ * nobody wanders in where the staff work.
+ */
 function buildCafe(b: LayoutBuilder): void {
-  b.item('cafe-counter', 'cafe-counter', 14.0, -3.6, 4.6, 0.65, { busyWith: CAFE_PICKUPS });
-  b.item('pastry-case', 'pastry-case', 17.5, -3.6, 1.4, 0.6);
+  b.item('cafe-counter', 'coffee-bar', COFFEE_BAR.x, COFFEE_BAR.z, COFFEE_BAR.w, COFFEE_BAR.d, {
+    busyWith: [...CAFE_PICKUPS]
+  });
+  b.item('bakery-counter', 'bakery-counter', 10.85, -3.6, 1.5, 0.65);
+  b.item('open-kitchen', 'open-kitchen', KITCHEN.x, KITCHEN.z, KITCHEN.w, KITCHEN.d);
   b.spot('cafe-machine', 'cafe', 'cafe', 15.4, -2.8, FACE_BACK);
   b.spot('cafe-counter-1', 'cafe', 'cafe', 14.1, -2.8, FACE_BACK);
   b.spot('cafe-counter-2', 'cafe', 'cafe', 12.85, -2.8, FACE_BACK);
@@ -304,11 +318,11 @@ function buildCafe(b: LayoutBuilder): void {
         'cafe-chair'
       );
     }
-  b.item('cafe-communal', 'meeting-table', 18.3, 1.8, 4.4, 1.0, { rotation: HALF_PI });
-  for (const [index, z] of [0.4, 1.4, 2.4, 3.4].entries())
+  b.item('cafe-communal', 'meeting-table', 18.3, 3.6, 4.4, 1.0, { rotation: HALF_PI });
+  for (const [index, z] of [2.2, 3.2, 4.2, 5.2].entries())
     b.seat(`cafe-c${index + 1}`, 'cafe-seat', 'cafe', 17.5, z, FACE_RIGHT, { x: 16.85, z }, 'cafe-chair');
   b.plant('plant-cafe-1', 8.2, -3.6, true);
-  b.plant('plant-cafe-2', 19.0, 5.6);
+  b.plant('plant-cafe-2', 19.3, 6.9);
   b.spot('open-cafe', 'open-area', 'cafe', 8.4, 6.4, FACE_FRONT);
 }
 

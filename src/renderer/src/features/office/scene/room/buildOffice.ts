@@ -32,9 +32,12 @@ import {
   type ScreenFlavor
 } from './materials';
 import { DeskScreens, type ScreenSlot } from './screens';
+import type { KitchenFx } from './kitchen';
 
 export interface OfficeRoom {
   root: THREE.Group;
+  /** The kitchen's flames, steam and pan, for the chefs to drive. */
+  kitchen: KitchenFx | null;
   seatHeight(poiId: string): number;
   /** Contact shadows carry the grounding alone without ambient occlusion, so they darken then. */
   setAmbientOcclusion(on: boolean): void;
@@ -261,12 +264,16 @@ export function buildOffice(): OfficeRoom {
   for (const w of WALLS) root.add(wallMesh(w));
 
   const lights: { spots: readonly string[]; mesh: THREE.Mesh; steam?: THREE.Object3D }[] = [];
+  let kitchen: KitchenFx | null = null;
   for (const item of FURNITURE) {
     const built = buildFurniture(item);
     built.object.position.set(item.x, 0, item.z);
     built.object.rotation.y = item.rotation;
     root.add(built.object);
     if (built.light) lights.push({ spots: item.busyWith ?? [], mesh: built.light, steam: built.steam });
+    for (const machine of built.machines ?? [])
+      lights.push({ spots: machine.spots, mesh: machine.light, steam: machine.steam });
+    if (built.kitchen) kitchen = built.kitchen;
   }
 
   for (const patch of contactShadows(FURNITURE)) root.add(patch);
@@ -302,6 +309,7 @@ export function buildOffice(): OfficeRoom {
 
   return {
     root,
+    kitchen,
     setAmbientOcclusion(on) {
       const { round, square } = contactMaterials();
       round.opacity = square.opacity = on ? CONTACT_OPACITY.withAO : CONTACT_OPACITY.withoutAO;

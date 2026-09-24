@@ -4,20 +4,13 @@ import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } f
 import * as commons from './commonsProps';
 import * as exec from './executive';
 import * as props from './props';
-import {
-  bevelBox,
-  bookshelf,
-  paintedBox,
-  coffeeMachine,
-  group,
-  largePlant,
-  plant,
-  seeded,
-  type CoffeeMachine
-} from './kit';
+import { bevelBox, bookshelf, paintedBox, group, largePlant, plant, seeded } from './kit';
 import { districtAt } from '../../campus/districts';
 import { accentAt, deskPod, singleDesk } from './desks';
 import { ergonomicChair } from './chairs';
+import { bakeryCounter, coffeeBar } from './cafe';
+import { openKitchen, type KitchenFx } from './kitchen';
+import { cupOfCoffee, servedPlate } from './food';
 
 export { largePlant, plant };
 
@@ -171,30 +164,6 @@ function fileCabinet(itemDef: FurnitureItem): THREE.Group {
   top.position.set(0, height, -d / 2 + 0.3);
   g.add(top, box('#e7c77d', [0.3, 0.2, 0.4], [0, height + 0.1, d / 2 - 0.4]));
   return g;
-}
-
-function cafeCounter(itemDef: FurnitureItem): CoffeeMachine {
-  const { w, d } = itemDef;
-  const g = group(
-    box(PALETTE.woodLight, [w, 0.86, d], [0, 0.45, 0]),
-    box('#b58d62', [w - 0.02, 0.08, d - 0.08], [0, 0.04, 0]),
-    box(PALETTE.white, [w + 0.04, 0.05, d + 0.04], [0, 0.905, 0], { roughness: 0.35 })
-  );
-  for (let i = 1; i < 5; i++)
-    g.add(box('#b99870', [0.01, 0.72, 0.01], [-w / 2 + (i * w) / 5, 0.47, d / 2 + 0.005]));
-  const machine = coffeeMachine();
-  machine.group.position.set(1.4, 0.93, -0.05);
-  g.add(machine.group);
-  for (const [x, color] of [
-    [0.9, PALETTE.white],
-    [0.98, '#e8b04a'],
-    [1.06, PALETTE.white]
-  ] as const)
-    g.add(cylinder(color, 0.04, 0.1, [x, 0.98, 0.12]));
-  const herb = plant(0.45, PALETTE.white, 31);
-  herb.position.set(-1.8, 0.93, -0.05);
-  g.add(herb, cylinder('#d9c3a0', 0.08, 0.2, [-1.3, 1.03, -0.05]));
-  return { group: g, light: machine.light, steam: machine.steam };
 }
 
 function cafeIsland(itemDef: FurnitureItem): THREE.Group {
@@ -406,6 +375,10 @@ export interface BuiltFurniture {
   light?: THREE.Mesh;
   /** Steam over a coffee machine, shown while it is in use. */
   steam?: THREE.Object3D;
+  /** Several machines on one counter, each busy while its own spots are taken. */
+  machines?: { light: THREE.Mesh; steam: THREE.Object3D; spots: string[] }[];
+  /** The kitchen's flames, steam and pan, driven by the chefs. */
+  kitchen?: KitchenFx;
 }
 
 export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
@@ -445,9 +418,15 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     }
     case 'file-cabinet':
       return { object: fileCabinet(itemDef) };
-    case 'cafe-counter': {
-      const built = cafeCounter(itemDef);
-      return { object: built.group, light: built.light, steam: built.steam };
+    case 'coffee-bar': {
+      const built = coffeeBar(itemDef);
+      return { object: built.group, machines: built.machines };
+    }
+    case 'bakery-counter':
+      return { object: bakeryCounter(itemDef) };
+    case 'open-kitchen': {
+      const built = openKitchen(itemDef);
+      return { object: built.group, kitchen: built.fx };
     }
     case 'sign-post':
       return { object: props.signPost() };
@@ -471,8 +450,19 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       return { object: cafeIsland(itemDef) };
     case 'stool':
       return { object: stool() };
-    case 'cafe-table':
-      return { object: roundTable(itemDef.w / 2, 0.74, PALETTE.white) };
+    case 'cafe-table': {
+      const table = roundTable(itemDef.w / 2, 0.74, PALETTE.white);
+      // Every other table has someone's plate and cup left on it.
+      const index = Number(itemDef.id.split('-').pop());
+      if (index % 2 === 1) {
+        const dish = servedPlate(index);
+        dish.position.set(-0.12, 0.76, 0.08);
+        const cup = cupOfCoffee();
+        cup.position.set(0.16, 0.76, -0.1);
+        table.add(dish, cup);
+      }
+      return { object: table };
+    }
     case 'cafe-chair':
       return { object: cafeChair() };
     case 'whiteboard':
@@ -523,8 +513,6 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
       return { object: commons.bookshelfTall(itemDef) };
     case 'cabinet-wall':
       return { object: commons.cabinetWall(itemDef) };
-    case 'pastry-case':
-      return { object: commons.pastryCase(itemDef) };
     case 'sorting-table':
       return { object: commons.sortingTable(itemDef) };
     case 'bike-rack':

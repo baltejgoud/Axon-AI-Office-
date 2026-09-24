@@ -4,7 +4,7 @@ import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { AmbientActivity } from '../simulation/agentProfiles';
 import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, ZONE_ANCHORS, poiById } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
-import { FILES_HOTSPOT, LIBRARY_HOTSPOT } from '../campus/commons';
+import { CAFE_PICKUPS, FILES_HOTSPOT, LIBRARY_HOTSPOT } from '../campus/commons';
 import { SIGNS, type SignKind, type SignSpec } from '../campus/signs';
 import { labelTier } from '../shell/framing';
 import { SignLayer } from './room/signs';
@@ -24,6 +24,8 @@ import { LAMP_BASE, windowGlass } from './room/materials';
 import { RACK_LIGHTS } from './room/props';
 import { RenderPipeline } from './render/pipeline';
 import { AutoQuality, qualityPreference, type QualityLevel, type QualityMode } from './render/quality';
+import { StaffLayer } from './staff/StaffLayer';
+import type { StaffAction, StaffId } from './staff/routines';
 
 /** Opt-in inspection handle for automated checks (set localStorage `axon.officeDebug` to "1"). */
 export interface OfficeDebugHandle {
@@ -47,6 +49,9 @@ export interface OfficeDebugHandle {
   boards(): { team: string; cards: { title: string; status: TaskStatus }[] }[];
   /** Where a team's board is on screen, in canvas pixels. */
   boardPoint(team: string): { x: number; y: number } | null;
+  /** The café staff: where they are, what they do and whether they are drawn. */
+  staff(): { id: StaffId; action: StaffAction; x: number; z: number; visible: boolean }[];
+  staffPoint(id: StaffId): { x: number; y: number } | null;
   seed: number;
 }
 
@@ -78,6 +83,11 @@ const hotspot = (area: { x: number; z: number; w: number; d: number; h: number }
   mesh.position.set(area.x, area.h / 2, area.z);
   return mesh;
 };
+
+/** The café floor: staff are drawn only while it is close and on screen. */
+const CAFE_AREA = { minX: 8, maxX: 21, minZ: -6.5, maxZ: 7 } as const;
+/** Staff and kitchen fire appear from department zoom inward (as extra full rigs do). */
+const STAFF_DETAIL = 0.06;
 
 const LOUNGE_SEATS = new Set(POINTS_OF_INTEREST.filter((poi) => poi.type === 'lounge').map((poi) => poi.id));
 /** Seconds after loading before Auto quality starts judging the frame rate (shaders are still warming up). */
@@ -115,6 +125,7 @@ export class OfficeScene {
   private readonly idleSince = new Map<string, number>();
   private readonly statuses = new Map<string, AgentStatus>();
   private readonly room: OfficeRoom;
+  private readonly staff: StaffLayer;
   private readonly pipeline: RenderPipeline;
   private qualityMode: QualityMode = qualityPreference();
   private autoQuality = new AutoQuality();
@@ -182,6 +193,8 @@ export class OfficeScene {
     this.sun = this.addLights();
     this.room = buildOffice();
     this.scene.add(this.room.root);
+    this.staff = new StaffLayer(this.reducedMotion);
+    this.scene.add(this.staff.object);
 
     const seed = Math.floor(Math.random() * 1e9);
     this.simulation = new OfficeSimulation({
@@ -219,6 +232,21 @@ export class OfficeScene {
         boardPoint: (team) =>
           this.boards.screenPoint(
             team,
+            this.cameraRig.camera,
+            this.container.clientWidth,
+            this.container.clientHeight
+          ),
+        staff: () =>
+          this.staff.info().map((s) => ({
+            id: s.id,
+            action: s.action,
+            x: s.x,
+            z: s.z,
+            visible: this.staff.object.visible
+          })),
+        staffPoint: (id) =>
+          this.staff.screenPoint(
+            id,
             this.cameraRig.camera,
             this.container.clientWidth,
             this.container.clientHeight
@@ -611,6 +639,7 @@ export class OfficeScene {
       if (character && view) this.updateCharacter(character, view, dt);
     }
     this.crowd.update(this.elapsed, this.reducedMotion);
+    this.updateStaff(dt);
     this.room.update(
       dt,
       this.elapsed,
@@ -628,6 +657,24 @@ export class OfficeScene {
       this.updateTiers();
       this.onReady();
     }
+  }
+
+  /** The café staff and the kitchen's fire: only drawn while the café is near and on screen. */
+  private updateStaff(dt: number): void {
+    const view = this.cameraRig.viewBounds();
+    const near =
+      this.cameraRig.metresPerPixel() < STAFF_DETAIL &&
+      view.maxX > CAFE_AREA.minX &&
+      view.minX < CAFE_AREA.maxX &&
+      view.maxZ > CAFE_AREA.minZ &&
+      view.minZ < CAFE_AREA.maxZ;
+    const waiting = CAFE_PICKUPS.filter((id) => this.simulation.occupantsOf(id).length > 0);
+    const grill = this.staff.update(dt, this.elapsed, waiting, near).find((s) => s.id === 'chef-grill');
+    this.room.kitchen?.update(
+      near && !!grill?.cooking,
+      this.reducedMotion ? 0 : this.elapsed,
+      near && grill?.holding === 'pan'
+    );
   }
 
   /** Signs grow as the camera pulls back and fade by zoom tier; only redone when the zoom moves. */
@@ -738,6 +785,7 @@ export class OfficeScene {
     if (window.__axonOffice) delete window.__axonOffice;
     this.characters.forEach((character) => character.dispose());
     this.crowd.dispose();
+    this.staff.dispose();
     this.signs.dispose();
     this.boards.dispose();
     for (const spot of [this.filesHotspot, this.libraryHotspot]) {

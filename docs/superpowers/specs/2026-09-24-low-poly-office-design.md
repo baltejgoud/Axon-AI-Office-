@@ -121,3 +121,12 @@ Plan: [`2026-09-24-low-poly-parts-2-4.md`](../plans/2026-09-24-low-poly-parts-2-
 5. **Accent tints are mixed in display (sRGB) terms**; mixed in linear light, 45 % white already read as grey.
 6. **Executive desks** lose their painted papers and brass cup: the desk-life props now sit there.
 7. **Readings** (desktop check, mains power): whole campus 444 draw calls, 1.48M triangles; 1080p Balanced 55 fps (median of ten; baseline 54); 1080p High 41 fps (baseline 36).
+
+### Part 3
+
+1. **The kitchen faces the camera.** The fixed camera looks from the front right, so appliances along the kitchen's east side would have shown their backs. The cooking line (fridge, range under the hood, oven column, back counter under a utensil rail, tiled splashback) runs along the back and faces the café; the prep counter and the pass run along the front, where the prep chef faces the room; side counters (fruit crate, sink) close it. The whole kitchen is one blocking footprint, x 16.32–19.8, z −3.95–0.45, meeting the bar's east end.
+2. **The barista's strip is part of the bar.** The coffee bar's footprint is 1.2 m deep: the counter keeps its old front line (the pickups do not move) and the 0.55 m behind it is the barista's, so coworkers never walk through her. The walkway to the Files room narrows from 2.07 m to 1.5 m and stays clear end to end (tested).
+3. **The Commons sign** moves from z 1 to z 8.5: from the camera it stood in front of the kitchen.
+4. **Espresso machines face the barista**; the café sees their painted backs, the cups warming on top, the busy lights and the steam.
+5. **Moving things cost one draw call each:** `bake()` collapses an object into one vertex-coloured mesh (the burner pan that hides while the chef tosses it). Flames and steam are drawn only while the café is close.
+6. **Readings** (desktop check, mains power): whole campus 427 draw calls, 1.49M triangles; 1080p Balanced 55 fps; 1080p High 36 fps.

@@ -215,6 +215,8 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
       );
   }
 
+  if (look.uniform) dressForWork(look, width, hips, spine, head, add, G);
+
   // Arms
   const arm = (side: 1 | -1): Limb => {
     const shoulder = joint(spine, 0.235 * side * width, 0.41, 0);
@@ -258,6 +260,47 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
       child instanceof THREE.Mesh && (child.material === eyeMaterial || child.material === highlight)
   );
   return { root, scale, hips, spine, head, armL, armR, legL, legR, outlinable: outlines, eyes };
+}
+
+/**
+ * Café work clothes: chefs get a double row of buttons, an apron from the waist and a tall toque;
+ * the barista a bib apron and a cap. Worn over the look's shirt and trousers.
+ */
+function dressForWork(
+  look: Appearance,
+  width: number,
+  hips: THREE.Group,
+  spine: THREE.Group,
+  head: THREE.Group,
+  add: (parent: THREE.Object3D, mesh: THREE.Mesh, outline?: boolean) => THREE.Mesh,
+  G: Shapes
+): void {
+  if (look.uniform === 'chef') {
+    const white = mat('#f7f6f2', { roughness: 0.85 });
+    const buttons = mat('#2b2f36', { roughness: 0.5 });
+    for (const side of [-1, 1])
+      for (const y of [0.18, 0.26, 0.34])
+        spine.add(part(G.small, buttons, [0.022, 0.022, 0.012], [side * 0.055, y, 0.136]));
+    add(hips, part(G.box, white, [0.38 * width, 0.42, 0.025], [0, -0.17, 0.14]));
+    add(head, part(G.cylinder, white, [0.27, 0.17, 0.27], [0, HEAD.y + 0.2, -0.015]));
+    add(head, part(G.hairBlob, white, [0.36, 0.2, 0.36], [0, HEAD.y + 0.32, -0.015]));
+    return;
+  }
+  const apron = mat('#8a5a3c', { roughness: 0.9 });
+  const cap = mat('#2f6f68', { roughness: 0.8 });
+  add(spine, part(G.box, apron, [0.3 * width, 0.3, 0.02], [0, 0.22, 0.136]));
+  add(hips, part(G.box, apron, [0.38 * width, 0.36, 0.022], [0, -0.14, 0.14]));
+  add(
+    head,
+    part(
+      G.hairCap,
+      cap,
+      [HEAD.w * 1.12, HEAD.h * 1.05, HEAD.d * 1.12],
+      [0, HEAD.y + 0.01, -0.008],
+      [-0.2, 0, 0]
+    )
+  );
+  add(head, part(G.box, cap, [0.2, 0.015, 0.13], [0, HEAD.y + 0.1, 0.17], [0.15, 0, 0]));
 }
 
 function buildHair(

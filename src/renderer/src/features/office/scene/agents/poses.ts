@@ -1,4 +1,8 @@
 import type { AgentBehaviorState, HeldItem } from '../../simulation/types';
+import type { StaffAction } from '../staff/routines';
+
+/** What a body can be doing: a coworker's behaviour or a café staff member's action. */
+export type PoseBehavior = AgentBehaviorState | StaffAction;
 
 /**
  * Procedural body poses. Angles are radians; lengths are in the unscaled skeleton's units
@@ -27,7 +31,7 @@ export interface Pose {
 }
 
 export interface PoseInput {
-  behavior: AgentBehaviorState;
+  behavior: PoseBehavior;
   /** 0 standing, 1 seated. */
   sit: number;
   /** Walking speed in m/s. */
@@ -221,6 +225,58 @@ export function computePose(input: PoseInput): Pose {
     case 'sitting':
       pose.armL = { ...ON_LAP };
       pose.armR = { ...ON_LAP };
+      break;
+    // ---- café staff, standing at their stations
+    case 'stir':
+      // Left hand on the pan's handle, the right stirring in small circles.
+      pose.lean = 0.1;
+      pose.headPitch = 0.38;
+      pose.armL = limb(0.72, -0.18, 0.95);
+      pose.armR = limb(0.92 + 0.1 * Math.sin(t * 5), -0.12 + 0.12 * Math.cos(t * 5), 1.0);
+      break;
+    case 'flip': {
+      // Both hands on the pan, tossing it every second or so.
+      const toss = Math.pow(Math.max(0, Math.sin(t * 5.2)), 3);
+      pose.lean = 0.06 - 0.06 * toss;
+      pose.headPitch = 0.3 - 0.25 * toss;
+      pose.armR = limb(0.85 + 0.45 * toss, -0.2, 1.15 - 0.45 * toss);
+      pose.armL = limb(0.7 + 0.2 * toss, -0.25, 1.1);
+      break;
+    }
+    case 'season':
+      pose.headPitch = 0.2;
+      pose.armR = limb(1.25, -0.15, 1.2 + 0.18 * Math.sin(t * 16));
+      pose.armL = limb(0.55, -0.2, 1.1);
+      break;
+    case 'chop': {
+      const beat = Math.sin(t * 9);
+      pose.lean = 0.14;
+      pose.headPitch = 0.42;
+      pose.armL = limb(0.72, -0.32, 1.15);
+      pose.armR = limb(0.8 + 0.12 * Math.max(0, beat), -0.08, 1.05 + 0.3 * beat);
+      break;
+    }
+    case 'plate': {
+      const reach = 0.5 + 0.5 * Math.sin(t * 1.6);
+      pose.lean = 0.1;
+      pose.headPitch = 0.4;
+      pose.armR = limb(0.7 + 0.15 * reach, -0.15, 0.95);
+      pose.armL = limb(0.7 + 0.15 * (1 - reach), -0.15, 0.95);
+      break;
+    }
+    case 'wipe':
+      // Circles with a cloth on the counter, leaning over it.
+      pose.lean = 0.2;
+      pose.headPitch = 0.3;
+      pose.twist = 0.08 * Math.sin(t * 3);
+      pose.armR = limb(0.85 + 0.12 * Math.sin(t * 3), -0.1 + 0.28 * Math.cos(t * 3), 0.7);
+      pose.armL = limb(0.6, -0.2, 0.8);
+      break;
+    case 'brew':
+      // Working the machine: tamp, lock the handle in, wait for the shot.
+      pose.headPitch = 0.25;
+      pose.armR = limb(0.95, -0.2, 1.35 + 0.2 * Math.sin(t * 2.2));
+      pose.armL = limb(0.85, -0.25, 1.3);
       break;
     case 'idle':
       if (seated) {
