@@ -1,3 +1,4 @@
+import { PLANNER_TOOL_NAMES } from '../tasks/tools';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
@@ -51,6 +52,8 @@ export class PermissionManager {
 
     // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
     if (toolName === 'ask_colleague') return { action: 'allow' };
+    // The receptionist's planner tools only touch the task records.
+    if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
 
     // 2. Path containment check
     if (['read_file', 'write_file', 'list_files'].includes(toolName)) {

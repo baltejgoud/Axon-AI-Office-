@@ -295,3 +295,44 @@ test('a colleague who cannot be reached ends their help with the reason', async 
   assert.equal(help.status, 'done');
   assert.equal(help.note, 'Provider down');
 });
+
+test('the receptionist keeps the planner with her own tools, knowing the date', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service, 'receptionist');
+  let calls = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    calls++;
+    if (calls === 1) {
+      assert.deepEqual(req.tools.map((tool) => tool.name), ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task']);
+      assert.match(req.system, /Now: \w+day \d+ \w+ \d{4}, \d\d:\d\d \(UTC[+-]\d\d:\d\d\)\. Today is \d{4}-\d\d-\d\d\./);
+      return { toolCalls: [{ id: 'add', name: 'add_task', arguments: JSON.stringify({ title: 'Prep the investor deck', due: '2099-01-02T10:00', remind_at: '2099-01-02T09:30' }) }] };
+    }
+    onChunk('Added: Prep the investor deck.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Remind me to prep the investor deck', []);
+  const todos = repo.state.tasks.filter((task) => task.kind === 'todo');
+  assert.equal(todos.length, 1);
+  assert.equal(todos[0].title, 'Prep the investor deck');
+  assert.equal(todos[0].due, '2099-01-02T10:00');
+  assert.equal(todos[0].remindAt, new Date(2099, 0, 2, 9, 30).getTime());
+  // She has no work records of her own; the call keeps its result for the thread.
+  assert.equal(repo.state.tasks.filter((task) => task.kind === 'work').length, 0);
+  const call = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length).toolCalls[0];
+  assert.match(call.result, /^Added "Prep the investor deck" \(id [^)]+\) — due Fri 2 Jan 2099 10:00, reminder Fri 2 Jan 2099 09:30\.$/);
+});
+
+test('the receptionist on a model without tools says so plainly', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service, 'receptionist');
+  mockModel(t, async () => {
+    throw new Error('registry.ollama.ai/library/gemma:2b does not support tools');
+  });
+  await service.chatSend(chat.id, 'What is on today?', []);
+  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  assert.equal(reply.error, "This model can't use tools, so I can't keep your planner. Pick another model.");
+});
