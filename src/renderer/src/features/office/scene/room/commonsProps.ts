@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { FurnitureItem } from '../../simulation/layout';
 import { bookshelf, coffeeMachine, group, plant, seeded, type CoffeeMachine } from './kit';
 import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part } from './materials';
+import { officeModel } from './models';
 
 /**
  * The Commons' bigger rooms: tall library shelves, the Files room's cabinet wall, the café's pastry
@@ -12,9 +13,28 @@ import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part } from './materia
 const BRASS = { metalness: 0.6, roughness: 0.35 } as const;
 
 /** Library shelving that reaches toward the ceiling, with a brass rail and a rolling ladder. */
+/** Bookcases side by side along `item`, or null if the model has not loaded. */
+function bookcases(item: FurnitureItem, height: number): THREE.Group | null {
+  const count = Math.max(1, Math.round(item.w / 1.15));
+  const width = item.w / count;
+  const g = group();
+  for (let i = 0; i < count; i++) {
+    const bookcase = officeModel('bookcase-books', {
+      w: width,
+      d: item.d,
+      h: height,
+      paint: { Wood1: PALETTE.wood, Wood2: PALETTE.wood, DarkWood: PALETTE.woodDark }
+    });
+    if (!bookcase) return null;
+    bookcase.position.x = -item.w / 2 + width * (i + 0.5);
+    g.add(bookcase);
+  }
+  return g;
+}
+
 export function bookshelfTall(item: FurnitureItem): THREE.Group {
   const height = 2.6;
-  const g = bookshelf(item, height, 6);
+  const g = bookcases(item, height) ?? bookshelf(item, height, 6);
   const { w, d } = item;
   g.add(cylinder('#b8914f', 0.012, w - 0.1, [0, 2.35, d / 2 + 0.06], BRASS).rotateZ(Math.PI / 2));
   // The ladder leans on the rail at a bay chosen by the shelf's position.

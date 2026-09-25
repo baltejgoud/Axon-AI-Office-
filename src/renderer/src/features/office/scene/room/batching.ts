@@ -67,8 +67,15 @@ function concat(parts: THREE.BufferGeometry[], names: readonly string[]): THREE.
     const array = new Float32Array(vertices * size);
     let offset = 0;
     for (const g of parts) {
-      const attribute = g.getAttribute(name) as THREE.BufferAttribute;
-      if (attribute.array instanceof Float32Array && attribute.itemSize === size && !attribute.normalized)
+      const attribute = g.getAttribute(name) as THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
+      // The fast copy only works on a plain float array: an interleaved one (as loaded models have)
+      // holds other attributes between these values, so it takes the per-component path.
+      if (
+        attribute instanceof THREE.BufferAttribute &&
+        attribute.array instanceof Float32Array &&
+        attribute.itemSize === size &&
+        !attribute.normalized
+      )
         array.set(attribute.array.subarray(0, attribute.count * size), offset);
       else
         for (let i = 0; i < attribute.count; i++)

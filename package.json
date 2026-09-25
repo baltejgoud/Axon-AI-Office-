@@ -18,7 +18,9 @@
     "test:desktop": "electron tests/electron-smoke.cjs",
     "start": "electron-vite preview",
     "format": "prettier --write \"src/renderer/src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/renderer/src/**/*.{ts,tsx,css}\""
+    "format:check": "prettier --check \"src/renderer/src/**/*.{ts,tsx,css}\"",
+    "models:optimize": "node scripts/models-optimize.mjs",
+    "models:inspect": "node scripts/models-inspect.mjs"
   },
   "dependencies": {
     "@types/three": "^0.186.0",
@@ -35,6 +37,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.0",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

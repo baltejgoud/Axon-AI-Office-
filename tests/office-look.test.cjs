@@ -98,6 +98,38 @@ test('plain colours of one finish merge into one vertex-coloured mesh; glowing a
   assert.equal(batching.surfaceKey(materials.mat('#123456', { map: new THREE.Texture() })), null);
 });
 
+test('batching copies interleaved attributes (as loaded models have them) value by value', () => {
+  // A downloaded model's positions and normals share one buffer: x y z nx ny nz per vertex.
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const count = box.getAttribute('position').count;
+  const data = new Float32Array(count * 6);
+  for (let i = 0; i < count; i++) {
+    data.set([box.getAttribute('position').getX(i), box.getAttribute('position').getY(i), box.getAttribute('position').getZ(i)], i * 6);
+    data.set([box.getAttribute('normal').getX(i), box.getAttribute('normal').getY(i), box.getAttribute('normal').getZ(i)], i * 6 + 3);
+  }
+  const buffer = new THREE.InterleavedBuffer(data, 6);
+  const model = new THREE.BufferGeometry();
+  model.setAttribute('position', new THREE.InterleavedBufferAttribute(buffer, 3, 0));
+  model.setAttribute('normal', new THREE.InterleavedBufferAttribute(buffer, 3, 3));
+  model.setIndex(box.getIndex());
+  const root = new THREE.Group();
+  const mesh = new THREE.Mesh(model, materials.mat('#336699'));
+  mesh.position.x = 10;
+  root.add(mesh);
+  batching.batchStatic(root);
+  const merged = root.children.find((c) => c.isMesh);
+  merged.geometry.computeBoundingBox();
+  // The unit box, where it was: no normals read as positions, nothing stretched across the room.
+  const { min, max } = merged.geometry.boundingBox;
+  assert.deepEqual(
+    [min.x, max.x, min.y, max.y, min.z, max.z].map((v) => +v.toFixed(6)),
+    [9.5, 10.5, -0.5, 0.5, -0.5, 0.5]
+  );
+  const normals = merged.geometry.getAttribute('normal');
+  for (let i = 0; i < normals.count; i++)
+    assert.ok(Math.abs(Math.hypot(normals.getX(i), normals.getY(i), normals.getZ(i)) - 1) < 1e-5);
+});
+
 test('batching leaves no empty groups behind, but keeps groups that still hold something that moves', () => {
   const root = new THREE.Group();
   const nested = new THREE.Group();

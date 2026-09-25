@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { FurnitureItem } from '../../simulation/layout';
 import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } from './materials';
 import { GREENS, LOW, bevelBox, facetPart, lathe } from './kit';
+import { officeModel } from './models';
 
 /**
  * District signature pieces: the things that make each area feel like its own place.
@@ -311,6 +312,27 @@ export function planter(item: FurnitureItem): THREE.Group {
     bevelBox('#ece6dc', [w, 0.45, d], [0, 0.225, 0], 0.04, { roughness: 0.75 }),
     box('#5b4636', [w - 0.08, 0.02, d - 0.08], [0, 0.45, 0])
   );
+  // Planted with the plant models where they have loaded: their pots are soil-coloured and sunk
+  // into the trough, so only the plants show.
+  const planted = Math.max(2, Math.round(w * 2));
+  const soil = '#5b4636';
+  const models = Array.from({ length: planted }, (_, i) => {
+    const h = 0.55 + random() * 0.25;
+    const model = officeModel(i % 2 ? 'plant-monstera-small' : 'plant-snake', {
+      w: d,
+      d,
+      h,
+      mode: 'inside',
+      paint: { Black: soil, Brown: soil, Plant_Green: GREENS[(i + 1) % GREENS.length] }
+    });
+    model?.position.set(-w / 2 + (w / planted) * (i + 0.5), 0.45 - h * 0.18, 0);
+    model?.rotation.set(0, random() * Math.PI * 2, 0);
+    return model;
+  });
+  if (models.every(Boolean)) {
+    g.add(...(models as THREE.Group[]));
+    return g;
+  }
   const count = Math.max(3, Math.round(w * 3));
   for (let i = 0; i < count; i++) {
     const x = -w / 2 + 0.15 + random() * (w - 0.3);

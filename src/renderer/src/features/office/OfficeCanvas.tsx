@@ -2,6 +2,7 @@ import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LayoutGrid, Library, RotateCcw, Scan, Settings, ZoomIn } from 'lucide-react';
 import { OfficeScene, type OfficeView } from './scene/OfficeScene';
+import { loadOfficeModels, officeModelsLoaded } from './scene/room/models';
 import { useOfficeStore } from './store/officeStore';
 import { OFFICE_AGENTS, type AgentStatus } from './data/officeAgents';
 import { DISTRICTS, districtById, type DistrictId } from './campus/districts';
@@ -26,6 +27,8 @@ export function OfficeCanvas() {
   const scene = useRef<OfficeScene | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
+  // The furniture models load once, before the office is first built (the loading note shows meanwhile).
+  const [modelsReady, setModelsReady] = useState(officeModelsLoaded);
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<OfficeView | null>(null);
   const tasks = useApp((s) => s.data?.tasks);
@@ -55,7 +58,16 @@ export function OfficeCanvas() {
   const roster = failed || !is3dEnabled;
 
   useEffect(() => {
-    if (roster || !container.current) return;
+    if (modelsReady) return;
+    let live = true;
+    void loadOfficeModels().then(() => live && setModelsReady(true));
+    return () => {
+      live = false;
+    };
+  }, [modelsReady]);
+
+  useEffect(() => {
+    if (roster || !modelsReady || !container.current) return;
     setLoading(true);
     const host = container.current;
     let world: OfficeScene;
@@ -101,7 +113,7 @@ export function OfficeCanvas() {
       world.destroy();
       scene.current = null;
     };
-  }, [roster, selectAgent, syncHelp]);
+  }, [roster, modelsReady, selectAgent, syncHelp]);
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);

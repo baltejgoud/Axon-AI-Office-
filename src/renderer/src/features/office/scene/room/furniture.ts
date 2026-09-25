@@ -4,15 +4,17 @@ import { GEOMETRY, PALETTE, box, cylinder, lampGlow, mat, part, screenCanvas } f
 import * as commons from './commonsProps';
 import * as exec from './executive';
 import * as props from './props';
-import { bevelBox, bookshelf, paintedBox, group, largePlant, plant, pottedTuft, seeded } from './kit';
+import { GREENS, bevelBox, bookshelf, paintedBox, group, largePlant, plant, pottedTuft, seeded } from './kit';
 import { districtAt } from '../../campus/districts';
 import { accentAt, deskPod, singleDesk } from './desks';
+import { SINGLE_DESK } from '../../campus/deskPlacement';
 import { ergonomicChair } from './chairs';
 import { bakeryCounter, coffeeBar } from './cafe';
 import { openKitchen, type KitchenFx } from './kitchen';
 import { cupOfCoffee, servedPlate } from './food';
 import { dogBed, mediaConsole, type MediaWall } from './lounge';
 import * as play from './playProps';
+import { officeModel, type ModelId } from './models';
 import type { RodSlot } from './playProps';
 
 export { largePlant, plant };
@@ -46,7 +48,11 @@ function armchair(): THREE.Group {
   );
 }
 
-/** Sofa fabrics: teal, rust, denim and olive, with cushions and throws that pick each other out. */
+/**
+ * Sofa fabrics: teal, rust, denim and olive, with cushions and throws that pick each other out.
+ * Sofas within the same 10 m square share a fabric, so a room's seating matches; the Lounge's U
+ * spans two squares, so its three sofas are named together.
+ */
 const SOFA_FABRICS = [
   { body: '#4f8a8b', seat: '#5e9a9b', throws: ['#e9b949', '#f1e6d2'] },
   { body: '#b8663f', seat: '#c7774f', throws: ['#f1e6d2', '#4f8a8b'] },
@@ -56,11 +62,7 @@ const SOFA_FABRICS = [
 
 function sofa(itemDef: FurnitureItem): THREE.Group {
   const { w, d } = itemDef;
-  // Sofas within the same 10 m square share a fabric, so a room's seating matches; the Lounge's
-  // U spans two squares, so its three sofas are named together.
-  const lounge = itemDef.id === 'sofa' || itemDef.id.startsWith('sofa-');
-  const room = lounge ? 0 : Math.floor((itemDef.x + 100) / 10) * 7 + Math.floor((itemDef.z + 100) / 10) * 3;
-  const fabric = SOFA_FABRICS[room % SOFA_FABRICS.length];
+  const fabric = fabricFor(itemDef);
   const g = group(
     paintedBox(fabric.body, [w, 0.3, d], [0, 0.2, 0], 0.05),
     paintedBox(fabric.body, [w, 0.72, 0.22], [0, 0.48, -d / 2 + 0.11], 0.06),
@@ -392,24 +394,157 @@ export interface BuiltFurniture {
   foosball?: readonly RodSlot[];
 }
 
+// ---------------------------------------------------------------- downloaded models
+// Each falls back to the code-built piece when its model has not loaded.
+
+const FRAME = '#2f343b';
+const STEEL = { color: '#9aa1ab', metalness: 0.45, roughness: 0.4 };
+
+/** The desk chair, its fabric in the district's colour. */
+function officeChair(accent: string): THREE.Group {
+  return (
+    officeModel('office-chair', {
+      w: 0.62,
+      d: 0.62,
+      seat: SEAT_HEIGHT['office-chair'],
+      mode: 'seat',
+      paint: { Chair: accent, Black: FRAME, Grey: STEEL },
+      // As with the code-built chair, only the seat and back throw shadows: the base and casters
+      // are 90% of its triangles and their shadows are lost under the desk.
+      shadows: ['Chair']
+    }) ?? ergonomicChair(accent)
+  );
+}
+
+/** Sofas and armchairs share the room's fabric (see SOFA_FABRICS). */
+function fabricFor(item: FurnitureItem) {
+  const lounge = item.id === 'sofa' || item.id.startsWith('sofa-');
+  const room = lounge ? 0 : Math.floor((item.x + 100) / 10) * 7 + Math.floor((item.z + 100) / 10) * 3;
+  return SOFA_FABRICS[room % SOFA_FABRICS.length];
+}
+
+function sofaModel(item: FurnitureItem): THREE.Group | null {
+  const fabric = fabricFor(item);
+  return officeModel('couch-medium-teal', {
+    w: item.w,
+    d: item.d,
+    seat: SOFA_SEAT_HEIGHT,
+    paint: { Couch_Blue: fabric.body, Black: PALETTE.woodDark }
+  });
+}
+
+function armchairModel(item: FurnitureItem): THREE.Group | null {
+  return officeModel('armchair-teal', {
+    w: item.w,
+    d: item.d,
+    seat: SEAT_HEIGHT.armchair,
+    paint: { Couch_Blue: PALETTE.fabricBlue, Black: PALETTE.woodDark }
+  });
+}
+
+/** Pots in the office's white or clay, leaves in its greens: the same plants, but ours. */
+function pottedModel(
+  ids: readonly ModelId[],
+  seed: number,
+  fit: { w: number; h: number }
+): THREE.Group | null {
+  const random = seeded(seed);
+  const id = ids[Math.floor(random() * ids.length)];
+  const pot = random() < 0.7 ? PALETTE.pot : PALETTE.clay;
+  const leaf = GREENS[Math.floor(random() * GREENS.length)];
+  const g = officeModel(id, {
+    w: fit.w,
+    d: fit.w,
+    h: fit.h * (0.85 + random() * 0.3),
+    mode: 'inside',
+    paint: { Black: pot, Grey: pot, Plant_Green: leaf, DarkGreen: GREENS[0], Brown: '#5b4636' }
+  });
+  if (g) g.rotation.y = random() * Math.PI * 2;
+  return g;
+}
+
+const SMALL_PLANTS: readonly ModelId[] = [
+  'plant-broadleaf',
+  'plant-monstera-small',
+  'plant-cactus-pot',
+  'plant-snake'
+];
+const LARGE_PLANTS: readonly ModelId[] = ['plant-banana', 'plant-monstera', 'plant-snake', 'cactus'];
+/** Only the broad-leaved ones grow into indoor trees; a 2.5 m snake plant or cactus looks wrong. */
+const TREES: readonly ModelId[] = ['plant-banana', 'plant-monstera'];
+
+/** A single desk: light wood on white drawers, a lamp at the back corner. */
+function deskModel(item: FurnitureItem): THREE.Group | null {
+  const desk = officeModel('desk', {
+    w: item.w,
+    d: item.d,
+    h: SINGLE_DESK.top,
+    paint: { Wood: PALETTE.woodLight, DarkWood: PALETTE.white }
+  });
+  if (!desk) return null;
+  const lamp = officeModel('desk-lamp', {
+    w: 0.3,
+    d: 0.3,
+    h: 0.42,
+    mode: 'inside',
+    paint: { Black: PALETTE.darkMetal, LightMetal: STEEL, White: '#f6ead0' },
+    shadows: false
+  });
+  if (lamp) {
+    lamp.position.set(item.w / 2 - 0.18, SINGLE_DESK.top, -item.d / 2 + 0.16);
+    lamp.rotation.y = -0.6;
+    desk.add(lamp);
+  }
+  return desk;
+}
+
+function stoolModel(): THREE.Group | null {
+  return officeModel('bar-stool', {
+    w: 0.44,
+    d: 0.44,
+    seat: SEAT_HEIGHT.stool,
+    squeeze: 0.55,
+    paint: { Wood: PALETTE.woodDark, Cushin: '#e6d8c3' }
+  });
+}
+
+/** A low round table with a couple of books and a bowl on it. */
+function coffeeTableModel(): THREE.Group | null {
+  const table = officeModel('table-round-small', {
+    w: 0.9,
+    d: 0.9,
+    h: 0.42,
+    paint: { Wood: PALETTE.woodLight }
+  });
+  if (!table) return null;
+  table.add(
+    box('#8d99ae', [0.2, 0.03, 0.26], [0.1, 0.435, 0.05]),
+    box('#e0b36a', [0.18, 0.03, 0.24], [0.1, 0.465, 0.05])
+  );
+  const bowl = pottedTuft(0.9, PALETTE.white, 11);
+  bowl.position.set(-0.15, 0.42, -0.1);
+  table.add(bowl);
+  return table;
+}
+
 export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
   switch (itemDef.kind) {
     case 'rug':
       return { object: rug(itemDef) };
     case 'desk':
-      return { object: singleDesk(itemDef) };
+      return { object: deskModel(itemDef) ?? singleDesk(itemDef) };
     case 'desk-pod':
       return { object: deskPod(itemDef) };
     case 'office-chair':
-      return { object: ergonomicChair(accentAt(itemDef.x, itemDef.z)) };
+      return { object: officeChair(accentAt(itemDef.x, itemDef.z)) };
     case 'meeting-chair':
       return { object: meetingChair() };
     case 'armchair':
-      return { object: armchair() };
+      return { object: armchairModel(itemDef) ?? armchair() };
     case 'sofa':
-      return { object: sofa(itemDef) };
+      return { object: sofaModel(itemDef) ?? sofa(itemDef) };
     case 'coffee-table':
-      return { object: coffeeTable() };
+      return { object: coffeeTableModel() ?? coffeeTable() };
     case 'side-table':
       return { object: sideTable() };
     case 'meeting-table':
@@ -482,7 +617,7 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     case 'cafe-island':
       return { object: cafeIsland(itemDef) };
     case 'stool':
-      return { object: stool() };
+      return { object: stoolModel() ?? stool() };
     case 'cafe-table': {
       const table = roundTable(itemDef.w / 2, 0.74, PALETTE.white);
       // Every other table has someone's plate and cup left on it.
@@ -503,9 +638,17 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     case 'wall-screen':
       return { object: wallScreen(itemDef) };
     case 'plant':
-      return { object: plant(1, PALETTE.pot, Math.abs(itemDef.x * 13 + itemDef.z)) };
+      return {
+        object:
+          pottedModel(SMALL_PLANTS, Math.abs(itemDef.x * 13 + itemDef.z), { w: 0.7, h: 0.8 }) ??
+          plant(1, PALETTE.pot, Math.abs(itemDef.x * 13 + itemDef.z))
+      };
     case 'plant-large':
-      return { object: largePlant(Math.abs(itemDef.x * 7 + itemDef.z * 3)) };
+      return {
+        object:
+          pottedModel(LARGE_PLANTS, Math.abs(itemDef.x * 7 + itemDef.z * 3), { w: 1.2, h: 1.6 }) ??
+          largePlant(Math.abs(itemDef.x * 7 + itemDef.z * 3))
+      };
     case 'credenza':
       return { object: credenza(itemDef) };
     case 'floor-lamp':
@@ -517,7 +660,11 @@ export function buildFurniture(itemDef: FurnitureItem): BuiltFurniture {
     case 'reception-desk':
       return { object: receptionDesk(itemDef) };
     case 'tree':
-      return { object: props.tree(itemDef) };
+      return {
+        object:
+          pottedModel(TREES, Math.abs(itemDef.x * 5 + itemDef.z * 11), { w: 2.2, h: 2.6 }) ??
+          props.tree(itemDef)
+      };
     case 'bean-bag':
       return { object: props.beanBag(itemDef) };
     case 'ping-pong':
