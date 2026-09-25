@@ -894,13 +894,13 @@ export function SettingsPanel() {
   );
 }
 
-/** How much shading the office draws; Auto steps down on a slow machine. */
+/** How sharply the office is drawn; Auto steps down on a slow machine. */
 function OfficeQualityField() {
   const [mode, setMode] = useState(qualityPreference);
   return (
     <Field
       label="Office quality"
-      hint="High adds soft shading where things meet. Auto switches to Balanced if the office runs slowly."
+      hint="High draws the office sharper, with finer shadows. Auto switches to Balanced if the office runs slowly."
     >
       <select
         className="select"

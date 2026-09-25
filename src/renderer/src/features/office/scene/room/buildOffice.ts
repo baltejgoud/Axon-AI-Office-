@@ -17,7 +17,7 @@ import { workstation } from './desks';
 import { surfaceOf } from '../../campus/deskPlacement';
 import { animateSteam } from './kit';
 import { batchStatic } from './batching';
-import { CONTACT_OPACITY, contactMaterials, contactShadows } from './grounding';
+import { contactShadows } from './grounding';
 import { wallOutward, wallSlab } from './walls';
 import {
   GEOMETRY,
@@ -46,8 +46,6 @@ export interface OfficeRoom {
   /** The lounge's TV and the dog, for the scene to animate. */
   lounge: { media: MediaWall | null; dog: THREE.Mesh | null };
   seatHeight(poiId: string): number;
-  /** Contact shadows carry the grounding alone without ambient occlusion, so they darken then. */
-  setAmbientOcclusion(on: boolean): void;
   update(
     dt: number,
     elapsed: number,
@@ -336,10 +334,6 @@ export function buildOffice(): OfficeRoom {
     root,
     kitchen,
     lounge,
-    setAmbientOcclusion(on) {
-      const { round, square } = contactMaterials();
-      round.opacity = square.opacity = on ? CONTACT_OPACITY.withAO : CONTACT_OPACITY.withoutAO;
-    },
     seatHeight(poiId) {
       if (poiId.startsWith('lounge-sofa')) return SOFA_SEAT_HEIGHT;
       if (poiId.startsWith('game-seat')) return BEAN_BAG_SEAT_HEIGHT;

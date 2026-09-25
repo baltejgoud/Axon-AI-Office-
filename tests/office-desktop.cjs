@@ -153,7 +153,7 @@ app.on('web-contents-created', (_, contents) => {
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 9);
-      // Quality: Auto starts on High (soft shading where things meet); Balanced leaves the shading out.
+      // Quality: Auto starts on High (drawn sharper, finer shadows); Balanced draws at screen resolution.
       assert.deepEqual(await evaluate('window.__axonOffice.quality()'), { mode: 'auto', level: 'high' });
       await snap('look-high.png');
       await evaluate("window.__axonOffice.setQuality('balanced')");

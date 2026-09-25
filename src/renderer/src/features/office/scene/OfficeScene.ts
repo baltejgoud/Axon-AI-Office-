@@ -23,8 +23,8 @@ import { screenSheet } from './room/screenSheet';
 import { MIDDAY, followsTimeOfDay, lightingAt, type Lighting } from './room/lighting';
 import { LAMP_BASE, windowGlass } from './room/materials';
 import { RACK_LIGHTS } from './room/props';
-import { RenderPipeline } from './render/pipeline';
 import { AutoQuality, qualityPreference, type QualityLevel, type QualityMode } from './render/quality';
+import { applyRenderQuality } from './render/sharpness';
 import { StaffLayer } from './staff/StaffLayer';
 import type { StaffAction, StaffId } from './staff/routines';
 
@@ -140,7 +140,6 @@ export class OfficeScene {
   private readonly statuses = new Map<string, AgentStatus>();
   private readonly room: OfficeRoom;
   private readonly staff: StaffLayer;
-  private readonly pipeline: RenderPipeline;
   private qualityMode: QualityMode = qualityPreference();
   private autoQuality = new AutoQuality();
   private qualityLevel: QualityLevel | null = null;
@@ -196,7 +195,6 @@ export class OfficeScene {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.pipeline = new RenderPipeline(this.renderer, this.scene, this.cameraRig.camera);
     this.renderer.domElement.setAttribute('role', 'img');
     this.renderer.domElement.setAttribute(
       'aria-label',
@@ -692,7 +690,7 @@ export class OfficeScene {
     this.cameraRig.update(dt, this.reducedMotion);
     this.updateSigns();
     this.updateQuality(dt);
-    this.pipeline.render();
+    this.renderer.render(this.scene, this.cameraRig.camera);
     this.placeLabels();
     this.notifyView(dt);
     if (!this.ready) {
@@ -833,7 +831,7 @@ export class OfficeScene {
     }
   }
 
-  /** High draws ambient occlusion; Auto judges the frame rate once the view has settled. */
+  /** High draws sharper (more pixels, a finer sun shadow); Auto judges the frame rate once the view has settled. */
   private updateQuality(dt: number): void {
     let level: QualityLevel;
     if (this.qualityMode !== 'auto') level = this.qualityMode;
@@ -841,8 +839,7 @@ export class OfficeScene {
     else level = this.autoQuality.sample(this.fps, dt, this.cameraRig.settled());
     if (level === this.qualityLevel) return;
     this.qualityLevel = level;
-    this.pipeline.ao = level === 'high';
-    this.room.setAmbientOcclusion(level === 'high');
+    applyRenderQuality(this.renderer, this.sun, level);
   }
 
   public handleResize(): void {
@@ -851,7 +848,6 @@ export class OfficeScene {
     if (!width || !height) return;
     this.cameraRig.resize(width, height);
     this.renderer.setSize(width, height);
-    this.pipeline.setSize(width, height);
   }
 
   public destroy(): void {
@@ -868,7 +864,6 @@ export class OfficeScene {
       (spot.material as THREE.Material).dispose();
     }
     this.room.dispose();
-    this.pipeline.dispose();
     this.renderer.dispose();
     if (this.container.contains(this.renderer.domElement))
       this.container.removeChild(this.renderer.domElement);

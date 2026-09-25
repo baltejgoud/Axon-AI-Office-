@@ -41,6 +41,25 @@ test('quality preference defaults to auto without storage', () => {
   assert.equal(quality.qualityPreference(), 'auto');
 });
 
+const sharpness = require('../src/renderer/src/features/office/scene/render/sharpness.ts');
+
+test('High draws more pixels than the screen has, up to twice per CSS pixel; Balanced draws at the screen resolution', () => {
+  assert.equal(sharpness.pixelRatioFor('balanced', 1), 1);
+  assert.equal(sharpness.pixelRatioFor('balanced', 1.25), 1.25);
+  assert.equal(sharpness.pixelRatioFor('high', 1), 1.6);
+  assert.equal(sharpness.pixelRatioFor('high', 1.25), 2);
+  // A sharp screen is already sharp: neither level goes past 2, and neither drops below the screen.
+  assert.equal(sharpness.pixelRatioFor('high', 2), 2);
+  assert.equal(sharpness.pixelRatioFor('high', 3), 2);
+  assert.equal(sharpness.pixelRatioFor('balanced', 3), 2);
+});
+
+test('High gives the sun a finer shadow; both soften its edge past a single texel', () => {
+  const { high, balanced } = sharpness.RENDER_QUALITY;
+  assert.ok(high.shadowMap > balanced.shadowMap);
+  assert.ok(high.shadowRadius > 1 && balanced.shadowRadius > 1);
+});
+
 const grounding = require('../src/renderer/src/features/office/scene/room/grounding.ts');
 
 test('contact shadows sit under standing furniture, not under rugs, screens or pendants', () => {

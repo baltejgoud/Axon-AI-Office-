@@ -1,4 +1,4 @@
-/** Auto follows the machine; High adds soft ambient-occlusion shading; Balanced leaves it out. */
+/** Auto follows the machine; High draws sharper, with finer shadows; Balanced draws at screen resolution. */
 export type QualityMode = 'auto' | 'high' | 'balanced';
 export type QualityLevel = 'high' | 'balanced';
 

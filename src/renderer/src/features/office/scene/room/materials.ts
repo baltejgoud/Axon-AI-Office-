@@ -175,7 +175,7 @@ export function woodFloorTexture(): THREE.CanvasTexture {
   floorTexture = new THREE.CanvasTexture(canvas);
   floorTexture.colorSpace = THREE.SRGBColorSpace;
   floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-  floorTexture.anisotropy = 4;
+  floorTexture.anisotropy = 8;
   return floorTexture;
 }
 
@@ -252,7 +252,8 @@ function canvasTexture(
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = 4;
+  // Floors are seen at a slant: sharper filtering keeps seams and grain crisp into the distance.
+  texture.anisotropy = 8;
   floorTextures.set(key, texture);
   return texture;
 }
@@ -297,19 +298,22 @@ export function concreteTexture(): THREE.CanvasTexture {
   });
 }
 
-/** Terrazzo: a warm stone base with scattered coloured chips. One tile covers 3 m. */
+/**
+ * Terrazzo: a warm stone base with fine chips close in tone, so from the usual distance the floor
+ * reads as clean stone rather than scattered crumbs. One tile covers 3 m.
+ */
 export function terrazzoTexture(): THREE.CanvasTexture {
-  return canvasTexture('terrazzo', 512, (g, random) => {
+  return canvasTexture('terrazzo', 1024, (g, random) => {
     g.fillStyle = '#f1ece4';
-    g.fillRect(0, 0, 512, 512);
-    const chips = ['#c9b8a3', '#9fb0b8', '#d9a88a', '#b9c2a5', '#8f8a86', '#e8d8c4'];
-    g.globalAlpha = 0.55;
-    for (let i = 0; i < 380; i++) {
+    g.fillRect(0, 0, 1024, 1024);
+    const chips = ['#ddd0bf', '#c9d0d2', '#e6cbb8', '#d3d8c6', '#cfc9c2', '#f8f1e6'];
+    g.globalAlpha = 0.6;
+    for (let i = 0; i < 1400; i++) {
       g.fillStyle = chips[Math.floor(random() * chips.length)];
       g.beginPath();
-      const x = random() * 512;
-      const y = random() * 512;
-      const r = 1 + random() * 4;
+      const x = random() * 1024;
+      const y = random() * 1024;
+      const r = 0.8 + random() * 2.2;
       g.ellipse(x, y, r, r * (0.5 + random() * 0.6), random() * Math.PI, 0, Math.PI * 2);
       g.fill();
     }

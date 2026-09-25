@@ -3,8 +3,8 @@ import type { FurnitureItem } from '../../simulation/layout';
 
 /**
  * Contact shadows: a soft dark patch under everything that stands on the floor, so furniture looks
- * set down rather than floating. They carry the grounding on Balanced quality and add to the
- * ambient occlusion on High. Two shared materials (round and square), merged with the static room.
+ * set down rather than floating, with no grainy screen-space shading around them. Two shared
+ * materials (round and square), merged with the static room.
  */
 
 /** Things that hang, lie flat or are too slender for a patch under them. */
@@ -34,8 +34,8 @@ export function groundShadow(item: FurnitureItem): { w: number; d: number; round
   return { w: grow(item.w), d: grow(item.d), round };
 }
 
-/** Strength of the patches with and without ambient occlusion. */
-export const CONTACT_OPACITY = { withAO: 0.32, withoutAO: 0.58 } as const;
+/** Strength of the patches: enough to seat furniture, light enough that a caf� floor stays clean. */
+export const CONTACT_OPACITY = 0.5;
 
 function patchTexture(round: boolean): THREE.CanvasTexture {
   const size = 128;
@@ -63,7 +63,7 @@ function patchTexture(round: boolean): THREE.CanvasTexture {
 
 let materials: { round: THREE.MeshBasicMaterial; square: THREE.MeshBasicMaterial } | null = null;
 
-/** The two shared patch materials; the scene turns their opacity down when AO is on. */
+/** The two shared patch materials. */
 export function contactMaterials(): { round: THREE.MeshBasicMaterial; square: THREE.MeshBasicMaterial } {
   if (materials) return materials;
   const make = (round: boolean) =>
@@ -71,7 +71,7 @@ export function contactMaterials(): { round: THREE.MeshBasicMaterial; square: TH
       map: patchTexture(round),
       color: '#3b2f25',
       transparent: true,
-      opacity: CONTACT_OPACITY.withAO,
+      opacity: CONTACT_OPACITY,
       depthWrite: false,
       // Floors are pulled toward the camera by 1 in the depth test and rugs by 2–3; patches lie on both.
       polygonOffset: true,
