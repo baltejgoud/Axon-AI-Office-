@@ -112,10 +112,10 @@ with one screen shows only the main app.
 
 ### Rendering
 
-- **Screen sheet**: one 2048 × 2240 canvas (`scene/room/screenApps.ts` paints it once, on first use).
-  Each tile is 256 × 320 with a 4 px gutter: the visible screen is 160 px of it, and the extra height
-  lets content scroll, wrapping within the tile (scrolling apps paint content that repeats every
-  160 px, so the wrap is seamless). 8 columns × 7 rows = 56 tiles, enough for 27 apps × 2 variants.
+- **Screen sheet**: one 2048 × 1120 canvas (`scene/room/screenSheet.ts` paints it once, on first use).
+  Each tile is a whole visible screen, 256 × 160. 8 columns × 7 rows = 56 tiles, enough for 27 apps ×
+  2 variants. An app that scrolls names a band (its code pane, log or list); only that band scrolls,
+  wrapping inside itself, and its painter draws the band so it repeats every band height.
 - **One instanced mesh** for every screen in the office, replacing the per-flavour meshes. Per
   instance: which tile (an `InstancedBufferAttribute` of tile offset), brightness (the existing
   instance colour), a scroll phase and speed, and a status (0 none, 1 working, 2 waiting,
@@ -131,7 +131,7 @@ with one screen shows only the main app.
 
 ### Performance
 
-The sheet is about 18 MB of GPU memory (24 MB with mipmaps), replacing four small textures. Draw
+The sheet is about 9 MB of GPU memory (12 MB with mipmaps), replacing four small textures. Draw
 calls for screens go from 4 to 1. No extra triangles. The shader adds a few instructions per screen
 pixel.
 
