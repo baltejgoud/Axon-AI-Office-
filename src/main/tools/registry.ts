@@ -1,8 +1,14 @@
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { ToolDefinition } from '../../shared/types';
 import type { Project } from '../project';
 import { createUnifiedDiff } from './diff';
+
+/** The files a commit names; anything that isn't a plain string is left out. */
+const gitFiles = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((f): f is string => typeof f === 'string' && f.trim() !== '') : [];
+/** Shown in approval previews only; the command itself never goes through a shell. */
+const quote = (value: string) => JSON.stringify(value);
 
 export interface ToolContext {
   project: Project;
@@ -282,34 +288,29 @@ export class ToolRegistry {
         }
       },
       preparePreview: async (args) => {
+        const files = gitFiles(args.files);
         return {
           type: 'command',
-          content: `git commit -m "${String(args.message).replace(/"/g, '\\"')}"`
+          content: `git add ${files.length ? `-- ${files.map(quote).join(' ')}` : '-A'}\ngit commit -m ${quote(String(args.message ?? ''))}`
         };
       },
       execute: async (args, ctx) => {
         if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
-        const msg = String(args.message).trim();
+        const msg = String(args.message ?? '').trim();
         if (!msg) return { content: 'Commit message is required.', isError: true };
-
-        const fileArgs = Array.isArray(args.files) && args.files.length > 0
-          ? args.files.map((f: string) => `"${f}"`).join(' ')
-          : '-A';
-
-        return new Promise<ToolHandlerResult>((resolvePromise) => {
-          exec(`git add ${fileArgs} && git commit -m "${msg.replace(/"/g, '\\"')}"`, { cwd: ctx.project.root! }, (err, stdout, stderr) => {
-            if (err) {
-              resolvePromise({
-                content: `Git commit failed: ${stderr || stdout || err.message}`,
-                isError: true
-              });
-            } else {
-              resolvePromise({
-                content: stdout || 'Committed successfully.'
-              });
-            }
+        const files = gitFiles(args.files);
+        // git runs directly, never through a shell, so a message or file name can't start another command.
+        const git = (gitArgs: string[]) => new Promise<{ ok: boolean; out: string }>((resolvePromise) => {
+          execFile('git', gitArgs, { cwd: ctx.project.root!, timeout: 60_000 }, (err, stdout, stderr) => {
+            resolvePromise({ ok: !err, out: String(stdout || stderr || err?.message || '') });
           });
         });
+        const added = await git(files.length ? ['add', '--', ...files] : ['add', '-A']);
+        if (!added.ok) return { content: `Git add failed: ${added.out}`, isError: true };
+        const committed = await git(['commit', '-m', msg]);
+        return committed.ok
+          ? { content: committed.out || 'Committed successfully.' }
+          : { content: `Git commit failed: ${committed.out}`, isError: true };
       }
     });
 

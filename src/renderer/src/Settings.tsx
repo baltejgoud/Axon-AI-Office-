@@ -26,7 +26,7 @@ const presets: Record<string, PresetInfo> = {
   Anthropic: {
     kind: 'anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
-    placeholder: 'claude-3-7-sonnet-20250219\nclaude-3-5-haiku-20241022'
+    placeholder: 'claude-opus-5\nclaude-sonnet-5\nclaude-haiku-4-5'
   },
   'Google Gemini': {
     kind: 'gemini',
@@ -431,13 +431,13 @@ export function SettingsPanel() {
                 className="input"
                 type="number"
                 min={256}
-                max={32768}
+                max={128000}
                 value={settings.defaultMaxTokens}
                 onChange={(e) =>
                   void perform(() =>
                     window.axon.settingsSave({
                       ...settings,
-                      defaultMaxTokens: Math.max(256, Math.min(32768, Number(e.target.value) || 4096))
+                      defaultMaxTokens: Math.max(256, Math.min(128000, Number(e.target.value) || 4096))
                     })
                   )
                 }
@@ -793,7 +793,14 @@ export function SettingsPanel() {
                   onChange={(e) => setMcpServer({ ...mcpServer, url: e.target.value })}
                 />
               </Field>
-              <Field label="API Key / Bearer token" hint="Optional token sent in Authorization header">
+              <Field
+                label="API Key / Bearer token"
+                hint={
+                  mcpServer.hasApiKey
+                    ? 'A key is saved in the OS key store. Leave blank to keep it.'
+                    : 'Optional token sent in Authorization header'
+                }
+              >
                 <input
                   className="input"
                   type="password"

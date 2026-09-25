@@ -10,11 +10,20 @@ export interface CheckResult {
   reason?: string;
 }
 
+/** What one run may touch: its folders, and whether shell commands are on. */
+export interface PermissionScope {
+  roots: string[];
+  allowShell: boolean;
+}
+
 interface PendingApproval {
   request: ToolApprovalRequest;
   resolve: (approved: boolean) => void;
   timer: NodeJS.Timeout;
 }
+
+/** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
+const EXACT_GRANTS = new Set(['run_command', 'git_commit']);
 
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
@@ -31,22 +40,23 @@ export class PermissionManager {
     this.allowShell = allowShell;
   }
 
-  isPathWithinRoots(targetPath: string): boolean {
-    if (!this.roots.length) return false;
-    const resolved = resolve(targetPath);
-    return this.roots.some(root => {
-      const rel = relative(root, resolved);
+  /** Relative paths are read against each root (tools take project-relative paths); absolute ones as they are. */
+  isPathWithinRoots(targetPath: string, roots: string[] = this.roots): boolean {
+    if (!roots.length) return false;
+    return roots.some(root => {
+      const rel = relative(root, resolve(root, targetPath));
       return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
     });
   }
 
-  check(req: { toolName: string; args: Record<string, any> }): CheckResult {
+  /** Checks one call. `scope` is the run's own folders and shell setting; without it the manager's defaults apply. */
+  check(req: { toolName: string; args: Record<string, any> }, scope?: PermissionScope): CheckResult {
     const { toolName, args } = req;
+    const roots = scope?.roots ?? this.roots;
+    const allowShell = scope?.allowShell ?? this.allowShell;
 
     // 1. Session-level grant check
-    const grantKey = `${toolName}:${JSON.stringify(args)}`;
-    const toolGrantKey = `${toolName}:*`;
-    if (this.sessionGrants.has(grantKey) || this.sessionGrants.has(toolGrantKey)) {
+    if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${toolName}:*`)) {
       return { action: 'allow' };
     }
 
@@ -58,14 +68,14 @@ export class PermissionManager {
     // 2. Path containment check
     if (['read_file', 'write_file', 'list_files'].includes(toolName)) {
       const p = args.path || args.directory || args.directoryPath;
-      if (p && this.roots.length > 0 && !this.isPathWithinRoots(p)) {
+      if (p && roots.length > 0 && !this.isPathWithinRoots(String(p), roots)) {
         return { action: 'deny', reason: `Path "${p}" is outside allowed workspace roots.` };
       }
     }
 
     // 3. Shell execution permission check
     if (toolName === 'run_command') {
-      if (!this.allowShell) {
+      if (!allowShell) {
         return { action: 'deny', reason: 'Shell command execution is disabled in workspace settings.' };
       }
       return { action: 'ask' };
@@ -108,11 +118,12 @@ export class PermissionManager {
       resolver = resolve;
     });
 
-    // 5-minute timeout on user approvals
+    // 5-minute timeout on user approvals; a waiting approval never keeps the app from quitting.
     const timer = setTimeout(() => {
       this.pendingApprovals.delete(id);
       resolver(false);
     }, 300_000);
+    timer.unref?.();
 
     this.pendingApprovals.set(id, {
       request,
@@ -136,11 +147,17 @@ export class PermissionManager {
     this.pendingApprovals.delete(decision.requestId);
 
     if (decision.approved && decision.alwaysAllowSession) {
-      this.sessionGrants.add(`${pending.request.toolName}:*`);
+      const { toolName, arguments: args } = pending.request;
+      this.sessionGrants.add(EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${toolName}:*`);
     }
 
     pending.resolve(decision.approved);
     return true;
+  }
+
+  /** The run that asked has stopped: the request is answered as rejected and leaves the pending list. */
+  withdraw(requestId: string): void {
+    this.resolveApproval({ requestId, approved: false });
   }
 
   clearSession() {

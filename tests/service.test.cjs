@@ -336,3 +336,138 @@ test('the receptionist on a model without tools says so plainly', async (t) => {
   const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
   assert.equal(reply.error, "This model can't use tools, so I can't keep your planner. Pick another model.");
 });
+
+/** Resolves once `find` returns something, or fails after about two seconds. */
+async function waitFor(find, what) {
+  for (let i = 0; i < 200; i++) {
+    const found = find();
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Timed out waiting for ${what}`);
+}
+const within = (promise, ms, what) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} did not finish`)), ms))]);
+
+test('after a tool call fails, the next message still sends every call with its result', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  const sent = [];
+  let calls = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    sent.push(req.messages.map((m) => ({ role: m.role, toolCallId: m.toolCallId, calls: m.toolCalls?.map((c) => c.id) })));
+    if (++calls === 1) return { toolCalls: [{ id: 't1', name: 'read_file', arguments: '{"path":"missing.txt"}' }] };
+    onChunk('Sorry, I could not read it.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Read missing.txt', []);
+  await service.chatSend(chat.id, 'Try again', []);
+  assert.deepEqual(sent[2], [
+    { role: 'user', toolCallId: undefined, calls: undefined },
+    { role: 'assistant', toolCallId: undefined, calls: ['t1'] },
+    { role: 'tool', toolCallId: 't1', calls: undefined },
+    { role: 'assistant', toolCallId: undefined, calls: undefined },
+    { role: 'user', toolCallId: undefined, calls: undefined }
+  ]);
+});
+
+test('Stop while a tool waits for approval withdraws it, and the tool never runs', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder);
+  await service.project.choose(folder);
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  mockModel(t, async () => ({ toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }] }));
+  const run = service.chatSend(chat.id, 'Write a.txt', []);
+  const request = await waitFor(() => events.find((e) => e.channel === 'chat' && e.approvalRequired)?.approvalRequired, 'the approval');
+  service.chatStop(chat.id);
+  await within(run, 2000, 'the stopped run');
+  assert.deepEqual(service.snapshot().pendingApprovals, []);
+  await service.toolApprove({ requestId: request.id, approved: true });
+  assert.equal(fs.existsSync(path.join(folder, 'a.txt')), false);
+});
+
+test('malformed tool arguments go back to the model as an error instead of running with none', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    if (++calls === 1) return { toolCalls: [{ id: 'w', name: 'write_file', arguments: '{"path": "a.txt", "cont' }] };
+    onChunk('Retrying.');
+    return { toolCalls: [] };
+  });
+  await within(service.chatSend(chat.id, 'Write a.txt', []), 2000, 'the run');
+  assert.ok(!events.some((e) => e.approvalRequired), 'nothing to approve');
+  const result = repo.state.messages.find((m) => m.conversationId === chat.id && m.role === 'tool');
+  assert.match(result.content, /not valid JSON/);
+});
+
+test('colleagues and sub-agents answer within the configured max tokens', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  repo.state.settings.defaultMaxTokens = 8000;
+  const seen = [];
+  let askerCalls = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    seen.push({ system: req.system, maxTokens: req.maxTokens, signal: req.signal });
+    if (req.system.includes('is asking you a question') || req.system.includes('autonomous subagent')) { onChunk('Answer.'); return { toolCalls: [] }; }
+    if (++askerCalls === 1) return { toolCalls: [{ id: 'a', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'Q?' }) }] };
+    onChunk('Done.');
+    return { toolCalls: [] };
+  });
+  const chat = await coworkerChat(service, 'frontend-developer');
+  await service.chatSend(chat.id, 'Build it', []);
+  const stop = new AbortController();
+  await service.runSubagent('p1', 'm1', 'Reviewer', 'Review it', null, undefined, stop.signal);
+  const consult = seen.find((s) => s.system.includes('is asking you a question'));
+  const subagent = seen.find((s) => s.system.includes('autonomous subagent'));
+  assert.equal(consult.maxTokens, 8000);
+  assert.equal(subagent.maxTokens, 8000);
+  assert.equal(subagent.signal, stop.signal);
+});
+
+test('an answer cut off at the token limit says so', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('The first half of'); return { truncated: true }; });
+  await service.chatSend(chat.id, 'Write an essay', []);
+  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  assert.equal(reply.content, 'The first half of');
+  assert.match(reply.error, /max-token limit/);
+});
+
+test('each tool round sends the provider\'s own turn back with it', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  const replay = { kind: 'anthropic', content: [{ type: 'thinking', thinking: '', signature: 'sig' }, { type: 'tool_use', id: 't1', name: 'list_files', input: {} }] };
+  let second;
+  let calls = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (++calls === 1) return { toolCalls: [{ id: 't1', name: 'list_files', arguments: '{}' }], replay };
+    second = req.messages;
+    onChunk('Listed.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'List files', []);
+  assert.deepEqual(second.find((m) => m.role === 'assistant').replay, replay);
+});
+
+test('max tokens can be set up to 128,000 for long answers', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  await service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 64000 });
+  assert.equal(repo.state.settings.defaultMaxTokens, 64000);
+  await assert.rejects(service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 200000 }), /Invalid settings/);
+});

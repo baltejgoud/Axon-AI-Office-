@@ -1,6 +1,39 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import type { MCPServerConfig } from '../../shared/types';
 import type { ToolRegistry } from '../tools/registry';
+
+/**
+ * On Windows, finds a bare command (npx, pnpm) on PATH with its extension: npx is really npx.cmd,
+ * and spawning without a shell needs the real file. Paths and names with an extension pass through.
+ */
+export function resolveCommand(command: string, env: NodeJS.ProcessEnv = process.env, platform: string = process.platform): string {
+  if (platform !== 'win32' || /[\\/]/.test(command) || extname(command)) return command;
+  const exts = (env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  for (const dir of (env.PATH ?? env.Path ?? '').split(';').filter(Boolean))
+    for (const ext of exts) {
+      const full = join(dir, command + ext.toLowerCase());
+      if (existsSync(full)) return full;
+    }
+  return command;
+}
+
+/** Quotes one word for cmd.exe, which is what runs .cmd and .bat files. */
+const cmdQuote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+/** Longest tool name OpenAI, Anthropic and Gemini all accept. */
+const MAX_TOOL_NAME = 64;
+
+/** A provider-safe tool name: `mcp_<server>_<tool>`, shortened with a hash when too long or already taken. */
+export function mcpToolName(server: string, tool: string, taken: ReadonlySet<string>): string {
+  const clean = (value: string) => value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const name = `mcp_${clean(server)}_${clean(tool)}`;
+  if (name.length <= MAX_TOOL_NAME && !taken.has(name)) return name;
+  const hash = createHash('sha256').update(`${server}\0${tool}`).digest('hex').slice(0, 8);
+  return `${name.slice(0, MAX_TOOL_NAME - 9)}_${hash}`;
+}
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -71,12 +104,13 @@ export class McpClient {
       }
 
       try {
-        const isBatch = this.config.command.endsWith('.cmd') || this.config.command.endsWith('.bat');
-        const proc = spawn(this.config.command, this.config.args || [], {
-          env: { ...process.env, ...(this.config.env || {}) },
-          stdio: ['pipe', 'pipe', 'pipe'],
-          shell: isBatch
-        });
+        const env = { ...process.env, ...(this.config.env || {}) };
+        const command = resolveCommand(this.config.command, env);
+        const args = this.config.args || [];
+        // .cmd and .bat files only run through cmd.exe; the line is quoted here rather than joined by Node.
+        const proc = /\.(cmd|bat)$/i.test(command)
+          ? spawn([command, ...args].map(cmdQuote).join(' '), { env, stdio: ['pipe', 'pipe', 'pipe'], shell: true })
+          : spawn(command, args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
         this.process = proc;
 
@@ -314,7 +348,7 @@ export class McpClient {
     } else if (this.config.transport === 'sse' && this.sseEndpointUrl) {
       void fetch(this.sseEndpointUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getSseHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
       }).catch(() => {});
     }
@@ -372,6 +406,8 @@ export class McpClient {
 
 export class MCPClientManager {
   private clients = new Map<string, McpClient>();
+  /** The tool names each server registered, so removing one server removes exactly its tools. */
+  private names = new Map<string, string[]>();
 
   constructor(private readonly toolRegistry: ToolRegistry) {}
 
@@ -406,8 +442,10 @@ export class MCPClientManager {
           existing.config.command !== cfg.command ||
           existing.config.url !== cfg.url ||
           existing.config.transport !== cfg.transport ||
+          existing.config.apiKey !== cfg.apiKey ||
           JSON.stringify(existing.config.args) !== JSON.stringify(cfg.args) ||
-          JSON.stringify(existing.config.env) !== JSON.stringify(cfg.env);
+          JSON.stringify(existing.config.env) !== JSON.stringify(cfg.env) ||
+          JSON.stringify(existing.config.headers) !== JSON.stringify(cfg.headers);
 
         if (changed) {
           existing.disconnect();
@@ -433,15 +471,15 @@ export class MCPClientManager {
     }
   }
 
-  private sanitize(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  }
-
   private registerTools(client: McpClient, tools: DiscoveredMcpTool[]) {
-    const prefix = `mcp_${this.sanitize(client.config.name)}_`;
+    const taken = new Set(this.toolRegistry.getDefinitions().map((definition) => definition.name));
+    const names: string[] = [];
+    this.names.set(client.config.id, names);
 
     for (const tool of tools) {
-      const toolName = `${prefix}${this.sanitize(tool.name)}`;
+      const toolName = mcpToolName(client.config.name, tool.name, taken);
+      taken.add(toolName);
+      names.push(toolName);
 
       this.toolRegistry.register({
         definition: {
@@ -463,13 +501,14 @@ export class MCPClientManager {
   }
 
   private unregisterTools(client: McpClient) {
-    const prefix = `mcp_${this.sanitize(client.config.name)}_`;
-    this.toolRegistry.unregisterByPrefix(prefix);
+    for (const name of this.names.get(client.config.id) ?? []) this.toolRegistry.unregister(name);
+    this.names.delete(client.config.id);
   }
 
   stopAll() {
     for (const client of this.clients.values()) {
       client.disconnect();
+      this.unregisterTools(client);
     }
     this.clients.clear();
   }

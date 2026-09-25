@@ -102,7 +102,8 @@ export class JsonStore {
 
   private async writeToDisk<T>(file: string, value: T): Promise<void> {
     const path = join(this.dir, file);
-    const snapshot = JSON.stringify(value, null, 2);
+    // Compact: the state can run to tens of megabytes, and nobody edits it by hand.
+    const snapshot = JSON.stringify(value);
     const prev = this.pending.get(file) ?? Promise.resolve();
     const run = prev.catch(() => undefined).then(async () => {
       const tmp = `${path}.tmp-${process.pid}`;

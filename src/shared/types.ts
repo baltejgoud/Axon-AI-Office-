@@ -214,11 +214,24 @@ export interface MCPServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  /** Sent in on save, and to the connection; kept in the OS vault, never in saved state or snapshots. */
   apiKey?: string;
+  /** True when an API key is stored for this server. */
+  hasApiKey?: boolean;
   enabled: boolean;
 }
 
 /* ------------------------------ Provider runtime ------------------------------ */
+
+/**
+ * An assistant turn exactly as the provider returned it (Anthropic content blocks with thinking
+ * signatures, Gemini parts with thought signatures). Sent back unchanged while the run's tool
+ * rounds continue; never persisted.
+ */
+export interface ProviderReplay {
+  kind: ProviderKind;
+  content: unknown[];
+}
 
 export interface ChatRequestMessage {
   role: MessageRole;
@@ -228,6 +241,8 @@ export interface ChatRequestMessage {
   name?: string;
   toolCallId?: string;
   toolCalls?: ToolCall[];
+  /** For role === 'assistant' within one run: the provider's own blocks, replayed as they came. */
+  replay?: ProviderReplay;
 }
 
 export interface ToolDefinition {

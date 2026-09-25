@@ -22,19 +22,22 @@ export function initialState(): PlatformState {
 }
 
 const BACKUPS_KEPT = 10;
+/** Saves happen several times a second during a run; a backup at most this often keeps real history. */
+const BACKUP_EVERY_MS = 10 * 60_000;
 
 export class Repository {
   readonly store: JsonStore;
   readonly state: PlatformState;
   private readonly file = 'platform-v1.json';
-  constructor(private readonly dir: string, private readonly backupDir: string) {
+  private lastBackup = -Infinity;
+  constructor(private readonly dir: string, private readonly backupDir: string, private readonly now: () => number = Date.now) {
     mkdirSync(backupDir, { recursive: true });
     this.store = new JsonStore(dir);
     this.state = this.loadValidated();
     this.backup();
   }
   save(): Promise<void> {
-    this.backup();
+    if (this.now() - this.lastBackup >= BACKUP_EVERY_MS) this.backup();
     return this.store.save(this.file, this.state);
   }
   id(): string { return randomUUID(); }
@@ -92,12 +95,13 @@ export class Repository {
         || !['open', 'working', 'attention', 'done'].includes(task.status)) throw new Error('Saved data failed validation.');
   }
 
-  /** Rolling pre-write backup of the previous good state (keeps BACKUPS_KEPT). */
+  /** Rolling pre-write backup of the previous good state: at start-up, then at most every BACKUP_EVERY_MS (keeps BACKUPS_KEPT). */
   private backup(): void {
     try {
       const source = join(this.dir, this.file);
       if (!existsSync(source)) return;
-      copyFileSync(source, join(this.backupDir, `state-${new Date().toISOString().replace(/[:.]/g, '-')}.json`));
+      this.lastBackup = this.now();
+      copyFileSync(source, join(this.backupDir, `state-${new Date(this.lastBackup).toISOString().replace(/[:.]/g, '-')}.json`));
       const kept = readdirSync(this.backupDir).filter(name => name.startsWith('state-')).sort();
       for (const stale of kept.slice(0, Math.max(0, kept.length - BACKUPS_KEPT))) {
         try { unlinkSync(join(this.backupDir, stale)); } catch { /* ignore */ }

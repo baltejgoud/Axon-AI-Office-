@@ -47,7 +47,7 @@ test('all three protocols stream text using mocked transport', async () => {
     }
   } finally { global.fetch = savedFetch; }
 });
-test('provider HTTP errors never disclose upstream response bodies or keys', async () => {
+test('provider HTTP errors never disclose raw response bodies or keys', async () => {
   const savedFetch = global.fetch;
   global.fetch = async () => new Response('test-secret', { status: 401 });
   try { await assert.rejects(streamChat(provider, 'test-secret', { model: 'x', messages: [] }, () => {}), error => error.message.includes('401') && !error.message.includes('test-secret')); }

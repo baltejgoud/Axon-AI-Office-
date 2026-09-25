@@ -79,6 +79,8 @@ export interface ConsultDeps {
   stream: typeof streamChat;
   /** Stops the colleague when the asker's run is stopped. */
   signal?: AbortSignal;
+  /** The answer's token limit, as for the asker. */
+  maxTokens?: number;
   /** Read-only tools when the asker's conversation has a folder; otherwise none. */
   tools: ToolDefinition[];
   execute: (name: string, args: Record<string, unknown>) => Promise<string>;
@@ -108,6 +110,7 @@ export async function consult(
         messages,
         system,
         temperature: 0.3,
+        maxTokens: deps.maxTokens,
         tools: deps.tools.length ? deps.tools : undefined,
         signal: deps.signal
       },
@@ -119,7 +122,7 @@ export async function consult(
     output += text;
     const calls = result.toolCalls ?? [];
     if (!calls.length) break;
-    messages.push({ role: 'assistant', content: text, toolCalls: calls });
+    messages.push({ role: 'assistant', content: text, toolCalls: calls, replay: result.replay });
     for (const call of calls) {
       let content = 'Not available to you here.';
       if (allowed.has(call.name)) {
