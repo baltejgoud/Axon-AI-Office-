@@ -471,3 +471,25 @@ test('max tokens can be set up to 128,000 for long answers', async (t) => {
   assert.equal(repo.state.settings.defaultMaxTokens, 64000);
   await assert.rejects(service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 200000 }), /Invalid settings/);
 });
+
+test('an agent with an interval schedule from an older build never runs on its own', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-service-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'db'));
+  fs.mkdirSync(path.join(dir, 'backups'));
+  const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+  addProvider(repo);
+  const now = Date.now();
+  // Put straight into memory, as an older build left it, before the service starts.
+  repo.state.agents.push({ id: 'old', name: 'Nightly digest', systemPrompt: 'Summarise.', providerId: 'p1', modelId: 'm1', tools: [], workspaceId: null,
+    skillIds: [], roleIds: [], maxSteps: 3, schedule: { kind: 'interval', intervalMinutes: 1, input: 'Write the digest.' }, createdAt: now, updatedAt: now });
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => { calls++; onChunk('Digest.'); return { toolCalls: [] }; });
+  const service = new Service(repo, { has: () => false, get: () => null, set() {}, remove() {} }, dir, () => {}, 'worker');
+  t.after(() => service.shutdown());
+  t.mock.timers.tick(5 * 60_000);
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 0, 'no model call');
+  assert.equal(repo.state.conversations.length, 0, 'no conversation started');
+});

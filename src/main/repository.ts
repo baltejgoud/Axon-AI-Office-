@@ -65,6 +65,9 @@ export class Repository {
     // v1 gained skillIds/roleIds on conversations, workspaces and agents (2026-09). Default them.
     for (const list of [state.conversations, state.workspaces, state.agents] as { skillIds?: string[]; roleIds?: string[] }[][])
       for (const item of list ?? []) { item.skillIds ??= []; item.roleIds ??= []; }
+    // Nothing runs on a schedule any more (2026-09): schedules from older builds are switched off, prompt kept.
+    for (const agent of state.agents ?? [])
+      if (agent.schedule?.kind === 'interval') agent.schedule = { ...agent.schedule, kind: 'manual' };
     state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
     // Task records arrived with the office's task boards (2026-09).
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];

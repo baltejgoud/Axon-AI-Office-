@@ -120,3 +120,17 @@ test('migrate defaults skillIds/roleIds on old data and validate rejects non-arr
     assert.equal(fresh.state.conversations.length, 0, 'invalid file is quarantined and replaced');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('interval schedules saved by older builds load switched off, keeping their prompt', () => {
+  const dir = temp();
+  try {
+    const now = Date.now();
+    const state = JSON.parse(validState);
+    state.agents = [{ id: 'a', name: 'Nightly digest', systemPrompt: 's', providerId: null, modelId: null, tools: [], workspaceId: null, skillIds: [], roleIds: [],
+      maxSteps: 3, schedule: { kind: 'interval', intervalMinutes: 60, input: 'Write the digest.' }, createdAt: now, updatedAt: now }];
+    fs.writeFileSync(path.join(dir, 'db', 'platform-v1.json'), JSON.stringify(state));
+    const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+    assert.equal(repo.state.agents[0].schedule.kind, 'manual');
+    assert.equal(repo.state.agents[0].schedule.input, 'Write the digest.');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

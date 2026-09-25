@@ -126,6 +126,7 @@ export interface Workspace {
 
 /* ---------------------------------- Agents ------------------------------------ */
 
+/** 'interval' remains only so data and profiles from older builds load; nothing runs on a schedule, and it loads as 'manual'. */
 export type AgentScheduleKind = 'manual' | 'interval';
 
 export interface AgentSchedule {

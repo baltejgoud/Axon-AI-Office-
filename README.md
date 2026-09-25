@@ -69,7 +69,7 @@ One versioned JSON document is persisted with serialized replacement writes, ser
 - Conversation/document text is not encrypted on disk. Use full-disk encryption.
 - Selected content goes to your chosen provider; its privacy and billing policies apply.
 - Tools run only in conversations with a project folder. Reading is automatic; writing files, running commands (off by default in settings), commits, sub-agents and MCP tools each need approval. "Always allow" lasts until Axon restarts.
-- Agent profiles have an interval schedule in the data model and a scheduler in the main process, but no UI to set one; a scheduled run would start as soon as Axon starts.
+- Nothing runs on a schedule: agents only work when you ask. Interval schedules saved by older builds are switched off when data loads. Reminders are the only timed events.
 - No vector search, OCR, image understanding, repository-wide knowledge import or executable plugins. MCP environment variables and custom headers are stored unencrypted; use the API key field for secrets.
 - File checks block ordinary traversal and symlink/junction escapes but not a malicious local process racing file replacement. Keep projects under your control.
 - Text, thinking and tool-call streaming with usage capture; no image input, reasoning-effort or structured-output parameters yet.

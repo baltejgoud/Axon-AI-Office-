@@ -24,7 +24,7 @@ import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } fro
 import { READ_ONLY_TOOLS, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
-import { Reminders, type Notice } from './reminders';
+import { Reminders, TICK_MS, type Notice } from './reminders';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 
 /** What the receptionist says when her model can't call tools, so she can't keep the planner. */
@@ -69,10 +69,8 @@ export class Service {
   readonly mcp: MCPClientManager;
   private runs = new Map<string, AbortController>();
   private attachments = new Map<string, { name: string; text: string }>();
-  private agentChats = new Map<string, string>();
   private readonly parsers: ParsePool;
-  private schedulerTimer: NodeJS.Timeout | null = null;
-  private lastAgentRuns = new Map<string, number>();
+  private tickTimer: NodeJS.Timeout | null = null;
   /** Coworkers' task records, and the tracker that keeps them in step with each run. */
   readonly tasks: TaskStore;
   private readonly tracker: TaskTracker;
@@ -96,7 +94,7 @@ export class Service {
     if (this.state.mcpServers?.length) {
       void this.mcp.syncServers(this.mcpConnections());
     }
-    this.startScheduler();
+    this.startTicking();
   }
   private get state() { return this.repo.state; }
   get settings(): Settings { return this.state.settings; }
@@ -804,49 +802,17 @@ export class Service {
     return output.trim() || '(subagent finished with no output)';
   }
 
-  private startScheduler(): void {
-    if (this.schedulerTimer) return;
-    this.schedulerTimer = setInterval(() => {
-      void this.checkScheduledAgents();
-      this.reminders.tick();
-    }, 30_000);
-    this.schedulerTimer.unref();
+  /** The reminders' tick. Nothing else runs on a timer: no agent works unattended. */
+  private startTicking(): void {
+    if (this.tickTimer) return;
+    this.tickTimer = setInterval(() => this.reminders.tick(), TICK_MS);
+    this.tickTimer.unref();
   }
 
-  private stopScheduler(): void {
-    if (this.schedulerTimer) {
-      clearInterval(this.schedulerTimer);
-      this.schedulerTimer = null;
-    }
-  }
-
-  private async checkScheduledAgents(): Promise<void> {
-    const now = Date.now();
-    for (const agent of this.state.agents) {
-      if (agent.schedule?.kind === 'interval' && agent.schedule.intervalMinutes && agent.schedule.intervalMinutes > 0) {
-        const intervalMs = agent.schedule.intervalMinutes * 60_000;
-        const lastRun = this.lastAgentRuns.get(agent.id) || 0;
-        if (now - lastRun >= intervalMs) {
-          this.lastAgentRuns.set(agent.id, now);
-          void this.triggerScheduledAgent(agent);
-        }
-      }
-    }
-  }
-
-  private async triggerScheduledAgent(agent: Agent): Promise<void> {
-    try {
-      const providerId = agent.providerId || this.state.providers.find(p => p.enabled)?.id;
-      if (!providerId) return;
-      const provider = this.state.providers.find(p => p.id === providerId);
-      const modelId = agent.modelId || provider?.models[0]?.id;
-      if (!modelId) return;
-
-      const chat = await this.chatCreate(providerId, modelId, agent.workspaceId, agent.id);
-      const prompt = agent.schedule.input || 'Scheduled background execution.';
-      await this.chatSend(chat.id, prompt, []);
-    } catch (err: any) {
-      console.warn(`[Scheduler] Failed scheduled run for agent ${agent.name}:`, err.message);
+  private stopTicking(): void {
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
     }
   }
 
@@ -854,13 +820,13 @@ export class Service {
   stopAll(): void {
     for (const run of this.runs.values()) run.abort();
     this.mcp.stopAll();
-    this.stopScheduler();
+    this.stopTicking();
   }
   shutdown(): void {
     this.reminders.stop();
     this.parsers.destroy();
     this.mcp.stopAll();
-    this.stopScheduler();
+    this.stopTicking();
   }
   async attach(): Promise<{ id: string; name: string }[]> {
     const files = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });
