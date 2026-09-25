@@ -245,3 +245,152 @@ test('checkModel goes through the same fallbacks as chat', async (t) => {
   await providers.checkModel({ kind: 'anthropic', baseUrl: 'https://another-proxy.example/v1', models: [] }, 'k', 'claude-opus-5');
   assert.equal(bodies.length, 2);
 });
+
+// ---------------------------------------------------------------- Kimi, Qwen and other compatible services
+
+const kimi = { kind: 'openai-compatible', baseUrl: 'https://api.moonshot.ai/v1', models: [] };
+const openAiText = { choices: [{ delta: { content: 'ok' } }] };
+
+test('a base URL pasted with /chat/completions (or /messages) still reaches the right endpoint', async (t) => {
+  const urls = [];
+  mockFetch(t, (_n, url) => {
+    urls.push(String(url));
+    return new Response(sseBody(String(url).endsWith('/messages') ? textEvent : openAiText, '[DONE]'));
+  });
+  await streamChat({ ...kimi, baseUrl: 'https://api.moonshot.ai/v1/chat/completions' }, 'k', { model: 'kimi-k3', messages: hi }, () => {});
+  await streamChat({ ...anthropic, baseUrl: 'https://api.anthropic.com/v1/messages/' }, 'k', { model: 'claude-opus-5', messages: hi }, () => {});
+  assert.deepEqual(urls, ['https://api.moonshot.ai/v1/chat/completions', 'https://api.anthropic.com/v1/messages']);
+});
+
+test('a server that refuses max_tokens gets max_completion_tokens instead, and remembers', async (t) => {
+  const provider = { ...kimi, baseUrl: 'https://limits-a.example/v1' };
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: "Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens' instead." } }), { status: 400 })
+    : new Response(sseBody(openAiText, '[DONE]')));
+  await streamChat(provider, 'k', { model: 'qwen3.8-max', maxTokens: 4096, messages: hi }, () => {});
+  assert.equal(bodies[0].max_tokens, 4096);
+  assert.equal(bodies[1].max_completion_tokens, 4096);
+  assert.equal('max_tokens' in bodies[1], false);
+  await streamChat(provider, 'k', { model: 'qwen3.8-max', maxTokens: 4096, messages: hi }, () => {});
+  assert.equal(bodies.length, 3, 'no second refusal');
+  assert.equal(bodies[2].max_completion_tokens, 4096);
+});
+
+test('a server that refuses max_completion_tokens gets max_tokens instead', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'Unrecognized request argument supplied: max_completion_tokens' } }), { status: 400 })
+    : new Response(sseBody(openAiText, '[DONE]')));
+  await streamChat(openai, 'k', { model: 'gpt-legacy-x', maxTokens: 100, messages: hi }, () => {});
+  assert.equal(bodies[0].max_completion_tokens, 100);
+  assert.equal(bodies[1].max_tokens, 100);
+});
+
+test('Kimi models that only allow their own temperature are retried without one', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'invalid temperature: only 1 is allowed for this model', type: 'invalid_request_error' } }), { status: 400 })
+    : new Response(sseBody(openAiText, '[DONE]')));
+  await streamChat(kimi, 'k', { model: 'kimi-k2.6', maxTokens: 100, temperature: 0.7, messages: hi }, () => {});
+  assert.equal(bodies.length, 2);
+  assert.equal('temperature' in bodies[1], false);
+});
+
+test('errors in other shapes still show the provider\'s explanation: FastAPI detail', async (t) => {
+  mockFetch(t, () => new Response(JSON.stringify({ detail: 'Model kimi-k9 does not exist' }), { status: 404 }));
+  await assert.rejects(
+    streamChat({ ...kimi, baseUrl: 'https://shape-a.example/v1' }, 'k', { model: 'kimi-k9', messages: hi }, () => {}),
+    /Model kimi-k9 does not exist/
+  );
+});
+
+test('a field refused inside a nested error message is still found and dropped', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ object: 'error', message: { detail: [{ type: 'extra_forbidden', loc: ['body', 'stream_options'], msg: 'Extra inputs are not permitted' }] } }), { status: 400 })
+    : new Response(sseBody(openAiText, '[DONE]')));
+  await streamChat({ ...kimi, baseUrl: 'https://shape-b.example/v1' }, 'k', { model: 'm', messages: hi }, () => {});
+  assert.equal(bodies.length, 2);
+  assert.equal('stream_options' in bodies[1], false);
+});
+
+test('a tool call whose name is repeated in every chunk keeps one name', async (t) => {
+  mockFetch(t, () => new Response(sseBody(
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'add_task', arguments: '' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'add_task', arguments: '{"title":' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'add_task', arguments: '"Call Sam"}' } }] } }] },
+    '[DONE]'
+  )));
+  const result = await streamChat({ ...kimi, baseUrl: 'https://repeat.example/v1' }, 'k', { model: 'm', messages: hi }, () => {});
+  assert.equal(result.toolCalls[0].name, 'add_task');
+  assert.equal(result.toolCalls[0].arguments, '{"title":"Call Sam"}');
+});
+
+test('a tool name split across chunks is joined', async (t) => {
+  mockFetch(t, () => new Response(sseBody(
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'add_', arguments: '' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'task', arguments: '{}' } }] } }] },
+    '[DONE]'
+  )));
+  const result = await streamChat({ ...kimi, baseUrl: 'https://split.example/v1' }, 'k', { model: 'm', messages: hi }, () => {});
+  assert.equal(result.toolCalls[0].name, 'add_task');
+});
+
+/** Replaces fetch for one GET test; returns the requests it saw. */
+function mockGet(t, respond) {
+  const saved = global.fetch;
+  const seen = [];
+  global.fetch = async (url, options) => {
+    seen.push({ url: String(url), options });
+    return respond(String(url), options);
+  };
+  t.after(() => { global.fetch = saved; });
+  return seen;
+}
+
+test('listModels reads an OpenAI-compatible model list with the key as a bearer token', async (t) => {
+  const seen = mockGet(t, () => Response.json({ object: 'list', data: [{ id: 'kimi-k3' }, { id: 'kimi-k2.6' }, { id: 'kimi-k3' }] }));
+  const models = await providers.listModels(kimi, 'sk-kimi');
+  assert.equal(seen[0].url, 'https://api.moonshot.ai/v1/models');
+  assert.equal(seen[0].options.method, 'GET');
+  assert.equal(seen[0].options.headers.Authorization, 'Bearer sk-kimi');
+  assert.deepEqual(models, ['kimi-k2.6', 'kimi-k3']);
+});
+
+test('listModels reads Anthropic and Gemini lists in their own shapes', async (t) => {
+  const seen = mockGet(t, (url) => url.includes('anthropic')
+    ? Response.json({ data: [{ id: 'claude-opus-5', type: 'model' }], has_more: false })
+    : Response.json({ models: [
+      { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] }
+    ] }));
+  assert.deepEqual(await providers.listModels(anthropic, 'ak'), ['claude-opus-5']);
+  assert.equal(seen[0].options.headers['x-api-key'], 'ak');
+  assert.equal(seen[0].options.headers['anthropic-version'], '2023-06-01');
+  assert.deepEqual(await providers.listModels(gemini, 'gk'), ['gemini-2.5-pro']);
+  assert.equal(seen[1].options.headers['x-goog-api-key'], 'gk');
+});
+
+test('listModels fails with the provider\'s message and never shows the key', async (t) => {
+  mockGet(t, () => Response.json({ error: { message: 'Invalid Authentication: sk-bad-123 is not valid', type: 'invalid_authentication_error' } }, { status: 401 }));
+  await assert.rejects(providers.listModels(kimi, 'sk-bad-123'), (error) => {
+    assert.match(error.message, /401/);
+    assert.match(error.message, /Invalid Authentication/);
+    assert.match(error.message, /Check the API key/);
+    assert.doesNotMatch(error.message, /sk-bad-123/);
+    return true;
+  });
+});
+
+test('listModels says so when the endpoint has no model list', async (t) => {
+  mockGet(t, () => new Response('<html>Not here</html>', { status: 200 }));
+  await assert.rejects(providers.listModels(kimi, 'k'), /did not return a model list/);
+});
+
+test('a server that refuses both limit names gets no limit rather than bouncing between them', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'max_tokens is not supported' } }), { status: 400 })
+    : n === 2
+      ? new Response(JSON.stringify({ error: { message: 'max_completion_tokens is not supported' } }), { status: 400 })
+      : new Response(sseBody({ choices: [{ delta: { content: 'ok' } }] }, '[DONE]')));
+  await streamChat({ kind: 'openai-compatible', baseUrl: 'https://no-limits.example/v1', models: [] }, 'k', { model: 'm', maxTokens: 50, messages: hi }, () => {});
+  assert.equal(bodies.length, 3);
+  assert.equal('max_tokens' in bodies[2] || 'max_completion_tokens' in bodies[2], false);
+});

@@ -36,6 +36,12 @@ export interface ProviderTestResult {
   /** Models past the first ten, not checked. */
   untested: number;
 }
+/** Settings' Find models: the model IDs the endpoint offers the key. */
+export interface ProviderModelsResult {
+  models: string[];
+  /** A key is saved, but the form's endpoint differs from the saved one, so it wasn't sent. */
+  savedKeyWithheld: boolean;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
@@ -49,6 +55,7 @@ export interface PlatformAPI {
   providerSave(provider: ProviderConfig, key?: string): Promise<void>;
   /** Checks the form's endpoint, key and models without saving. With no key typed, the saved key is used only for the saved endpoint. */
   providerTest(provider: ProviderConfig, key?: string): Promise<ProviderTestResult>;
+  providerModels(provider: ProviderConfig, key?: string): Promise<ProviderModelsResult>;
   providerDelete(id: string): Promise<void>;
   workspaceSave(workspace: Workspace): Promise<void>;
   workspaceDelete(id: string): Promise<void>;

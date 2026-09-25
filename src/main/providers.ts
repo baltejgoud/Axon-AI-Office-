@@ -5,7 +5,25 @@ export function endpoint(provider: ProviderConfig): URL {
   const url = new URL(provider.baseUrl || defaults[provider.kind]);
   if (url.username || url.password || url.search || url.hash) throw new Error('Endpoint cannot contain credentials, a query, or a fragment.');
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Use HTTPS, or HTTP on localhost only.');
+  // A pasted request URL (".../v1/chat/completions") still names the service: keep the base it sits under.
+  const request = provider.kind === 'anthropic' ? /\/messages\/?$/ : provider.kind === 'openai-compatible' ? /\/chat\/completions\/?$/ : null;
+  if (request) url.pathname = url.pathname.replace(request, '');
   return url;
+}
+
+/**
+ * A pasted API key as the provider expects it: without surrounding spaces, line breaks or quotes,
+ * without a "Bearer " prefix copied from a curl example, and without the invisible characters web
+ * pages carry. A key with anything else unusual in it is refused here, with a clear reason, instead
+ * of failing at the provider.
+ */
+export function cleanApiKey(raw: string): string {
+  let key = raw.replace(/[​-‍⁠﻿]/g, '').trim();
+  key = key.replace(/^["'`“‘]([\s\S]*)["'`”’]$/, '$1').trim();
+  key = key.replace(/^bearer\s+/i, '');
+  if (/\s/.test(key)) throw new Error('The API key has a space or line break inside it. Copy the key again and paste it on its own.');
+  if (/[^\x21-\x7e]/.test(key)) throw new Error('The API key has characters no key contains. Copy the key again from your provider\'s console.');
+  return key;
 }
 
 /** Incremental SSE decoder; supports CRLF, split UTF-8, comments and multiline data. */
@@ -38,10 +56,30 @@ const DEFAULT_MAX_TOKENS = 4096;
 const ATTEMPTS = 3;
 /** Worth retrying before any output: timeouts, rate limits, overload and gateway errors. */
 const RETRY_STATUSES = [408, 429, 500, 502, 503, 504, 529];
-/** Optional fields some models refuse. A 400 that names one is retried once without it. */
+/** Optional fields some models refuse. A 400 that names one is retried without it. */
 const OPTIONAL_FIELDS = ['temperature', 'stream_options', 'cache_control'];
-/** Fields each endpoint and model refused, so later requests leave them out from the start. */
+/**
+ * The two names OpenAI-compatible servers use for the output limit. Kimi and Qwen now prefer the
+ * newer one; older and self-hosted servers only know the first. A 400 that names the one sent is
+ * retried once with the other.
+ */
+const LIMIT_NAMES = ['max_tokens', 'max_completion_tokens'] as const;
+/** Fields each endpoint and model refused, so later requests leave them out (or rename them) from the start. */
 const refused = new Map<string, Set<string>>();
+
+/**
+ * Leaves out each field this endpoint and model refused; the output limit moves to its other name,
+ * unless that one was refused too.
+ */
+function withoutRefused(payload: Record<string, unknown>, fields: ReadonlySet<string>): void {
+  for (const field of fields) {
+    if (!(field in payload)) continue;
+    const limit = LIMIT_NAMES.indexOf(field as (typeof LIMIT_NAMES)[number]);
+    const other = LIMIT_NAMES[1 - limit];
+    if (limit >= 0 && !fields.has(other)) payload[other] = payload[field];
+    delete payload[field];
+  }
+}
 
 export interface StreamChatResult extends ChatUsage {
   toolCalls?: ToolCall[];
@@ -72,15 +110,27 @@ function clean(message: string, key: string | null): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 
-/** The explanation inside an error body: `{error: {message}}`, `{message}`, or Gemini's array form. Raw text is never shown. */
+/**
+ * The explanation inside an error body: `{error: {message}}`, `{message}`, Gemini's array form, or a
+ * FastAPI-style `{detail}` (a string, or a list of `{loc, msg}`), nested or not. Raw text is never shown.
+ */
 function errorDetail(body: string): string {
   try {
     let parsed = JSON.parse(body);
     if (Array.isArray(parsed)) parsed = parsed[0];
-    const error = parsed?.error ?? parsed;
-    if (typeof error === 'string') return error;
-    if (typeof error?.message === 'string') return error.message;
+    return describe(parsed?.error ?? parsed?.message ?? parsed?.detail ?? parsed);
   } catch { /* Not JSON. */ }
+  return '';
+}
+
+function describe(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(describe).filter(Boolean).join('; ');
+  if (!value || typeof value !== 'object') return '';
+  const error = value as { message?: unknown; detail?: unknown; msg?: unknown; loc?: unknown };
+  if (error.message !== undefined) return describe(error.message);
+  if (error.detail !== undefined) return describe(error.detail);
+  if (typeof error.msg === 'string') return Array.isArray(error.loc) ? `${error.loc.join('.')}: ${error.msg}` : error.msg;
   return '';
 }
 
@@ -227,19 +277,24 @@ function buildRequest(provider: ProviderConfig, key: string | null, request: Cha
 
 /**
  * Sends a chat request and returns the stream once the provider accepts it. A 400 that names an
- * optional field is sent once more without it, and that field stays out for this endpoint and model.
+ * optional field is sent again without it (or, for the output limit, under its other name), and that
+ * field stays out for this endpoint and model.
  */
 async function open(provider: ProviderConfig, key: string | null, request: ChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
   const { url, headers, payload } = buildRequest(provider, key, request);
   const refusedKey = `${url}|${request.model}`;
-  for (const field of refused.get(refusedKey) ?? []) delete payload[field];
+  withoutRefused(payload, refused.get(refusedKey) ?? new Set());
   let response = await post(url, headers, payload, signal, request.signal);
-  if (response.status === 400) {
+  // One field at a time: a server may refuse two (a fixed temperature and the older limit name).
+  for (let fallback = 0; response.status === 400 && fallback < 3; fallback++) {
     const error = await providerError(response, key);
-    const field = OPTIONAL_FIELDS.find(name => name in payload && error.detail.toLowerCase().includes(name));
+    const detail = error.detail.toLowerCase();
+    const renamable = provider.kind === 'openai-compatible' ? LIMIT_NAMES : [];
+    const field = [...OPTIONAL_FIELDS, ...renamable].find(name => name in payload && detail.includes(name));
     if (!field) throw error;
-    delete payload[field];
-    refused.set(refusedKey, new Set([...(refused.get(refusedKey) ?? []), field]));
+    const fields = new Set([...(refused.get(refusedKey) ?? []), field]);
+    refused.set(refusedKey, fields);
+    withoutRefused(payload, fields);
     response = await post(url, headers, payload, signal, request.signal);
   }
   if (!response.ok) throw await providerError(response, key);
@@ -270,6 +325,46 @@ export async function checkModel(provider: ProviderConfig, key: string | null, m
     return; // Leaving the loop cancels the stream.
   }
   throw new Error('The endpoint answered, but not with a model stream. Check the base URL.');
+}
+
+/**
+ * The models an endpoint offers this key, for picking IDs in Settings: sorted, without repeats.
+ * OpenAI-compatible `/models` (Kimi, Qwen, OpenRouter, DeepSeek, Ollama...), Anthropic's and Gemini's own lists.
+ */
+export async function listModels(provider: ProviderConfig, key: string | null, signal?: AbortSignal): Promise<string[]> {
+  const base = endpoint(provider).href.replace(/\/$/, '');
+  const headers: Record<string, string> = {};
+  let url = `${base}/models`;
+  if (provider.kind === 'anthropic') {
+    headers['x-api-key'] = key || '';
+    headers['anthropic-version'] = '2023-06-01';
+    url += '?limit=1000';
+  } else if (provider.kind === 'gemini') {
+    headers['x-goog-api-key'] = key || '';
+    url += '?pageSize=1000';
+  } else if (key) headers.Authorization = `Bearer ${key}`;
+  const response = await fetch(url, { method: 'GET', headers, signal, redirect: 'error' });
+  if (!response.ok) throw await providerError(response, key);
+  let body: { data?: unknown; models?: unknown } | unknown[] | null = null;
+  try { body = JSON.parse(await readCapped(response, 8_000_000)); } catch { /* Not a list. */ }
+  const ids = modelIdsOf(provider, body);
+  if (!ids) throw new Error('The endpoint did not return a model list. Type the model IDs from your provider\'s documentation.');
+  return [...new Set(ids)].sort();
+}
+
+function modelIdsOf(provider: ProviderConfig, body: unknown): string[] | null {
+  if (provider.kind === 'gemini') {
+    const models = (body as { models?: unknown })?.models;
+    if (!Array.isArray(models)) return null;
+    return models
+      .filter((m: { supportedGenerationMethods?: unknown }) => !Array.isArray(m?.supportedGenerationMethods) ||
+        m.supportedGenerationMethods.some((method: unknown) => method === 'generateContent' || method === 'streamGenerateContent'))
+      .map((m: { name?: unknown }) => typeof m?.name === 'string' ? m.name.replace(/^models\//, '') : '')
+      .filter(Boolean);
+  }
+  const list = Array.isArray(body) ? body : (body as { data?: unknown })?.data;
+  if (!Array.isArray(list)) return null;
+  return list.map((m: { id?: unknown }) => typeof m?.id === 'string' ? m.id : '').filter(Boolean);
 }
 
 /** Streams one assistant turn: text, thinking, tool calls and usage, through each protocol's adapter. */
@@ -404,7 +499,8 @@ export async function streamChat(
               const idx = tc.index ?? 0;
               const existing = openAiToolCalls.get(idx) || { id: tc.id || '', name: '', arguments: '' };
               if (tc.id) existing.id = tc.id;
-              if (tc.function?.name) existing.name += tc.function.name;
+              // Names arrive once, or split across chunks; some servers repeat the whole name in every chunk.
+              if (tc.function?.name && tc.function.name !== existing.name) existing.name += tc.function.name;
               if (tc.function?.arguments) existing.arguments += tc.function.arguments;
               openAiToolCalls.set(idx, existing);
             }

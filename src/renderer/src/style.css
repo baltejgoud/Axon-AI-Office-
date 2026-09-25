@@ -430,6 +430,51 @@ svg {
   color: var(--danger-text);
   font-size: var(--text-sm);
 }
+/* Find models in the provider dialog: the endpoint's models as toggles that add to the list. */
+.provider-models {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.provider-models .input {
+  width: 100%;
+}
+.provider-model-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-height: 180px;
+  overflow-y: auto;
+}
+.provider-model {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.provider-model:hover {
+  border-color: var(--accent);
+}
+.provider-model[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.provider-model:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 /* Test connection in the provider dialog: one line per model, a tick or a cross. */
 .provider-test {
   display: flex;

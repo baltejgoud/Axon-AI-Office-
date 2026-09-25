@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Check, KeyRound, PlugZap, Plus, Trash2, Server, X } from 'lucide-react';
+import { Check, KeyRound, ListPlus, PlugZap, Plus, Trash2, Server, X } from 'lucide-react';
 import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared/types';
-import type { ProviderTestResult } from '../../shared/platform';
+import type { ProviderModelsResult, ProviderTestResult } from '../../shared/platform';
 import { useApp, perform } from './state';
 import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
@@ -42,7 +42,29 @@ const presets: Record<string, PresetInfo> = {
   Kimi: {
     kind: 'openai-compatible',
     baseUrl: 'https://api.moonshot.ai/v1',
-    placeholder: 'moonshot-v1-8k\nmoonshot-v1-32k'
+    placeholder: 'kimi-k3\nkimi-k2.6',
+    description:
+      'Keys from platform.moonshot.ai. A China account (platform.moonshot.cn) uses https://api.moonshot.cn/v1. Kimi models think before they answer: set Max tokens to 16,000 or more.'
+  },
+  'Qwen (Alibaba Model Studio)': {
+    kind: 'openai-compatible',
+    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    placeholder: 'qwen3.8-max\nqwen-plus',
+    description:
+      'A key works only in the region it was made in. This address is Singapore; US keys use https://dashscope-us.aliyuncs.com/compatible-mode/v1, Beijing keys https://dashscope.aliyuncs.com/compatible-mode/v1.'
+  },
+  OpenRouter: {
+    kind: 'openai-compatible',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    placeholder: 'moonshotai/kimi-k3\nqwen/qwen3.8-max-0902',
+    description: 'One key for Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.'
+  },
+  'Ollama (this computer)': {
+    kind: 'openai-compatible',
+    baseUrl: 'http://localhost:11434/v1',
+    placeholder: 'qwen3\nllama3.2',
+    description:
+      'Models running on this computer through Ollama. No key needed; pull a model in Ollama first.'
   },
   'Union Alpha (Custom Enterprise)': {
     kind: 'openai-compatible',
@@ -93,6 +115,8 @@ const blankMcp = (): MCPServerConfig => ({
   url: '',
   enabled: true
 });
+/** Found models shown at once; a filter narrows longer lists (OpenRouter offers hundreds). */
+const MODELS_SHOWN = 60;
 /** The model IDs typed in the form: one per line, trimmed, without repeats. */
 const modelIds = (text: string) => [
   ...new Set(
@@ -120,6 +144,10 @@ export function SettingsPanel() {
   const [testing, setTesting] = useState(false);
   /** The last Test connection, and the form it was run on: results show only while the form still matches. */
   const [test, setTest] = useState<{ form: string; result: ProviderTestResult } | null>(null);
+  /** The last Find models, for the endpoint and key it was run with. */
+  const [found, setFound] = useState<{ form: string; result: ProviderModelsResult } | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [modelFilter, setModelFilter] = useState('');
 
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
   const [mcpArgs, setMcpArgs] = useState('');
@@ -137,15 +165,45 @@ export function SettingsPanel() {
     setKey('');
     setProviderError('');
     setSelectedTemplate(p.name in presets ? p.name : '');
+    setFound(null);
+    setModelFilter('');
   };
   const close = () => {
     setProvider(null);
     setKey('');
     setProviderError('');
     setTest(null);
+    setFound(null);
+    setModelFilter('');
   };
   const form = JSON.stringify([provider?.id, provider?.kind, provider?.baseUrl, models, key]);
   const shownTest = test?.form === form ? test.result : null;
+  /** Found models stay while picking them changes the list; a new endpoint or key hides them. */
+  const endpointForm = JSON.stringify([provider?.id, provider?.kind, provider?.baseUrl, key]);
+  const shownModels = found?.form === endpointForm ? found.result : null;
+  const chosen = new Set(modelIds(models));
+  const findModels = async () => {
+    if (!provider) return;
+    setProviderError('');
+    setFinding(true);
+    try {
+      const result = await window.axon.providerModels(
+        { ...provider, models: modelIds(models).map((id) => ({ id, displayName: id })) },
+        key || undefined
+      );
+      setFound({ form: endpointForm, result });
+      setModelFilter('');
+    } catch (err) {
+      setProviderError(errorText(err));
+    } finally {
+      setFinding(false);
+    }
+  };
+  /** Adds a found model to the list, or takes it off again. */
+  const toggleModel = (id: string) => {
+    const ids = modelIds(models);
+    setModels((chosen.has(id) ? ids.filter((m) => m !== id) : [...ids, id]).join('\n'));
+  };
   const testConnection = async () => {
     if (!provider) return;
     const ids = modelIds(models);
@@ -743,6 +801,53 @@ export function SettingsPanel() {
               onChange={(e) => setModels(e.target.value)}
             />
           </Field>
+          <div className="provider-models">
+            <Button size="sm" icon={ListPlus} disabled={finding} onClick={() => void findModels()}>
+              {finding ? 'Finding models…' : 'Find models'}
+            </Button>
+            {shownModels &&
+              (() => {
+                const needle = modelFilter.trim().toLowerCase();
+                const matches = shownModels.models.filter((id) => id.toLowerCase().includes(needle));
+                return (
+                  <>
+                    {shownModels.models.length > 12 && (
+                      <input
+                        className="input"
+                        type="search"
+                        aria-label="Filter models"
+                        placeholder={`Filter ${shownModels.models.length} models`}
+                        value={modelFilter}
+                        onChange={(e) => setModelFilter(e.target.value)}
+                      />
+                    )}
+                    <div className="provider-model-list" role="group" aria-label="Models this key can use">
+                      {matches.slice(0, MODELS_SHOWN).map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className="provider-model"
+                          aria-pressed={chosen.has(id)}
+                          onClick={() => toggleModel(id)}
+                        >
+                          {chosen.has(id) && <Icon icon={Check} size="sm" />}
+                          {id}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-caption">
+                      {shownModels.models.length === 0
+                        ? 'The endpoint lists no models for this key.'
+                        : matches.length > MODELS_SHOWN
+                          ? `Showing ${MODELS_SHOWN} of ${matches.length}. Type to narrow the list; click a model to add it.`
+                          : 'Click a model to add it to the list, or again to take it off.'}
+                      {shownModels.savedKeyWithheld &&
+                        ' Listed without the saved key, because the endpoint changed. Type the key to list with it.'}
+                    </p>
+                  </>
+                );
+              })()}
+          </div>
           <div className="provider-test">
             <Button size="sm" icon={PlugZap} disabled={testing} onClick={() => void testConnection()}>
               {testing ? 'Testing…' : 'Test connection'}

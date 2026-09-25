@@ -1,14 +1,14 @@
 import { app, dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { PlatformAPI, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
+import type { PlatformAPI, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
 import type { FocusTarget, Settings, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
 import { Project } from './project';
 import { forget, isOnWall, loadWall, remember, saveWall } from './folderWall';
-import { checkModel, endpoint, streamChat } from './providers';
+import { checkModel, cleanApiKey, endpoint, listModels, streamChat } from './providers';
 import { search } from './knowledge';
 import { ParsePool } from './parse-pool';
 import { catalog, hasSkill, skillBodies } from './skills';
@@ -45,6 +45,9 @@ export const PROVIDER_TEST = { timeoutMs: 30_000, maxModels: 10 };
 const mcpSecret = (id: string) => `mcp:${id}`;
 /** Shown when an answer stops at the max-token limit. */
 export const TRUNCATED = 'The answer reached the max-token limit and was cut off. Raise Max tokens in Settings to get longer answers.';
+/** Shown when a thinking model (Kimi, Qwen or DeepSeek reasoning) spends the whole limit before it answers. */
+export const TRUNCATED_THINKING =
+  'The model used the whole max-token limit thinking and stopped before it answered. Thinking models need more room: set Max tokens in Settings to 16,000 or more.';
 /** The largest max-tokens setting: current models stream answers up to 128K tokens. */
 const MAX_OUTPUT_TOKENS = 128000;
 /** Characters of history and system prompt a request may carry; whole oldest turns go first. */
@@ -137,11 +140,15 @@ export class Service {
     const sel = (input ?? {}) as Partial<Selection>;
     return { skillIds: list(sel.skillIds ?? [], hasSkill, 'skill'), roleIds: list(sel.roleIds ?? [], hasRole, 'role') };
   }
-  /** What Save and Test connection both check: the protocol, the endpoint policy and the model IDs. */
-  private checkConnection(p: ProviderConfig): void {
+  /** What Save, Test connection and Find models all check: the protocol and the endpoint policy. */
+  private checkEndpoint(p: ProviderConfig): void {
     text(p.id, 100);
     if (!p.id || !['openai-compatible', 'anthropic', 'gemini'].includes(p.kind)) throw new Error('Invalid provider.');
     endpoint(p);
+  }
+  /** What Save and Test connection also check: the model IDs. */
+  private checkConnection(p: ProviderConfig): void {
+    this.checkEndpoint(p);
     if (!Array.isArray(p.models) || !p.models.length || p.models.length > 100) throw new Error('Add between 1 and 100 models.');
     p.models.forEach(m => { if (!text(m.id, 200).trim()) throw new Error('Model ID is required.'); text(m.displayName, 200); });
   }
@@ -149,12 +156,14 @@ export class Service {
     text(p.name, 100);
     if (!p.name.trim()) throw new Error('Invalid provider.');
     this.checkConnection(p);
+    // A pasted key is stored cleaned, exactly as Test connection sends it; an empty one removes the saved key.
+    const secret = key === undefined ? undefined : this.typedKey(key);
     const previous = this.state.providers.find(item => item.id === p.id);
     if (previous && (previous.baseUrl !== p.baseUrl || previous.kind !== p.kind)) {
       const choice = await dialog.showMessageBox({ type: 'warning', message: 'Change provider endpoint?', detail: 'Future prompts and this provider’s saved API key will be sent to the new endpoint.', buttons: ['Cancel', 'Change endpoint'], defaultId: 0, cancelId: 0 });
       if (choice.response !== 1) throw new Error('Endpoint change cancelled.');
     }
-    if (key !== undefined) this.vault.set(p.id, text(key, 16000));
+    if (secret !== undefined) this.vault.set(p.id, secret);
     const clean = { id: p.id, name: p.name.trim(), kind: p.kind, baseUrl: p.baseUrl, models: p.models,
       enabled: Boolean(p.enabled), createdAt: previous?.createdAt ?? Date.now(), hasApiKey: this.vault.has(p.id) };
     this.state.providers = [...this.state.providers.filter(item => item.id !== p.id), clean];
@@ -166,11 +175,7 @@ export class Service {
    */
   async providerTest(p: ProviderConfig, key?: string): Promise<ProviderTestResult> {
     this.checkConnection(p);
-    const typed = typeof key === 'string' ? text(key, 16000).trim() : '';
-    const saved = this.state.providers.find(item => item.id === p.id);
-    const sameEndpoint = !!saved && saved.baseUrl === p.baseUrl && saved.kind === p.kind;
-    const hasSaved = !!saved && this.vault.has(p.id);
-    const secret = typed || (sameEndpoint && hasSaved ? this.vault.get(p.id) : null);
+    const { secret, savedKeyWithheld } = this.formKey(p, key);
     const models = p.models.slice(0, PROVIDER_TEST.maxModels);
     const results = await Promise.all(models.map(async ({ id }) => {
       const started = Date.now();
@@ -185,7 +190,47 @@ export class Service {
         return { modelId: id, ok: false, error: message };
       }
     }));
-    return { results, savedKeyWithheld: !typed && hasSaved && !sameEndpoint, untested: p.models.length - models.length };
+    return { results, savedKeyWithheld, untested: p.models.length - models.length };
+  }
+  /**
+   * Find models: the model IDs the endpoint offers the form's key (or the saved key, for the endpoint
+   * it was saved with), so nobody has to guess names that change every few months.
+   */
+  async providerModels(p: ProviderConfig, key?: string): Promise<ProviderModelsResult> {
+    this.checkEndpoint(p);
+    const { secret, savedKeyWithheld } = this.formKey(p, key);
+    const signal = AbortSignal.timeout(PROVIDER_TEST.timeoutMs);
+    try {
+      return { models: await listModels(p, secret, signal), savedKeyWithheld };
+    } catch (error) {
+      if (signal.aborted) throw new Error(`No answer within ${Math.round(PROVIDER_TEST.timeoutMs / 1000)} seconds.`);
+      throw error;
+    }
+  }
+  /** A key typed in the form, cleaned; '' when the field is blank. */
+  private typedKey(key: string): string {
+    return text(key, 16000).trim() ? cleanApiKey(key) : '';
+  }
+  /** The key a form's check goes out with: the typed one, else the saved one, but only to the endpoint it was saved for. */
+  private formKey(p: ProviderConfig, key?: string): { secret: string | null; savedKeyWithheld: boolean } {
+    const typed = typeof key === 'string' ? this.typedKey(key) : '';
+    const saved = this.state.providers.find(item => item.id === p.id);
+    const sameEndpoint = !!saved && saved.baseUrl === p.baseUrl && saved.kind === p.kind;
+    const hasSaved = !!saved && this.vault.has(p.id);
+    return {
+      secret: typed || (sameEndpoint && hasSaved ? this.providerKey(p.id) : null),
+      savedKeyWithheld: !typed && hasSaved && !sameEndpoint
+    };
+  }
+  /** A provider's saved key, cleaned (keys saved before cleaning may carry a pasted space or line break). */
+  private providerKey(id: string): string | null {
+    const saved = this.vault.get(id);
+    if (!saved) return null;
+    try {
+      return cleanApiKey(saved);
+    } catch {
+      return saved.trim();
+    }
   }
   async providerDelete(id: string): Promise<void> {
     this.state.providers = this.state.providers.filter(p => p.id !== id); this.vault.remove(id); await this.repo.save();
@@ -412,7 +457,7 @@ export class Service {
     // Every call keeps its result and trimming drops whole turns, so the history is always one providers accept.
     const requests = fitToBudget([...requestHistory(history), { role: 'user' as const, content }], CONTEXT_BUDGET - system.length);
 
-    const key = this.vault.get(provider.id), controller = new AbortController();
+    const key = this.providerKey(provider.id), controller = new AbortController();
     this.runs.set(id, controller);
 
     let activeAssistant: Message = {
@@ -517,7 +562,8 @@ export class Service {
         activeAssistant.toolCalls = usage.toolCalls;
 
         if (!usage.toolCalls || usage.toolCalls.length === 0) {
-          if (usage.truncated) activeAssistant.error = TRUNCATED;
+          if (usage.truncated)
+            activeAssistant.error = !activeAssistant.content.trim() && activeAssistant.thought ? TRUNCATED_THINKING : TRUNCATED;
           break; // Turn complete
         }
 
@@ -685,7 +731,7 @@ export class Service {
     try {
       const answer = await consult(
         provider,
-        this.vault.get(provider.id),
+        this.providerKey(provider.id),
         chat.modelId,
         colleague,
         coworkerById(chat.agentId)?.name ?? 'A colleague',
@@ -723,7 +769,7 @@ export class Service {
   ): Promise<string> {
     const provider = this.state.providers.find(p => p.id === providerId && p.enabled);
     if (!provider) return 'Subagent error: Provider not configured or enabled.';
-    const key = this.vault.get(provider.id);
+    const key = this.providerKey(provider.id);
 
     const system = [
       `You are an autonomous subagent specialized in: "${role}".`,

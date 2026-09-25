@@ -4,7 +4,7 @@ import type { StreamEvent } from '../shared/types';
 const invoke = <K extends keyof Omit<PlatformAPI, 'onStream'>>(method: K) =>
   (...args: Parameters<PlatformAPI[K]>) => ipcRenderer.invoke(`platform:${method}`, ...args) as ReturnType<PlatformAPI[K]>;
 const api: PlatformAPI = {
-  snapshot: invoke('snapshot'), providerSave: invoke('providerSave'), providerTest: invoke('providerTest'), providerDelete: invoke('providerDelete'),
+  snapshot: invoke('snapshot'), providerSave: invoke('providerSave'), providerTest: invoke('providerTest'), providerModels: invoke('providerModels'), providerDelete: invoke('providerDelete'),
   workspaceSave: invoke('workspaceSave'), workspaceDelete: invoke('workspaceDelete'), agentSave: invoke('agentSave'),
   agentDelete: invoke('agentDelete'), agentExport: invoke('agentExport'), agentImport: invoke('agentImport'),
   settingsSave: invoke('settingsSave'), mcpServerSave: invoke('mcpServerSave'), mcpServerDelete: invoke('mcpServerDelete'), chatCreate: invoke('chatCreate'), chatRename: invoke('chatRename'),

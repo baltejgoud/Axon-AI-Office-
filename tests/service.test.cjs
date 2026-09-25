@@ -446,6 +446,22 @@ test('an answer cut off at the token limit says so', async (t) => {
   assert.match(reply.error, /max-token limit/);
 });
 
+test('a thinking model that runs out of tokens before answering is told apart, with the limit to set', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    onChunk('', { type: 'thought', text: 'Let me think about every step of this carefully...' });
+    return { truncated: true };
+  });
+  await service.chatSend(chat.id, 'Plan my week', []);
+  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  assert.equal(reply.content, '');
+  assert.match(reply.error, /thinking/);
+  assert.match(reply.error, /16,000/);
+});
+
 test('each tool round sends the provider\'s own turn back with it', async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

@@ -19,7 +19,7 @@ let quitting = false;
 let tray: Tray | null = null;
 const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
-  'snapshot', 'providerSave', 'providerTest', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
+  'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
   'settingsSave', 'mcpServerSave', 'mcpServerDelete', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
   'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart'
