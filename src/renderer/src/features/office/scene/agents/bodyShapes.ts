@@ -141,19 +141,19 @@ function handShape(side: 1 | -1, ball: THREE.BufferGeometry, digit: THREE.Buffer
 
 function build(detail: 'full' | 'low'): BodyShapes {
   const full = detail === 'full';
-  const sphere = smooth(full ? new THREE.SphereGeometry(0.5, 14, 10) : new THREE.SphereGeometry(0.5, 10, 7));
+  const sphere = smooth(full ? new THREE.SphereGeometry(0.5, 14, 10) : new THREE.SphereGeometry(0.5, 8, 6));
   const mid = smooth(full ? new THREE.SphereGeometry(0.5, 10, 7) : new THREE.SphereGeometry(0.5, 6, 4));
   const small = smooth(full ? new THREE.SphereGeometry(0.5, 8, 6) : new THREE.SphereGeometry(0.5, 6, 4));
   const digit = smooth(new THREE.CapsuleGeometry(0.5, 1, 2, full ? 8 : 5));
-  const radial = full ? 14 : 10;
+  const radial = full ? 14 : 8;
   return {
     box: GEOMETRY.box,
     sphere,
     mid,
     small,
-    cylinder: full ? new THREE.CylinderGeometry(0.5, 0.5, 1, 12) : new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
-    capsule: smooth(new THREE.CapsuleGeometry(0.5, 1, 3, full ? 10 : 8)),
-    limb: taperedCapsule(1, 0.8, full ? 3 : 2, full ? 12 : 8),
+    cylinder: full ? new THREE.CylinderGeometry(0.5, 0.5, 1, 12) : new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
+    capsule: smooth(new THREE.CapsuleGeometry(0.5, 1, full ? 3 : 2, full ? 10 : 6)),
+    limb: taperedCapsule(1, 0.8, full ? 3 : 1, full ? 12 : 7),
     torso: lathe(
       [
         [0, 0],
@@ -182,7 +182,7 @@ function build(detail: 'full' | 'low'): BodyShapes {
       ].map(([r, y]) => [r / 0.176, y] as [number, number]),
       radial
     ),
-    head: full ? headShape(20, 14) : headShape(14, 10),
+    head: full ? headShape(20, 14) : headShape(12, 8),
     hand: { 1: handShape(1, small, digit, full), [-1]: handShape(-1, small, digit, full) } as Record<
       1 | -1,
       THREE.BufferGeometry
@@ -193,10 +193,10 @@ function build(detail: 'full' | 'low'): BodyShapes {
     ]),
     sole: assemble([[mid, [0.106, 0.03, 0.262], [0, -0.042, 0.048]]]),
     hairCap: smooth(
-      new THREE.SphereGeometry(0.5, full ? 22 : 12, full ? 9 : 5, 0, Math.PI * 2, 0, Math.PI * 0.5)
+      new THREE.SphereGeometry(0.5, full ? 22 : 10, full ? 9 : 4, 0, Math.PI * 2, 0, Math.PI * 0.5)
     ),
     hairVolume: sphere,
-    curls: full ? curlyShape(24, 18, 9, 0.07) : curlyShape(16, 12, 7, 0.06),
+    curls: full ? curlyShape(24, 18, 9, 0.07) : curlyShape(14, 10, 7, 0.06),
     strand: taperedCapsule(1, 0.45, 2, full ? 10 : 6),
     smile: new THREE.TorusGeometry(0.024, 0.006, 4, full ? 10 : 6, Math.PI).rotateZ(Math.PI),
     vee: new THREE.CylinderGeometry(0.5, 0, 1, 3).rotateY(Math.PI),

@@ -133,7 +133,7 @@ test('people stay within their triangle budget: close-up figures and the instanc
   const looks = Object.values(appearance.APPEARANCES);
   for (const [detail, budget] of [
     ['full', 7000],
-    ['low', 3300]
+    ['low', 2600]
   ]) {
     const average = looks.reduce((sum, look) => sum + trianglesOf(rig.buildHumanoid(look, detail).root), 0) / looks.length;
     assert.ok(average <= budget, `${detail}: ${Math.round(average)} triangles a person`);
