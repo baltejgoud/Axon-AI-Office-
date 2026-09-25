@@ -137,7 +137,7 @@ export class DeskScreens {
 /**
  * The screen shader: `MeshBasicMaterial` whose map lookup picks the instance's tile and scrolls its
  * band (wrapping inside the band), then, after the brightness, a blinking cursor while working and
- * the status strip along the bottom 7%.
+ * the status strip along the bottom 10%, under a thin dark line so it reads as the office's, not the app's.
  */
 function patchScreenShader(shader: { vertexShader: string; fragmentShader: string }): void {
   const f = (n: number) => n.toFixed(1);
@@ -202,12 +202,12 @@ diffuseColor *= textureGrad(map, sheetUv, dFdx(gradientUv), dFdy(gradientUv));`
 if (vScreenStatus > 0.5 && vScreenStatus < 1.5 && vScreenCursor.z > 0.5 && fract(uTime * 1.6) < 0.5 &&
     abs(screenPx.x - vScreenCursor.x) < 1.5 && abs(screenPx.y - vScreenCursor.y) < 3.0)
   diffuseColor.rgb = vScreenCursor.z < 1.5 ? vec3(0.9) : vec3(0.05);
-if (vScreenStatus > 0.5 && vScreenUv.y < 0.07) {
+if (vScreenStatus > 0.5 && vScreenUv.y < 0.1) {
   int code = int(vScreenStatus + 0.5);
   vec3 strip = uStrip[code - 1];
-  if (code == 1) strip = mix(strip, vec3(1.0), 0.55 * smoothstep(0.7, 1.0, fract(vScreenUv.x * 0.8 - uTime * 0.35)));
+  if (code == 1) strip = mix(strip, vec3(1.0), 0.7 * smoothstep(0.7, 1.0, fract(vScreenUv.x * 0.8 - uTime * 0.35)));
   if (code == 2) strip *= 0.7 + 0.3 * sin(uTime * 4.0);
-  diffuseColor.rgb = strip;
+  diffuseColor.rgb = vScreenUv.y > 0.088 ? vec3(0.02) : strip;
 }`
     );
 }

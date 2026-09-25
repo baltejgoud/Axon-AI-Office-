@@ -120,8 +120,9 @@ with one screen shows only the main app.
   instance: which tile (an `InstancedBufferAttribute` of tile offset), brightness (the existing
   instance colour), a scroll phase and speed, and a status (0 none, 1 working, 2 waiting,
   3 completed, 4 error) with progress. The material is `MeshBasicMaterial` patched with
-  `onBeforeCompile` to pick the tile, scroll it, and draw the status strip in the bottom 7% of the
-  screen. One draw call for all screens (today four).
+  `onBeforeCompile` to pick the tile, scroll it, and draw the status strip in the bottom 10% of the
+  screen, under a thin dark line. No app paints a full-width bar in a status colour there (the
+  editor's status bar is purple or grey, the terminal's cyan), so the strip never reads as part of the app. One draw call for all screens (today four).
 - **Motion**: content scrolls slowly (code, logs, tickets) or not at all (canvas, calendar), per app.
   While the owner works on a real task, scrolling is faster and a typing cursor blinks.
 - **Status**: `OfficeScene.updateAgentStatus(id, status)` already exists; it sets the status of that

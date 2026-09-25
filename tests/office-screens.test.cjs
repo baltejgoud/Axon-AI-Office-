@@ -239,19 +239,74 @@ test('the status strip follows the desk owner, and screens brighten while someon
   );
   const status = { a: 'working', b: undefined };
   const strip = screens.mesh.geometry.getAttribute('screenStatus');
-  screens.update(0.1, 1, () => 'active', (desk) => status[desk]);
+  screens.update(
+    0.1,
+    1,
+    () => 'active',
+    (desk) => status[desk]
+  );
   assert.deepEqual([strip.getX(0), strip.getX(1)], [1, 0]);
   status.a = 'completed';
-  screens.update(0.1, 2, () => 'active', (desk) => status[desk]);
+  screens.update(
+    0.1,
+    2,
+    () => 'active',
+    (desk) => status[desk]
+  );
   assert.equal(screens.stripOf('a'), 3);
-  screens.update(0.1, 2 + apps.DONE_FOR + 0.5, () => 'active', (desk) => status[desk]);
+  screens.update(
+    0.1,
+    2 + apps.DONE_FOR + 0.5,
+    () => 'active',
+    (desk) => status[desk]
+  );
   assert.equal(screens.stripOf('a'), 0, 'the green strip goes after a while');
   status.b = 'error';
-  screens.update(0.1, 30, () => 'active', (desk) => status[desk]);
+  screens.update(
+    0.1,
+    30,
+    () => 'active',
+    (desk) => status[desk]
+  );
   assert.equal(screens.stripOf('b'), 4);
-  for (let i = 0; i < 60; i++) screens.update(0.1, 31 + i * 0.1, () => 'active', (desk) => status[desk]);
+  for (let i = 0; i < 60; i++)
+    screens.update(
+      0.1,
+      31 + i * 0.1,
+      () => 'active',
+      (desk) => status[desk]
+    );
   const color = new THREE.Color();
   screens.mesh.getColorAt(0, color);
   assert.ok(color.r > 0.95, `screen brightness ${color.r}`);
   screens.dispose();
+});
+
+/** Hue in degrees, saturation and brightness (HSV) of a #rrggbb colour. */
+function hsv(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let hue = 0;
+  if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { hue: (hue * 60 + 360) % 360, saturation: max ? d / max : 0, value: max };
+}
+
+test('no app paints a full-width bar in a status colour where the status strip goes', () => {
+  // Working blue, waiting amber, done green, error red (screens.ts STRIP).
+  const statusHues = [217, 38, 142, 0];
+  for (const app of apps.SCREEN_APPS)
+    for (const variant of [0, 1])
+      for (const s of record(app, variant)) {
+        if (s.w < 154 || s.y + s.h <= 160 * 0.9 || !/^#[0-9a-f]{6}$/i.test(s.color)) continue;
+        const { hue, saturation, value } = hsv(s.color);
+        if (saturation < 0.35 || value < 0.3) continue;
+        const near = statusHues.find((h) => Math.min(Math.abs(hue - h), 360 - Math.abs(hue - h)) < 25);
+        assert.equal(
+          near,
+          undefined,
+          `${app} ${variant}: a ${s.color} bar at y ${s.y} looks like a status strip`
+        );
+      }
 });

@@ -98,7 +98,8 @@ export const PAINTERS: Record<ScreenApp, Painter> = {
     }
     pen.rect('#252526', 232, 14, 24, 136);
     for (let y = 18; y < 146; y += 3) pen.rect('#4b4b4b', 236, y, 4 + random() * 14, 1);
-    pen.rect(variant ? '#16825d' : '#007acc', 0, 150, W, 10);
+    // Status bar: VS Code's purple or a neutral grey, never a status-strip colour (see screens.ts).
+    pen.rect(variant ? '#3c3c3c' : '#68217a', 0, 150, W, 10);
     text(pen, '#ffffff', 6, 154, 34);
     text(pen, '#ffffff', 196, 154, 52);
   },
@@ -121,7 +122,7 @@ export const PAINTERS: Record<ScreenApp, Painter> = {
       }
     }
     if (variant) {
-      pen.rect('#16c60c', 0, 155, W, 5);
+      pen.rect('#00afaf', 0, 155, W, 5);
       pen.rect('#0c0c0c', 4, 156, 40, 3);
     }
   },

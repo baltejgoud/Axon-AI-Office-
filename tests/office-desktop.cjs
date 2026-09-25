@@ -222,6 +222,11 @@ app.on('web-contents-created', (_, contents) => {
       // The low-poly work's triangle ceiling (1.72M before Part 2).
       assert.ok(stats.triangles <= 2.3e6, `triangles ${stats.triangles}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
+      // Role screens: every desk screen is one draw call; the sheet is saved for review.
+      const parts = await evaluate('window.__axonOffice.breakdown()');
+      assert.equal(parts.screens?.meshes, 1, 'every desk screen is one draw call');
+      const sheet = await evaluate('window.__axonOffice.screenSheet()');
+      fs.writeFileSync(path.join(output, 'screen-sheet.png'), Buffer.from(sheet.split(',')[1], 'base64'));
       // The café staff are hidden from afar; they never count as coworkers.
       assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => !s.visible), 'staff hidden from afar');
       await snap('campus-overview.png');
@@ -245,6 +250,24 @@ app.on('web-contents-created', (_, contents) => {
         await evaluate(`window.__axonOffice.focus(${point.x}, ${point.z}, 5)`);
         await pause(1500);
         await snap(`screens-${id}.png`);
+      }
+      // The status strip follows the owner's real task status, then goes back to nothing. The UI
+      // developer sits in a pod's front row, so their screens face the camera.
+      for (const [status, code] of [
+        ['working', 1],
+        ['waiting', 2],
+        ['completed', 3],
+        ['error', 4],
+        ['idle', 0]
+      ]) {
+        await evaluate(`window.__axonOffice.setStatus('ui-developer', '${status}')`);
+        await waitFor(`window.__axonOffice.screenStrip('ui-developer') === ${code}`, `${status} strip`);
+        if (status === 'working') {
+          const desk = await evaluate(`window.__axonOffice.deskPoint('ui-developer')`);
+          await evaluate(`window.__axonOffice.focus(${desk.x}, ${desk.z}, 4)`);
+          await pause(1500);
+          await snap('screens-status-working.png');
+        }
       }
       await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
       await waitFor(
