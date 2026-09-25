@@ -9,6 +9,7 @@ import {
 import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, WALLS, poiById } from './layout';
 import { NavGrid, obstaclesFrom } from './navigation';
 import { Random, hashString } from './random';
+import { rhythmAt, type Rhythm } from './dayRhythm';
 import type { DistrictId } from '../campus/districts';
 import { nearestCoffee, stationSpots } from '../campus/coffee';
 import {
@@ -43,7 +44,9 @@ type DoKind =
   | 'celebrating'
   | 'thinking'
   | 'gaming'
-  | 'foosball';
+  | 'foosball'
+  | 'standup'
+  | 'eating';
 
 type Step =
   | { type: 'goto'; poiId: string; fast?: boolean }
@@ -51,7 +54,8 @@ type Step =
   | { type: 'do'; kind: DoKind; seconds: number | null }
   | { type: 'hold'; item: HeldItem | null };
 
-type PlanKind = AmbientActivity | 'task' | 'wrap-up' | 'meeting' | 'return' | 'initial' | 'help';
+type PlanKind =
+  AmbientActivity | 'task' | 'wrap-up' | 'meeting' | 'return' | 'initial' | 'help' | 'standup' | 'lunch';
 
 interface Plan {
   kind: PlanKind;
@@ -80,6 +84,27 @@ interface Meeting {
   speakerUntil: number;
 }
 
+/** A team on its feet at its board: one walks the board, the others stand in an arc. */
+interface Standup {
+  id: number;
+  department: string;
+  leadId: string;
+  spots: Map<string, string>;
+  /** The middle of the arc, where the lead turns to listen. */
+  centre: Vec2;
+  formedAt: number;
+  endsAt: number | null;
+  speakerId: string | null;
+  speakerUntil: number;
+}
+
+/** Where a department stands up: its board spot for the lead, and the arc in front of it. */
+interface StandupPlace {
+  lead: string;
+  arc: string[];
+  centre: Vec2;
+}
+
 interface AgentState {
   id: string;
   profile: AgentProfile;
@@ -96,7 +121,7 @@ interface AgentState {
   stepEndsAt: number | null;
   motion: Motion;
   heldItem: HeldItem | null;
-  deskMode: 'typing' | 'reading' | 'thinking';
+  deskMode: 'typing' | 'reading' | 'thinking' | 'eating' | 'stretching';
   deskModeUntil: number;
   onTask: boolean;
   taskStatus: TaskStatus;
@@ -116,6 +141,16 @@ interface AgentState {
   nearCommons: boolean;
   /** Where they get coffee: 'cafe', or the id of their district's nearest coffee station. */
   coffee: string;
+  standupId: number | null;
+  /** Who they are chatting with over coffee or lunch, taking turns to talk. */
+  chatWith: string | null;
+  chatSpeaks: boolean;
+  chatTurnUntil: number;
+  laughUntil: number;
+  /** When they last went for lunch; nobody has two. */
+  lunchedAt: number;
+  /** Eating at their own desk until then. */
+  deskLunchUntil: number;
 }
 
 export interface SimulationOptions {
@@ -126,6 +161,11 @@ export interface SimulationOptions {
   reducedMotion?: boolean;
   /** Most people away from their desks at once (real tasks never wait for this). */
   maxAway?: number;
+  /**
+   * The local hour (0-24) the office's day follows: standups, breaks and lunch. Without it, or when
+   * it returns null, the office keeps a plain working rhythm.
+   */
+  clock?: () => number | null;
 }
 
 const CAFE_PICKUP = ['cafe-machine', 'cafe-counter-1', 'cafe-counter-2'];
@@ -141,8 +181,42 @@ const OUTINGS = new Set<PlanKind>([
   'visit',
   'meeting',
   'gaming',
-  'play'
+  'play',
+  'standup',
+  'lunch'
 ]);
+/** Steps where people who find themselves together strike up a conversation. */
+const SOCIAL: ReadonlySet<DoKind> = new Set(['coffee', 'waiting', 'eating', 'sitting']);
+/** Near enough to chat, and far enough to stop. */
+const CHAT_REACH = 2.2;
+const CHAT_BREAK = 2.6;
+/** Teams standing up at once, and how soon the same team stands up again. */
+const MAX_STANDUPS = 2;
+const STANDUP_REST = 1500;
+/** A second lunch never comes round within this many seconds. */
+const LUNCH_ONCE = 3 * 3600;
+/** Where each department gathers for its standup. */
+const STANDUP_PLACES: ReadonlyMap<string, StandupPlace> = (() => {
+  const places = new Map<string, StandupPlace>();
+  for (const poi of POINTS_OF_INTEREST) {
+    if (poi.type !== 'standup' || !poi.department) continue;
+    const lead = POINTS_OF_INTEREST.find(
+      (other) => other.type === 'whiteboard' && other.department === poi.department
+    );
+    if (!lead) continue;
+    const place = places.get(poi.department) ?? { lead: lead.id, arc: [], centre: { x: 0, z: 0 } };
+    place.arc.push(poi.id);
+    places.set(poi.department, place);
+  }
+  for (const place of places.values()) {
+    const spots = place.arc.map((id) => poiById(id).position);
+    place.centre = {
+      x: spots.reduce((sum, p) => sum + p.x, 0) / spots.length,
+      z: spots.reduce((sum, p) => sum + p.z, 0) / spots.length + 0.3
+    };
+  }
+  return places;
+})();
 /** Seconds a visitor waits at an empty desk before heading back. */
 const HOST_AWAY_WAIT = 3;
 /** Specialists this close to the café may use the Commons; nobody hikes the whole campus for coffee. */
@@ -170,6 +244,17 @@ export class OfficeSimulation {
   private meeting: Meeting | null = null;
   private meetingCount = 0;
   private nextMeetingCheck: number;
+  private readonly clock: () => number | null;
+  /** The day's rhythm as of the current step. */
+  private rhythm: Rhythm = rhythmAt(null);
+  private readonly standupRng: Random;
+  private readonly chatRng: Random;
+  /** Whether the office knows the time of day (so breaks, lunch and stretches follow it). */
+  private dayKnown = false;
+  private standups: Standup[] = [];
+  private standupCount = 0;
+  private nextStandupAt: number;
+  private readonly lastStandup = new Map<string, number>();
 
   constructor(options: SimulationOptions) {
     this.grid = new NavGrid(obstaclesFrom(WALLS, FURNITURE));
@@ -177,6 +262,10 @@ export class OfficeSimulation {
     this.rng = new Random(hashString(`meetings:${seed}`));
     this.reducedMotion = options.reducedMotion ?? false;
     this.maxAway = options.maxAway ?? 12;
+    this.clock = options.clock ?? (() => null);
+    this.standupRng = new Random(hashString(`standups:${seed}`));
+    this.chatRng = new Random(hashString(`chats:${seed}`));
+    this.nextStandupAt = this.standupRng.range(5, 25);
     const cafe = poiById('cafe-machine').position;
     this.nextMeetingCheck = this.rng.range(60, 100);
     for (const id of options.agentIds) {
@@ -216,7 +305,14 @@ export class OfficeSimulation {
         district: homeSpot.district,
         department: homeSpot.department,
         nearCommons: !homeSpot.district || distance(homeSpot.position, cafe) <= COMMONS_REACH,
-        coffee: nearestCoffee(homeSpot.position, cafe, homeSpot.district)
+        coffee: nearestCoffee(homeSpot.position, cafe, homeSpot.district),
+        standupId: null,
+        chatWith: null,
+        chatSpeaks: false,
+        chatTurnUntil: 0,
+        laughUntil: 0,
+        lunchedAt: -Infinity,
+        deskLunchUntil: 0
       };
       this.agents.set(id, agent);
       this.placeInitial(agent);
@@ -233,9 +329,19 @@ export class OfficeSimulation {
     const slice = Math.min(Math.max(dt, 0), MAX_STEP);
     if (!slice) return;
     this.time += slice;
+    const hour = this.clock();
+    this.dayKnown = hour !== null;
+    this.rhythm = rhythmAt(hour);
     this.updateMeeting();
+    this.updateStandups();
     for (const agent of this.agents.values()) this.advance(agent, slice);
     this.reindex();
+    this.updateChats();
+  }
+
+  /** How many may be away at once now: more over lunch, fewer early and late. */
+  private awayBudget(): number {
+    return Math.round(this.maxAway * this.rhythm.away);
   }
 
   /** People currently away from their own desk for something other than real work. */
@@ -361,6 +467,12 @@ export class OfficeSimulation {
 
   views(): AgentView[] {
     return this.agentIds.map((id) => this.view(id)!);
+  }
+
+  /** Whether whoever sits at this desk is having their lunch there. */
+  lunchAt(deskPoiId: string): boolean {
+    const agent = this.seatedAt.get(deskPoiId);
+    return !!agent && agent.poiId === agent.home && this.time < agent.deskLunchUntil;
   }
 
   screenState(deskPoiId: string): ScreenState {
@@ -505,9 +617,53 @@ export class OfficeSimulation {
     if (this.reducedMotion || agent.poiId !== agent.home)
       return this.deskPlan(agent, agent.rng.range(45, 110));
     // The office is busy enough: keep working and look again later.
-    if (this.awayCount() >= this.maxAway) return this.deskPlan(agent, agent.rng.range(min, max));
-    const activity = agent.rng.weighted(agent.profile.weights);
-    return this.ambientPlan(agent, activity) ?? this.deskPlan(agent, agent.rng.range(min, max));
+    if (this.awayCount() >= this.awayBudget()) return this.deskPlan(agent, agent.rng.range(min, max));
+    const { weights, lunch } = this.rhythm;
+    const choices: Record<string, number> = {};
+    for (const [activity, weight] of Object.entries(agent.profile.weights))
+      choices[activity] = (weight ?? 0) * (weights[activity as AmbientActivity] ?? 1);
+    if (lunch > 0 && this.time - agent.lunchedAt > LUNCH_ONCE) choices.lunch = lunch;
+    const choice = agent.rng.weighted(choices);
+    if (choice === 'lunch') return this.lunchPlan(agent);
+    return (
+      this.ambientPlan(agent, choice as AmbientActivity) ?? this.deskPlan(agent, agent.rng.range(min, max))
+    );
+  }
+
+  /**
+   * Lunch: from the Commons, some take a plate from the caf� counter to a table; everyone else, and
+   * most people anyway, eats at their desk for a good while, reading as they go.
+   */
+  private lunchPlan(agent: AgentState): Plan {
+    const { rng } = agent;
+    agent.lunchedAt = this.time;
+    const pickup = this.freeSpots(CAFE_PICKUP, agent)[0];
+    const seats = this.freeSpots(
+      this.poisOfType((poi) => poi.type === 'cafe-seat'),
+      agent
+    );
+    if (agent.nearCommons && pickup && seats.length && !rng.chance(this.rhythm.deskLunch)) {
+      const table = rng.pick(seats);
+      this.reserve(agent, pickup);
+      this.reserve(agent, table);
+      return {
+        kind: 'lunch',
+        steps: [
+          { type: 'leave' },
+          { type: 'goto', poiId: pickup },
+          this.doing('waiting', rng.range(5, 9)),
+          { type: 'hold', item: 'plate' },
+          { type: 'leave' },
+          { type: 'goto', poiId: table },
+          this.doing('eating', rng.range(240, 480)),
+          { type: 'hold', item: null },
+          { type: 'leave' }
+        ]
+      };
+    }
+    const seconds = rng.range(900, 1800);
+    agent.deskLunchUntil = this.time + seconds;
+    return this.deskPlan(agent, seconds);
   }
 
   /** Builds and reserves an ambient outing, or returns null when every suitable spot is taken. */
@@ -532,7 +688,8 @@ export class OfficeSimulation {
       case 'coffee': {
         // The café, or their district's coffee station: pick up a cup, then sit or stand with it.
         const station = agent.coffee === 'cafe' ? null : stationSpots(agent.coffee);
-        const pickup = this.freeSpots(station ? station.slice(0, 2) : CAFE_PICKUP, agent)[0];
+        const pickups = this.freeSpots(station ? station.slice(0, 2) : CAFE_PICKUP, agent);
+        const pickup = pickups[0];
         if (!pickup) return null;
         this.reserve(agent, pickup);
         const steps: Step[] = [
@@ -541,6 +698,26 @@ export class OfficeSimulation {
           this.doing('waiting', rng.range(4, 7)),
           { type: 'hold', item: 'cup' }
         ];
+        // Coffee is better with company: now and then a teammate comes along and they stand and talk.
+        const friend = pickups[1] ? this.coffeeCompanion(agent) : null;
+        if (friend) {
+          const together = this.chatRng.range(25, 50);
+          this.cancelPlan(friend);
+          this.reserve(friend, pickups[1]);
+          this.setPlan(friend, {
+            kind: 'coffee',
+            steps: [
+              leave,
+              { type: 'goto', poiId: pickups[1] },
+              this.doing('waiting', this.chatRng.range(4, 7)),
+              { type: 'hold', item: 'cup' },
+              this.doing('coffee', together),
+              leave
+            ]
+          });
+          steps.push(this.doing('coffee', together), leave);
+          return { kind: 'coffee', steps };
+        }
         const seat = !rng.chance(0.5)
           ? null
           : station
@@ -725,11 +902,25 @@ export class OfficeSimulation {
    * has room for both players.
    */
   private partnerFor(agent: AgentState, eligible: (other: AgentState) => boolean): AgentState | null {
-    if (this.reducedMotion || this.awayCount() + 2 > this.maxAway) return null;
+    if (this.reducedMotion || this.awayCount() + 2 > this.awayBudget()) return null;
     const pool = [...this.agents.values()].filter(
       (other) => other !== agent && eligible(other) && this.availableForMeeting(other)
     );
     return pool.length ? agent.rng.pick(pool) : null;
+  }
+
+  /** A teammate, quietly working, who fancies a coffee too: about one coffee run in three. */
+  private coffeeCompanion(agent: AgentState): AgentState | null {
+    if (this.reducedMotion || !this.chatRng.chance(0.35) || this.awayCount() + 2 > this.awayBudget())
+      return null;
+    const pool = [...this.agents.values()].filter(
+      (other) =>
+        other !== agent &&
+        other.department === agent.department &&
+        other.coffee === agent.coffee &&
+        this.availableForMeeting(other)
+    );
+    return pool.length ? this.chatRng.pick(pool) : null;
   }
 
   private setPlan(agent: AgentState, plan: Plan): void {
@@ -760,10 +951,13 @@ export class OfficeSimulation {
       };
     }
     agent.meetingId = null;
+    agent.standupId = null;
     agent.visitHostId = null;
     agent.hostMissedAt = null;
-    // A controller stays with the game.
-    if (agent.heldItem === 'controller') agent.heldItem = null;
+    agent.deskLunchUntil = 0;
+    this.endChat(agent);
+    // A controller stays with the game; a plate goes back to the caf�.
+    if (agent.heldItem === 'controller' || agent.heldItem === 'plate') agent.heldItem = null;
   }
 
   // ---------------------------------------------------------------- meetings and visits
@@ -779,6 +973,7 @@ export class OfficeSimulation {
       step?.type === 'do' &&
       step.kind === 'desk' &&
       agent.meetingId === null &&
+      agent.standupId === null &&
       agent.visitHostId === null
     );
   }
@@ -848,7 +1043,7 @@ export class OfficeSimulation {
     );
     if (pool.length < 2) return;
     const count = Math.min(pool.length, this.rng.chance(0.45) ? 3 : 2);
-    if (this.awayCount() + count > this.maxAway) return;
+    if (this.awayCount() + count > this.awayBudget()) return;
     const chosen: AgentState[] = [];
     while (chosen.length < count) {
       const weights = Object.fromEntries(pool.map((agent) => [agent.id, agent.profile.meetingAffinity]));
@@ -903,7 +1098,200 @@ export class OfficeSimulation {
     this.meeting = meeting;
   }
 
+  // ---------------------------------------------------------------- standups
+
+  /** Teams take turns standing up at their boards while the day's rhythm calls for it. */
+  private updateStandups(): void {
+    const every = this.rhythm.standupEvery;
+    if (!this.reducedMotion && every !== null && this.time >= this.nextStandupAt) {
+      this.nextStandupAt = this.time + every * this.standupRng.range(0.7, 1.3);
+      if (this.standups.length < MAX_STANDUPS) this.startStandup();
+    }
+    for (const standup of [...this.standups]) this.updateStandup(standup);
+  }
+
+  private standupOf(agent: AgentState): Standup | null {
+    if (agent.standupId === null) return null;
+    return this.standups.find((standup) => standup.id === agent.standupId) ?? null;
+  }
+
+  /** Pulls three to five of a team who are quietly working to its board. Purely visual. */
+  private startStandup(): void {
+    const busy = new Set(this.standups.map((standup) => standup.department));
+    const teams = new Map<string, AgentState[]>();
+    for (const agent of this.agents.values()) {
+      if (!agent.department || busy.has(agent.department) || !this.availableForMeeting(agent)) continue;
+      const team = teams.get(agent.department);
+      if (team) team.push(agent);
+      else teams.set(agent.department, [agent]);
+    }
+    const ready = [...teams].filter(([department, members]) => {
+      const place = STANDUP_PLACES.get(department);
+      return (
+        !!place &&
+        members.length >= 3 &&
+        this.time - (this.lastStandup.get(department) ?? -Infinity) > STANDUP_REST &&
+        this.hasRoom(place.lead) &&
+        place.arc.filter((id) => this.hasRoom(id)).length >= 2
+      );
+    });
+    if (!ready.length) return;
+    const [department, members] = this.standupRng.pick(ready);
+    const place = STANDUP_PLACES.get(department)!;
+    // The inner places first, so a small team stands close and even.
+    const arc = place.arc
+      .filter((id) => this.hasRoom(id))
+      .sort(
+        (a, b) =>
+          Math.abs(poiById(a).position.x - place.centre.x) - Math.abs(poiById(b).position.x - place.centre.x)
+      );
+    const count = Math.min(members.length, arc.length + 1, this.awayBudget() - this.awayCount());
+    if (count < 3) return;
+    const pool = [...members];
+    const team: AgentState[] = [];
+    while (team.length < count)
+      team.push(pool.splice(Math.floor(this.standupRng.next() * pool.length), 1)[0]);
+    const standup: Standup = {
+      id: ++this.standupCount,
+      department,
+      leadId: team[0].id,
+      spots: new Map(),
+      centre: place.centre,
+      formedAt: this.time,
+      endsAt: null,
+      speakerId: null,
+      speakerUntil: 0
+    };
+    team.forEach((agent, i) => {
+      const spot = i === 0 ? place.lead : arc[i - 1];
+      this.cancelPlan(agent);
+      agent.standupId = standup.id;
+      this.reserve(agent, spot);
+      standup.spots.set(agent.id, spot);
+      this.setPlan(agent, {
+        kind: 'standup',
+        steps: [
+          { type: 'leave' },
+          { type: 'goto', poiId: spot },
+          this.doing('standup', null),
+          { type: 'leave' }
+        ]
+      });
+    });
+    this.standups.push(standup);
+  }
+
+  /** Waits for the team, then passes the turn to talk around it; the lead opens. Ends on time. */
+  private updateStandup(standup: Standup): void {
+    const participants = [...standup.spots.keys()]
+      .map((id) => this.agents.get(id)!)
+      .filter((agent) => agent.standupId === standup.id);
+    const arrived = participants.filter(
+      (agent) => agent.poiId === standup.spots.get(agent.id) && agent.motion.kind === 'still'
+    );
+    const ended =
+      (participants.length < 2 && this.time - standup.formedAt > 3) ||
+      (standup.endsAt !== null && this.time >= standup.endsAt);
+    if (ended) {
+      for (const agent of participants) agent.standupId = null;
+      this.lastStandup.set(standup.department, this.time);
+      this.standups = this.standups.filter((other) => other !== standup);
+      return;
+    }
+    if (
+      standup.endsAt === null &&
+      (arrived.length === participants.length || this.time - standup.formedAt > 40)
+    )
+      standup.endsAt = this.time + this.standupRng.range(45, 80);
+    if (!arrived.length) return;
+    const speaker = arrived.find((agent) => agent.id === standup.speakerId);
+    if (speaker && this.time < standup.speakerUntil) return;
+    const lead = arrived.find((agent) => agent.id === standup.leadId);
+    const others = arrived.filter((agent) => agent !== speaker);
+    const next = !standup.speakerId && lead ? lead : this.standupRng.pick(others.length ? others : arrived);
+    // Now and then something gets a laugh before the next person goes.
+    if (speaker && this.standupRng.chance(0.15))
+      for (const agent of arrived) agent.laughUntil = this.time + 1.3;
+    standup.speakerId = next.id;
+    standup.speakerUntil = this.time + this.standupRng.range(4, 8);
+  }
+
+  // ---------------------------------------------------------------- conversations
+
+  /** Somewhere people naturally talk, and free to: over coffee, in the caf� queue, at lunch, on a sofa. */
+  private canChat(agent: AgentState): boolean {
+    if (agent.onTask || agent.motion.kind !== 'still' || !agent.poiId) return false;
+    const step = agent.plan.steps[agent.stepIndex];
+    return step?.type === 'do' && SOCIAL.has(step.kind);
+  }
+
+  private chatPartner(agent: AgentState): AgentState | null {
+    return agent.chatWith ? (this.agents.get(agent.chatWith) ?? null) : null;
+  }
+
+  private endChat(agent: AgentState): void {
+    const partner = this.chatPartner(agent);
+    if (partner?.chatWith === agent.id) partner.chatWith = null;
+    agent.chatWith = null;
+  }
+
+  /** Pairs up people who find themselves together, and passes the turn to talk back and forth. */
+  private updateChats(): void {
+    const free: AgentState[] = [];
+    for (const agent of this.agents.values()) {
+      const partner = this.chatPartner(agent);
+      if (partner) {
+        if (
+          !this.canChat(agent) ||
+          !this.canChat(partner) ||
+          distance(agent.position, partner.position) > CHAT_BREAK
+        )
+          this.endChat(agent);
+        continue;
+      }
+      if (this.canChat(agent)) free.push(agent);
+    }
+    for (const agent of free) {
+      if (agent.chatWith) continue;
+      let nearest: AgentState | null = null;
+      let reach = CHAT_REACH;
+      for (const other of free) {
+        if (other === agent || other.chatWith) continue;
+        const d = distance(agent.position, other.position);
+        if (d < reach) {
+          nearest = other;
+          reach = d;
+        }
+      }
+      if (!nearest) continue;
+      agent.chatWith = nearest.id;
+      nearest.chatWith = agent.id;
+      agent.chatSpeaks = true;
+      nearest.chatSpeaks = false;
+      agent.chatTurnUntil = this.time + this.chatRng.range(3, 6);
+    }
+    for (const agent of this.agents.values()) {
+      const partner = this.chatPartner(agent);
+      if (!partner || !agent.chatSpeaks || this.time < agent.chatTurnUntil) continue;
+      // The turn passes; now and then the joke lands first.
+      if (this.chatRng.chance(0.25)) agent.laughUntil = partner.laughUntil = this.time + 1.3;
+      agent.chatSpeaks = false;
+      partner.chatSpeaks = true;
+      partner.chatTurnUntil = this.time + this.chatRng.range(3, 6);
+    }
+  }
+
   private attentionOf(agent: AgentState): Vec2 | null {
+    const standup = this.standupOf(agent);
+    if (standup && agent.motion.kind === 'still') {
+      const speaker = standup.speakerId ? this.agents.get(standup.speakerId) : undefined;
+      if (speaker && speaker !== agent) return { ...speaker.position };
+      // Walking the board, the lead looks at it; otherwise the team looks to the lead.
+      const lead = this.agents.get(standup.leadId);
+      return agent.id === standup.leadId || !lead ? null : { ...lead.position };
+    }
+    const partner = this.chatPartner(agent);
+    if (partner) return { ...partner.position };
     const meeting = this.meeting;
     if (meeting && agent.meetingId === meeting.id && agent.sit > 0.9) {
       const speaker = meeting.speakerId ? this.agents.get(meeting.speakerId) : undefined;
@@ -983,6 +1371,7 @@ export class OfficeSimulation {
         if (step.kind === 'desk') {
           agent.deskMode = 'typing';
           agent.deskModeUntil = this.time + agent.rng.range(4, 12);
+          if (this.time < agent.deskLunchUntil) agent.deskMode = 'eating';
         }
         return;
       case 'hold':
@@ -1000,6 +1389,7 @@ export class OfficeSimulation {
         return true;
       case 'do':
         if (step.kind === 'meeting') return agent.meetingId === null;
+        if (step.kind === 'standup') return agent.standupId === null;
         if (step.kind === 'visit' && agent.plan.kind !== 'help' && !this.hostIsAvailable(agent)) {
           // Nobody at the desk: look around for a moment, then head back.
           agent.hostMissedAt ??= this.time;
@@ -1132,6 +1522,15 @@ export class OfficeSimulation {
     } else if (agent.poiId) {
       target = poiById(agent.poiId).facing;
       rate = agent.motion.kind === 'transition' ? 10 : 6;
+      const standup = this.standupOf(agent);
+      const partner = this.chatPartner(agent);
+      if (standup?.leadId === agent.id && standup.speakerId !== agent.id && agent.motion.kind === 'still') {
+        target = yawTowards(agent.position, standup.centre);
+        rate = 4;
+      } else if (partner && agent.sit < 0.05 && agent.motion.kind === 'still') {
+        target = yawTowards(agent.position, partner.position);
+        rate = 4;
+      }
     }
     if (target === null) return;
     agent.heading = wrapAngle(agent.heading + wrapAngle(target - agent.heading) * (1 - Math.exp(-rate * dt)));
@@ -1151,6 +1550,14 @@ export class OfficeSimulation {
       }
       case 'meeting':
         return this.meeting?.speakerId === agent.id ? 'talking' : 'meeting';
+      case 'standup': {
+        const standup = this.standupOf(agent);
+        if (!standup) return 'idle';
+        if (this.time < agent.laughUntil) return 'laughing';
+        if (standup.speakerId !== agent.id) return 'listening';
+        // The lead walks the board; everyone else says their piece to the group.
+        return agent.id === standup.leadId ? 'whiteboard' : 'talking';
+      }
       case 'visit':
         // A social visit to an empty desk is a wait; helping someone at work is a conversation.
         if (agent.plan.kind !== 'help' && !this.hostIsAvailable(agent)) return 'waiting';
@@ -1158,17 +1565,35 @@ export class OfficeSimulation {
           agent.visitorSpeaks = !agent.visitorSpeaks;
           agent.turnUntil = this.time + agent.rng.range(3, 6);
         }
-        return agent.visitorSpeaks ? 'talking' : 'idle';
-      case 'sitting':
-        return 'sitting';
-      default:
+        return agent.visitorSpeaks ? 'talking' : 'listening';
+      default: {
+        const partner = this.chatPartner(agent);
+        if (partner) {
+          if (this.time < agent.laughUntil) return 'laughing';
+          if (agent.chatSpeaks) return 'talking';
+          // Over lunch, whoever is not talking gets on with eating.
+          return step.kind === 'eating' ? 'eating' : 'listening';
+        }
         return step.kind;
+      }
     }
   }
 
   /** At a desk people type, pause to read, sometimes sit back and think. Real work types more. */
   private nextDeskMode(agent: AgentState): void {
     const { rng, onTask } = agent;
+    if (!onTask && this.time < agent.deskLunchUntil) {
+      // Lunch at the desk: a few bites, a bit of reading, more bites.
+      agent.deskMode = agent.deskMode === 'eating' ? 'reading' : 'eating';
+      agent.deskModeUntil = this.time + (agent.deskMode === 'eating' ? rng.range(15, 35) : rng.range(6, 14));
+      return;
+    }
+    const stretch = this.rhythm.phase === 'afternoon-break' ? 0.2 : 0.03;
+    if (this.dayKnown && !onTask && agent.deskMode === 'typing' && this.chatRng.chance(stretch)) {
+      agent.deskMode = 'stretching';
+      agent.deskModeUntil = this.time + this.chatRng.range(2.5, 4);
+      return;
+    }
     if (agent.deskMode === 'typing') {
       agent.deskMode = rng.chance(onTask ? 0.25 : 0.35) ? 'thinking' : 'reading';
       agent.deskModeUntil =

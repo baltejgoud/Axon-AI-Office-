@@ -1,5 +1,5 @@
 import { hashString } from '../simulation/random';
-import type { DeskEquipment, DeskProp, LayoutBuilder } from './builder';
+import type { DeskEquipment, DeskProp, FurnitureKind, LayoutBuilder, PoiTags } from './builder';
 import { propPlacements, surfaceOf } from './deskPlacement';
 import { DISTRICTS, type Bounds, type District } from './districts';
 import { boardKind, decorateDepartment } from './decor';
@@ -12,6 +12,34 @@ const POD_PITCH_X = 4.8;
 const POD_PITCH_Z = 5.2;
 /** Space kept along each department's back edge for its whiteboard and label. */
 const BACK_STRIP = 2.2;
+/**
+ * A standup: the team stands in an arc between the board and the desks, turned in toward its middle
+ * (so the viewer sees faces), while one of them walks the board from its spot.
+ */
+const STANDUP = { depth: 1.6, radius: 1.15, angles: [-1.4, -0.8, 0.8, 1.4] } as const;
+/**
+ * Things tall enough to hide someone standing behind them, and how far in front of that person
+ * they still do (a tree's canopy spreads well past its trunk); desks and seats are too low to.
+ */
+const TALL: ReadonlyMap<FurnitureKind, number> = new Map([
+  ['tree', 2.4],
+  ['plant-large', 1.6],
+  ['planter', 1.2],
+  ['tv-corner', 1.4],
+  ['bookshelf', 1.6],
+  ['bookshelf-tall', 1.8],
+  ['arcade', 1.6],
+  ['vending-machine', 1.6],
+  ['snack-shelf', 1.4],
+  ['server-rack', 1.8],
+  ['data-wall', 1.8],
+  ['cabinet-wall', 1.8],
+  ['coat-rack', 1.2],
+  ['water-cooler', 1.0],
+  ['floor-lamp', 0.8]
+]);
+/** Toward the viewer along the floor: the office camera looks in from the front right. */
+const VIEWER = { x: Math.sin(0.42), z: Math.cos(0.42) } as const;
 const EDGE = 0.4;
 /** Gap between department cells: the main corridors. */
 const CELL_GAP = 2.6;
@@ -161,7 +189,41 @@ function packDepartment(
       }
   }
   b.decor.push(decorateDepartment(b, district, key, region, { centreX, centreZ, cols, rows }, index, tags));
+  standupSpots(b, key, cx, cell.minZ + STANDUP.depth, tags);
   return homes;
+}
+
+/**
+ * The places around a department's board where its team stands up, turned in toward the middle.
+ * A place is left out where furniture crowds it or would stand between it and the viewer.
+ */
+function standupSpots(b: LayoutBuilder, key: string, cx: number, cz: number, tags: PoiTags): void {
+  STANDUP.angles.forEach((angle, i) => {
+    const x = cx + Math.sin(angle) * STANDUP.radius;
+    const z = cz - Math.cos(angle) * STANDUP.radius;
+    const blocked = b.furniture.some((item) => {
+      if (!item.blocks) return false;
+      // The item's footprint as an axis-aligned box (items stand square or at right angles).
+      const cos = Math.abs(Math.cos(item.rotation));
+      const sin = Math.abs(Math.sin(item.rotation));
+      const hw = (item.w * cos + item.d * sin) / 2;
+      const hd = (item.w * sin + item.d * cos) / 2;
+      const gapX = Math.max(0, Math.abs(item.x - x) - hw);
+      const gapZ = Math.max(0, Math.abs(item.z - z) - hd);
+      if (Math.hypot(gapX, gapZ) < 0.3) return true;
+      // Something tall in front of the spot, toward the viewer (who looks in from the front right),
+      // would hide whoever stands there.
+      const hides = TALL.get(item.kind) ?? 0;
+      for (let t = 0.3; t <= hides; t += 0.15) {
+        const px = x + VIEWER.x * t;
+        const pz = z + VIEWER.z * t;
+        if (Math.abs(item.x - px) < hw + 0.25 && Math.abs(item.z - pz) < hd + 0.25) return true;
+      }
+      return false;
+    });
+    if (blocked) return;
+    b.spot(`standup-${key}-${i}`, 'standup', 'agents', x, z, Math.atan2(cx - x, cz - z), tags);
+  });
 }
 
 /** Private glass offices for the executive team: five across, two rows, doors toward the viewer. */

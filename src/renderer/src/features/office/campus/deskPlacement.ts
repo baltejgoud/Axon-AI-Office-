@@ -5,7 +5,16 @@ import type { DeskEquipment, DeskProp } from './builder';
  * x runs to their right. Rectangles are footprints on the desktop, in metres.
  */
 export interface Placement {
-  item: DeskEquipment | DeskProp | 'keyboard' | 'mouse' | 'monitor' | 'monitor-left' | 'monitor-right';
+  item:
+    | DeskEquipment
+    | DeskProp
+    | 'keyboard'
+    | 'mouse'
+    | 'monitor'
+    | 'monitor-left'
+    | 'monitor-right'
+    | 'lunch'
+    | 'lunch-bowl';
   x: number;
   z: number;
   w: number;
@@ -148,4 +157,43 @@ export function propPlacements(
       }
   });
   return placed;
+}
+
+/** A lunch bowl with a drink beside it, or the bowl alone on a full desk. */
+export const LUNCH_SIZE = { lunch: [0.24, 0.16], 'lunch-bowl': [0.15, 0.15] } as const;
+/** Lunch goes within easy reach: beside the keyboard, never out by the desk's far corners. */
+const LUNCH_REACH = 0.62;
+
+/**
+ * Where lunch goes on a desk: the free place nearest the person's left hand, clear of the screens,
+ * keyboard, mouse and their own things; the bowl alone if there is no room for a drink too. Null
+ * when the desk is too full even for that.
+ */
+export function lunchPlacement(
+  equipment: DeskEquipment,
+  props: readonly DeskProp[],
+  surface: Surface = POD_DESK
+): Placement | null {
+  const taken = [...equipmentPlacements(equipment, surface), ...propPlacements(equipment, props, surface)];
+  return fitLunch('lunch', taken, surface) ?? fitLunch('lunch-bowl', taken, surface);
+}
+
+function fitLunch(item: 'lunch' | 'lunch-bowl', taken: Placement[], surface: Surface): Placement | null {
+  const [w, d] = LUNCH_SIZE[item];
+  const reach = Math.min(LUNCH_REACH, surface.maxX) - w / 2;
+  const from = Math.max(-reach, surface.minX + w / 2);
+  const hand = { x: -0.3, z: surface.minZ };
+  let best: Placement | null = null;
+  let nearest = Infinity;
+  for (let x = from; x <= reach + 1e-9; x += 0.02)
+    for (let z = surface.minZ + d / 2; z <= surface.maxZ - d / 2 + 1e-9; z += 0.02) {
+      const candidate: Placement = { item, x, z, w, d, turn: 0 };
+      if (taken.some((other) => overlaps(candidate, other))) continue;
+      const distance = Math.hypot(x - hand.x, z - hand.z);
+      if (distance < nearest) {
+        nearest = distance;
+        best = candidate;
+      }
+    }
+  return best;
 }

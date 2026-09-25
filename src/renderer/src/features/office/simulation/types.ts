@@ -20,9 +20,13 @@ export type AgentBehaviorState =
   | 'whiteboard'
   | 'celebrating'
   | 'gaming'
-  | 'foosball';
+  | 'foosball'
+  | 'listening'
+  | 'laughing'
+  | 'eating'
+  | 'stretching';
 
-export type HeldItem = 'cup' | 'book' | 'folder' | 'tablet' | 'clipboard' | 'controller';
+export type HeldItem = 'cup' | 'book' | 'folder' | 'tablet' | 'clipboard' | 'controller' | 'plate';
 
 /** Mirrors the office store's real task status; the simulation never invents one. */
 export type TaskStatus = 'idle' | 'working' | 'waiting' | 'completed' | 'error';
@@ -43,7 +47,8 @@ export type PoiType =
   | 'bookshelf'
   | 'printer'
   | 'files'
-  | 'open-area';
+  | 'open-area'
+  | 'standup';
 
 export interface PointOfInterest {
   id: string;

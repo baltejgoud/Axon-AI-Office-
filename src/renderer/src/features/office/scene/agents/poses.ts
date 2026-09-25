@@ -67,6 +67,9 @@ const CUP_HOLD = limb(0.55, -0.12, 1.5);
 const CARRY = limb(0.35, -0.15, 1.55);
 const ON_DESK = limb(0.55, -0.2, 1.0);
 const ON_LAP = limb(0.38, 0.03, 0.8);
+/** Arms loosely crossed in front, as people stand when listening. */
+const FOLDED_L = limb(0.5, -0.42, 1.8);
+const FOLDED_R = limb(0.45, -0.38, 1.75);
 
 export function neutralPose(): Pose {
   return {
@@ -185,19 +188,66 @@ export function computePose(input: PoseInput): Pose {
       pose.armR = seated ? limb(0.6, -0.18, 0.95) : { ...RELAXED };
       break;
     }
-    case 'talking':
+    case 'talking': {
       pose.headPitch = 0.02 + 0.04 * Math.sin(t * 3.4);
-      pose.armR = limb(
+      const gesture = limb(
         0.75 + 0.22 * Math.sin(t * 2.3),
         0.18 + 0.1 * Math.sin(t * 1.6),
         1.25 + 0.25 * Math.sin(t * 3.2)
       );
-      pose.armL = seated
-        ? limb(0.6, -0.18, 0.95)
-        : held
-          ? { ...CARRY }
-          : limb(0.2 + 0.1 * Math.sin(t * 1.7), 0.16, 0.5);
+      // With a cup in the right hand, the left one does the talking.
+      if (held === 'cup') pose.armL = gesture;
+      else {
+        pose.armR = gesture;
+        pose.armL = seated
+          ? limb(0.6, -0.18, 0.95)
+          : held
+            ? { ...CARRY }
+            : limb(0.2 + 0.1 * Math.sin(t * 1.7), 0.16, 0.5);
+      }
       if (seated) pose.lean = 0.08;
+      break;
+    }
+    case 'listening': {
+      // Attentive: a nod now and then, weight on one leg, arms loosely folded when they are free.
+      const nod = Math.pow(Math.max(0, Math.sin(t * 1.3)), 8);
+      pose.headPitch = 0.05 + 0.13 * nod;
+      pose.headRoll = 0.05 * Math.sin(t * 0.35);
+      if (seated) {
+        pose.armL = input.lounging ? { ...ON_LAP } : limb(0.6, -0.18, 0.95);
+        pose.armR = input.lounging ? { ...ON_LAP } : limb(0.6, -0.18, 0.95);
+      } else {
+        pose.tilt = 0.035;
+        pose.armL = held ? { ...RELAXED } : FOLDED_L;
+        pose.armR = held ? { ...RELAXED } : FOLDED_R;
+      }
+      break;
+    }
+    case 'laughing': {
+      // Head back, shoulders shaking, a hand to the middle.
+      const shake = Math.sin(t * 17);
+      pose.headPitch = -0.2 + 0.05 * shake;
+      pose.lean = (seated ? 0 : -0.07) + 0.03 * shake;
+      pose.armL = limb(0.55, -0.35, 1.6 + 0.08 * shake);
+      if (!held) pose.armR = limb(0.3, 0.22, 0.55 + 0.12 * shake);
+      break;
+    }
+    case 'eating': {
+      // A forkful every few seconds; the other hand stays by the plate.
+      const cycle = (t + seed * 5) % 3.2;
+      const lift = cycle < 1 ? Math.sin(cycle * Math.PI) : 0;
+      pose.lean = seated ? 0.14 : 0.04;
+      pose.headPitch = 0.28 - 0.18 * lift;
+      pose.armL = { ...ON_DESK };
+      pose.armR = lerpLimb(limb(0.6, -0.15, 1.1), limb(0.95, -0.28, 2.3), lift);
+      break;
+    }
+    case 'stretching':
+      // Arms up and a lean back: the afternoon stretch.
+      pose.lean = seated ? -0.2 : -0.1;
+      pose.headPitch = -0.22;
+      pose.armL = limb(2.9, 0.3, 0.35 + 0.1 * Math.sin(t * 2));
+      pose.armR = limb(2.9, 0.3, 0.35 + 0.1 * Math.sin(t * 2 + 1));
       break;
     case 'coffee': {
       const sip = sipping(t, seed);
@@ -319,7 +369,14 @@ export function computePose(input: PoseInput): Pose {
 
   // ---- whatever is in hand overrides the arm that holds it
   if (held === 'cup' && behavior !== 'coffee') pose.armR = { ...CUP_HOLD };
-  if (held && held !== 'cup' && held !== 'controller' && behavior !== 'reading' && behavior !== 'talking')
+  if (
+    held &&
+    held !== 'cup' &&
+    held !== 'controller' &&
+    behavior !== 'reading' &&
+    behavior !== 'talking' &&
+    behavior !== 'eating'
+  )
     pose.armL = { ...CARRY };
   return pose;
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { hashString } from '../../simulation/random';
 import { yawTowards, type AgentBehaviorState, type AgentView, type HeldItem } from '../../simulation/types';
 import { box, cylinder } from '../room/materials';
+import { servedPlate } from '../room/food';
 import { controller } from '../room/lounge';
 import { appearanceFor } from './appearance';
 import { HAND_GRIP, applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
@@ -44,6 +45,9 @@ function heldProp(item: HeldItem, accent: string): THREE.Object3D {
       pad.rotation.x = -0.6;
       return new THREE.Group().add(pad);
     }
+    case 'plate':
+      // Lunch from the café counter, carried level.
+      return servedPlate(accent.length);
     case 'clipboard':
       return new THREE.Group().add(
         box('#9f7549', [0.012, 0.3, 0.22], [0, 0, 0.02]),
@@ -111,7 +115,7 @@ export class OfficeAgentCharacter {
     this.hitBox.userData.agentId = agentId;
     this.root.add(this.hitBox);
 
-    for (const item of ['cup', 'book', 'folder', 'tablet', 'clipboard', 'controller'] as const) {
+    for (const item of ['cup', 'book', 'folder', 'tablet', 'clipboard', 'controller', 'plate'] as const) {
       const prop = heldProp(item, look.accent);
       prop.visible = false;
       prop.position.y += HAND_GRIP;
@@ -228,7 +232,7 @@ export class OfficeAgentCharacter {
     prop.parent!.getWorldQuaternion(this.scratchQuat);
     this.root.getWorldQuaternion(this.scratchQuat2);
     prop.quaternion.copy(this.scratchQuat.invert().multiply(this.scratchQuat2));
-    if (held !== 'cup' && held !== 'controller') prop.quaternion.multiply(HELD_FLAT_TILT);
+    if (held !== 'cup' && held !== 'controller' && held !== 'plate') prop.quaternion.multiply(HELD_FLAT_TILT);
   }
 
   private buildOutlines(): THREE.Mesh[] {

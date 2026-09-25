@@ -25,6 +25,7 @@ import { LAMP_BASE, windowGlass } from './room/materials';
 import { RACK_LIGHTS } from './room/props';
 import { AutoQuality, qualityPreference, type QualityLevel, type QualityMode } from './render/quality';
 import { applyRenderQuality } from './render/sharpness';
+import { DeskLunches } from './room/lunch';
 import { StaffLayer } from './staff/StaffLayer';
 import type { StaffAction, StaffId } from './staff/routines';
 
@@ -58,6 +59,10 @@ export interface OfficeDebugHandle {
   boards(): { team: string; cards: { title: string; status: TaskStatus }[] }[];
   /** Where a team's board is on screen, in canvas pixels. */
   boardPoint(team: string): { x: number; y: number } | null;
+  /** Runs the office's day (and its light) at this hour instead of the clock; null follows the clock. */
+  setHour(hour: number | null): void;
+  /** Desks with lunch on them now. */
+  lunches(): number;
   /** The café staff: where they are, what they do and whether they are drawn. */
   staff(): { id: StaffId; action: StaffAction; x: number; z: number; visible: boolean }[];
   staffPoint(id: StaffId): { x: number; y: number } | null;
@@ -171,6 +176,10 @@ export class OfficeScene {
   private lastFrame = 0;
   private elapsed = 0;
   private tierClock = TIER_INTERVAL;
+  private readonly lunches = new DeskLunches();
+  private lunchClock = 0;
+  /** An hour set from the debug handle, in place of the clock. */
+  private hourOverride: number | null = null;
   private viewClock = 0;
   private lastViewKey = '';
   private shadowExtent = 0;
@@ -204,7 +213,7 @@ export class OfficeScene {
 
     this.sun = this.addLights();
     this.room = buildOffice();
-    this.scene.add(this.room.root);
+    this.scene.add(this.room.root, this.lunches.object);
     this.staff = new StaffLayer(this.reducedMotion);
     this.scene.add(this.staff.object);
 
@@ -212,7 +221,8 @@ export class OfficeScene {
     this.simulation = new OfficeSimulation({
       agentIds: OFFICE_AGENTS.map((agent) => agent.id),
       seed,
-      reducedMotion: this.reducedMotion
+      reducedMotion: this.reducedMotion,
+      clock: () => this.clockHour()
     });
     this.crowd = new CrowdRenderer(
       OFFICE_AGENTS.map((agent) => {
@@ -248,6 +258,11 @@ export class OfficeScene {
         setStatus: (agentId, status) => this.updateAgentStatus(agentId, status),
         signs: () => this.signs.info(),
         boards: () => this.boards.info(),
+        setHour: (hour) => {
+          this.hourOverride = hour;
+          this.applyLighting();
+        },
+        lunches: () => this.lunches.count(),
         boardPoint: (team) =>
           this.boards.screenPoint(
             team,
@@ -328,10 +343,21 @@ export class OfficeScene {
     this.start();
   }
 
+  /**
+   * The local hour the office's light and day follow, or null if the user switched that off (then
+   * the office keeps a midday light and a plain working rhythm).
+   */
+  private clockHour(): number | null {
+    if (this.hourOverride !== null) return this.hourOverride;
+    if (!followsTimeOfDay()) return null;
+    const now = new Date();
+    return now.getHours() + now.getMinutes() / 60;
+  }
+
   /** Light the office for the time of day (or midday, if the user switched that off). */
   private applyLighting(): void {
-    const now = new Date();
-    const light: Lighting = followsTimeOfDay() ? lightingAt(now.getHours() + now.getMinutes() / 60) : MIDDAY;
+    const hour = this.clockHour();
+    const light: Lighting = hour === null ? MIDDAY : lightingAt(hour);
     this.hemisphere.color.set(light.sky);
     this.hemisphere.groundColor.set(light.ground);
     this.hemisphere.intensity = light.hemisphere;
@@ -678,6 +704,11 @@ export class OfficeScene {
       if (character && view) this.updateCharacter(character, view, dt);
     }
     this.crowd.update(this.elapsed, this.reducedMotion);
+    this.lunchClock += dt;
+    if (this.lunchClock >= 0.5) {
+      this.lunchClock = 0;
+      this.lunches.update((deskId) => this.simulation.lunchAt(deskId));
+    }
     this.updateStaff(dt);
     this.updateLounge(dt);
     this.room.update(
@@ -864,6 +895,7 @@ export class OfficeScene {
       (spot.material as THREE.Material).dispose();
     }
     this.room.dispose();
+    this.lunches.dispose();
     this.renderer.dispose();
     if (this.container.contains(this.renderer.domElement))
       this.container.removeChild(this.renderer.domElement);
