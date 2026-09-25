@@ -225,6 +225,33 @@ app.on('web-contents-created', (_, contents) => {
       // The café staff are hidden from afar; they never count as coworkers.
       assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => !s.visible), 'staff hidden from afar');
       await snap('campus-overview.png');
+      // Role screens: one person per role family, close enough to see their monitors. Taken after
+      // the campus budget reading, so that reading keeps its timing (walkers are always full rigs).
+      for (const id of [
+        'frontend-developer',
+        'database-administrator',
+        'site-reliability-engineer',
+        'security-engineer',
+        'machine-learning-engineer',
+        'game-developer',
+        'ui-ux-designer',
+        'product-manager',
+        'sales-manager',
+        'talent-acquisition-manager',
+        'marketing-manager',
+        'chief-executive-officer'
+      ]) {
+        const point = await evaluate(`window.__axonOffice.deskPoint(${JSON.stringify(id)})`);
+        await evaluate(`window.__axonOffice.focus(${point.x}, ${point.z}, 5)`);
+        await pause(1500);
+        await snap(`screens-${id}.png`);
+      }
+      await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
+      await waitFor(
+        "window.__axonOffice.signs().filter((s) => s.kind === 'district' && s.opacity === 1).length === 8",
+        'district signs again'
+      );
+      await pause(1500);
       // Clicking a district sign glides there, like its chip.
       const sign = await evaluate("window.__axonOffice.signPoint('district:engineering')");
       await evaluate(`(() => {

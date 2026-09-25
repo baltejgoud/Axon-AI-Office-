@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { DeskSetup, DeskProp, FurnitureItem } from '../../simulation/layout';
 import { districtAt } from '../../campus/districts';
 import { POD_DESK, equipmentPlacements, propPlacements, type Surface } from '../../campus/deskPlacement';
-import { GEOMETRY, PALETTE, box, lampGlow, mat, part, type ScreenFlavor } from './materials';
+import { GEOMETRY, PALETTE, box, lampGlow, mat, part } from './materials';
+import { hardwareFlavor, type DeskScreenApps, type ScreenApp } from './screenApps';
 import { LOW, bevelBox, facetPart, group, lathe, noShadow, plant, seeded, tones } from './kit';
 
 /**
@@ -122,22 +123,23 @@ export interface Workstation {
 const screenPlaceholder = new THREE.MeshBasicMaterial({ visible: false });
 
 /**
- * Where a screen goes. The room collects these and draws every screen as one instanced mesh per
- * style (see screens.ts), so the placeholder itself is never rendered.
+ * Where a screen goes, and which app it shows. The room collects these and draws every screen as
+ * one instanced mesh (see screens.ts), so the placeholder itself is never rendered.
  */
-function display(width: number, height: number, flavor: ScreenFlavor): THREE.Mesh {
+function display(width: number, height: number, app: ScreenApp, variant: 0 | 1): THREE.Mesh {
   const mesh = new THREE.Mesh(GEOMETRY.plane, screenPlaceholder);
   mesh.scale.set(width, height, 1);
   mesh.userData.dynamic = true;
-  mesh.userData.screen = flavor;
+  mesh.userData.screen = { app, variant };
   mesh.castShadow = false;
   return mesh;
 }
 
 /** A slim-bezel monitor on a neck and an oval foot, tipped back a little. Faces +z. */
-function monitor(flavor: ScreenFlavor): { object: THREE.Group; display: THREE.Mesh } {
-  const casing = flavor === 'design' ? '#d9dce1' : '#2a2f37';
-  const screen = display(0.54, 0.3, flavor);
+function monitor(app: ScreenApp, variant: 0 | 1): { object: THREE.Group; display: THREE.Mesh } {
+  const light = hardwareFlavor(app) === 'design';
+  const casing = light ? '#d9dce1' : '#2a2f37';
+  const screen = display(0.54, 0.3, app, variant);
   screen.position.set(0, 0.008, 0.0125);
   const head = group(
     bevelBox(casing, [0.56, 0.335, 0.024], [0, 0, 0], 0.008, PLASTIC),
@@ -146,7 +148,7 @@ function monitor(flavor: ScreenFlavor): { object: THREE.Group; display: THREE.Me
   );
   head.position.set(0, 0.36, 0);
   head.rotation.x = -0.08;
-  const stand = flavor === 'design' ? '#c3c7cd' : '#3a3f47';
+  const stand = light ? '#c3c7cd' : '#3a3f47';
   const object = group(
     part(LOW.can, mat(stand, PLASTIC), [0.2, 0.012, 0.15], [0, 0.006, -0.02]),
     box(stand, [0.045, 0.25, 0.022], [0, 0.13, -0.045], PLASTIC),
@@ -160,11 +162,12 @@ function monitor(flavor: ScreenFlavor): { object: THREE.Group; display: THREE.Me
  * low riser when it is the only screen, on a tilted stand beside a monitor.
  */
 function laptop(
-  flavor: ScreenFlavor,
+  app: ScreenApp,
+  variant: 0 | 1,
   raised: 'riser' | 'stand'
 ): { object: THREE.Group; display: THREE.Mesh } {
   const body = PALETTE.metal;
-  const screen = display(0.29, 0.18, flavor);
+  const screen = display(0.29, 0.18, app, variant);
   screen.position.set(0, 0.108, 0.006);
   const lid = group(box(body, [0.32, 0.21, 0.009], [0, 0.105, 0], METAL), screen);
   lid.position.set(0, 0.014, -0.105);
@@ -425,20 +428,29 @@ function deskProp(prop: DeskProp, accent: string, seed: number): THREE.Object3D 
 
 /**
  * The screens, keyboard, mouse and personal things on one desk, in the seat's frame: the person
- * sits at the origin looking toward +z. Screens turn to face them.
+ * sits at the origin looking toward +z. Screens turn to face them and show the owner's apps: a
+ * laptop beside a monitor, or the right of two monitors, is the second screen.
  */
-export function workstation(setup: DeskSetup, surface: Surface = POD_DESK): Workstation {
+export function workstation(setup: DeskSetup, surface: Surface, screens: DeskScreenApps): Workstation {
   const g = new THREE.Group();
   const displays: THREE.Mesh[] = [];
-  const flavor = setup.flavor ?? 'code';
+  const flavor = hardwareFlavor(screens.main);
   const accent = setup.accent ?? PALETTE.white;
   const dark = flavor === 'code' || flavor === 'data';
+  const appOf = (item: string): ScreenApp =>
+    item === 'monitor-right' || (item === 'laptop' && setup.equipment === 'laptop-monitor')
+      ? (screens.second ?? screens.main)
+      : screens.main;
   const y = surface.top;
   for (const placement of equipmentPlacements(setup.equipment, surface)) {
     let object: THREE.Object3D;
     switch (placement.item) {
       case 'laptop': {
-        const built = laptop(flavor, setup.equipment === 'laptop' ? 'riser' : 'stand');
+        const built = laptop(
+          appOf('laptop'),
+          screens.variant,
+          setup.equipment === 'laptop' ? 'riser' : 'stand'
+        );
         displays.push(built.display);
         object = built.object;
         object.rotation.y = Math.PI - placement.turn;
@@ -451,7 +463,7 @@ export function workstation(setup: DeskSetup, surface: Surface = POD_DESK): Work
         object = mouse(tones(accent).dark, dark);
         break;
       default: {
-        const built = monitor(flavor);
+        const built = monitor(appOf(placement.item), screens.variant);
         displays.push(built.display);
         object = built.object;
         object.rotation.y = Math.PI - placement.turn;

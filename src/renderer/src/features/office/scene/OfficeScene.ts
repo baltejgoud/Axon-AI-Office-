@@ -19,6 +19,7 @@ import { OfficeCameraRig } from './cameraRig';
 import { CrowdRenderer } from './people/CrowdRenderer';
 import { chooseFullTier } from './people/tiers';
 import { buildOffice, type OfficeRoom } from './room/buildOffice';
+import { screenSheet } from './room/screenSheet';
 import { MIDDAY, followsTimeOfDay, lightingAt, type Lighting } from './room/lighting';
 import { LAMP_BASE, windowGlass } from './room/materials';
 import { RACK_LIGHTS } from './room/props';
@@ -35,6 +36,14 @@ export interface OfficeDebugHandle {
   tiers(): { full: number; crowd: number };
   stats(): { fps: number; calls: number; triangles: number };
   focus(x: number, z: number, span: number): void;
+  /** Where someone's own desk is, for close-ups. */
+  deskPoint(agentId: string): { x: number; z: number };
+  /** The screen sheet as a PNG data URL, to look at every app at once. */
+  screenSheet(): string;
+  /** The status strip on someone's desk screens (0 none, 1 working, 2 waiting, 3 done, 4 error). */
+  screenStrip(agentId: string): number;
+  /** Sets someone's task status the way the office store does. */
+  setStatus(agentId: string, status: AgentStatus): void;
   breakdown(): Record<string, { meshes: number; triangles: number }>;
   shadows(on: boolean): void;
   /** The chosen quality and what is drawn now; `setQuality` overrides the choice until reload. */
@@ -232,6 +241,13 @@ export class OfficeScene {
           triangles: this.renderer.info.render.triangles
         }),
         focus: (x, z, span) => this.cameraRig.focus({ x, z }, span),
+        deskPoint: (agentId) => {
+          const { x, z } = poiById(HOME_DESKS[agentId]).position;
+          return { x, z };
+        },
+        screenSheet: () => screenSheet().toDataURL('image/png'),
+        screenStrip: (agentId) => this.room.stripOf(HOME_DESKS[agentId]),
+        setStatus: (agentId, status) => this.updateAgentStatus(agentId, status),
         signs: () => this.signs.info(),
         boards: () => this.boards.info(),
         boardPoint: (team) =>
@@ -293,9 +309,11 @@ export class OfficeScene {
             const count = object instanceof THREE.InstancedMesh ? object.count : 1;
             const key = object.name.startsWith('crowd')
               ? 'crowd'
-              : object.parent === this.room.root
-                ? `room:${(object.material as THREE.MeshStandardMaterial).color?.getHexString?.() ?? '?'}`
-                : 'characters';
+              : object.name === 'screens'
+                ? 'screens'
+                : object.parent === this.room.root
+                  ? `room:${(object.material as THREE.MeshStandardMaterial).color?.getHexString?.() ?? '?'}`
+                  : 'characters';
             const entry = (out[key] ??= { meshes: 0, triangles: 0 });
             entry.meshes++;
             entry.triangles += per * count;
@@ -425,6 +443,16 @@ export class OfficeScene {
 
   public endHelp(helperId: string): void {
     this.simulation.endHelp(helperId);
+  }
+
+  /** Whose desk each desk is, for the screens' status strip. */
+  private readonly deskOwners = new Map(
+    Object.entries(HOME_DESKS).map(([agentId, deskId]) => [deskId, agentId])
+  );
+
+  private deskStatus(deskId: string): AgentStatus | undefined {
+    const owner = this.deskOwners.get(deskId);
+    return owner ? this.statuses.get(owner) : undefined;
   }
 
   public updateAgentStatus(agentId: string, status: AgentStatus): void {
@@ -658,7 +686,8 @@ export class OfficeScene {
       dt,
       this.elapsed,
       (deskId) => this.simulation.screenState(deskId),
-      (poiId) => this.simulation.occupantsOf(poiId).length > 0
+      (poiId) => this.simulation.occupantsOf(poiId).length > 0,
+      (deskId) => this.deskStatus(deskId)
     );
     this.cameraRig.update(dt, this.reducedMotion);
     this.updateSigns();

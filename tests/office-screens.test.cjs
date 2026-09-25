@@ -196,3 +196,62 @@ test("nothing small straddles a scroll band's edge, so the wrap is seamless", ()
         );
       }
 });
+
+const THREE = require('three');
+const { DeskScreens } = require('../src/renderer/src/features/office/scene/room/screens.ts');
+
+test('every desk screen is one instance of one mesh, showing its own app', () => {
+  const at = (x) => new THREE.Matrix4().makeTranslation(x, 1, 0);
+  const screens = new DeskScreens(
+    [
+      { deskId: 'a', app: 'editor', variant: 0, matrix: at(0) },
+      { deskId: 'a', app: 'browser-devtools', variant: 0, matrix: at(1) },
+      { deskId: 'b', app: 'design', variant: 1, matrix: at(2) }
+    ],
+    new THREE.DataTexture(new Uint8Array(4), 1, 1)
+  );
+  const meshes = [];
+  screens.object.traverse((o) => o.isMesh && meshes.push(o));
+  assert.equal(meshes.length, 1);
+  assert.equal(meshes[0].name, 'screens');
+  assert.equal(meshes[0].count, 3);
+  const geometry = meshes[0].geometry;
+  const tile = geometry.getAttribute('screenTile');
+  const design = apps.tileOf('design', 1);
+  assert.deepEqual([tile.getX(2), tile.getY(2)], [design.x, design.y]);
+  const band = geometry.getAttribute('screenBand');
+  const { left, top, right, bottom } = apps.SCROLL.editor;
+  assert.deepEqual([band.getX(0), band.getY(0), band.getZ(0), band.getW(0)], [left, top, right, bottom]);
+  assert.deepEqual([band.getX(2), band.getY(2), band.getZ(2), band.getW(2)], [0, 0, 0, 0]);
+  assert.equal(geometry.getAttribute('screenMotion').getX(0), apps.SCROLL.editor.speed);
+  assert.equal(geometry.getAttribute('screenCursor').getZ(0), 1, 'the editor has a light cursor');
+  assert.equal(geometry.getAttribute('screenCursor').getZ(2), 0, 'the design canvas has none');
+  screens.dispose();
+});
+
+test('the status strip follows the desk owner, and screens brighten while someone works there', () => {
+  const screens = new DeskScreens(
+    [
+      { deskId: 'a', app: 'editor', variant: 0, matrix: new THREE.Matrix4() },
+      { deskId: 'b', app: 'kanban', variant: 1, matrix: new THREE.Matrix4() }
+    ],
+    new THREE.DataTexture(new Uint8Array(4), 1, 1)
+  );
+  const status = { a: 'working', b: undefined };
+  const strip = screens.mesh.geometry.getAttribute('screenStatus');
+  screens.update(0.1, 1, () => 'active', (desk) => status[desk]);
+  assert.deepEqual([strip.getX(0), strip.getX(1)], [1, 0]);
+  status.a = 'completed';
+  screens.update(0.1, 2, () => 'active', (desk) => status[desk]);
+  assert.equal(screens.stripOf('a'), 3);
+  screens.update(0.1, 2 + apps.DONE_FOR + 0.5, () => 'active', (desk) => status[desk]);
+  assert.equal(screens.stripOf('a'), 0, 'the green strip goes after a while');
+  status.b = 'error';
+  screens.update(0.1, 30, () => 'active', (desk) => status[desk]);
+  assert.equal(screens.stripOf('b'), 4);
+  for (let i = 0; i < 60; i++) screens.update(0.1, 31 + i * 0.1, () => 'active', (desk) => status[desk]);
+  const color = new THREE.Color();
+  screens.mesh.getColorAt(0, color);
+  assert.ok(color.r > 0.95, `screen brightness ${color.r}`);
+  screens.dispose();
+});

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   DESK_SETUPS,
   FURNITURE,
+  HOME_DESKS,
   ROOM,
   WALLS,
   WALL_THICKNESS,
@@ -28,10 +29,12 @@ import {
   part,
   terrazzoTexture,
   windowGlass,
-  woodFloorTexture,
-  type ScreenFlavor
+  woodFloorTexture
 } from './materials';
 import { DeskScreens, type ScreenSlot } from './screens';
+import { OFFICE_AGENTS, type AgentStatus } from '../../data/officeAgents';
+import { screenAppsFor, spareDeskApps, type ScreenApp } from './screenApps';
+import { screenSheet } from './screenSheet';
 import type { KitchenFx } from './kitchen';
 import type { MediaWall } from './lounge';
 import { FoosballRods, type RodSlot } from './playProps';
@@ -49,8 +52,11 @@ export interface OfficeRoom {
     dt: number,
     elapsed: number,
     screens: (deskId: string) => ScreenState,
-    busy: (poiId: string) => boolean
+    busy: (poiId: string) => boolean,
+    status: (deskId: string) => AgentStatus | undefined
   ): void;
+  /** The status strip a desk's screens show now (0 none, 1 working, 2 waiting, 3 done, 4 error). */
+  stripOf(deskId: string): number;
   dispose(): void;
 }
 
@@ -290,10 +296,15 @@ export function buildOffice(): OfficeRoom {
 
   for (const patch of contactShadows(FURNITURE)) root.add(patch);
 
+  // Each desk's screens show its owner's apps; a spare desk keeps its district's flavour.
+  const owners = new Map(Object.entries(HOME_DESKS).map(([agentId, deskId]) => [deskId, agentId]));
+  const agents = new Map(OFFICE_AGENTS.map((agent) => [agent.id, agent]));
   const stations: { deskId: string; displays: THREE.Mesh[] }[] = [];
   for (const setup of DESK_SETUPS) {
     const seat = poiById(setup.poiId);
-    const station = workstation(setup, surfaceOf(setup.poiId, seat.district));
+    const owner = agents.get(owners.get(setup.poiId) ?? '');
+    const apps = owner ? screenAppsFor(owner) : spareDeskApps(setup.flavor ?? 'code', setup.poiId);
+    const station = workstation(setup, surfaceOf(setup.poiId, seat.district), apps);
     station.object.position.set(seat.position.x, 0, seat.position.z);
     station.object.rotation.y = seat.facing;
     root.add(station.object);
@@ -305,14 +316,14 @@ export function buildOffice(): OfficeRoom {
   const slots: ScreenSlot[] = [];
   for (const { deskId, displays } of stations)
     for (const display of displays) {
-      slots.push({
-        deskId,
-        flavor: display.userData.screen as ScreenFlavor,
-        matrix: display.matrixWorld.clone()
-      });
+      const { app, variant } = display.userData.screen as { app: ScreenApp; variant: 0 | 1 };
+      slots.push({ deskId, app, variant, matrix: display.matrixWorld.clone() });
       display.removeFromParent();
     }
-  const screens = new DeskScreens(slots);
+  const sheet = new THREE.CanvasTexture(screenSheet());
+  sheet.colorSpace = THREE.SRGBColorSpace;
+  sheet.anisotropy = 4;
+  const screens = new DeskScreens(slots, sheet);
 
   batchStatic(root);
   root.add(screens.object);
@@ -335,8 +346,9 @@ export function buildOffice(): OfficeRoom {
       const kind = seatKinds.get(`${poiId}-seat`);
       return (kind && SEAT_HEIGHT[kind]) ?? 0.48;
     },
-    update(dt, elapsed, screenState, busy) {
-      screens.update(dt, elapsed, screenState);
+    stripOf: (deskId) => screens.stripOf(deskId),
+    update(dt, elapsed, screenState, busy, status) {
+      screens.update(dt, elapsed, screenState, status);
       rods.update(elapsed, busy);
       for (const { spots, mesh, steam } of lights) {
         const inUse = spots.some(busy);
