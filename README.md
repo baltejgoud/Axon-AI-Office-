@@ -14,6 +14,8 @@ For the built application, run `npm run build` followed by `npm start`.
 
 Add a provider in Settings, enter its API base URL and exact model IDs, and optionally save an API key. Keys use Electron safeStorage (Windows DPAPI / system keyring); insecure fallback is refused. No API key or official Union Alpha endpoint is included. Use endpoint/model details from your service. Local OpenAI-compatible servers can use HTTP on loopback without a key.
 
+How keys, requests, streaming, tools and storage work end to end: [docs/backend.md](docs/backend.md).
+
 ## Implemented
 
 - Sandboxed desktop renderer and explicit preload methods.
@@ -30,19 +32,23 @@ Add a provider in Settings, enter its API base URL and exact model IDs, and opti
 
 ```powershell
 npm run typecheck
-npm test        # 31 tests: core + repository hardening
+npm test        # unit tests: protocols, history, permissions, MCP, storage, office
 npm run build
 npm run test:desktop
 npm run package:dir
 ```
 
-Unit tests use Node's test runner and the installed TypeScript compiler. Protocol tests use mocked transport, not paid services. The desktop E2E test starts the built app with an isolated temporary profile and a loopback mock provider: it verifies rendering, IPC, renderer isolation, workspace-default-model selection, a full streaming round-trip (assistant text delivered through IPC and persisted), per-protocol usage capture, and asserts server-side that the saved API key arrives as `Bearer …`. It saves a screenshot at `D:\Baltej IDE\test-results\desktop.png` and prints its temporary profile path. `npm run package:dir` produces `dist\win-unpacked\Axon.exe` (verified exit 0; test-signed only).
+Unit tests use Node's test runner and the installed TypeScript compiler. Protocol tests (`tests/providers.test.cjs`) check each protocol's wire format against mocked transport, not paid services. The desktop E2E test starts the built app with an isolated temporary profile and a loopback mock provider: it verifies rendering, IPC, renderer isolation, workspace-default-model selection, a full streaming round-trip (assistant text delivered through IPC and persisted), per-protocol usage capture, and asserts server-side that the saved API key arrives as `Bearer …`. It saves a screenshot at `D:\Baltej IDE\test-results\desktop.png` and prints its temporary profile path. `npm run package:dir` produces `dist\win-unpacked\Axon.exe` (verified exit 0; test-signed only).
 
 ## Architecture
 
 - `D:\Baltej IDE\src\main\index.ts`: lifecycle, window isolation and IPC sender checks.
-- `D:\Baltej IDE\src\main\service.ts`: application operations and request lifecycle.
-- `D:\Baltej IDE\src\main\providers.ts`: endpoint policy, SSE parser, three protocol adapters, retry/backoff and usage capture.
+- `D:\Baltej IDE\src\main\service.ts`: application operations and the chat/tool loop.
+- `D:\Baltej IDE\src\main\providers.ts`: endpoint policy, SSE parser, three protocol adapters, retries, timeouts, provider error messages, replay of thinking/tool turns, usage capture.
+- `D:\Baltej IDE\src\main\history.ts`: the history each request carries (every tool call paired with its result, trimmed by whole turns).
+- `D:\Baltej IDE\src\main\tools\registry.ts`, `src\main\security\permissions.ts`: built-in tools and the allow/ask/deny policy with approvals.
+- `D:\Baltej IDE\src\main\mcp\client-manager.ts`: MCP servers over stdio and SSE; their tools join the registry.
+- `D:\Baltej IDE\src\main\colleagues.ts`, `src\main\tasks`, `src\main\reminders.ts`, `src\main\shell`: office coworkers asking each other, task records, the planner, reminders, tray and notifications.
 - `D:\Baltej IDE\src\main\repository.ts`: validated schema-v1 state, corruption quarantine, migration seam, rolling backups.
 - `D:\Baltej IDE\src\main\parse-pool.ts` and `src\main\workers\parse-worker.ts`: document parsing isolated in utilityProcess workers (30s timeout, crash respawn).
 - `D:\Baltej IDE\src\main\infra\vault.ts`: OS-protected credentials, never returned to renderer.
@@ -62,10 +68,11 @@ One versioned JSON document is persisted with serialized replacement writes, ser
 
 - Conversation/document text is not encrypted on disk. Use full-disk encryption.
 - Selected content goes to your chosen provider; its privacy and billing policies apply.
-- No terminal execution, autonomous tools, unattended writes, schedules, multi-agent orchestration, vector search, OCR, image understanding, repository-wide knowledge import or executable plugins.
-- Code is a manual review/copy/save workflow, not autonomous project editing. Automatic workspace file/tool permissions are disabled.
+- Tools run only in conversations with a project folder. Reading is automatic; writing files, running commands (off by default in settings), commits, sub-agents and MCP tools each need approval. "Always allow" lasts until Axon restarts.
+- Agent profiles have an interval schedule in the data model and a scheduler in the main process, but no UI to set one; a scheduled run would start as soon as Axon starts.
+- No vector search, OCR, image understanding, repository-wide knowledge import or executable plugins. MCP environment variables and custom headers are stored unencrypted; use the API key field for secrets.
 - File checks block ordinary traversal and symlink/junction escapes but not a malicious local process racing file replacement. Keep projects under your control.
-- Basic text streaming with usage capture and temperature; not every provider reasoning/tool/vision parameter.
+- Text, thinking and tool-call streaming with usage capture; no image input, reasoning-effort or structured-output parameters yet.
 - Context uses a character cap rather than exact provider token accounting.
 - No live call to a paid provider, signed installer, cross-platform packaging, accessibility audit or large-codebase performance benchmark has been verified. `npm run package:dir` was verified with exit 0; installers, code signing and update delivery remain unimplemented.
 
