@@ -1,9 +1,33 @@
-import { useMemo, useState } from 'react';
-import { Check, ListPlus, PlugZap, Plus, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  ListPlus,
+  LoaderCircle,
+  PlugZap,
+  Plus,
+  Search,
+  X
+} from 'lucide-react';
 import type { ProviderConfig, ProviderKind } from '../../../shared/types';
 import type { ProviderModelsResult, ProviderTestResult } from '../../../shared/platform';
 import { useApp, perform } from '../state';
 import { Button, Icon, Modal } from '../ui';
+import { PREFERENCES, chooseModels, serviceFromKey } from './modelChoice';
+
+/** Where set-up from a pasted key stands. */
+type Setup =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'ready'; models: string[]; movedTo?: string }
+  | { state: 'failed'; message: string }
+  | { state: 'needs-service' };
+/** How long after the last keystroke set-up starts, so a pasted key is checked once. */
+const SETUP_DELAY_MS = 600;
+const isLocal = (url?: string) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(url ?? '');
+const spec = (id: string) => ({ id, displayName: id });
 
 interface Preset {
   /** The provider's name once saved, and the tile's label. */
@@ -53,7 +77,7 @@ export const PRESETS: readonly Preset[] = [
     baseUrl: 'https://api.moonshot.ai/v1',
     models: ['kimi-k3', 'kimi-k2.6'],
     description:
-      'Keys from platform.moonshot.ai. A China account (platform.moonshot.cn) uses https://api.moonshot.cn/v1. Kimi models think before they answer: set Max tokens to 16,000 or more.',
+      'Paste a key from platform.moonshot.ai or platform.moonshot.cn: Axon finds the right address for it, and gives Kimi room to think before it answers.',
     tint: 'kimi'
   },
   {
@@ -62,7 +86,7 @@ export const PRESETS: readonly Preset[] = [
     baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     models: ['qwen3.8-max', 'qwen-plus'],
     description:
-      'Alibaba Model Studio. A key works only in the region it was made in: this address is Singapore; US keys use https://dashscope-us.aliyuncs.com/compatible-mode/v1, Beijing keys https://dashscope.aliyuncs.com/compatible-mode/v1.',
+      'Alibaba Model Studio. Keys work only in the region they were made in; Axon tries Singapore, the US, Beijing and Hong Kong and keeps the one that accepts yours.',
     tint: 'qwen'
   },
   {
@@ -129,6 +153,46 @@ const errorText = (err: unknown) =>
 /** Found models shown at once; a search narrows longer lists (OpenRouter offers hundreds). */
 const MODELS_SHOWN = 80;
 
+/** What set-up found out, under the key field. */
+function SetupStatus({ setup, service }: { setup: Setup; service: string }) {
+  switch (setup.state) {
+    case 'idle':
+      return null;
+    case 'checking':
+      return (
+        <div className="setup-status span-2" role="status">
+          <Icon icon={LoaderCircle} size="sm" className="spin" />
+          <span>Checking your key{service ? ` with ${service}` : ''} and finding its models…</span>
+        </div>
+      );
+    case 'needs-service':
+      return (
+        <div className="setup-status span-2" role="status">
+          <Icon icon={Info} size="sm" />
+          <span>Choose the service this key is for, above.</span>
+        </div>
+      );
+    case 'ready':
+      return (
+        <div className="setup-status span-2 is-ready" role="status">
+          <Icon icon={CircleCheck} size="sm" />
+          <span>
+            Key works. Ready to use: {setup.models.join(', ')}.
+            {setup.movedTo &&
+              ` This key belongs to ${new URL(setup.movedTo).host}, so Axon uses that address.`}
+          </span>
+        </div>
+      );
+    case 'failed':
+      return (
+        <div className="setup-status span-2 is-failed" role="alert">
+          <Icon icon={CircleAlert} size="sm" />
+          <span>{setup.message}</span>
+        </div>
+      );
+  }
+}
+
 /** Add or edit a model provider: which service, how to reach it, and which of its models to use. */
 export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; onClose: () => void }) {
   const isNew = !useApp((s) => s.data?.providers.some((p) => p.id === initial.id));
@@ -143,6 +207,13 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
   const [finding, setFinding] = useState(false);
   const [found, setFound] = useState<{ form: string; result: ProviderModelsResult } | null>(null);
   const [search, setSearch] = useState('');
+  const [setup, setSetup] = useState<Setup>({ state: 'idle' });
+  /** Only the latest set-up may report; an older one finishing late is ignored. */
+  const runs = useRef(0);
+  /** The endpoint and key set-up last finished for, so a region move does not start it again. */
+  const settled = useRef('');
+  /** While Save runs its own check, the automatic one stands down. */
+  const saving = useRef(false);
 
   const endpointForm = JSON.stringify([provider.kind, provider.baseUrl, key]);
   const form = JSON.stringify([endpointForm, models]);
@@ -210,15 +281,109 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
     }
   };
 
-  const save = async () => {
-    setError('');
-    if (!provider.name.trim()) return setError('Give this provider a name.');
-    if (!provider.baseUrl?.trim()) return setError('Enter the endpoint URL.');
-    if (!models.length) return setError('Add at least one model.');
+  /**
+   * Set-up from the pasted key: finds the service's address that takes it (another region if need
+   * be), picks models the key can use, and checks they answer. Returns what to save, or null.
+   */
+  type Connected = { ok: true; baseUrl: string; models: string[] } | { ok: false; message: string };
+  const connect = async (): Promise<Connected | null> => {
+    const target = provider;
+    if (!target.baseUrl?.trim()) return null;
+    const run = ++runs.current;
+    const fail = (message: string): Connected => {
+      if (run === runs.current) setSetup({ state: 'failed', message });
+      return { ok: false, message };
+    };
+    const typed = key || undefined;
+    setSetup({ state: 'checking' });
     try {
-      await window.axon.providerSave({ ...withModels(), name: provider.name.trim() }, key || undefined);
+      const connected = await window.axon.providerConnect({ ...target, models: models.map(spec) }, typed);
+      if (run !== runs.current) return null;
+      const baseUrl = connected.baseUrl;
+      let next = models;
+      if (connected.models) {
+        setFound({
+          form: JSON.stringify([target.kind, baseUrl, key]),
+          result: { models: connected.models, savedKeyWithheld: connected.savedKeyWithheld }
+        });
+        next = chooseModels(
+          connected.models,
+          models,
+          PREFERENCES[preset?.name ?? 'Custom'] ?? PREFERENCES.Custom
+        );
+      }
+      if (!next.length)
+        return fail('The key works, but this endpoint lists no chat models. Add a model ID below.');
+      const tested = await window.axon.providerTest({ ...target, baseUrl, models: next.map(spec) }, typed);
+      if (run !== runs.current) return null;
+      const working = tested.results.filter((r) => r.ok).map((r) => r.modelId);
+      if (!working.length) return fail(tested.results[0]?.error ?? 'None of the models answered.');
+      settled.current = JSON.stringify([target.kind, baseUrl, key]);
+      if (baseUrl !== target.baseUrl) setProvider((p) => ({ ...p, baseUrl }));
+      setModels(working);
+      setSetup({
+        state: 'ready',
+        models: working,
+        movedTo: baseUrl !== target.baseUrl ? baseUrl : undefined
+      });
+      return { ok: true, baseUrl, models: working };
+    } catch (err) {
+      return fail(errorText(err));
+    }
+  };
+
+  // Paste a key and the rest follows: once typing stops, set-up runs by itself. A key that names its
+  // service picks the tile; a plain one waits for a tile. A local server (Ollama) needs no key.
+  useEffect(() => {
+    const typed = key.trim();
+    if (!typed && !(isNew && isLocal(provider.baseUrl))) return setSetup({ state: 'idle' });
+    if (!preset && isNew) {
+      const named = PRESETS.find((p) => p.name === serviceFromKey(typed));
+      if (named) return choosePreset(named);
+      if (!provider.baseUrl?.trim()) return setSetup({ state: 'needs-service' });
+    }
+    if (settled.current === JSON.stringify([provider.kind, provider.baseUrl, key])) return;
+    const timer = setTimeout(() => {
+      if (!saving.current) void connect();
+    }, SETUP_DELAY_MS);
+    return () => clearTimeout(timer);
+    // Set-up follows the service, the endpoint and the key; the model list is its output.
+  }, [key, preset?.name, provider.kind, provider.baseUrl]);
+
+  const save = async () => {
+    saving.current = true;
+    try {
+      await saveChecked();
+    } finally {
+      saving.current = false;
+    }
+  };
+  const saveChecked = async () => {
+    setError('');
+    if (!provider.baseUrl?.trim()) return setError('Choose a service above, or enter its endpoint.');
+    if (isNew && !key.trim() && !isLocal(provider.baseUrl)) return setError('Paste your API key first.');
+    if (!provider.name.trim()) return setError('Give this provider a name.');
+    let target = { baseUrl: provider.baseUrl, models };
+    // Not checked yet (or still checking): check now, so what is saved is what works.
+    if (setup.state !== 'ready' && (key.trim() || (isNew && isLocal(provider.baseUrl)))) {
+      const done = await connect();
+      if (done?.ok) target = done;
+      // A key the service refuses is not saved; other trouble (offline, a slow server) can be.
+      else if (done && /\bHTTP 40[13]\b/.test(done.message))
+        return setError(
+          'The service did not accept this key. Check it (details under the key) and try again.'
+        );
+    }
+    if (!target.models.length) return setError('Add at least one model.');
+    try {
+      await window.axon.providerSave(
+        { ...provider, baseUrl: target.baseUrl, name: provider.name.trim(), models: target.models.map(spec) },
+        key || undefined
+      );
       await useApp.getState().refresh();
-      useApp.getState().pushToast('Provider saved');
+      // A provider just added is the one to use next.
+      if (isNew) useApp.getState().patch({ model: `${provider.id}::${target.models[0]}` });
+      useApp.getState().pushToast(isNew ? `${provider.name.trim()} is ready` : 'Provider saved');
       onClose();
     } catch (err) {
       setError(errorText(err));
@@ -272,6 +437,41 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
       <section className="provider-section">
         <h3 className="provider-section-title">Connection</h3>
         <div className="form-grid">
+          <label className="field span-2">
+            API key
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={provider.hasApiKey ? '•••••••• saved — type to replace' : 'Paste your key'}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+            />
+            <span className="field-hint">
+              {provider.hasApiKey ? (
+                <>
+                  A key is saved. Leave this empty to keep it, or{' '}
+                  <button
+                    type="button"
+                    className="link-button danger"
+                    onClick={() =>
+                      void perform(async () => {
+                        await window.axon.providerSave(provider, '');
+                        setProvider({ ...provider, hasApiKey: false });
+                      }, 'Saved key removed')
+                    }
+                  >
+                    remove it
+                  </button>
+                  .
+                </>
+              ) : (
+                'Paste it as you copied it. Axon checks it and picks the models for you.'
+              )}
+            </span>
+          </label>
+          <SetupStatus setup={setup} service={preset?.name ?? provider.name} />
           <label className="field">
             Name
             <input
@@ -306,40 +506,8 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               value={provider.baseUrl || ''}
               onChange={(e) => setProvider({ ...provider, baseUrl: e.target.value })}
             />
-            <span className="field-hint">HTTPS, or http://localhost for a server on this computer.</span>
-          </label>
-          <label className="field span-2">
-            API key
-            <input
-              className="input"
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={provider.hasApiKey ? '•••••••• saved — type to replace' : 'Paste your key'}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-            />
             <span className="field-hint">
-              {provider.hasApiKey ? (
-                <>
-                  A key is saved. Leave this empty to keep it, or{' '}
-                  <button
-                    type="button"
-                    className="link-button danger"
-                    onClick={() =>
-                      void perform(async () => {
-                        await window.axon.providerSave(provider, '');
-                        setProvider({ ...provider, hasApiKey: false });
-                      }, 'Saved key removed')
-                    }
-                  >
-                    remove it
-                  </button>
-                  .
-                </>
-              ) : (
-                'Spaces, quotes and a "Bearer " prefix are removed for you.'
-              )}
+              Filled in by the service you choose. HTTPS, or http://localhost for a server on this computer.
             </span>
           </label>
         </div>

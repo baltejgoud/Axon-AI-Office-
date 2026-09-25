@@ -42,6 +42,14 @@ export interface ProviderModelsResult {
   /** A key is saved, but the form's endpoint differs from the saved one, so it wasn't sent. */
   savedKeyWithheld: boolean;
 }
+/** Settings' set-up from a pasted key: where the key works, and the models it can use there. */
+export interface ProviderConnectResult {
+  /** The service's address that accepted the key; another region's when the form's did not. */
+  baseUrl: string;
+  /** The models the key can use, or null when the endpoint lists none. */
+  models: string[] | null;
+  savedKeyWithheld: boolean;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
@@ -56,6 +64,7 @@ export interface PlatformAPI {
   /** Checks the form's endpoint, key and models without saving. With no key typed, the saved key is used only for the saved endpoint. */
   providerTest(provider: ProviderConfig, key?: string): Promise<ProviderTestResult>;
   providerModels(provider: ProviderConfig, key?: string): Promise<ProviderModelsResult>;
+  providerConnect(provider: ProviderConfig, key?: string): Promise<ProviderConnectResult>;
   providerDelete(id: string): Promise<void>;
   workspaceSave(workspace: Workspace): Promise<void>;
   workspaceDelete(id: string): Promise<void>;

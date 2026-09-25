@@ -222,7 +222,7 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
         <SettingRow
           label="Max tokens"
           id="setting-max-tokens"
-          hint="The longest answer a model may write. Thinking models (Kimi, Qwen, DeepSeek Reasoner) need 16,000 or more."
+          hint="The longest answer a model may write. Models that think first (Kimi, DeepSeek Reasoner) always get at least 16,384."
         >
           <NumberSetting
             id="setting-max-tokens"

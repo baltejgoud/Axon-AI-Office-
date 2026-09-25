@@ -101,3 +101,59 @@ test('Find models checks the endpoint like Save, and needs no model IDs yet', as
   const result = await service.providerModels({ ...kimi, models: [] });
   assert.deepEqual(result.models, ['kimi-k2.6', 'kimi-k3']);
 });
+
+// ---------------------------------------------------------------- connecting from just a key
+
+const denied = () => new providers.ProviderError(401, 'Invalid Authentication');
+
+test('a Kimi key from the China platform is found at the China address, without any setting', async (t) => {
+  const { service, listed } = setup(t, null);
+  providers.listModels = async (provider, key) => {
+    listed.push({ baseUrl: provider.baseUrl, key });
+    if (provider.baseUrl !== 'https://api.moonshot.cn/v1') throw denied();
+    return ['kimi-k2.6', 'kimi-k3'];
+  };
+  const result = await service.providerConnect({ ...kimi, id: 'fresh' }, 'sk-china');
+  assert.equal(result.baseUrl, 'https://api.moonshot.cn/v1');
+  assert.deepEqual(result.models, ['kimi-k2.6', 'kimi-k3']);
+  assert.deepEqual(listed.map((l) => l.baseUrl), ['https://api.moonshot.ai/v1', 'https://api.moonshot.cn/v1']);
+});
+
+test('a Qwen key is tried in each Alibaba region until one accepts it', async (t) => {
+  const { service, listed } = setup(t, null);
+  providers.listModels = async (provider) => {
+    listed.push(provider.baseUrl);
+    if (!provider.baseUrl.includes('dashscope-us')) throw denied();
+    return ['qwen-plus'];
+  };
+  const qwen = { ...kimi, id: 'q', baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' };
+  const result = await service.providerConnect(qwen, 'sk-us-key');
+  assert.equal(result.baseUrl, 'https://dashscope-us.aliyuncs.com/compatible-mode/v1');
+  assert.ok(listed.every((url) => /^https:\/\/[\w.-]*dashscope[\w.-]*\.aliyuncs\.com\/compatible-mode\/v1$/.test(url)));
+});
+
+test('a key no region accepts fails with the service\'s own words; other services never see it', async (t) => {
+  const { service, listed } = setup(t, null);
+  providers.listModels = async (provider) => {
+    listed.push(provider.baseUrl);
+    throw denied();
+  };
+  await assert.rejects(service.providerConnect({ ...kimi, id: 'fresh' }, 'sk-bad'), /Invalid Authentication/);
+  assert.ok(listed.every((url) => url.includes('moonshot')), 'the key only goes to Moonshot');
+  // A service with one address is asked once.
+  listed.length = 0;
+  await assert.rejects(service.providerConnect({ ...kimi, id: 'd', baseUrl: 'https://api.deepseek.com/v1' }, 'sk-bad'));
+  assert.deepEqual(listed, ['https://api.deepseek.com/v1']);
+});
+
+test('an endpoint without a model list is checked with a tiny request instead', async (t) => {
+  const { service, checked } = setup(t, null);
+  providers.listModels = async () => {
+    throw new providers.ProviderError(404, 'Not Found');
+  };
+  const result = await service.providerConnect({ ...kimi, id: 'fresh', baseUrl: 'https://gateway.example/v1' }, 'sk-ok');
+  assert.equal(result.models, null);
+  assert.equal(result.baseUrl, 'https://gateway.example/v1');
+  assert.equal(checked[0].model, 'kimi-k3');
+  assert.equal(checked[0].key, 'sk-ok');
+});

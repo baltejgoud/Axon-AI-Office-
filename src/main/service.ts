@@ -1,14 +1,14 @@
 import { app, dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { PlatformAPI, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
+import type { PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
 import type { FocusTarget, Settings, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
 import { Project } from './project';
 import { forget, isOnWall, loadWall, remember, saveWall } from './folderWall';
-import { checkModel, cleanApiKey, endpoint, listModels, streamChat } from './providers';
+import { ProviderError, checkModel, cleanApiKey, endpoint, listModels, otherRegions, outputLimit, streamChat } from './providers';
 import { search } from './knowledge';
 import { ParsePool } from './parse-pool';
 import { catalog, hasSkill, skillBodies } from './skills';
@@ -47,7 +47,7 @@ const mcpSecret = (id: string) => `mcp:${id}`;
 export const TRUNCATED = 'The answer reached the max-token limit and was cut off. Raise Max tokens in Settings to get longer answers.';
 /** Shown when a thinking model (Kimi, Qwen or DeepSeek reasoning) spends the whole limit before it answers. */
 export const TRUNCATED_THINKING =
-  'The model used the whole max-token limit thinking and stopped before it answered. Thinking models need more room: set Max tokens in Settings to 16,000 or more.';
+  'The model used the whole max-token limit thinking and stopped before it answered. Raise Max tokens in Settings to give it more room.';
 /** The largest max-tokens setting: current models stream answers up to 128K tokens. */
 const MAX_OUTPUT_TOKENS = 128000;
 /** Characters of history and system prompt a request may carry; whole oldest turns go first. */
@@ -206,6 +206,46 @@ export class Service {
       if (signal.aborted) throw new Error(`No answer within ${Math.round(PROVIDER_TEST.timeoutMs / 1000)} seconds.`);
       throw error;
     }
+  }
+  /**
+   * Set-up from a pasted key: the address of this service that accepts the key (trying its other
+   * regions, never another company's), and the models the key can use there, or null when the
+   * endpoint lists none (then the key is checked with a tiny request to the form's first model).
+   */
+  async providerConnect(p: ProviderConfig, key?: string): Promise<ProviderConnectResult> {
+    this.checkEndpoint(p);
+    const { secret, savedKeyWithheld } = this.formKey(p, key);
+    const signal = AbortSignal.timeout(PROVIDER_TEST.timeoutMs);
+    const refusedKey = (error: unknown) => error instanceof ProviderError && (error.status === 401 || error.status === 403);
+    const noList = (error: unknown) =>
+      (error instanceof ProviderError && [404, 405, 501].includes(error.status)) ||
+      (error instanceof Error && /did not return a model list/.test(error.message));
+    let refused: unknown = null;
+    for (const baseUrl of [p.baseUrl ?? '', ...otherRegions(p.baseUrl ?? '')]) {
+      const candidate = { ...p, baseUrl };
+      try {
+        return { baseUrl, models: await listModels(candidate, secret, signal), savedKeyWithheld };
+      } catch (error) {
+        if (signal.aborted) throw new Error(`No answer within ${Math.round(PROVIDER_TEST.timeoutMs / 1000)} seconds.`);
+        if (refusedKey(error)) {
+          refused ??= error;
+          continue;
+        }
+        if (!noList(error)) throw error;
+        const first = p.models[0]?.id;
+        if (!first) return { baseUrl, models: null, savedKeyWithheld };
+        try {
+          await checkModel(candidate, secret, first, signal);
+        } catch (check) {
+          if (refusedKey(check)) {
+            refused ??= check;
+            continue;
+          }
+        }
+        return { baseUrl, models: null, savedKeyWithheld };
+      }
+    }
+    throw refused;
   }
   /** A key typed in the form, cleaned; '' when the field is blank. */
   private typedKey(key: string): string {
@@ -521,7 +561,7 @@ export class Service {
             messages: requests,
             system,
             tools: availableTools.length > 0 ? availableTools : undefined,
-            maxTokens: this.state.settings.defaultMaxTokens,
+            maxTokens: outputLimit(chat.modelId, this.state.settings.defaultMaxTokens),
             temperature: this.state.settings.defaultTemperature,
             signal: controller.signal
           },
@@ -739,7 +779,7 @@ export class Service {
         {
           stream: streamChat,
           signal,
-          maxTokens: this.state.settings.defaultMaxTokens,
+          maxTokens: outputLimit(chat.modelId, this.state.settings.defaultMaxTokens),
           tools: scope.roots.length ? this.tools.getDefinitions().filter((tool) => READ_ONLY_TOOLS.includes(tool.name)) : [],
           execute: async (name, toolArgs) => {
             const tool = this.tools.get(name);
@@ -789,7 +829,7 @@ export class Service {
         messages,
         system,
         temperature: 0.3,
-        maxTokens: this.state.settings.defaultMaxTokens,
+        maxTokens: outputLimit(modelId, this.state.settings.defaultMaxTokens),
         tools: tools.length > 0 ? tools : undefined,
         signal
       }, (chunk, delta) => {

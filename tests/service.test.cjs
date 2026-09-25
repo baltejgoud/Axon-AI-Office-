@@ -459,7 +459,7 @@ test('a thinking model that runs out of tokens before answering is told apart, w
   const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
   assert.equal(reply.content, '');
   assert.match(reply.error, /thinking/);
-  assert.match(reply.error, /16,000/);
+  assert.match(reply.error, /Raise Max tokens/);
 });
 
 test('each tool round sends the provider\'s own turn back with it', async (t) => {
