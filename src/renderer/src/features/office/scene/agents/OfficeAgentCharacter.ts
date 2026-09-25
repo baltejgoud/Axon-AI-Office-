@@ -4,7 +4,7 @@ import { yawTowards, type AgentBehaviorState, type AgentView, type HeldItem } fr
 import { box, cylinder } from '../room/materials';
 import { controller } from '../room/lounge';
 import { appearanceFor } from './appearance';
-import { applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
+import { HAND_GRIP, applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
 import { WALK_STRIDE, computePose, easePose, neutralPose, type Pose } from './poses';
 
 const ringGeometry = new THREE.RingGeometry(0.36, 0.43, 56);
@@ -114,6 +114,7 @@ export class OfficeAgentCharacter {
     for (const item of ['cup', 'book', 'folder', 'tablet', 'clipboard', 'controller'] as const) {
       const prop = heldProp(item, look.accent);
       prop.visible = false;
+      prop.position.y += HAND_GRIP;
       prop.traverse((o) => (o.castShadow = true));
       (item === 'cup' ? this.rig.armR : this.rig.armL).end.add(prop);
       this.props.set(item, prop);

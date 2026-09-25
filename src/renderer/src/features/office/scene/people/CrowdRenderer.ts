@@ -229,9 +229,7 @@ export class CrowdRenderer {
       const fixed = FIXED_COLOR[role];
       const material = new THREE.MeshStandardMaterial({
         color: fixed ?? '#ffffff',
-        roughness: role === 'eyes' || role === 'glasses' ? 0.35 : 0.85,
-        // Hair and beards are faceted, as on the full characters.
-        flatShading: role === 'hair' || role === 'beard'
+        roughness: role === 'eyes' || role === 'glasses' ? 0.35 : role === 'hair' ? 0.72 : 0.85
       });
       const mesh = new THREE.InstancedMesh(geometry, material, members.length);
       mesh.name = `crowd-${role}`;

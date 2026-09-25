@@ -114,3 +114,49 @@ test('every district dresses in colours that go with its own', () => {
     assert.ok(near.length >= 2, `${district.id}: ${near.join(', ')}`);
   }
 });
+
+const THREE = require('three');
+const rig = require('../src/renderer/src/features/office/scene/agents/HumanoidRig.ts');
+const shapes = require('../src/renderer/src/features/office/scene/agents/bodyShapes.ts');
+
+const trianglesOf = (root) => {
+  let count = 0;
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || !object.visible) return;
+    const g = object.geometry;
+    count += (g.index ? g.index.count : g.getAttribute('position').count) / 3;
+  });
+  return count;
+};
+
+test('people stay within their triangle budget: close-up figures and the instanced crowd', () => {
+  const looks = Object.values(appearance.APPEARANCES);
+  for (const [detail, budget] of [
+    ['full', 7000],
+    ['low', 3300]
+  ]) {
+    const average = looks.reduce((sum, look) => sum + trianglesOf(rig.buildHumanoid(look, detail).root), 0) / looks.length;
+    assert.ok(average <= budget, `${detail}: ${Math.round(average)} triangles a person`);
+  }
+});
+
+test('close-up hands have a thumb, and the two hands mirror each other', () => {
+  const full = shapes.bodyShapes('full');
+  const low = shapes.bodyShapes('low');
+  const box = (g) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
+  // The thumb reaches forward (+z) past the palm, which the crowd's simpler hands do not.
+  assert.ok(box(full.hand[1]).max.z > 0.045);
+  assert.ok(box(low.hand[1]).max.z < 0.04);
+  const left = box(full.hand[1]);
+  const right = box(full.hand[-1]);
+  assert.ok(Math.abs(left.min.x + right.max.x) < 1e-6 && Math.abs(left.max.x + right.min.x) < 1e-6);
+});
+
+test('hair is smooth, never faceted, on close-up people and in the crowd', () => {
+  for (const hairStyle of ['short', 'curly', 'afro', 'bob', 'braids']) {
+    const look = { ...appearance.APPEARANCES.receptionist, hairStyle, beard: '#3b2a20' };
+    rig.buildHumanoid(look, 'low').root.traverse((object) => {
+      if (object instanceof THREE.Mesh) assert.equal(object.material.flatShading, false, hairStyle);
+    });
+  }
+});
