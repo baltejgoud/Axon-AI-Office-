@@ -54,7 +54,7 @@ export interface StreamChatResult extends ChatUsage {
 /** A provider's HTTP failure, with the provider's own explanation when it gave one. */
 export class ProviderError extends Error {
   constructor(readonly status: number, readonly detail: string) {
-    super(`Provider returned HTTP ${status}${detail ? `: ${detail}` : '.'} ${hint(status)}`);
+    super(`Provider returned HTTP ${status}${detail ? `: ${/[.!?]$/.test(detail) ? detail : `${detail}.`}` : '.'} ${hint(status)}`);
   }
 }
 
@@ -225,20 +225,14 @@ function buildRequest(provider: ProviderConfig, key: string | null, request: Cha
   } };
 }
 
-/** Streams one assistant turn: text, thinking, tool calls and usage, through each protocol's adapter. */
-export async function streamChat(
-  provider: ProviderConfig,
-  key: string | null,
-  request: ChatRequest,
-  emit: (text: string, delta?: StreamDelta) => void
-): Promise<StreamChatResult> {
+/**
+ * Sends a chat request and returns the stream once the provider accepts it. A 400 that names an
+ * optional field is sent once more without it, and that field stays out for this endpoint and model.
+ */
+async function open(provider: ProviderConfig, key: string | null, request: ChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
   const { url, headers, payload } = buildRequest(provider, key, request);
   const refusedKey = `${url}|${request.model}`;
   for (const field of refused.get(refusedKey) ?? []) delete payload[field];
-  // Aborted when the stream goes quiet for too long.
-  const watchdog = new AbortController();
-  const signal = request.signal ? AbortSignal.any([request.signal, watchdog.signal]) : watchdog.signal;
-
   let response = await post(url, headers, payload, signal, request.signal);
   if (response.status === 400) {
     const error = await providerError(response, key);
@@ -250,6 +244,45 @@ export async function streamChat(
   }
   if (!response.ok) throw await providerError(response, key);
   if (!response.body) throw new Error('Provider returned no response body.');
+  return response.body;
+}
+
+/** A streamed error event becomes an error carrying the provider's message. */
+function throwIfError(event: { error?: unknown; type?: string }, key: string | null): void {
+  if (!event.error && event.type !== 'error') return;
+  const error = event.error as { message?: unknown } | string | undefined;
+  const detail = clean(typeof error === 'string' ? error : String(error?.message ?? ''), key);
+  throw new Error(detail ? `The provider reported an error: ${detail}` : 'The provider reported a streaming error.');
+}
+
+/**
+ * Settings' Test connection for one model: a tiny request through the same path as chat. It passes
+ * once the provider starts answering with a model stream, and the rest of the answer is dropped.
+ */
+export async function checkModel(provider: ProviderConfig, key: string | null, model: string, signal?: AbortSignal): Promise<void> {
+  const request: ChatRequest = { model, messages: [{ role: 'user', content: 'Reply with OK.' }], maxTokens: 16, signal };
+  const body = await open(provider, key, request, signal ?? new AbortController().signal);
+  for await (const raw of sse(body)) {
+    if (raw === '[DONE]') break;
+    let event: { error?: unknown; type?: string };
+    try { event = JSON.parse(raw); } catch { break; }
+    throwIfError(event, key);
+    return; // Leaving the loop cancels the stream.
+  }
+  throw new Error('The endpoint answered, but not with a model stream. Check the base URL.');
+}
+
+/** Streams one assistant turn: text, thinking, tool calls and usage, through each protocol's adapter. */
+export async function streamChat(
+  provider: ProviderConfig,
+  key: string | null,
+  request: ChatRequest,
+  emit: (text: string, delta?: StreamDelta) => void
+): Promise<StreamChatResult> {
+  // Aborted when the stream goes quiet for too long.
+  const watchdog = new AbortController();
+  const signal = request.signal ? AbortSignal.any([request.signal, watchdog.signal]) : watchdog.signal;
+  const body = await open(provider, key, request, signal);
 
   let received = false, truncated = false, refusedAnswer = false;
   let usage: ChatUsage = {};
@@ -282,14 +315,11 @@ export async function streamChat(
   const kick = (): void => { clearTimeout(idle); idle = setTimeout(() => watchdog.abort(), timeouts.idleMs); };
   kick();
   try {
-    for await (const raw of sse(response.body)) {
+    for await (const raw of sse(body)) {
       kick();
       if (raw === '[DONE]') break;
       const event = JSON.parse(raw);
-      if (event.error || event.type === 'error') {
-        const detail = clean(typeof event.error === 'string' ? event.error : String(event.error?.message ?? ''), key);
-        throw new Error(detail ? `The provider reported an error: ${detail}` : 'The provider reported a streaming error.');
-      }
+      throwIfError(event, key);
 
       if (provider.kind === 'anthropic') {
         if (event.type === 'message_start') readUsage(event.message?.usage?.input_tokens);

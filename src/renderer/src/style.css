@@ -430,6 +430,49 @@ svg {
   color: var(--danger-text);
   font-size: var(--text-sm);
 }
+/* Test connection in the provider dialog: one line per model, a tick or a cross. */
+.provider-test {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.provider-test-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+.provider-test-results li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.provider-test-results li > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.provider-test-results .is-ok {
+  color: var(--accent-text);
+}
+.provider-test-results .is-failed {
+  color: var(--danger-text);
+}
+.provider-test-results code {
+  /* A model ID stays on one line unless it is longer than half the row. */
+  flex: none;
+  max-width: 50%;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.provider-test-results span {
+  min-width: 0;
+}
 .empty-state {
   display: flex;
   flex-direction: column;

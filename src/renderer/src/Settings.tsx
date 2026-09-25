@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { KeyRound, Plus, Trash2, Server } from 'lucide-react';
+import { Check, KeyRound, PlugZap, Plus, Trash2, Server, X } from 'lucide-react';
 import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared/types';
+import type { ProviderTestResult } from '../../shared/platform';
 import { useApp, perform } from './state';
 import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
@@ -92,6 +93,20 @@ const blankMcp = (): MCPServerConfig => ({
   url: '',
   enabled: true
 });
+/** The model IDs typed in the form: one per line, trimmed, without repeats. */
+const modelIds = (text: string) => [
+  ...new Set(
+    text
+      .split('\n')
+      .map((m) => m.trim())
+      .filter(Boolean)
+  )
+];
+/** A main-process error without Electron's "Error invoking remote method" wrapper. */
+const errorText = (err: unknown) =>
+  err instanceof Error
+    ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+    : String(err);
 const tabs = ['Providers', 'MCP Servers', 'Appearance', 'Skills & roles', 'Security & data'] as const;
 type Tab = (typeof tabs)[number];
 
@@ -102,6 +117,9 @@ export function SettingsPanel() {
   const [models, setModels] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [providerError, setProviderError] = useState('');
+  const [testing, setTesting] = useState(false);
+  /** The last Test connection, and the form it was run on: results show only while the form still matches. */
+  const [test, setTest] = useState<{ form: string; result: ProviderTestResult } | null>(null);
 
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
   const [mcpArgs, setMcpArgs] = useState('');
@@ -124,6 +142,30 @@ export function SettingsPanel() {
     setProvider(null);
     setKey('');
     setProviderError('');
+    setTest(null);
+  };
+  const form = JSON.stringify([provider?.id, provider?.kind, provider?.baseUrl, models, key]);
+  const shownTest = test?.form === form ? test.result : null;
+  const testConnection = async () => {
+    if (!provider) return;
+    const ids = modelIds(models);
+    if (ids.length === 0) {
+      setProviderError('Please specify at least one Model ID (one per line).');
+      return;
+    }
+    setProviderError('');
+    setTesting(true);
+    try {
+      const result = await window.axon.providerTest(
+        { ...provider, models: ids.map((id) => ({ id, displayName: id })) },
+        key || undefined
+      );
+      setTest({ form, result });
+    } catch (err) {
+      setProviderError(errorText(err));
+    } finally {
+      setTesting(false);
+    }
   };
   const saveProvider = async () => {
     setProviderError('');
@@ -135,14 +177,7 @@ export function SettingsPanel() {
       setProviderError('Please enter an API endpoint URL.');
       return;
     }
-    const ids = [
-      ...new Set(
-        models
-          .split('\n')
-          .map((m) => m.trim())
-          .filter(Boolean)
-      )
-    ];
+    const ids = modelIds(models);
     if (ids.length === 0) {
       setProviderError('Please specify at least one Model ID (one per line).');
       return;
@@ -155,12 +190,8 @@ export function SettingsPanel() {
       await useApp.getState().refresh();
       useApp.getState().pushToast('Provider saved');
       close();
-    } catch (err: any) {
-      const msg =
-        err instanceof Error
-          ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
-          : String(err);
-      setProviderError(msg);
+    } catch (err) {
+      setProviderError(errorText(err));
     }
   };
 
@@ -225,12 +256,8 @@ export function SettingsPanel() {
       await useApp.getState().refresh();
       useApp.getState().pushToast('MCP server saved');
       closeMcp();
-    } catch (err: any) {
-      const msg =
-        err instanceof Error
-          ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
-          : String(err);
-      setMcpError(msg);
+    } catch (err) {
+      setMcpError(errorText(err));
     }
   };
 
@@ -716,6 +743,38 @@ export function SettingsPanel() {
               onChange={(e) => setModels(e.target.value)}
             />
           </Field>
+          <div className="provider-test">
+            <Button size="sm" icon={PlugZap} disabled={testing} onClick={() => void testConnection()}>
+              {testing ? 'Testing…' : 'Test connection'}
+            </Button>
+            <div aria-live="polite">
+              {shownTest && (
+                <>
+                  <ul className="provider-test-results">
+                    {shownTest.results.map((r) => (
+                      <li key={r.modelId} className={r.ok ? 'is-ok' : 'is-failed'}>
+                        <Icon icon={r.ok ? Check : X} size="sm" />
+                        <code>{r.modelId}</code>
+                        <span>{r.ok ? `${((r.ms ?? 0) / 1000).toFixed(1)} s` : r.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {shownTest.savedKeyWithheld && (
+                    <p className="text-caption">
+                      Tested without the saved key, because the endpoint changed. Type the key to test with
+                      it.
+                    </p>
+                  )}
+                  {shownTest.untested > 0 && (
+                    <p className="text-caption">
+                      Tested the first {shownTest.results.length} models; {shownTest.untested} more not
+                      tested.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
           <p className="text-caption">
             Your key and messages are sent to this endpoint. Only connect services you trust.
           </p>

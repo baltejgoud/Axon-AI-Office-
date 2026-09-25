@@ -22,12 +22,13 @@ app.setPath('userData', profile);
 fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maximized: false }));
 // Loopback-only mock provider. Rejects requests without the expected Bearer key.
 let lastAuth = '';
-let lastBody = '';
+/** Every request body, in order; the chat's is the one carrying a system prompt. */
+const bodies = [];
 const mock = http.createServer((request, response) => {
   const chunks = [];
   request.on('data', (c) => chunks.push(c));
   request.on('end', () => {
-    lastBody = Buffer.concat(chunks).toString('utf8');
+    bodies.push(Buffer.concat(chunks).toString('utf8'));
     lastAuth = String(request.headers.authorization || '');
     if (lastAuth !== 'Bearer smoke-key-123') { response.writeHead(401); response.end(); return; }
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -55,6 +56,11 @@ app.on('web-contents-created', (_, contents) => {
         if (document.querySelector('.sidebar, .chat-view, .return-to-office')) throw new Error('A page other than the office is reachable');
         const id = crypto.randomUUID();
         await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
+        const form = { id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: true };
+        const check = await window.axon.providerTest(form);
+        if (!check.results[0]?.ok) throw new Error('Test connection with the saved key failed: ' + JSON.stringify(check));
+        const wrong = await window.axon.providerTest(form, 'wrong-key');
+        if (wrong.results[0]?.ok || !String(wrong.results[0]?.error).includes('HTTP 401')) throw new Error('Test connection missed a wrong key: ' + JSON.stringify(wrong));
         const chat = await window.axon.chatCreate(id, 'mock-model', 'research', undefined, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer'] });
         await window.axon.chatSend(chat.id, 'Say hello', []);
         const after = await window.axon.snapshot();
@@ -73,6 +79,23 @@ app.on('web-contents-created', (_, contents) => {
         addProvider.click();
         await wait();
         if (document.querySelectorAll('[role=dialog]').length !== 2) throw new Error('Provider modal did not open over Settings');
+        // Test connection from the form itself: the tested endpoint and key are what's typed, before saving.
+        const dialog = [...document.querySelectorAll('[role=dialog]')].pop();
+        const type = (el, value) => {
+          const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        type(dialog.querySelector('input[placeholder="https://your-provider.example/v1"]'), 'http://127.0.0.1:${globalThis.__axonMockPort}/v1');
+        type(dialog.querySelector('input[type=password]'), 'smoke-key-123');
+        type(dialog.querySelector('textarea'), 'mock-model');
+        await wait();
+        const testButton = [...dialog.querySelectorAll('button')].find(b => b.textContent.includes('Test connection'));
+        if (!testButton) throw new Error('Test connection button missing');
+        testButton.click();
+        let passed = null;
+        for (let i = 0; i < 30 && !passed; i++) { await wait(); passed = dialog.querySelector('.provider-test-results .is-ok code'); }
+        if (passed?.textContent !== 'mock-model') throw new Error('Test connection result not shown: ' + dialog.querySelector('.provider-test')?.textContent);
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         await wait();
         if (document.querySelectorAll('[role=dialog]').length !== 1 || !document.querySelector('.office-overlay')) throw new Error('Esc did not close only the provider modal');
@@ -80,10 +103,11 @@ app.on('web-contents-created', (_, contents) => {
         await wait();
         if (document.querySelector('.office-overlay')) throw new Error('Esc did not close the Settings sheet');
         await window.axon.chatDelete(chat.id); await window.axon.providerDelete(id);
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, selection: true, layeredEscape: true, title: document.title };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, providerTest: true, selection: true, layeredEscape: true, title: document.title };
       })()`);
       if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
-      const sent = JSON.parse(lastBody);
+      const sent = bodies.map((body) => JSON.parse(body)).find((body) => body.messages?.some((m) => m.role === 'system'));
+      if (!sent) throw new Error('The chat request never reached the provider');
       const system = sent.messages.find((m) => m.role === 'system')?.content || '';
       const r = system.indexOf('<roles>'), s = system.indexOf('<skills>');
       if (r < 0 || s < 0 || r > s) throw new Error('Roles/skills blocks missing or misordered in system prompt');

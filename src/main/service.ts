@@ -1,14 +1,14 @@
 import { app, dialog } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { PlatformAPI, Snapshot, TaskPatch } from '../shared/platform';
+import type { PlatformAPI, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
 import type { FocusTarget, Settings, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
 import { Project } from './project';
 import { forget, isOnWall, loadWall, remember, saveWall } from './folderWall';
-import { endpoint, streamChat } from './providers';
+import { checkModel, endpoint, streamChat } from './providers';
 import { search } from './knowledge';
 import { ParsePool } from './parse-pool';
 import { catalog, hasSkill, skillBodies } from './skills';
@@ -39,6 +39,8 @@ export interface ShellPort {
   applySettings(settings: Settings): void;
 }
 
+/** Settings' Test connection: the time each model gets, and how many models it checks. Tests shorten the time. */
+export const PROVIDER_TEST = { timeoutMs: 30_000, maxModels: 10 };
 /** Where an MCP server's API key lives in the vault, apart from provider keys. */
 const mcpSecret = (id: string) => `mcp:${id}`;
 /** Shown when an answer stops at the max-token limit. */
@@ -137,12 +139,18 @@ export class Service {
     const sel = (input ?? {}) as Partial<Selection>;
     return { skillIds: list(sel.skillIds ?? [], hasSkill, 'skill'), roleIds: list(sel.roleIds ?? [], hasRole, 'role') };
   }
-  async providerSave(p: Parameters<PlatformAPI['providerSave']>[0], key?: string): Promise<void> {
-    text(p.id, 100); text(p.name, 100);
-    if (!p.id || !p.name.trim() || !['openai-compatible', 'anthropic', 'gemini'].includes(p.kind)) throw new Error('Invalid provider.');
+  /** What Save and Test connection both check: the protocol, the endpoint policy and the model IDs. */
+  private checkConnection(p: ProviderConfig): void {
+    text(p.id, 100);
+    if (!p.id || !['openai-compatible', 'anthropic', 'gemini'].includes(p.kind)) throw new Error('Invalid provider.');
     endpoint(p);
     if (!Array.isArray(p.models) || !p.models.length || p.models.length > 100) throw new Error('Add between 1 and 100 models.');
     p.models.forEach(m => { if (!text(m.id, 200).trim()) throw new Error('Model ID is required.'); text(m.displayName, 200); });
+  }
+  async providerSave(p: Parameters<PlatformAPI['providerSave']>[0], key?: string): Promise<void> {
+    text(p.name, 100);
+    if (!p.name.trim()) throw new Error('Invalid provider.');
+    this.checkConnection(p);
     const previous = this.state.providers.find(item => item.id === p.id);
     if (previous && (previous.baseUrl !== p.baseUrl || previous.kind !== p.kind)) {
       const choice = await dialog.showMessageBox({ type: 'warning', message: 'Change provider endpoint?', detail: 'Future prompts and this provider’s saved API key will be sent to the new endpoint.', buttons: ['Cancel', 'Change endpoint'], defaultId: 0, cancelId: 0 });
@@ -153,6 +161,33 @@ export class Service {
       enabled: Boolean(p.enabled), createdAt: previous?.createdAt ?? Date.now(), hasApiKey: this.vault.has(p.id) };
     this.state.providers = [...this.state.providers.filter(item => item.id !== p.id), clean];
     await this.repo.save();
+  }
+  /**
+   * Test connection: a tiny request to each listed model (the first ten, all at once), with the key
+   * typed in the form, or else the saved key, but only for the endpoint it was saved with.
+   */
+  async providerTest(p: ProviderConfig, key?: string): Promise<ProviderTestResult> {
+    this.checkConnection(p);
+    const typed = typeof key === 'string' ? text(key, 16000).trim() : '';
+    const saved = this.state.providers.find(item => item.id === p.id);
+    const sameEndpoint = !!saved && saved.baseUrl === p.baseUrl && saved.kind === p.kind;
+    const hasSaved = !!saved && this.vault.has(p.id);
+    const secret = typed || (sameEndpoint && hasSaved ? this.vault.get(p.id) : null);
+    const models = p.models.slice(0, PROVIDER_TEST.maxModels);
+    const results = await Promise.all(models.map(async ({ id }) => {
+      const started = Date.now();
+      const signal = AbortSignal.timeout(PROVIDER_TEST.timeoutMs);
+      try {
+        await checkModel(p, secret, id, signal);
+        return { modelId: id, ok: true, ms: Date.now() - started };
+      } catch (error) {
+        const message = signal.aborted
+          ? `No answer within ${Math.round(PROVIDER_TEST.timeoutMs / 1000)} seconds.`
+          : error instanceof Error ? error.message : 'The check failed.';
+        return { modelId: id, ok: false, error: message };
+      }
+    }));
+    return { results, savedKeyWithheld: !typed && hasSaved && !sameEndpoint, untested: p.models.length - models.length };
   }
   async providerDelete(id: string): Promise<void> {
     this.state.providers = this.state.providers.filter(p => p.id !== id); this.vault.remove(id); await this.repo.save();

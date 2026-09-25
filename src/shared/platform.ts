@@ -28,6 +28,14 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   /** Start with Windows needs the installed app. */
   startWithWindowsAvailable: boolean;
 }
+/** Settings' Test connection: one line per model checked. */
+export interface ProviderTestResult {
+  results: { modelId: string; ok: boolean; ms?: number; error?: string }[];
+  /** A key is saved, but the form's endpoint differs from the saved one, so it wasn't sent. */
+  savedKeyWithheld: boolean;
+  /** Models past the first ten, not checked. */
+  untested: number;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
@@ -39,6 +47,8 @@ export interface TaskPatch {
 export interface PlatformAPI {
   snapshot(): Promise<Snapshot>;
   providerSave(provider: ProviderConfig, key?: string): Promise<void>;
+  /** Checks the form's endpoint, key and models without saving. With no key typed, the saved key is used only for the saved endpoint. */
+  providerTest(provider: ProviderConfig, key?: string): Promise<ProviderTestResult>;
   providerDelete(id: string): Promise<void>;
   workspaceSave(workspace: Workspace): Promise<void>;
   workspaceDelete(id: string): Promise<void>;

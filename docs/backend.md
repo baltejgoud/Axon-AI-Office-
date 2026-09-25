@@ -20,6 +20,8 @@ Renderer (React)  ──window.axon──►  preload  ──IPC (sender-checked
    - If an existing provider's URL or protocol changes, a native dialog asks first. The saved key would otherwise go to the new endpoint.
 3. The key goes to the **Vault**, never to the saved state. The vault encrypts it with Electron `safeStorage` (Windows DPAPI, macOS Keychain, the Linux keyring) and writes it to `secrets/os-vault.json`. When no OS key store is available it refuses to save rather than store plaintext.
 4. The saved provider holds only `hasApiKey: true`. The key never goes back to the renderer. Leaving the key field blank keeps the saved key, and **Remove saved key** deletes it.
+5. **Test connection** in the same dialog checks what's in the form, without saving. `Service.providerTest` sends each listed model a tiny request ("Reply with OK", 16 max tokens, no tools), up to 10 models at once with 30 seconds each. The request goes through the same path as chat, via `checkModel` in `providers.ts`. A model passes once the provider starts answering with a model stream; the rest is dropped. Each line shows a tick and the time taken, or the provider's own error.
+   - It uses the key typed in the form. If no key is typed, it uses the saved key, but only for the endpoint and protocol the key was saved with. A changed endpoint is tested without it, and the result says so.
 
 The key is read from the vault once per request and sent in the header each protocol expects:
 

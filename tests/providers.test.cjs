@@ -214,3 +214,34 @@ test('Anthropic requests ask for prompt caching, and a proxy that refuses it is 
   assert.deepEqual(bodies[0].cache_control, { type: 'ephemeral' });
   assert.equal('cache_control' in bodies[1], false);
 });
+
+test('checkModel passes once the provider starts answering, with a tiny request and no tools', async (t) => {
+  const bodies = mockFetch(t, () => new Response(sseBody({ type: 'message_start', message: { usage: { input_tokens: 3 } } }, textEvent)));
+  await providers.checkModel(anthropic, 'k', 'claude-opus-5');
+  assert.equal(bodies[0].model, 'claude-opus-5');
+  assert.equal(bodies[0].max_tokens, 16);
+  assert.equal('tools' in bodies[0], false);
+});
+
+test('checkModel fails with the provider\'s own message', async (t) => {
+  mockFetch(t, () => new Response(JSON.stringify({ error: { message: 'model: claude-opsu-5 not found' } }), { status: 404 }));
+  await assert.rejects(providers.checkModel(anthropic, 'k', 'claude-opsu-5'), /HTTP 404: model: claude-opsu-5 not found\. Check the endpoint URL and model ID\./);
+});
+
+test('checkModel fails when the first streamed event is an error', async (t) => {
+  mockFetch(t, () => new Response(sseBody({ type: 'error', error: { type: 'permission_error', message: 'Your key cannot use this model' } })));
+  await assert.rejects(providers.checkModel(anthropic, 'k', 'm'), /Your key cannot use this model/);
+});
+
+test('checkModel fails when the endpoint answers with something other than a model stream', async (t) => {
+  mockFetch(t, () => new Response('<html><body>Welcome</body></html>', { status: 200 }));
+  await assert.rejects(providers.checkModel(openai, 'k', 'gpt-5'), /not with a model stream/);
+});
+
+test('checkModel goes through the same fallbacks as chat', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'cache_control: Extra inputs are not permitted' } }), { status: 400 })
+    : new Response(sseBody(textEvent)));
+  await providers.checkModel({ kind: 'anthropic', baseUrl: 'https://another-proxy.example/v1', models: [] }, 'k', 'claude-opus-5');
+  assert.equal(bodies.length, 2);
+});
