@@ -893,9 +893,9 @@ sized for the side panel. */
 }
 
 /* Composer: model chip, the hint that always shows, and the no-model call to action. */
-.composer-actions-row .model-chip {
+.composer-actions-row .model-picker-trigger {
   flex: 0 1 auto;
-  max-width: 50%;
+  max-width: 55%;
 }
 .composer-actions-row .composer-hint {
   margin-left: auto;
@@ -1341,6 +1341,17 @@ sized for the side panel. */
 }
 .office-overlay-panel.wide {
   width: min(960px, 100%);
+}
+/* Settings: one height whichever section is open, so the sheet never jumps. */
+.office-overlay-panel.flush {
+  height: min(700px, calc(100vh - 64px));
+  overflow: hidden;
+}
+.office-overlay-body.flush {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0 0 22px 22px;
 }
 .office-overlay-header {
   display: flex;

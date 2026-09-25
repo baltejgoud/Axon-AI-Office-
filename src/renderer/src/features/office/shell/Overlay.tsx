@@ -10,12 +10,15 @@ export function Overlay({
   title,
   onClose,
   children,
-  wide = false
+  wide = false,
+  flush = false
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** The content lays itself out edge to edge and scrolls its own parts; the sheet keeps one height. */
+  flush?: boolean;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -49,7 +52,7 @@ export function Overlay({
     <div className="office-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={panel}
-        className={`office-overlay-panel ${wide ? 'wide' : ''}`}
+        className={`office-overlay-panel ${wide ? 'wide' : ''} ${flush ? 'flush' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -62,7 +65,7 @@ export function Overlay({
             <X size={18} />
           </button>
         </header>
-        <div className="office-overlay-body">{children}</div>
+        <div className={`office-overlay-body ${flush ? 'flush' : ''}`}>{children}</div>
       </div>
     </div>
   );

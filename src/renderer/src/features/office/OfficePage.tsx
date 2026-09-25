@@ -21,7 +21,7 @@ export function OfficePage() {
       <OfficeCanvas />
       <ActivityPanel />
       {overlay === 'settings' && (
-        <Overlay title="Settings" onClose={close} wide>
+        <Overlay title="Settings" onClose={close} wide flush>
           <SettingsPanel />
         </Overlay>
       )}

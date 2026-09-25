@@ -1,99 +1,51 @@
-import { useState } from 'react';
-import { Check, KeyRound, ListPlus, PlugZap, Plus, Trash2, Server, X } from 'lucide-react';
-import type { ProviderConfig, ProviderKind, MCPServerConfig } from '../../shared/types';
-import type { ProviderModelsResult, ProviderTestResult } from '../../shared/platform';
+import './settings/settings.css';
+import { useState, type ReactNode } from 'react';
+import {
+  BookOpen,
+  Copy,
+  KeyRound,
+  Monitor,
+  Palette,
+  Pencil,
+  Plug,
+  Plus,
+  Server,
+  Shield,
+  Sparkles,
+  Trash2,
+  type LucideIcon
+} from 'lucide-react';
+import type { MCPServerConfig, ProviderConfig, Settings } from '../../shared/types';
 import { useApp, perform } from './state';
-import { Button, EmptyState, Field, Icon, Kbd, Modal } from './ui';
+import { Button, EmptyState, Icon, Kbd } from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
 import {
   qualityPreference,
   setQualityPreference,
   type QualityMode
 } from './features/office/scene/render/quality';
+import {
+  NumberSetting,
+  Segmented,
+  SettingRow,
+  SettingsGroup,
+  SliderSetting,
+  Switch
+} from './settings/controls';
+import { ProviderDialog, protocolLabel, tintOf } from './settings/ProviderDialog';
+import { McpDialog } from './settings/McpDialog';
 
-interface PresetInfo {
-  kind: ProviderKind;
-  baseUrl: string;
-  placeholder: string;
-  description?: string;
-}
+type Section = 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
+const SECTIONS: readonly { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: 'models', label: 'Models', icon: Sparkles },
+  { id: 'tools', label: 'Tools (MCP)', icon: Plug },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'system', label: 'System', icon: Monitor },
+  { id: 'skills', label: 'Skills & roles', icon: BookOpen },
+  { id: 'privacy', label: 'Privacy & security', icon: Shield }
+];
 
-const presets: Record<string, PresetInfo> = {
-  OpenAI: {
-    kind: 'openai-compatible',
-    baseUrl: 'https://api.openai.com/v1',
-    placeholder: 'gpt-4o\ngpt-4o-mini'
-  },
-  Anthropic: {
-    kind: 'anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
-    placeholder: 'claude-opus-5\nclaude-sonnet-5\nclaude-haiku-4-5'
-  },
-  'Google Gemini': {
-    kind: 'gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    placeholder: 'gemini-2.5-flash\ngemini-2.5-pro'
-  },
-  DeepSeek: {
-    kind: 'openai-compatible',
-    baseUrl: 'https://api.deepseek.com/v1',
-    placeholder: 'deepseek-chat\ndeepseek-reasoner'
-  },
-  Kimi: {
-    kind: 'openai-compatible',
-    baseUrl: 'https://api.moonshot.ai/v1',
-    placeholder: 'kimi-k3\nkimi-k2.6',
-    description:
-      'Keys from platform.moonshot.ai. A China account (platform.moonshot.cn) uses https://api.moonshot.cn/v1. Kimi models think before they answer: set Max tokens to 16,000 or more.'
-  },
-  'Qwen (Alibaba Model Studio)': {
-    kind: 'openai-compatible',
-    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-    placeholder: 'qwen3.8-max\nqwen-plus',
-    description:
-      'A key works only in the region it was made in. This address is Singapore; US keys use https://dashscope-us.aliyuncs.com/compatible-mode/v1, Beijing keys https://dashscope.aliyuncs.com/compatible-mode/v1.'
-  },
-  OpenRouter: {
-    kind: 'openai-compatible',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    placeholder: 'moonshotai/kimi-k3\nqwen/qwen3.8-max-0902',
-    description: 'One key for Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.'
-  },
-  'Ollama (this computer)': {
-    kind: 'openai-compatible',
-    baseUrl: 'http://localhost:11434/v1',
-    placeholder: 'qwen3\nllama3.2',
-    description:
-      'Models running on this computer through Ollama. No key needed; pull a model in Ollama first.'
-  },
-  'Union Alpha (Custom Enterprise)': {
-    kind: 'openai-compatible',
-    baseUrl: '',
-    placeholder: 'model-id-1\nmodel-id-2',
-    description: 'Internal or self-hosted enterprise OpenAI-compatible gateway'
-  },
-  Custom: {
-    kind: 'openai-compatible',
-    baseUrl: '',
-    placeholder: 'model-id-1\nmodel-id-2'
-  }
-};
-const protocolLabel: Record<ProviderKind, string> = {
-  'openai-compatible': 'OpenAI compatible',
-  anthropic: 'Anthropic Messages',
-  gemini: 'Google Gemini'
-};
-/** Purely cosmetic brand tint for the provider card's icon tile. */
-function tileClass(p: ProviderConfig): string {
-  if (p.kind === 'anthropic') return 'icon-tile-anthropic';
-  if (p.kind === 'gemini') return 'icon-tile-gemini';
-  const name = p.name.toLowerCase();
-  if (name.includes('openai') || name.includes('gpt')) return 'icon-tile-openai';
-  if (name.includes('deepseek')) return 'icon-tile-deepseek';
-  if (name.includes('kimi') || name.includes('moonshot')) return 'icon-tile-openai';
-  return 'icon-tile-custom';
-}
-const blank = (): ProviderConfig => ({
+const blankProvider = (): ProviderConfig => ({
   id: crypto.randomUUID(),
   name: '',
   kind: 'openai-compatible',
@@ -115,934 +67,478 @@ const blankMcp = (): MCPServerConfig => ({
   url: '',
   enabled: true
 });
-/** Found models shown at once; a filter narrows longer lists (OpenRouter offers hundreds). */
-const MODELS_SHOWN = 60;
-/** The model IDs typed in the form: one per line, trimmed, without repeats. */
-const modelIds = (text: string) => [
-  ...new Set(
-    text
-      .split('\n')
-      .map((m) => m.trim())
-      .filter(Boolean)
-  )
-];
-/** A main-process error without Electron's "Error invoking remote method" wrapper. */
-const errorText = (err: unknown) =>
-  err instanceof Error
-    ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
-    : String(err);
-const tabs = ['Providers', 'MCP Servers', 'Appearance', 'Skills & roles', 'Security & data'] as const;
-type Tab = (typeof tabs)[number];
 
+/** Settings, as a sheet over the office: sections on the left, the chosen one on the right. */
 export function SettingsPanel() {
-  const { data } = useApp();
+  const [section, setSection] = useState<Section>('models');
   const [provider, setProvider] = useState<ProviderConfig | null>(null);
-  const [key, setKey] = useState('');
-  const [models, setModels] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [providerError, setProviderError] = useState('');
-  const [testing, setTesting] = useState(false);
-  /** The last Test connection, and the form it was run on: results show only while the form still matches. */
-  const [test, setTest] = useState<{ form: string; result: ProviderTestResult } | null>(null);
-  /** The last Find models, for the endpoint and key it was run with. */
-  const [found, setFound] = useState<{ form: string; result: ProviderModelsResult } | null>(null);
-  const [finding, setFinding] = useState(false);
-  const [modelFilter, setModelFilter] = useState('');
-
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
-  const [mcpArgs, setMcpArgs] = useState('');
-  const [mcpEnv, setMcpEnv] = useState('');
-  const [mcpHeaders, setMcpHeaders] = useState('');
-  const [mcpApiKey, setMcpApiKey] = useState('');
-  const [mcpError, setMcpError] = useState('');
-
-  const [tab, setTab] = useState<Tab>('Providers');
-  const settings = data!.settings;
-
-  const edit = (p: ProviderConfig) => {
-    setProvider(p);
-    setModels(p.models.map((m) => m.id).join('\n'));
-    setKey('');
-    setProviderError('');
-    setSelectedTemplate(p.name in presets ? p.name : '');
-    setFound(null);
-    setModelFilter('');
-  };
-  const close = () => {
-    setProvider(null);
-    setKey('');
-    setProviderError('');
-    setTest(null);
-    setFound(null);
-    setModelFilter('');
-  };
-  const form = JSON.stringify([provider?.id, provider?.kind, provider?.baseUrl, models, key]);
-  const shownTest = test?.form === form ? test.result : null;
-  /** Found models stay while picking them changes the list; a new endpoint or key hides them. */
-  const endpointForm = JSON.stringify([provider?.id, provider?.kind, provider?.baseUrl, key]);
-  const shownModels = found?.form === endpointForm ? found.result : null;
-  const chosen = new Set(modelIds(models));
-  const findModels = async () => {
-    if (!provider) return;
-    setProviderError('');
-    setFinding(true);
-    try {
-      const result = await window.axon.providerModels(
-        { ...provider, models: modelIds(models).map((id) => ({ id, displayName: id })) },
-        key || undefined
-      );
-      setFound({ form: endpointForm, result });
-      setModelFilter('');
-    } catch (err) {
-      setProviderError(errorText(err));
-    } finally {
-      setFinding(false);
-    }
-  };
-  /** Adds a found model to the list, or takes it off again. */
-  const toggleModel = (id: string) => {
-    const ids = modelIds(models);
-    setModels((chosen.has(id) ? ids.filter((m) => m !== id) : [...ids, id]).join('\n'));
-  };
-  const testConnection = async () => {
-    if (!provider) return;
-    const ids = modelIds(models);
-    if (ids.length === 0) {
-      setProviderError('Please specify at least one Model ID (one per line).');
-      return;
-    }
-    setProviderError('');
-    setTesting(true);
-    try {
-      const result = await window.axon.providerTest(
-        { ...provider, models: ids.map((id) => ({ id, displayName: id })) },
-        key || undefined
-      );
-      setTest({ form, result });
-    } catch (err) {
-      setProviderError(errorText(err));
-    } finally {
-      setTesting(false);
-    }
-  };
-  const saveProvider = async () => {
-    setProviderError('');
-    if (!provider?.name?.trim()) {
-      setProviderError('Please enter a provider name.');
-      return;
-    }
-    if (!provider?.baseUrl?.trim()) {
-      setProviderError('Please enter an API endpoint URL.');
-      return;
-    }
-    const ids = modelIds(models);
-    if (ids.length === 0) {
-      setProviderError('Please specify at least one Model ID (one per line).');
-      return;
-    }
-    try {
-      await window.axon.providerSave(
-        { ...provider, name: provider.name.trim(), models: ids.map((id) => ({ id, displayName: id })) },
-        key || undefined
-      );
-      await useApp.getState().refresh();
-      useApp.getState().pushToast('Provider saved');
-      close();
-    } catch (err) {
-      setProviderError(errorText(err));
-    }
-  };
-
-  const editMcp = (s: MCPServerConfig) => {
-    setMcpServer(s);
-    setMcpArgs((s.args || []).join(' '));
-    setMcpEnv(
-      Object.entries(s.env || {})
-        .map(([k, v]) => `${k}=${v}`)
-        .join('\n')
-    );
-    setMcpHeaders(
-      Object.entries(s.headers || {})
-        .map(([k, v]) => `${k}: ${v}`)
-        .join('\n')
-    );
-    setMcpApiKey(s.apiKey || '');
-    setMcpError('');
-  };
-  const closeMcp = () => {
-    setMcpServer(null);
-    setMcpError('');
-  };
-  const saveMcp = async () => {
-    setMcpError('');
-    if (!mcpServer?.name?.trim()) {
-      setMcpError('Please enter a server name.');
-      return;
-    }
-    if (mcpServer.transport === 'stdio' && !mcpServer.command?.trim()) {
-      setMcpError('Please specify a command for stdio transport.');
-      return;
-    }
-    if (mcpServer.transport === 'sse' && !mcpServer.url?.trim()) {
-      setMcpError('Please specify a server URL for SSE transport.');
-      return;
-    }
-    const args = mcpArgs.trim() ? mcpArgs.trim().split(/\s+/) : [];
-    const env: Record<string, string> = {};
-    mcpEnv.split('\n').forEach((line) => {
-      const idx = line.indexOf('=');
-      if (idx > 0) {
-        env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-      }
-    });
-    const headers: Record<string, string> = {};
-    mcpHeaders.split('\n').forEach((line) => {
-      const idx = line.indexOf(':');
-      if (idx > 0) {
-        headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-      }
-    });
-    try {
-      await window.axon.mcpServerSave({
-        ...mcpServer,
-        name: mcpServer.name.trim(),
-        args,
-        env,
-        headers,
-        apiKey: mcpApiKey.trim() || undefined
-      });
-      await useApp.getState().refresh();
-      useApp.getState().pushToast('MCP server saved');
-      closeMcp();
-    } catch (err) {
-      setMcpError(errorText(err));
-    }
-  };
 
   return (
-    <div className="settings-sheet">
-      <div className="settings-sheet-inner">
-        <div className="tabs" role="tablist">
-          {tabs.map((t) => (
-            <button key={t} role="tab" className="tab" aria-selected={t === tab} onClick={() => setTab(t)}>
-              {t}
-            </button>
-          ))}
-        </div>
+    <div className="settings">
+      <nav className="settings-nav" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            id={`settings-tab-${s.id}`}
+            aria-controls="settings-content"
+            aria-selected={s.id === section}
+            className="settings-nav-item"
+            onClick={() => setSection(s.id)}
+          >
+            <Icon icon={s.icon} size="md" />
+            {s.label}
+          </button>
+        ))}
+      </nav>
+      <div
+        className="settings-content"
+        id="settings-content"
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${section}`}
+        key={section}
+      >
+        {section === 'models' && <ModelsSection onEdit={setProvider} />}
+        {section === 'tools' && <ToolsSection onEdit={setMcpServer} />}
+        {section === 'appearance' && <AppearanceSection />}
+        {section === 'system' && <SystemSection />}
+        {section === 'skills' && <SkillsSection />}
+        {section === 'privacy' && <PrivacySection />}
+      </div>
+      {provider && <ProviderDialog initial={provider} onClose={() => setProvider(null)} />}
+      {mcpServer && <McpDialog initial={mcpServer} onClose={() => setMcpServer(null)} />}
+    </div>
+  );
+}
 
-        {tab === 'Providers' && (
-          <>
-            <div className="row-between">
-              <div>
-                <h2>Providers</h2>
-                <p className="text-small text-secondary">
-                  Bring your own API keys. Keys are stored in the OS key store and never shown again.
-                </p>
+function SectionHeader({
+  title,
+  description,
+  action
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <header className="settings-header">
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      {action}
+    </header>
+  );
+}
+
+/** Saves one change to the app settings. */
+function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
+  const settings = useApp((s) => s.data!.settings);
+  return [settings, (patch) => void perform(() => window.axon.settingsSave({ ...settings, ...patch }))];
+}
+
+// ---------------------------------------------------------------- Models
+
+function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
+  const providers = useApp((s) => s.data!.providers);
+  const [settings, save] = useSettings();
+  return (
+    <div className="settings-page">
+      <SectionHeader
+        title="Models"
+        description="Connect the AI services your coworkers think with. Bring your own keys: they stay in your system's key store."
+        action={
+          <Button variant="primary" icon={Plus} onClick={() => onEdit(blankProvider())}>
+            Add provider
+          </Button>
+        }
+      />
+      {providers.length ? (
+        <SettingsGroup title="Providers">
+          {providers.map((p) => (
+            <div className="settings-item" key={p.id}>
+              <span className={`preset-mark tint-${tintOf(p)}`} aria-hidden="true">
+                {p.name.slice(0, 1).toUpperCase()}
+              </span>
+              <div className="settings-item-main">
+                <div className="settings-item-title">
+                  {p.name}
+                  {!p.hasApiKey && !/localhost|127\.0\.0\.1/.test(p.baseUrl ?? '') && (
+                    <span className="badge badge-warning">No key</span>
+                  )}
+                </div>
+                <div className="settings-item-meta">
+                  {protocolLabel(p.kind)} · {p.models.length} model{p.models.length === 1 ? '' : 's'}
+                  {p.models.length ? `: ${p.models.map((m) => m.id).join(', ')}` : ''}
+                </div>
               </div>
-              <Button variant="primary" icon={Plus} onClick={() => edit(blank())}>
+              <div className="settings-item-actions">
+                <Switch
+                  checked={p.enabled}
+                  label={`${p.name} enabled`}
+                  onChange={() =>
+                    void perform(
+                      () => window.axon.providerSave({ ...p, enabled: !p.enabled }),
+                      p.enabled ? `${p.name} turned off` : `${p.name} turned on`
+                    )
+                  }
+                />
+                <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(p)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Trash2}
+                  iconOnly
+                  className="danger-hover"
+                  aria-label={`Remove ${p.name}`}
+                  onClick={() => {
+                    if (confirm(`Remove ${p.name} and its saved key?`))
+                      void perform(() => window.axon.providerDelete(p.id), 'Provider removed');
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </SettingsGroup>
+      ) : (
+        <div className="settings-card settings-empty">
+          <EmptyState
+            icon={KeyRound}
+            title="No models connected yet"
+            description="Add Kimi, Qwen, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, a local Ollama, or any OpenAI-compatible service."
+            action={
+              <Button variant="primary" icon={Plus} onClick={() => onEdit(blankProvider())}>
                 Add provider
               </Button>
-            </div>
-
-            {data!.providers.length ? (
-              <div className="card-grid">
-                {data!.providers.map((p) => (
-                  <div className="card" key={p.id}>
-                    <div className="card-header">
-                      <span className={`icon-tile ${tileClass(p)}`}>{p.name.slice(0, 1).toUpperCase()}</span>
-                      <span className={p.enabled ? 'badge badge-accent' : 'badge'}>
-                        {p.enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                    <h3 className="card-title">{p.name}</h3>
-                    <p className="text-small text-secondary">{protocolLabel[p.kind]}</p>
-                    <p className="text-caption" style={{ marginTop: 'var(--space-2)' }}>
-                      {p.models.length} model{p.models.length === 1 ? '' : 's'} ·{' '}
-                      {p.hasApiKey ? 'Key saved' : 'No key'}
-                    </p>
-                    <div className="card-footer">
-                      <Button size="sm" onClick={() => edit(p)}>
-                        Configure
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          void perform(
-                            () => window.axon.providerSave({ ...p, enabled: !p.enabled }),
-                            p.enabled ? 'Provider disabled' : 'Provider enabled'
-                          )
-                        }
-                      >
-                        {p.enabled ? 'Disable' : 'Enable'}
-                      </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={Trash2}
-                        iconOnly
-                        aria-label={`Remove ${p.name}`}
-                        onClick={() => {
-                          if (confirm(`Remove ${p.name} and its saved key?`))
-                            void perform(() => window.axon.providerDelete(p.id), 'Provider removed');
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={KeyRound}
-                title="No providers yet"
-                description="Connect OpenAI, Anthropic, Gemini, DeepSeek, Kimi or any OpenAI-compatible endpoint."
-                action={
-                  <Button variant="primary" icon={Plus} onClick={() => edit(blank())}>
-                    Add provider
-                  </Button>
-                }
-              />
-            )}
-            <p className="text-caption">
-              Union Alpha (Custom Enterprise) connects to internal or self-hosted OpenAI-compatible gateways.
-              Provide your custom endpoint URL and model IDs.
-            </p>
-          </>
-        )}
-
-        {tab === 'MCP Servers' && (
-          <>
-            <div className="row-between">
-              <div>
-                <h2>MCP Servers</h2>
-                <p className="text-small text-secondary">
-                  Model Context Protocol servers provide external tools over stdio or SSE. Discovered tools
-                  are made available in the Code workspace with approval cards.
-                </p>
-              </div>
-              <Button variant="primary" icon={Plus} onClick={() => editMcp(blankMcp())}>
-                Add MCP server
-              </Button>
-            </div>
-
-            {data!.mcpServers?.length ? (
-              <div className="card-grid">
-                {data!.mcpServers.map((s) => (
-                  <div className="card" key={s.id}>
-                    <div className="card-header">
-                      <span className="icon-tile">
-                        <Icon icon={Server} size="md" />
-                      </span>
-                      <span className={s.enabled ? 'badge badge-accent' : 'badge'}>
-                        {s.enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                    <h3 className="card-title">{s.name}</h3>
-                    <p className="text-small text-secondary" style={{ wordBreak: 'break-all' }}>
-                      <span className="badge badge-outline" style={{ marginRight: 'var(--space-2)' }}>
-                        {s.transport}
-                      </span>
-                      {s.transport === 'stdio' ? `${s.command} ${(s.args || []).join(' ')}` : s.url}
-                    </p>
-                    <div className="card-footer">
-                      <Button size="sm" onClick={() => editMcp(s)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          void perform(
-                            async () => {
-                              await window.axon.mcpServerSave({ ...s, enabled: !s.enabled });
-                            },
-                            s.enabled ? 'MCP server disabled' : 'MCP server enabled'
-                          )
-                        }
-                      >
-                        {s.enabled ? 'Disable' : 'Enable'}
-                      </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={Trash2}
-                        iconOnly
-                        aria-label={`Delete ${s.name}`}
-                        onClick={() => {
-                          if (confirm(`Remove MCP server "${s.name}"?`)) {
-                            void perform(() => window.axon.mcpServerDelete(s.id), 'MCP server removed');
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={Server}
-                title="No MCP servers yet"
-                description="Connect Model Context Protocol servers (e.g. GitHub, Postgres, Puppeteer) via stdio command or SSE URL."
-                action={
-                  <Button variant="primary" icon={Plus} onClick={() => editMcp(blankMcp())}>
-                    Add MCP server
-                  </Button>
-                }
-              />
-            )}
-          </>
-        )}
-
-        {tab === 'Appearance' && (
-          <div className="card stack" style={{ maxWidth: 560 }}>
-            <h2>Appearance</h2>
-            <Field label="Theme">
-              <select
-                className="select"
-                value={settings.theme}
-                onChange={(e) =>
-                  void perform(() =>
-                    window.axon.settingsSave({ ...settings, theme: e.target.value as typeof settings.theme })
-                  )
-                }
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">Match system</option>
-              </select>
-            </Field>
-            <OfficeLightingField />
-            <OfficeQualityField />
-            <Field label="Maximum output tokens" hint="256 – 32,768. Applies to new messages.">
-              <input
-                className="input"
-                type="number"
-                min={256}
-                max={128000}
-                value={settings.defaultMaxTokens}
-                onChange={(e) =>
-                  void perform(() =>
-                    window.axon.settingsSave({
-                      ...settings,
-                      defaultMaxTokens: Math.max(256, Math.min(128000, Number(e.target.value) || 4096))
-                    })
-                  )
-                }
-              />
-            </Field>
-            <Field label="Default sampling temperature" hint="0.0 (exact) to 2.0 (creative).">
-              <input
-                className="input"
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                value={settings.defaultTemperature}
-                onChange={(e) =>
-                  void perform(() =>
-                    window.axon.settingsSave({
-                      ...settings,
-                      defaultTemperature: Math.max(0, Math.min(2, Number(e.target.value) || 0.7))
-                    })
-                  )
-                }
-              />
-            </Field>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={settings.autoTitleConversations}
-                onChange={(e) =>
-                  void perform(() =>
-                    window.axon.settingsSave({ ...settings, autoTitleConversations: e.target.checked })
-                  )
-                }
-              />
-              Auto-title new conversations from your first prompt
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={settings.allowShellExecution}
-                onChange={(e) =>
-                  void perform(() =>
-                    window.axon.settingsSave({ ...settings, allowShellExecution: e.target.checked })
-                  )
-                }
-              />
-              Allow shell execution (asks for confirmation in project workspace)
-            </label>
-            <div className="stack" style={{ gap: 'var(--space-2)' }}>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.keepInTray}
-                  onChange={(e) =>
-                    void perform(() =>
-                      window.axon.settingsSave({ ...settings, keepInTray: e.target.checked })
-                    )
-                  }
-                />
-                Keep running in the tray when the window is closed
-              </label>
-              <p className="text-caption">Reminders only arrive while Axon is running.</p>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.startWithWindows}
-                  disabled={!data?.startWithWindowsAvailable}
-                  onChange={(e) =>
-                    void perform(() =>
-                      window.axon.settingsSave({ ...settings, startWithWindows: e.target.checked })
-                    )
-                  }
-                />
-                Start with Windows, in the tray
-              </label>
-              {!data?.startWithWindowsAvailable && (
-                <p className="text-caption">Available in the installed app.</p>
-              )}
-            </div>
-            <div>
-              <h3 className="section-title">Keyboard shortcuts</h3>
-              <div className="stack" style={{ gap: 'var(--space-2)' }}>
-                <div className="row-between text-small">
-                  <span>New conversation</span>
-                  <Kbd keys="Mod N" />
-                </div>
-                <div className="row-between text-small">
-                  <span>Search conversations</span>
-                  <Kbd keys="Mod K" />
-                </div>
-                <div className="row-between text-small">
-                  <span>Settings</span>
-                  <Kbd keys="Mod ," />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'Skills & roles' && (
-          <div className="card stack" style={{ maxWidth: 640 }}>
-            <h2>Skills &amp; roles</h2>
-            <p className="text-small text-secondary">
-              Bundled catalogs authored for Axon. Skills and roles are attached per-workspace or
-              per-conversation and run entirely on the provider you choose.
-            </p>
-            <div>
-              <h3 className="section-title">Skills</h3>
-              <p className="text-caption">
-                {data!.skills.length} skills in {new Set(data!.skills.map((s) => s.category)).size}{' '}
-                categories. Bundled with Axon under open licenses; prompt injection protections apply.
-              </p>
-            </div>
-            <div>
-              <h3 className="section-title">Roles</h3>
-              <p className="text-caption">
-                {data!.roles.length} roles in {new Set(data!.roles.map((r) => r.group)).size} groups, authored
-                for Axon. Roles are bundled with the app.
-              </p>
-            </div>
-            <p className="text-caption">
-              License texts for each source are in <code>src/skills/LICENSES.md</code>.
-            </p>
-          </div>
-        )}
-
-        {tab === 'Security & data' && (
-          <div className="card stack" style={{ maxWidth: 640 }}>
-            <h2>Security &amp; data</h2>
-            <ul className="bullet-list">
-              <li>API keys are encrypted with the operating system key store.</li>
-              <li>
-                Conversations and knowledge are stored locally and are not encrypted. Use full-disk
-                encryption.
-              </li>
-              <li>
-                Messages, attachments, shared editor content and retrieved passages go to your selected
-                provider.
-              </li>
-              <li>
-                No telemetry or third-party tracking. Shell execution is disabled by default and requires
-                explicit confirmation. Background agents run locally on scheduled intervals.
-              </li>
-              <li>
-                Project writes require a native confirmation. Sensitive filenames and symbolic links are
-                blocked.
-              </li>
-            </ul>
-            <div>
-              <h3 className="section-title">Local data directory</h3>
-              <code className="code-path">{data!.dataPath}</code>
-              <p className="text-caption" style={{ marginTop: 'var(--space-2)' }}>
-                Close Axon before backing up this folder. OS-protected keys are not portable. Delete the
-                folder to reset all local data.
-              </p>
-            </div>
-            <div>
-              <h3 className="section-title">Release status</h3>
-              <p className="text-small text-secondary">
-                Local beta. Import only trusted documents. Code signing and a security review are required
-                before public distribution.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {provider && (
-        <Modal
-          title={provider.name || 'Add provider'}
-          onClose={close}
-          onSubmit={saveProvider}
-          submitLabel="Save provider"
-        >
-          {providerError && (
-            <div className="banner-error" style={{ marginBottom: 'var(--space-3)' }} role="alert">
-              <span>{providerError}</span>
-            </div>
-          )}
-          <Field label="Quick setup" hint={presets[selectedTemplate]?.description}>
-            <select
-              className="select"
-              value={selectedTemplate}
-              onChange={(e) => {
-                const choice = e.target.value;
-                setSelectedTemplate(choice);
-                const p = presets[choice];
-                if (p) {
-                  setProvider({
-                    ...provider,
-                    name: choice === 'Custom' ? '' : choice,
-                    kind: p.kind,
-                    baseUrl: p.baseUrl
-                  });
-                  if (!models.trim()) {
-                    setModels(p.placeholder);
-                  }
-                }
-              }}
-            >
-              <option value="" disabled>
-                Choose a template
-              </option>
-              {Object.keys(presets).map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Name">
-            <input
-              className="input"
-              required
-              value={provider.name}
-              onChange={(e) => setProvider({ ...provider, name: e.target.value })}
-            />
-          </Field>
-          <Field label="API protocol">
-            <select
-              className="select"
-              value={provider.kind}
-              onChange={(e) => setProvider({ ...provider, kind: e.target.value as ProviderKind })}
-            >
-              {(Object.keys(protocolLabel) as ProviderKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {protocolLabel[k]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Base endpoint" hint="HTTPS only, except http://localhost for local servers.">
-            <input
-              className="input"
-              required
-              type="url"
-              placeholder="https://your-provider.example/v1"
-              value={provider.baseUrl || ''}
-              onChange={(e) => setProvider({ ...provider, baseUrl: e.target.value })}
-            />
-          </Field>
-          <Field
-            label="API key"
-            hint={provider.hasApiKey ? 'A key is saved. Leave blank to keep it.' : undefined}
-          >
-            <input
-              className="input"
-              type="password"
-              autoComplete="off"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-            />
-          </Field>
-          {provider.hasApiKey && (
-            <div>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() =>
-                  void perform(async () => {
-                    await window.axon.providerSave(provider, '');
-                    setProvider({ ...provider, hasApiKey: false });
-                  })
-                }
-              >
-                Remove saved key
-              </Button>
-            </div>
-          )}
-          <Field label="Model IDs" hint="One per line, exactly as your provider names them.">
-            <textarea
-              className="textarea"
-              required
-              rows={4}
-              placeholder={presets[selectedTemplate]?.placeholder || 'gpt-4o\ngpt-4o-mini'}
-              value={models}
-              onChange={(e) => setModels(e.target.value)}
-            />
-          </Field>
-          <div className="provider-models">
-            <Button size="sm" icon={ListPlus} disabled={finding} onClick={() => void findModels()}>
-              {finding ? 'Finding models…' : 'Find models'}
-            </Button>
-            {shownModels &&
-              (() => {
-                const needle = modelFilter.trim().toLowerCase();
-                const matches = shownModels.models.filter((id) => id.toLowerCase().includes(needle));
-                return (
-                  <>
-                    {shownModels.models.length > 12 && (
-                      <input
-                        className="input"
-                        type="search"
-                        aria-label="Filter models"
-                        placeholder={`Filter ${shownModels.models.length} models`}
-                        value={modelFilter}
-                        onChange={(e) => setModelFilter(e.target.value)}
-                      />
-                    )}
-                    <div className="provider-model-list" role="group" aria-label="Models this key can use">
-                      {matches.slice(0, MODELS_SHOWN).map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className="provider-model"
-                          aria-pressed={chosen.has(id)}
-                          onClick={() => toggleModel(id)}
-                        >
-                          {chosen.has(id) && <Icon icon={Check} size="sm" />}
-                          {id}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-caption">
-                      {shownModels.models.length === 0
-                        ? 'The endpoint lists no models for this key.'
-                        : matches.length > MODELS_SHOWN
-                          ? `Showing ${MODELS_SHOWN} of ${matches.length}. Type to narrow the list; click a model to add it.`
-                          : 'Click a model to add it to the list, or again to take it off.'}
-                      {shownModels.savedKeyWithheld &&
-                        ' Listed without the saved key, because the endpoint changed. Type the key to list with it.'}
-                    </p>
-                  </>
-                );
-              })()}
-          </div>
-          <div className="provider-test">
-            <Button size="sm" icon={PlugZap} disabled={testing} onClick={() => void testConnection()}>
-              {testing ? 'Testing…' : 'Test connection'}
-            </Button>
-            <div aria-live="polite">
-              {shownTest && (
-                <>
-                  <ul className="provider-test-results">
-                    {shownTest.results.map((r) => (
-                      <li key={r.modelId} className={r.ok ? 'is-ok' : 'is-failed'}>
-                        <Icon icon={r.ok ? Check : X} size="sm" />
-                        <code>{r.modelId}</code>
-                        <span>{r.ok ? `${((r.ms ?? 0) / 1000).toFixed(1)} s` : r.error}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {shownTest.savedKeyWithheld && (
-                    <p className="text-caption">
-                      Tested without the saved key, because the endpoint changed. Type the key to test with
-                      it.
-                    </p>
-                  )}
-                  {shownTest.untested > 0 && (
-                    <p className="text-caption">
-                      Tested the first {shownTest.results.length} models; {shownTest.untested} more not
-                      tested.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          <p className="text-caption">
-            Your key and messages are sent to this endpoint. Only connect services you trust.
-          </p>
-        </Modal>
+            }
+          />
+        </div>
       )}
-
-      {mcpServer && (
-        <Modal
-          title={mcpServer.name ? 'Edit MCP server' : 'New MCP server'}
-          onClose={closeMcp}
-          onSubmit={saveMcp}
-          submitLabel="Save server"
+      <SettingsGroup title="Answers">
+        <SettingRow
+          label="Max tokens"
+          id="setting-max-tokens"
+          hint="The longest answer a model may write. Thinking models (Kimi, Qwen, DeepSeek Reasoner) need 16,000 or more."
         >
-          {mcpError && (
-            <div className="banner-error" style={{ marginBottom: 'var(--space-3)' }} role="alert">
-              <span>{mcpError}</span>
+          <NumberSetting
+            id="setting-max-tokens"
+            value={settings.defaultMaxTokens}
+            min={256}
+            max={128000}
+            step={256}
+            onCommit={(defaultMaxTokens) => save({ defaultMaxTokens })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Temperature"
+          hint="Lower is more exact, higher is more varied. Some models fix their own."
+        >
+          <SliderSetting
+            label="Temperature"
+            value={settings.defaultTemperature}
+            min={0}
+            max={2}
+            step={0.1}
+            onCommit={(defaultTemperature) => save({ defaultTemperature })}
+          />
+        </SettingRow>
+        <SettingRow label="Name conversations" hint="Title each new conversation from your first message.">
+          <Switch
+            checked={settings.autoTitleConversations}
+            label="Name conversations"
+            onChange={(autoTitleConversations) => save({ autoTitleConversations })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Tools
+
+function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
+  const servers = useApp((s) => s.data!.mcpServers ?? []);
+  return (
+    <div className="settings-page">
+      <SectionHeader
+        title="Tools (MCP)"
+        description="Model Context Protocol servers give coworkers tools like files, GitHub or a database. Every tool use asks you first."
+        action={
+          <Button variant="primary" icon={Plus} onClick={() => onEdit(blankMcp())}>
+            Add server
+          </Button>
+        }
+      />
+      {servers.length ? (
+        <SettingsGroup title="Servers">
+          {servers.map((s) => (
+            <div className="settings-item" key={s.id}>
+              <span className="preset-mark tint-custom" aria-hidden="true">
+                <Icon icon={Server} size="sm" />
+              </span>
+              <div className="settings-item-main">
+                <div className="settings-item-title">
+                  {s.name}
+                  <span className="badge badge-outline">{s.transport === 'stdio' ? 'Local' : 'Remote'}</span>
+                </div>
+                <div className="settings-item-meta">
+                  {s.transport === 'stdio' ? `${s.command} ${(s.args || []).join(' ')}` : s.url}
+                </div>
+              </div>
+              <div className="settings-item-actions">
+                <Switch
+                  checked={s.enabled}
+                  label={`${s.name} enabled`}
+                  onChange={() =>
+                    void perform(
+                      () => window.axon.mcpServerSave({ ...s, enabled: !s.enabled }),
+                      s.enabled ? `${s.name} turned off` : `${s.name} turned on`
+                    )
+                  }
+                />
+                <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(s)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Trash2}
+                  iconOnly
+                  className="danger-hover"
+                  aria-label={`Remove ${s.name}`}
+                  onClick={() => {
+                    if (confirm(`Remove the MCP server "${s.name}"?`))
+                      void perform(() => window.axon.mcpServerDelete(s.id), 'MCP server removed');
+                  }}
+                />
+              </div>
             </div>
-          )}
-          <Field label="Server name" hint="A short identifier, e.g. github, filesystem, rube">
-            <input
-              className="input"
-              required
-              value={mcpServer.name}
-              onChange={(e) => setMcpServer({ ...mcpServer, name: e.target.value })}
-            />
-          </Field>
-          <Field label="Transport">
-            <select
-              className="select"
-              value={mcpServer.transport}
-              onChange={(e) => setMcpServer({ ...mcpServer, transport: e.target.value as 'stdio' | 'sse' })}
-            >
-              <option value="stdio">Local process (stdio)</option>
-              <option value="sse">Remote HTTP / SSE</option>
-            </select>
-          </Field>
-          {mcpServer.transport === 'stdio' ? (
-            <>
-              <Field label="Command" hint="Executable command, e.g. npx, node, uvx, python">
-                <input
-                  className="input"
-                  required
-                  placeholder="npx"
-                  value={mcpServer.command || ''}
-                  onChange={(e) => setMcpServer({ ...mcpServer, command: e.target.value })}
-                />
-              </Field>
-              <Field label="Arguments" hint="Command arguments separated by spaces">
-                <input
-                  className="input"
-                  placeholder="-y @modelcontextprotocol/server-filesystem D:\my-files"
-                  value={mcpArgs}
-                  onChange={(e) => setMcpArgs(e.target.value)}
-                />
-              </Field>
-              <Field label="Environment variables" hint="KEY=VALUE per line">
-                <textarea
-                  className="textarea"
-                  rows={3}
-                  placeholder={'GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...\nNODE_ENV=production'}
-                  value={mcpEnv}
-                  onChange={(e) => setMcpEnv(e.target.value)}
-                />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="Server URL" hint="SSE endpoint URL">
-                <input
-                  className="input"
-                  required
-                  type="url"
-                  placeholder="http://localhost:8000/sse"
-                  value={mcpServer.url || ''}
-                  onChange={(e) => setMcpServer({ ...mcpServer, url: e.target.value })}
-                />
-              </Field>
-              <Field
-                label="API Key / Bearer token"
-                hint={
-                  mcpServer.hasApiKey
-                    ? 'A key is saved in the OS key store. Leave blank to keep it.'
-                    : 'Optional token sent in Authorization header'
-                }
-              >
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="off"
-                  placeholder="Bearer token or API key"
-                  value={mcpApiKey}
-                  onChange={(e) => setMcpApiKey(e.target.value)}
-                />
-              </Field>
-              <Field label="Custom HTTP headers" hint="Header: Value per line">
-                <textarea
-                  className="textarea"
-                  rows={2}
-                  placeholder={'X-Custom-Auth: secret\nUser-Agent: Axon-Client'}
-                  value={mcpHeaders}
-                  onChange={(e) => setMcpHeaders(e.target.value)}
-                />
-              </Field>
-            </>
-          )}
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={mcpServer.enabled}
-              onChange={(e) => setMcpServer({ ...mcpServer, enabled: e.target.checked })}
-            />
-            <span>Enable this MCP server</span>
-          </label>
-        </Modal>
+          ))}
+        </SettingsGroup>
+      ) : (
+        <div className="settings-card settings-empty">
+          <EmptyState
+            icon={Plug}
+            title="No tools connected"
+            description="Connect an MCP server by the command that starts it (stdio) or by its URL (SSE)."
+            action={
+              <Button variant="primary" icon={Plus} onClick={() => onEdit(blankMcp())}>
+                Add server
+              </Button>
+            }
+          />
+        </div>
       )}
     </div>
   );
 }
 
-/** How sharply the office is drawn; Auto steps down on a slow machine. */
-function OfficeQualityField() {
-  const [mode, setMode] = useState(qualityPreference);
+// ---------------------------------------------------------------- Appearance
+
+const THEMES = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' }
+] as const;
+const QUALITIES = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'high', label: 'High' },
+  { value: 'balanced', label: 'Balanced' }
+] as const;
+
+function AppearanceSection() {
+  const [settings, save] = useSettings();
+  const [followClock, setFollowClock] = useState(followsTimeOfDay);
+  const [quality, setQuality] = useState<QualityMode>(qualityPreference);
   return (
-    <Field
-      label="Office quality"
-      hint="High draws the office sharper, with finer shadows. Auto switches to Balanced if the office runs slowly."
-    >
-      <select
-        className="select"
-        value={mode}
-        onChange={(e) => {
-          const next = e.target.value as QualityMode;
-          setMode(next);
-          setQualityPreference(next);
-        }}
-      >
-        <option value="auto">Auto</option>
-        <option value="high">High</option>
-        <option value="balanced">Balanced</option>
-      </select>
-    </Field>
+    <div className="settings-page">
+      <SectionHeader title="Appearance" description="How Axon and the office look." />
+      <SettingsGroup title="App">
+        <SettingRow label="Theme" hint="System follows your computer's light or dark mode.">
+          <Segmented
+            label="Theme"
+            value={settings.theme}
+            options={THEMES}
+            onChange={(theme) => save({ theme })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="Office">
+        <SettingRow
+          label="Follow the time of day"
+          hint="Morning light, golden evenings and lamps at night, and the office's day: standups, lunch and breaks."
+        >
+          <Switch
+            checked={followClock}
+            label="Follow the time of day"
+            onChange={(on) => {
+              setFollowClock(on);
+              setFollowsTimeOfDay(on);
+            }}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Quality"
+          hint="High draws the office sharper, with finer shadows. Auto switches to Balanced if the office runs slowly."
+        >
+          <Segmented
+            label="Office quality"
+            value={quality}
+            options={QUALITIES}
+            onChange={(mode) => {
+              setQuality(mode);
+              setQualityPreference(mode);
+            }}
+          />
+        </SettingRow>
+      </SettingsGroup>
+    </div>
   );
 }
 
-/** The office follows the clock (golden evenings, lamps on at night) unless switched off here. */
-function OfficeLightingField() {
-  const [on, setOn] = useState(followsTimeOfDay);
+// ---------------------------------------------------------------- System
+
+function SystemSection() {
+  const [settings, save] = useSettings();
+  const startAvailable = useApp((s) => s.data!.startWithWindowsAvailable);
   return (
-    <Field
-      label="Office lighting"
-      hint="Warm mornings, golden evenings and lamps at night, following your clock."
-    >
-      <label className="row" style={{ gap: 'var(--space-2)' }}>
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => {
-            setOn(e.target.checked);
-            setFollowsTimeOfDay(e.target.checked);
-          }}
-        />
-        <span>Follow the time of day</span>
-      </label>
-    </Field>
+    <div className="settings-page">
+      <SectionHeader title="System" description="How Axon runs on this computer." />
+      <SettingsGroup title="Running">
+        <SettingRow
+          label="Keep running in the tray"
+          hint="Closing the window keeps Axon in the tray. Reminders only arrive while Axon is running."
+        >
+          <Switch
+            checked={settings.keepInTray}
+            label="Keep running in the tray"
+            onChange={(keepInTray) => save({ keepInTray })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Start with Windows"
+          hint={startAvailable ? 'Opens in the tray when you sign in.' : 'Available in the installed app.'}
+        >
+          <Switch
+            checked={settings.startWithWindows}
+            disabled={!startAvailable}
+            label="Start with Windows"
+            onChange={(startWithWindows) => save({ startWithWindows })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="Keyboard shortcuts">
+        <SettingRow label="Find a coworker">
+          <Kbd keys="Mod K" />
+        </SettingRow>
+        <SettingRow label="Open settings">
+          <Kbd keys="Mod ," />
+        </SettingRow>
+        <SettingRow label="Close a sheet or dialog">
+          <Kbd keys="Esc" />
+        </SettingRow>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Skills & roles
+
+function SkillsSection() {
+  const skills = useApp((s) => s.data!.skills);
+  const roles = useApp((s) => s.data!.roles);
+  const stats = [
+    {
+      value: skills.length,
+      label: 'skills',
+      detail: `in ${new Set(skills.map((s) => s.category)).size} categories`
+    },
+    { value: roles.length, label: 'roles', detail: `in ${new Set(roles.map((r) => r.group)).size} groups` }
+  ];
+  return (
+    <div className="settings-page">
+      <SectionHeader
+        title="Skills & roles"
+        description="Know-how bundled with Axon. Attach skills and roles to a workspace or a conversation; they run on the model you choose."
+      />
+      <div className="settings-stats">
+        {stats.map((stat) => (
+          <div className="settings-card settings-stat" key={stat.label}>
+            <div className="settings-stat-value">{stat.value.toLocaleString()}</div>
+            <div className="settings-stat-label">
+              {stat.label} <span>{stat.detail}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="settings-footnote">
+        Skills come from open-licensed collections, with prompt-injection protections applied; their licences
+        are listed in src/skills/LICENSES.md. Roles are written for Axon.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Privacy & security
+
+function PrivacySection() {
+  const [settings, save] = useSettings();
+  const dataPath = useApp((s) => s.data!.dataPath);
+  return (
+    <div className="settings-page">
+      <SectionHeader title="Privacy & security" description="What Axon may do, and where your data lives." />
+      <SettingsGroup title="Permissions">
+        <SettingRow
+          label="Allow shell commands"
+          hint="Coworkers may run commands in your project folder. Each command asks you first."
+        >
+          <Switch
+            checked={settings.allowShellExecution}
+            label="Allow shell commands"
+            onChange={(allowShellExecution) => save({ allowShellExecution })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="Your data">
+        <div className="settings-prose">
+          <ul>
+            <li>API keys are encrypted with your system's key store and never shown again.</li>
+            <li>
+              Conversations and your library are stored on this computer, unencrypted: use full-disk
+              encryption to protect them.
+            </li>
+            <li>Messages, attachments and library passages go only to the model provider you choose.</li>
+            <li>No telemetry or tracking. Nothing runs on a schedule.</li>
+            <li>Writing to project files asks you first; sensitive files and symbolic links are blocked.</li>
+          </ul>
+        </div>
+        <SettingRow
+          label="Data folder"
+          hint="Close Axon before backing it up. Saved keys don't move to another computer. Delete the folder to reset Axon."
+          stacked
+        >
+          <div className="settings-path">
+            <span>{dataPath}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={Copy}
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(dataPath)
+                  .then(() => useApp.getState().pushToast('Folder path copied'))
+              }
+            >
+              Copy
+            </Button>
+          </div>
+        </SettingRow>
+      </SettingsGroup>
+      <p className="settings-footnote">Axon is in beta: import only documents you trust.</p>
+    </div>
   );
 }

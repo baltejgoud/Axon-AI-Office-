@@ -4,7 +4,7 @@ import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { Icon } from '../../../ui';
-import { ModelSelect } from '../../../chat/ModelSelect';
+import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
@@ -211,15 +211,14 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             <Icon icon={Paperclip} size="sm" />
           </button>
 
-          <ModelSelect
-            compact
-            size="sm"
+          <ModelPicker
             value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
             disabled={Boolean(conversation) || isBusy}
             title={
               conversation ? 'Start a new conversation to change the model' : 'Model for this conversation'
             }
             onChange={(value) => patch({ model: value })}
+            onManage={() => useOfficeStore.getState().openOverlay('settings')}
           />
 
           <span className="composer-hint">Shift+Enter for a new line</span>
