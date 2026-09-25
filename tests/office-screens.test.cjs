@@ -134,3 +134,65 @@ test('the status strip: working, waiting and error while they last; done for 20 
   assert.equal(apps.stripCode('completed', apps.DONE_FOR + 0.1), 0);
   assert.equal(apps.stripCode('error', 500), 4);
 });
+
+const { PAINTERS, paintSeed } = require('../src/renderer/src/features/office/scene/room/screenPainters.ts');
+const { seeded } = require('../src/renderer/src/features/office/scene/room/kit.ts');
+
+/** Paints an app with a pen that records every shape's bounding box. */
+function record(app, variant) {
+  const shapes = [];
+  const box = (kind, color, x, y, w, h) => shapes.push({ kind, color, x, y, w, h });
+  const pen = {
+    rect: (color, x, y, w, h) => box('rect', color, x, y, w, h),
+    round: (color, x, y, w, h) => box('round', color, x, y, w, h),
+    dot: (color, x, y, r) => box('dot', color, x - r, y - r, r * 2, r * 2),
+    line: (color, width, points) => {
+      const xs = points.map((p) => p[0]);
+      const ys = points.map((p) => p[1]);
+      const pad = width / 2;
+      box(
+        'line',
+        color,
+        Math.min(...xs) - pad,
+        Math.min(...ys) - pad,
+        Math.max(...xs) - Math.min(...xs) + width,
+        Math.max(...ys) - Math.min(...ys) + width
+      );
+    }
+  };
+  PAINTERS[app](pen, seeded(paintSeed(app, variant)), variant);
+  return shapes;
+}
+
+test('every app is painted, inside its tile, the same every time, and its two variants differ', () => {
+  for (const app of apps.SCREEN_APPS) {
+    const [zero, one] = [record(app, 0), record(app, 1)];
+    for (const [variant, shapes] of [
+      [0, zero],
+      [1, one]
+    ]) {
+      assert.ok(shapes.length >= 12, `${app} ${variant} draws ${shapes.length} shapes`);
+      for (const s of shapes)
+        assert.ok(
+          s.x >= -0.5 && s.y >= -0.5 && s.x + s.w <= 256.5 && s.y + s.h <= 160.5,
+          `${app} ${variant}: ${s.kind} at ${s.x.toFixed(1)},${s.y.toFixed(1)} ${s.w.toFixed(1)}x${s.h.toFixed(1)}`
+        );
+    }
+    assert.deepEqual(record(app, 0), zero, `${app} paints the same way twice`);
+    assert.notDeepEqual(zero, one, `${app}'s variants differ`);
+  }
+});
+
+test("nothing small straddles a scroll band's edge, so the wrap is seamless", () => {
+  for (const [app, band] of Object.entries(apps.SCROLL))
+    for (const variant of [0, 1])
+      for (const s of record(app, variant)) {
+        if (s.h > 20 || s.x + s.w <= band.left || s.x >= band.right) continue;
+        const inside = s.y >= band.top - 0.01 && s.y + s.h <= band.bottom + 0.01;
+        const outside = s.y + s.h <= band.top + 0.01 || s.y >= band.bottom - 0.01;
+        assert.ok(
+          inside || outside,
+          `${app} ${variant}: ${s.kind} at y ${s.y.toFixed(1)}+${s.h.toFixed(1)} crosses ${band.top}..${band.bottom}`
+        );
+      }
+});
