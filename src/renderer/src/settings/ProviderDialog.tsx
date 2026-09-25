@@ -154,7 +154,7 @@ const errorText = (err: unknown) =>
 const MODELS_SHOWN = 80;
 
 /** What set-up found out, under the key field. */
-function SetupStatus({ setup, service }: { setup: Setup; service: string }) {
+function SetupStatus({ setup, service, isKeyless }: { setup: Setup; service: string; isKeyless?: boolean }) {
   switch (setup.state) {
     case 'idle':
       return null;
@@ -162,7 +162,11 @@ function SetupStatus({ setup, service }: { setup: Setup; service: string }) {
       return (
         <div className="setup-status span-2" role="status">
           <Icon icon={LoaderCircle} size="sm" className="spin" />
-          <span>Checking your key{service ? ` with ${service}` : ''} and finding its models…</span>
+          <span>
+            {isKeyless
+              ? `Connecting${service ? ` to ${service}` : ''} and finding models…`
+              : `Checking your key${service ? ` with ${service}` : ''} and finding its models…`}
+          </span>
         </div>
       );
     case 'needs-service':
@@ -177,7 +181,7 @@ function SetupStatus({ setup, service }: { setup: Setup; service: string }) {
         <div className="setup-status span-2 is-ready" role="status">
           <Icon icon={CircleCheck} size="sm" />
           <span>
-            Key works. Ready to use: {setup.models.join(', ')}.
+            {isKeyless ? 'Connected.' : 'Key works.'} Ready to use: {setup.models.join(', ')}.
             {setup.movedTo &&
               ` This key belongs to ${new URL(setup.movedTo).host}, so Axon uses that address.`}
           </span>
@@ -313,7 +317,11 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
         );
       }
       if (!next.length)
-        return fail('The key works, but this endpoint lists no chat models. Add a model ID below.');
+        return fail(
+          isLocal(baseUrl)
+            ? 'Connected, but this endpoint lists no chat models. Pull a model in Ollama or add a model ID below.'
+            : 'The key works, but this endpoint lists no chat models. Add a model ID below.'
+        );
       const tested = await window.axon.providerTest({ ...target, baseUrl, models: next.map(spec) }, typed);
       if (run !== runs.current) return null;
       const working = tested.results.filter((r) => r.ok).map((r) => r.modelId);
@@ -471,7 +479,11 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               )}
             </span>
           </label>
-          <SetupStatus setup={setup} service={preset?.name ?? provider.name} />
+          <SetupStatus
+            setup={setup}
+            service={preset?.name ?? provider.name}
+            isKeyless={isLocal(provider.baseUrl)}
+          />
           <label className="field">
             Name
             <input

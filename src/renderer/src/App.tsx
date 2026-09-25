@@ -70,7 +70,10 @@ export function App() {
           if (event.contentSoFar !== undefined) {
             office.setLastResponse(agentId, event.contentSoFar);
           }
-          // Status comes from the task records; the feed keeps its own entries.
+          // Status comes from the task records; the feed keeps its own entries. The receptionist
+          // has no task records, so her run's end frees her here.
+          if (event.done && agentId === RECEPTIONIST_ID)
+            office.setAgentStatus(agentId, event.error ? 'error' : 'idle');
           if (event.done && event.error) {
             office.pushActivity(agentId, {
               type: 'error',

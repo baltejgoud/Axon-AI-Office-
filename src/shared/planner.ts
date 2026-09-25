@@ -38,9 +38,13 @@ export interface LocalTime {
   at: number;
 }
 
-const PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/;
+const PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z)?)?$/;
 
-/** Reads a local date or date and time; anything else, or a date that doesn't exist, is null. */
+/**
+ * Reads a local date or date and time; anything else, or a date that doesn't exist, is null.
+ * Models add seconds and a 'Z' out of habit to the local time they were given, so both are
+ * dropped rather than read as UTC; an explicit offset like '+05:30' is still refused.
+ */
 export function parseLocal(value: string): LocalTime | null {
   const match = PATTERN.exec(value.trim());
   if (!match) return null;

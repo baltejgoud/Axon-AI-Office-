@@ -764,6 +764,9 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor('document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")', 'planner card');
       assert.match(await evaluate('document.querySelector(".planner-card").textContent'), /due Tomorrow/);
       await waitFor(`(${plannerGroup('This week')}).includes('Book the venue')`, 'her to-do in the planner');
+      // She has no task record to say her run ended, so the stream frees her for the next message.
+      await waitFor('document.querySelector(".status-badge.completed")', 'the receptionist shows completed');
+      assert.equal(await evaluate('document.querySelector(".composer-textarea").disabled'), false);
       assert.ok(providerRequest.messages.some((message) => message.role === 'system' && /Now: .* Today is /.test(message.content)));
       await snap('c-reception.png');
       // A reminder fires once, on time, as a notification that leads to her planner.
