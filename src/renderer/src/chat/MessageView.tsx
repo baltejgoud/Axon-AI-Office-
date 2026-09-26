@@ -13,6 +13,34 @@ export function visibleUserText(content: string): string {
   return content.split('\n\n<attachment')[0].split('\n\nFile context: ')[0].split('\n\n<file path=')[0];
 }
 
+/** The standard card for a tool call: its name and state, opening to its arguments and result. */
+export function ToolCallDetails({ call: tc }: { call: ToolCall }) {
+  return (
+    <details className="tool-call-item">
+      <summary className="tool-call-summary">
+        <span className="tool-call-name">
+          <IconTerminal size={14} />
+          <strong>{tc.name}</strong>
+        </span>
+        <span className={`tool-call-status ${tc.error ? 'failed' : tc.result ? 'completed' : 'running'}`}>
+          {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
+        </span>
+      </summary>
+      <div className="tool-call-body">
+        <div className="tool-call-label">Arguments</div>
+        <pre className="tool-call-pre">{tc.arguments}</pre>
+        {tc.result && (
+          <>
+            <div className="tool-call-label">Result</div>
+            <pre className="tool-call-pre scrollable">{tc.result}</pre>
+          </>
+        )}
+        {tc.error && <div className="tool-call-error">{tc.error}</div>}
+      </div>
+    </details>
+  );
+}
+
 /** One message in a thread: meta line, thought, tool calls, markdown body and actions. */
 export function MessageView({
   message: m,
@@ -23,10 +51,16 @@ export function MessageView({
   message: Message;
   authorName?: string;
   actions?: ReactNode;
-  /** A card of its own for some tool calls; return nothing to use the standard one. */
+  /**
+   * A card of its own for some tool calls; return nothing to use the standard one, or false to
+   * leave the call out (it is shown somewhere else).
+   */
   renderToolCall?: (call: ToolCall) => ReactNode;
 }) {
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
+  const calls = (m.toolCalls ?? [])
+    .map((call) => ({ call, custom: renderToolCall?.(call) }))
+    .filter(({ custom }) => custom !== false);
   return (
     <article className={`message ${m.role}${m.streaming ? ' streaming' : ''}`}>
       <div className="message-avatar">
@@ -55,38 +89,15 @@ export function MessageView({
             <div className="thought-content">{m.thought}</div>
           </details>
         )}
-        {m.toolCalls && m.toolCalls.length > 0 && (
+        {calls.length > 0 && (
           <div className="tool-calls">
-            {m.toolCalls.map((tc) => {
-              const custom = renderToolCall?.(tc);
-              if (custom) return <Fragment key={tc.id}>{custom}</Fragment>;
-              return (
-                <details key={tc.id} className="tool-call-item">
-                  <summary className="tool-call-summary">
-                    <span className="tool-call-name">
-                      <IconTerminal size={14} />
-                      <strong>{tc.name}</strong>
-                    </span>
-                    <span
-                      className={`tool-call-status ${tc.error ? 'failed' : tc.result ? 'completed' : 'running'}`}
-                    >
-                      {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
-                    </span>
-                  </summary>
-                  <div className="tool-call-body">
-                    <div className="tool-call-label">Arguments</div>
-                    <pre className="tool-call-pre">{tc.arguments}</pre>
-                    {tc.result && (
-                      <>
-                        <div className="tool-call-label">Result</div>
-                        <pre className="tool-call-pre scrollable">{tc.result}</pre>
-                      </>
-                    )}
-                    {tc.error && <div className="tool-call-error">{tc.error}</div>}
-                  </div>
-                </details>
-              );
-            })}
+            {calls.map(({ call, custom }) =>
+              custom ? (
+                <Fragment key={call.id}>{custom}</Fragment>
+              ) : (
+                <ToolCallDetails key={call.id} call={call} />
+              )
+            )}
           </div>
         )}
         <div className="message-content">

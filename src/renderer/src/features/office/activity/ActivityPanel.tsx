@@ -177,7 +177,8 @@ export function ActivityPanel() {
         <Conversation
           agentName={agent.name}
           conversation={conversation}
-          pendingTask={streaming ? runtime?.currentTask : undefined}
+          pendingTask={streaming || status === 'waiting' ? runtime?.currentTask : undefined}
+          working={streaming || status === 'waiting'}
         />
         {!conversation && !activities.length && !(reception && briefing) && (
           <div className="activity-empty">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { Conversation as Thread, Message, ToolCall } from '../../../../../shared/types';
 import { useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
@@ -6,48 +6,50 @@ import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
 import { PlannerToolCard } from './PlannerToolCard';
 import { isPlannerCall } from '../tasks';
+import { withOutcomes } from './thread';
+import { WorkSummary } from './WorkSummary';
+import { isWorkCall, onlyWork, threadRuns, workOf } from '../workspace/work';
 
-/** Colleagues' answers and the receptionist's planner changes get their own cards in the thread. */
-const officeToolCard = (call: ToolCall) =>
+/**
+ * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
+ * work (files, commands, pages, tools) is summed up once per run instead.
+ */
+const officeToolCard = (call: ToolCall, at: number) =>
   call.name === 'ask_colleague' ? (
     <ColleagueCard call={call} />
   ) : isPlannerCall(call) ? (
     <PlannerToolCard call={call} />
+  ) : isWorkCall(call, at) ? (
+    false
   ) : null;
 
 /** The whole thread with the selected coworker, following new output unless the user scrolled up. */
 export function Conversation({
   agentName,
   conversation,
-  pendingTask
+  pendingTask,
+  working
 }: {
   agentName: string;
   conversation: Thread | undefined;
   /** A task that was just sent; shown until the saved thread includes it. */
   pendingTask?: string;
+  /** The coworker is working on this thread now. */
+  working: boolean;
 }) {
   const allMessages = useApp((s) => s.data?.messages);
   const approvals = useApp((s) => s.pendingApprovals);
-  const messages = useMemo(() => {
-    if (!conversation) return [];
-    const thread = (allMessages ?? []).filter((m) => m.conversationId === conversation.id);
-    // Tool results are shown on the call that asked for them, not as messages of their own.
-    const outcomes = new Map(thread.filter((m) => m.role === 'tool').map((m) => [m.toolCallId, m]));
-    return thread
-      .filter((m) => m.role !== 'system' && m.role !== 'tool')
-      .map((m) =>
-        m.toolCalls?.some((tc) => !tc.result && !tc.error && outcomes.has(tc.id))
-          ? {
-              ...m,
-              toolCalls: m.toolCalls.map((tc) => {
-                const outcome = outcomes.get(tc.id);
-                if (tc.result || tc.error || !outcome) return tc;
-                return outcome.error ? { ...tc, error: outcome.content } : { ...tc, result: outcome.content };
-              })
-            }
-          : m
-      );
-  }, [allMessages, conversation]);
+  // When the current run began: the task you sent goes just before what it produced.
+  const runStartedAt = useApp(
+    (s) => s.data?.tasks.find((t) => t.kind === 'work' && t.conversationId === conversation?.id)?.runStartedAt
+  );
+  const messages = useMemo(
+    () =>
+      conversation
+        ? withOutcomes((allMessages ?? []).filter((m) => m.conversationId === conversation.id))
+        : [],
+    [allMessages, conversation]
+  );
   const shown = useMemo(() => {
     if (!pendingTask) return messages;
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
@@ -59,12 +61,25 @@ export function Conversation({
       content: pendingTask,
       createdAt: Date.now()
     };
-    const streamingAt = messages.findIndex((m) => m.streaming);
-    return streamingAt < 0
-      ? [...messages, optimistic]
-      : [...messages.slice(0, streamingAt), optimistic, ...messages.slice(streamingAt)];
-  }, [messages, pendingTask, conversation?.id]);
+    // The run's replies are dated from its start; without a task record, from the first still streaming.
+    const at = messages.findIndex((m) =>
+      runStartedAt !== undefined ? m.role === 'assistant' && m.createdAt >= runStartedAt : m.streaming
+    );
+    return at < 0 ? [...messages, optimistic] : [...messages.slice(0, at), optimistic, ...messages.slice(at)];
+  }, [messages, pendingTask, conversation?.id, runStartedAt]);
   const pending = Object.values(approvals).filter((r) => r.conversationId === conversation?.id).length;
+  // Each run's work, summed up after its last message.
+  const summaries = useMemo(
+    () =>
+      new Map(
+        threadRuns(shown)
+          .map((run) => [run.end, workOf(run.messages).steps] as const)
+          .filter(([, steps]) => steps.length > 0)
+      ),
+    [shown]
+  );
+  const lastEnd = shown.length - 1;
+  const live = working || pending > 0;
   const end = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
 
@@ -92,9 +107,27 @@ export function Conversation({
       {(shown.length > 0 || pending > 0) && (
         <section className="office-thread" aria-label={`Conversation with ${agentName}`}>
           <div className="messages">
-            {shown.map((m) => (
-              <MessageView key={m.id} message={m} authorName={agentName} renderToolCall={officeToolCard} />
-            ))}
+            {shown.map((m, i) => {
+              const steps = summaries.get(i);
+              return (
+                <Fragment key={m.id}>
+                  {!onlyWork(m) && (
+                    <MessageView
+                      message={m}
+                      authorName={agentName}
+                      renderToolCall={(call) => officeToolCard(call, m.createdAt)}
+                    />
+                  )}
+                  {steps && conversation && (
+                    <WorkSummary
+                      conversationId={conversation.id}
+                      steps={steps}
+                      live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>
         </section>

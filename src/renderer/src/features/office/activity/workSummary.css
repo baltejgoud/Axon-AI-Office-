@@ -1,0 +1,146 @@
+/* One run's work in the side panel: files changed, commands run, what was looked at. */
+.work-summary {
+  margin: 4px 0 14px 38px;
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  background: var(--office-paper);
+  overflow: hidden;
+}
+.work-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  font-size: 12.5px;
+}
+.work-summary-head strong {
+  font-weight: 650;
+}
+.work-summary-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1ca47d;
+  flex: none;
+}
+.work-summary.is-live .work-summary-dot {
+  background: var(--office-blue);
+  animation: office-pulse 1.5s infinite;
+}
+.work-summary-rows {
+  display: grid;
+  /* A long command shortens with an ellipsis rather than widening the card. */
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 6px 4px;
+}
+.office-container .work-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--office-ink);
+  font-size: 12.5px;
+  text-align: left;
+  width: 100%;
+}
+.office-container .work-summary-row:hover {
+  background: var(--office-soft);
+}
+.work-summary-row.is-muted {
+  color: var(--office-muted);
+}
+.work-summary-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--office-muted);
+}
+.work-summary-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.work-summary-name {
+  min-width: 0;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-summary-row.is-muted .work-summary-name {
+  font-weight: 450;
+}
+.work-summary-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--office-muted);
+  font-size: 11.5px;
+  direction: rtl;
+  text-align: left;
+}
+.work-summary-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.work-summary-stat {
+  display: inline-flex;
+  gap: 6px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.work-summary-stat .add {
+  color: #187859;
+}
+.work-summary-stat .del {
+  color: #bb3344;
+}
+.work-summary-state {
+  flex: none;
+  font-size: 11px;
+  color: var(--office-muted);
+}
+.work-summary-state.is-running {
+  color: var(--office-blue);
+}
+.work-summary-state.is-waiting {
+  color: #8e5c08;
+  font-weight: 600;
+}
+.work-summary-state.is-failed {
+  color: #bb3344;
+}
+.work-summary-steps {
+  border-top: 1px solid var(--office-border);
+  padding: 6px 12px 8px;
+  font-size: 11.5px;
+  color: var(--office-muted);
+}
+.work-summary-steps > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.work-summary-steps[open] > summary {
+  margin-bottom: 6px;
+}
+[data-theme='dark'] .work-summary-stat .add {
+  color: #6fd3a8;
+}
+[data-theme='dark'] .work-summary-stat .del,
+[data-theme='dark'] .work-summary-state.is-failed {
+  color: #ff8b98;
+}
+[data-theme='dark'] .work-summary-state.is-waiting {
+  color: #f2c14e;
+}
