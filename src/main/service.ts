@@ -731,6 +731,8 @@ export class Service {
         if (controller.signal.aborted) break;
 
         activeAssistant.streaming = false;
+        // This step is over: the window stops showing its reply as generating.
+        this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, contentSoFar: activeAssistant.content, thoughtSoFar: activeAssistant.thought, streaming: false, done: false });
         activeAssistant = {
           id: this.repo.id(),
           conversationId: id,

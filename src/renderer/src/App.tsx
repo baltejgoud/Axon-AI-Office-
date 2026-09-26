@@ -130,7 +130,7 @@ export function App() {
               role: 'assistant' as const,
               content: event.contentSoFar ?? '',
               thought: event.thoughtSoFar ?? '',
-              streaming: true,
+              streaming: event.streaming ?? true,
               createdAt: Date.now(),
               toolCalls: event.toolCall ? [event.toolCall] : []
             }

@@ -509,3 +509,30 @@ test('an agent with an interval schedule from an older build never runs on its o
   assert.equal(calls, 0, 'no model call');
   assert.equal(repo.state.conversations.length, 0, 'no conversation started');
 });
+
+test('each step of a run stops showing as generating when the next one starts', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    if (++calls === 1) {
+      onChunk('Let me look.');
+      return { toolCalls: [{ id: 't1', name: 'list_files', arguments: '{}' }] };
+    }
+    onChunk('Done.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Look around', []);
+  const replies = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant');
+  assert.equal(replies.length, 2);
+  const first = events.filter((e) => e.channel === 'chat' && e.messageId === replies[0].id);
+  const finished = first.findIndex((e) => e.streaming === false);
+  assert.ok(finished >= 0, 'the first step is marked finished');
+  assert.equal(first[finished].contentSoFar, 'Let me look.');
+  assert.equal(first[finished].done, false, 'the run itself goes on');
+  const second = events.findIndex((e) => e.channel === 'chat' && e.messageId === replies[1].id);
+  assert.ok(events.indexOf(first[finished]) < second, 'before the next step speaks');
+});
