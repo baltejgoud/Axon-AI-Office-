@@ -1,10 +1,10 @@
 import './modelPicker.css';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Lock, Search, Settings2 } from 'lucide-react';
 import { shortModelName } from '../../../shared/models';
 import { useApp } from '../state';
-import { Icon } from '../ui';
+import { IconCaretDown, IconCheck, IconLock, IconSearch, IconSettings } from '../ui';
+import { ModelIcon } from '../settings/ModelIcon';
 
 interface Option {
   value: string;
@@ -164,9 +164,13 @@ export function ModelPicker({
           }
         }}
       >
-        <span className={`model-picker-dot ${current ? 'is-set' : ''}`} aria-hidden="true" />
+        {current ? (
+          <ModelIcon name={current.providerName} size={15} className="model-picker-brand-icon" />
+        ) : (
+          <span className="model-picker-dot" aria-hidden="true" />
+        )}
         <span className="model-picker-label">{label}</span>
-        <Icon icon={disabled ? Lock : ChevronDown} size="sm" className="model-picker-arrow" />
+        {disabled ? <IconLock size={12} className="model-picker-arrow" /> : <IconCaretDown size={11} className="model-picker-arrow" />}
       </button>
       {open &&
         place &&
@@ -180,7 +184,7 @@ export function ModelPicker({
             {options.length > 0 ? (
               <>
                 <label className="model-picker-search">
-                  <Icon icon={Search} size="sm" />
+                  <IconSearch size={14} />
                   <input
                     autoFocus
                     role="combobox"
@@ -201,7 +205,8 @@ export function ModelPicker({
                       <div key={option.value}>
                         {header && (
                           <div className="model-picker-group" role="presentation">
-                            {option.providerName}
+                            <ModelIcon name={option.providerName} size={13} />
+                            <span>{option.providerName}</span>
                           </div>
                         )}
                         <div
@@ -217,7 +222,7 @@ export function ModelPicker({
                           }}
                         >
                           <span className="model-picker-option-name">{option.label}</span>
-                          {option.value === value && <Icon icon={Check} size="sm" />}
+                          {option.value === value && <IconCheck size={13} />}
                         </div>
                       </div>
                     );
@@ -239,7 +244,7 @@ export function ModelPicker({
                 onManage();
               }}
             >
-              <Icon icon={Settings2} size="sm" />
+              <IconSettings size={14} />
               {options.length ? 'Manage models' : 'Connect a model'}
             </button>
           </div>,

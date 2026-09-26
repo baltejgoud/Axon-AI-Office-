@@ -1,16 +1,16 @@
 import './files.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Check,
-  ChevronLeft,
-  FileText,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  HandHelping,
-  Search,
-  X
-} from 'lucide-react';
+  IconCheck,
+  IconChevronLeft,
+  IconFileText,
+  IconFolder,
+  IconFolderOpen,
+  IconFolderPlus,
+  IconHandoff,
+  IconSearch,
+  IconClose
+} from '../../../ui';
 import { districtById } from '../campus/districts';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { useOfficeStore } from '../store/officeStore';
@@ -88,7 +88,7 @@ export function FilesPanel() {
   return (
     <section className="office-files-hub" aria-label="Files room">
       <div className="activity-section-heading">
-        <FolderOpen size={15} />
+        <IconFolderOpen size={15} />
         <h4>Folder wall</h4>
         <span className="activity-session-label">{wall.length ? `${wall.length} folders` : 'Empty'}</span>
       </div>
@@ -100,7 +100,7 @@ export function FilesPanel() {
               disabled={busy}
               onClick={() => void run(async () => show(await window.axon.projectOpen(path)), path)}
             >
-              <Folder size={18} />
+              <IconFolder size={18} />
               <span>{folderName(path)}</span>
             </button>
             <button
@@ -115,7 +115,7 @@ export function FilesPanel() {
                 })
               }
             >
-              <X size={12} />
+              <IconClose size={12} />
             </button>
           </div>
         ))}
@@ -124,7 +124,7 @@ export function FilesPanel() {
           disabled={busy}
           onClick={() => void run(async () => show(await window.axon.projectChoose()))}
         >
-          <FolderPlus size={18} />
+          <IconFolderPlus size={18} />
           <span>{busy ? 'Opening…' : 'Open a folder'}</span>
         </button>
       </div>
@@ -161,7 +161,7 @@ export function FilesPanel() {
                 )
               }
             >
-              <ChevronLeft size={15} />
+              <IconChevronLeft size={15} />
               Parent folder
             </button>
           )}
@@ -171,7 +171,7 @@ export function FilesPanel() {
               if (isDirectory(path))
                 return (
                   <button key={path} className="office-file-entry" onClick={() => setFolder(`${path}/`)}>
-                    <Folder size={15} />
+                    <IconFolder size={15} />
                     <span>{name}</span>
                   </button>
                 );
@@ -184,8 +184,8 @@ export function FilesPanel() {
                   aria-checked={chosen}
                   onClick={() => toggle(path)}
                 >
-                  <span className="office-file-check">{chosen && <Check size={12} />}</span>
-                  <FileText size={15} />
+                  <span className="office-file-check">{chosen && <IconCheck size={12} />}</span>
+                  <IconFileText size={15} />
                   <span>{name}</span>
                 </button>
               );
@@ -200,7 +200,7 @@ export function FilesPanel() {
                 disabled={!picked.length || busy}
                 onClick={() => setPicking(true)}
               >
-                <HandHelping size={15} />
+                <IconHandoff size={15} />
                 Hand to…
               </button>
               {picking && (
@@ -258,7 +258,7 @@ function HandToPicker({ onChoose, onClose }: { onChoose: (agentId: string) => vo
   return (
     <div className="office-hand-picker" ref={root} role="dialog" aria-label="Hand files to">
       <label className="office-department-search">
-        <Search size={15} />
+        <IconSearch size={15} />
         <input
           autoFocus
           aria-label="Find someone to hand the files to"

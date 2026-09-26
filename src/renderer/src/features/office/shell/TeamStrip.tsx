@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react';
+import { IconUsers } from '../../../ui';
 import type { OfficeAgent } from '../data/officeAgents';
 import { AgentPortrait } from '../AgentPortrait';
 import { shortName } from './framing';
@@ -18,7 +18,7 @@ export function TeamStrip({
   return (
     <footer className="office-team-dock" aria-label={`${title} team`}>
       <div className="office-team-caption">
-        <Users size={17} />
+        <IconUsers size={17} />
         <strong>{title}</strong>
         <span>
           {people.length} {people.length === 1 ? 'person' : 'people'}

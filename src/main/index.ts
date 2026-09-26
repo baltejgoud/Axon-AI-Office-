@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, dialog, screen, type Tray } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog, screen, nativeImage, type Tray } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PathService } from './infra/paths';
@@ -12,6 +12,7 @@ import { RECEPTIONIST_ID } from '../shared/coworkers';
 import { afterLastWindow, appUserModelId, loginItem, startedInBackground } from './shell/lifecycle';
 import { showNotice } from './shell/notify';
 import { createTray } from './shell/tray';
+import { WINDOW_ICON } from './shell/icon';
 let window: BrowserWindow | null = null;
 let service: Service;
 let quitting = false;
@@ -31,6 +32,7 @@ function createWindow(): void {
   const saved = loadWindowState(stateFile, screen.getAllDisplays().map(d => d.workArea));
   window = new BrowserWindow({ ...(saved.bounds ?? { width: 1380, height: 900 }), minWidth: 980, minHeight: 680, show: false,
     title: 'Axon — AI Studio', backgroundColor: '#f7f8fa', autoHideMenuBar: true,
+    icon: nativeImage.createFromDataURL(WINDOW_ICON),
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());

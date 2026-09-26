@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent } from 'react';
-import { Map as MapIcon, Minimize2 } from 'lucide-react';
+import { IconMap, IconMinimize } from '../../../ui';
 import { DISTRICTS, type Bounds } from '../campus/districts';
 import { HOME_DESKS, ROOM, poiById } from '../simulation/layout';
 import type { Vec2 } from '../simulation/types';
@@ -60,7 +60,7 @@ export function Minimap({
         title="Show map"
         onClick={() => setAndRemember(false)}
       >
-        <MapIcon size={16} />
+        <IconMap size={16} />
       </button>
     );
 
@@ -136,7 +136,7 @@ export function Minimap({
         title="Hide map"
         onClick={() => setAndRemember(true)}
       >
-        <Minimize2 size={13} />
+        <IconMinimize size={13} />
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGrid, Library, RotateCcw, Scan, Settings, ZoomIn } from 'lucide-react';
+import { IconLayoutGrid, IconBook, IconRotateCcw, IconScan, IconSettings, IconZoomIn } from '../../ui';
 import { OfficeScene, type OfficeView } from './scene/OfficeScene';
 import { loadOfficeModels, officeModelsLoaded } from './scene/room/models';
 import { useOfficeStore } from './store/officeStore';
@@ -249,10 +249,10 @@ export function OfficeCanvas() {
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
           <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
-            <Library size={16} />
+            <IconBook size={16} />
           </button>
           <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
-            <Settings size={16} />
+            <IconSettings size={16} />
           </button>
           <button
             onClick={() => scene.current?.overview()}
@@ -260,7 +260,7 @@ export function OfficeCanvas() {
             aria-label="Whole campus"
             disabled={roster}
           >
-            <Scan size={16} />
+            <IconScan size={16} />
           </button>
           <button
             onClick={() => {
@@ -271,7 +271,7 @@ export function OfficeCanvas() {
             aria-label="Reset view"
             disabled={roster}
           >
-            <RotateCcw size={16} />
+            <IconRotateCcw size={16} />
           </button>
           <button
             onClick={() => {
@@ -281,7 +281,7 @@ export function OfficeCanvas() {
             title={roster ? 'Office view' : 'Team view'}
             aria-label={roster ? 'Office view' : 'Team view'}
           >
-            <LayoutGrid size={16} />
+            <IconLayoutGrid size={16} />
           </button>
         </div>
       </nav>
@@ -353,7 +353,7 @@ export function OfficeCanvas() {
             />
           )}
           <div className="office-map-hint">
-            <ZoomIn size={13} />
+            <IconZoomIn size={13} />
             <span>
               {hovered
                 ? `Select ${OFFICE_AGENTS.find((a) => a.id === hovered)?.name}`

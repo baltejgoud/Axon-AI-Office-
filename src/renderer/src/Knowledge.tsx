@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Library, Plus, Search, Trash2 } from 'lucide-react';
 import { useApp, perform } from './state';
-import { Button, EmptyState } from './ui';
+import { Button, EmptyState, IconBook, IconPlus, IconSearch, IconTrash } from './ui';
 import { syncOfficeLibrary } from './features/office/library';
 
 /** The office library: documents the Library's coworkers can search. Shown in an overlay. */
@@ -26,7 +25,7 @@ export function Knowledge() {
           they use. PDF, DOCX, TXT, Markdown, Excel, CSV and text-based code files · 15 MB per file · no OCR.
           Import only files you trust.
         </p>
-        <Button variant="primary" icon={Plus} disabled={busy} onClick={importDocs}>
+        <Button variant="primary" icon={IconPlus} disabled={busy} onClick={importDocs}>
           {busy ? 'Importing…' : 'Import documents'}
         </Button>
       </div>
@@ -45,7 +44,7 @@ export function Knowledge() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <Button type="submit" icon={Search}>
+        <Button type="submit" icon={IconSearch}>
           Search
         </Button>
       </form>
@@ -75,7 +74,7 @@ export function Knowledge() {
               <Button
                 variant="danger"
                 size="sm"
-                icon={Trash2}
+                icon={IconTrash}
                 iconOnly
                 aria-label={`Remove ${d.name}`}
                 onClick={() => {
@@ -93,11 +92,11 @@ export function Knowledge() {
         </div>
       ) : (
         <EmptyState
-          icon={Library}
+          icon={IconBook}
           title="The shelves are empty"
           description="Import documents and the Library's coworkers can search them for you."
           action={
-            <Button variant="primary" icon={Plus} disabled={busy} onClick={importDocs}>
+            <Button variant="primary" icon={IconPlus} disabled={busy} onClick={importDocs}>
               Import documents
             </Button>
           }

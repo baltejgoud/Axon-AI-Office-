@@ -15,18 +15,26 @@ export const PREFERENCES: Readonly<Record<string, ModelPreference>> = {
   Anthropic: { exact: [], families: [/^claude-opus/, /^claude-sonnet/, /^claude-haiku/] },
   Gemini: { exact: [], families: [/^gemini-[\d.]+-pro$/, /^gemini-[\d.]+-flash$/] },
   DeepSeek: { exact: ['deepseek-chat', 'deepseek-reasoner'], families: [] },
+  Groq: {
+    exact: ['openai/gpt-oss-120b', 'gpt-oss-120b'],
+    families: [/gpt-oss/, /llama-3\.3/]
+  },
+  Cerebras: {
+    exact: ['gpt-oss-120b', 'openai/gpt-oss-120b'],
+    families: [/gpt-oss/, /llama/]
+  },
   Kimi: { exact: ['kimi-k3', 'kimi-k2.6'], families: [/^kimi-k[\d.]+$/] },
   Qwen: {
     exact: ['qwen3.8-max', 'qwen-plus'],
     families: [/^qwen[\d.]*-max$/, /^qwen[\d.]*-plus$/, /^qwen[\d.]*-flash$/]
   },
   OpenRouter: {
-    exact: ['moonshotai/kimi-k3', 'qwen/qwen3.8-max-0902'],
-    families: [/^moonshotai\/kimi-k[\d.]+$/, /^qwen\/qwen[\d.]*-max/, /^deepseek\/deepseek-chat/]
+    exact: ['openai/gpt-oss-120b', 'moonshotai/kimi-k3', 'qwen/qwen3.8-max-0902'],
+    families: [/gpt-oss/, /^moonshotai\/kimi-k[\d.]+$/, /^qwen\/qwen[\d.]*-max/, /^deepseek\/deepseek-chat/]
   },
-  Ollama: { exact: [], families: [] },
+  Ollama: { exact: ['gpt-oss-120b'], families: [/gpt-oss/] },
   'Union Alpha': { exact: [], families: [] },
-  Custom: { exact: [], families: [] }
+  Custom: { exact: ['openai/gpt-oss-120b', 'gpt-oss-120b'], families: [/gpt-oss/] }
 };
 
 /** Models that do not chat: embeddings, speech, images, moderation, rerankers. */
@@ -37,6 +45,8 @@ const MAX_CHOSEN = 3;
 /** Keys whose prefix names their service. Plain `sk-` keys (OpenAI, DeepSeek, Kimi, Qwen) do not. */
 export function serviceFromKey(key: string): string | null {
   const k = key.trim();
+  if (k.startsWith('gsk_')) return 'Groq';
+  if (k.startsWith('csk-')) return 'Cerebras';
   if (k.startsWith('sk-ant-')) return 'Anthropic';
   if (k.startsWith('sk-or-')) return 'OpenRouter';
   if (k.startsWith('AIza')) return 'Gemini';

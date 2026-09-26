@@ -1,9 +1,8 @@
 import { useState, type KeyboardEvent } from 'react';
-import { ArrowUp, FileText, Paperclip, X } from 'lucide-react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
-import { Icon } from '../../../ui';
+import { IconPaperclip, IconSend, IconClose, IconFileText } from '../../../ui';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
@@ -159,10 +158,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <div className="composer-attachments-preview composer-handed" aria-label="Files handed over">
           {handed.map((file) => (
             <span key={file.path} className="composer-attachment-tag handed" title={file.path}>
-              <FileText size={13} />
+              <IconFileText size={13} />
               <span>{file.path.split('/').pop()}</span>
               <button aria-label={`Remove ${file.path}`} onClick={() => removeFile(agentId, file.path)}>
-                <X size={13} />
+                <IconClose size={12} />
               </button>
             </span>
           ))}
@@ -172,7 +171,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <div className="composer-attachments-preview">
           {attachments.map((att) => (
             <span key={att.id} className="composer-attachment-tag">
-              <Icon icon={Paperclip} size="sm" />
+              <IconPaperclip size={13} />
               <span>{att.name}</span>
               <button
                 type="button"
@@ -180,7 +179,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                 aria-label="Remove attachment"
                 onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
               >
-                <Icon icon={X} size="sm" />
+                <IconClose size={12} />
               </button>
             </span>
           ))}
@@ -208,7 +207,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             onClick={handleAttach}
             disabled={isBusy}
           >
-            <Icon icon={Paperclip} size="sm" />
+            <IconPaperclip size={15} />
           </button>
 
           <ModelPicker
@@ -240,7 +239,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
               disabled={!input.trim() || isBusy}
               onClick={() => void handleSend()}
             >
-              <Icon icon={ArrowUp} size="sm" />
+              <IconSend size={15} />
             </button>
           )}
         </div>

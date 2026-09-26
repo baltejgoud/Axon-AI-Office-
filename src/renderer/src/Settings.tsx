@@ -1,23 +1,26 @@
 import './settings/settings.css';
-import { useState, type ReactNode } from 'react';
-import {
-  BookOpen,
-  Copy,
-  KeyRound,
-  Monitor,
-  Palette,
-  Pencil,
-  Plug,
-  Plus,
-  Server,
-  Shield,
-  Sparkles,
-  Trash2,
-  type LucideIcon
-} from 'lucide-react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import type { MCPServerConfig, ProviderConfig, Settings } from '../../shared/types';
 import { useApp, perform } from './state';
-import { Button, EmptyState, Icon, Kbd } from './ui';
+import {
+  Button,
+  EmptyState,
+  Icon,
+  IconBook,
+  IconCompose,
+  IconCopy,
+  IconKey,
+  IconMonitor,
+  IconPalette,
+  IconPlug,
+  IconPlus,
+  IconServer,
+  IconShield,
+  IconSparkle,
+  IconTrash,
+  Kbd,
+  type AppIconProps
+} from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
 import {
   qualityPreference,
@@ -34,15 +37,17 @@ import {
 } from './settings/controls';
 import { ProviderDialog, protocolLabel, tintOf } from './settings/ProviderDialog';
 import { McpDialog } from './settings/McpDialog';
+import { ModelIcon } from './settings/ModelIcon';
+import { ServiceIcon } from './settings/ServiceIcon';
 
 type Section = 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
-const SECTIONS: readonly { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: 'models', label: 'Models', icon: Sparkles },
-  { id: 'tools', label: 'Tools (MCP)', icon: Plug },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'system', label: 'System', icon: Monitor },
-  { id: 'skills', label: 'Skills & roles', icon: BookOpen },
-  { id: 'privacy', label: 'Privacy & security', icon: Shield }
+const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
+  { id: 'models', label: 'Models', icon: IconSparkle },
+  { id: 'tools', label: 'Tools (MCP)', icon: IconPlug },
+  { id: 'appearance', label: 'Appearance', icon: IconPalette },
+  { id: 'system', label: 'System', icon: IconMonitor },
+  { id: 'skills', label: 'Skills & roles', icon: IconBook },
+  { id: 'privacy', label: 'Privacy & security', icon: IconShield }
 ];
 
 const blankProvider = (): ProviderConfig => ({
@@ -150,7 +155,7 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
         title="Models"
         description="Connect the AI services your coworkers think with. Bring your own keys: they stay in your system's key store."
         action={
-          <Button variant="primary" icon={Plus} onClick={() => onEdit(blankProvider())}>
+          <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankProvider())}>
             Add provider
           </Button>
         }
@@ -160,7 +165,7 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
           {providers.map((p) => (
             <div className="settings-item" key={p.id}>
               <span className={`preset-mark tint-${tintOf(p)}`} aria-hidden="true">
-                {p.name.slice(0, 1).toUpperCase()}
+                <ModelIcon name={p.name} size={18} fallback={p.name.slice(0, 1).toUpperCase()} />
               </span>
               <div className="settings-item-main">
                 <div className="settings-item-title">
@@ -185,13 +190,13 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
                     )
                   }
                 />
-                <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(p)}>
+                <Button size="sm" variant="ghost" icon={IconCompose} onClick={() => onEdit(p)}>
                   Edit
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={Trash2}
+                  icon={IconTrash}
                   iconOnly
                   className="danger-hover"
                   aria-label={`Remove ${p.name}`}
@@ -207,11 +212,11 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
       ) : (
         <div className="settings-card settings-empty">
           <EmptyState
-            icon={KeyRound}
+            icon={IconKey}
             title="No models connected yet"
             description="Add Kimi, Qwen, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, a local Ollama, or any OpenAI-compatible service."
             action={
-              <Button variant="primary" icon={Plus} onClick={() => onEdit(blankProvider())}>
+              <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankProvider())}>
                 Add provider
               </Button>
             }
@@ -268,7 +273,7 @@ function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
         title="Tools (MCP)"
         description="Model Context Protocol servers give coworkers tools like files, GitHub or a database. Every tool use asks you first."
         action={
-          <Button variant="primary" icon={Plus} onClick={() => onEdit(blankMcp())}>
+          <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankMcp())}>
             Add server
           </Button>
         }
@@ -278,7 +283,7 @@ function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
           {servers.map((s) => (
             <div className="settings-item" key={s.id}>
               <span className="preset-mark tint-custom" aria-hidden="true">
-                <Icon icon={Server} size="sm" />
+                <ServiceIcon name={s.name} size={16} fallback={<Icon icon={IconServer} size="sm" />} />
               </span>
               <div className="settings-item-main">
                 <div className="settings-item-title">
@@ -300,13 +305,13 @@ function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
                     )
                   }
                 />
-                <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(s)}>
+                <Button size="sm" variant="ghost" icon={IconCompose} onClick={() => onEdit(s)}>
                   Edit
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={Trash2}
+                  icon={IconTrash}
                   iconOnly
                   className="danger-hover"
                   aria-label={`Remove ${s.name}`}
@@ -322,11 +327,11 @@ function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
       ) : (
         <div className="settings-card settings-empty">
           <EmptyState
-            icon={Plug}
+            icon={IconPlug}
             title="No tools connected"
             description="Connect an MCP server by the command that starts it (stdio) or by its URL (SSE)."
             action={
-              <Button variant="primary" icon={Plus} onClick={() => onEdit(blankMcp())}>
+              <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankMcp())}>
                 Add server
               </Button>
             }
@@ -526,7 +531,7 @@ function PrivacySection() {
             <Button
               size="sm"
               variant="ghost"
-              icon={Copy}
+              icon={IconCopy}
               onClick={() =>
                 void navigator.clipboard
                   .writeText(dataPath)

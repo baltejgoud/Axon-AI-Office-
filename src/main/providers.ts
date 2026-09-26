@@ -50,7 +50,7 @@ export function otherRegions(baseUrl: string): string[] {
 }
 
 /** Models that think before they answer, their thinking counted in the output limit. */
-const THINKS = [/kimi-k(2\.[5-9]|[3-9])/i, /thinking/i, /reasoner/i, /deepseek-r1/i, /(^|\/)qwq/i, /(^|\/)o[1-9](-|$)/i, /(^|\/)gpt-5/i];
+const THINKS = [/kimi-k(2\.[5-9]|[3-9])/i, /thinking/i, /reasoner/i, /deepseek-r1/i, /(^|\/)qwq/i, /(^|\/)o[1-9](-|$)/i, /(^|\/)gpt-5/i, /(^|\/)gpt-oss/i];
 /** Room for a thinking model to think and still answer: Kimi asks for 16,000 or more. */
 export const THINKING_MIN_TOKENS = 16384;
 

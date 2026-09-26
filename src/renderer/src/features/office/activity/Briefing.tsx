@@ -1,4 +1,4 @@
-import { AlertCircle, Users } from 'lucide-react';
+import { IconAlertCircle, IconUsers } from '../../../ui';
 import type { Briefing as Brief } from '../../../../../shared/planner';
 import { AgentPortrait } from '../AgentPortrait';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -36,7 +36,7 @@ export function Briefing({ briefing }: { briefing: Brief }) {
       {briefing.overdue.length > 0 && (
         <>
           <h5 className="briefing-overdue">
-            <AlertCircle size={12} /> Overdue
+            <IconAlertCircle size={12} /> Overdue
           </h5>
           <ul>
             {briefing.overdue.map((line) => (
@@ -47,7 +47,7 @@ export function Briefing({ briefing }: { briefing: Brief }) {
       )}
       {briefing.coworkers && (
         <p className="briefing-team">
-          <Users size={12} /> {briefing.coworkers}.
+          <IconUsers size={12} /> {briefing.coworkers}.
         </p>
       )}
       <button className="briefing-dismiss" onClick={dismiss}>

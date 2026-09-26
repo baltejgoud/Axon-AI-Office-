@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { IconSearch, IconClose } from '../../ui';
 import { districtById } from './campus/districts';
 import { OFFICE_AGENTS } from './data/officeAgents';
 import { AgentPortrait } from './AgentPortrait';
@@ -15,7 +15,7 @@ export function OfficeDirectory({ onChoose }: { onChoose: (id: string) => void }
   };
   return (
     <div className="office-find-person">
-      <Search size={16} />
+      <IconSearch size={16} />
       <input
         aria-label="Find a coworker"
         placeholder="Find a person or specialty… (front-end, SRE, business analyst)"
@@ -28,7 +28,7 @@ export function OfficeDirectory({ onChoose }: { onChoose: (id: string) => void }
       />
       {query && (
         <button aria-label="Clear coworker search" onClick={() => setQuery('')}>
-          <X size={15} />
+          <IconClose size={15} />
         </button>
       )}
       {query.trim() && (

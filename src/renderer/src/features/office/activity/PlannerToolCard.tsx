@@ -1,20 +1,21 @@
-import { CalendarCheck, CalendarPlus, ListChecks, PencilLine } from 'lucide-react';
+import type { ComponentType } from 'react';
 import type { ToolCall } from '../../../../../shared/types';
+import { IconCalendar, IconCheck, IconCheckList, IconCompose, type AppIconProps } from '../../../ui';
 import { parsePlannerCall } from '../tasks';
 import { useMinute } from './Planner';
 
-const ICONS: Record<string, typeof CalendarPlus> = {
-  add_task: CalendarPlus,
-  update_task: PencilLine,
-  complete_task: CalendarCheck,
-  list_tasks: ListChecks
+const ICONS: Record<string, ComponentType<AppIconProps>> = {
+  add_task: IconCalendar,
+  update_task: IconCompose,
+  complete_task: IconCheck,
+  list_tasks: IconCheckList
 };
 
 /** What the receptionist just did to the planner, in one line: "Added: Prep the deck — due Fri". */
 export function PlannerToolCard({ call }: { call: ToolCall }) {
   const now = useMinute();
   const info = parsePlannerCall(call, now);
-  const Icon = ICONS[call.name] ?? ListChecks;
+  const Icon = ICONS[call.name] ?? IconCheckList;
   const listing = call.name === 'list_tasks';
   return (
     <div className={`planner-card${info.error ? ' failed' : ''}${info.pending ? ' pending' : ''}`}>

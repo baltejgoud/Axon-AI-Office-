@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bell, CalendarDays, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { IconBell, IconCalendar, IconCaretDown, IconPlus, IconTrash } from '../../../ui';
 import type { TaskItem } from '../../../../../shared/types';
 import { dayKey, dueLabel, groupPlanner, isOverdue, parseLocal } from '../../../../../shared/planner';
 import { useApp } from '../../../state';
@@ -60,7 +60,7 @@ export function Planner() {
   return (
     <section className={`planner${open ? ' open' : ''}`} aria-label="Planner">
       <button className="planner-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <CalendarDays size={15} />
+        <IconCalendar size={15} />
         <h4>Planner</h4>
         <span className="planner-count">
           {todayCount
@@ -69,7 +69,7 @@ export function Planner() {
               ? `${groups.week.length} this week`
               : 'Nothing today'}
         </span>
-        <ChevronDown size={15} className="planner-chevron" />
+        <IconCaretDown size={15} className="planner-chevron" />
       </button>
       {open && (
         <div className="planner-body">
@@ -91,7 +91,7 @@ export function Planner() {
                 onClick={() => setDoneOpen(!doneOpen)}
               >
                 Done <span>{groups.done.length}</span>
-                <ChevronDown size={13} className="planner-chevron" />
+                <IconCaretDown size={13} className="planner-chevron" />
               </button>
               {doneOpen && (
                 <ul>
@@ -121,7 +121,7 @@ function AddRow({ onAdd }: { onAdd: (input: { title: string; due?: string }) => 
   };
   return (
     <form className="planner-add" onSubmit={(event) => void submit(event)}>
-      <Plus size={14} aria-hidden="true" />
+      <IconPlus size={14} aria-hidden="true" />
       <input
         className="planner-add-title"
         placeholder="Add a to-do…"
@@ -223,7 +223,7 @@ function Row({ task, now, run }: { task: TaskItem; now: Date; run: Run }) {
           aria-expanded={dueOpen}
           onClick={() => setDueOpen(!dueOpen)}
         >
-          {reminding && <Bell size={11} aria-label="Reminder set" />}
+          {reminding && <IconBell size={11} aria-label="Reminder set" />}
           {task.due ? dueLabel(task, now) : 'Add date'}
         </button>
         {confirming ? (
@@ -238,7 +238,7 @@ function Row({ task, now, run }: { task: TaskItem; now: Date; run: Run }) {
             aria-label={`Delete “${task.title}”`}
             onClick={() => setConfirming(true)}
           >
-            <Trash2 size={13} />
+            <IconTrash size={13} />
           </button>
         )}
       </div>

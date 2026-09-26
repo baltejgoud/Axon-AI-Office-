@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { Check, X, ArrowLeftRight } from 'lucide-react';
-import { Button } from './index';
+import { Button, IconCheck, IconClose } from './index';
 
 interface DiffLine {
   type: 'keep' | 'del' | 'add';
@@ -79,12 +78,12 @@ export function DiffViewer({
         </div>
         <div className="diff-header-actions">
           {onReject && (
-            <Button size="sm" variant="ghost" icon={X} onClick={onReject}>
+            <Button size="sm" variant="ghost" icon={IconClose} onClick={onReject}>
               Discard
             </Button>
           )}
           {onAccept && (
-            <Button size="sm" variant="primary" icon={Check} onClick={onAccept}>
+            <Button size="sm" variant="primary" icon={IconCheck} onClick={onAccept}>
               Apply Changes
             </Button>
           )}

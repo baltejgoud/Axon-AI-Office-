@@ -1,30 +1,30 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties } from 'react';
 import {
-  BrainCircuit,
-  Briefcase,
-  ChevronDown,
-  Code2,
-  Coffee,
-  Crown,
-  HeartHandshake,
-  Palette,
-  SquareKanban,
-  type LucideIcon
-} from 'lucide-react';
+  IconBrain,
+  IconBriefcase,
+  IconCaretDown,
+  IconCode,
+  IconCoffee,
+  IconCrown,
+  IconHeart,
+  IconPalette,
+  IconKanban,
+  type AppIconProps
+} from '../../../ui';
 import { districtById, type DistrictId } from '../campus/districts';
 import { useEscape } from '../../../ui/escape';
 import { fitChips } from './chipFit';
 import { DISTRICT_ORDER } from './framing';
 
-const ICONS: Record<DistrictId, LucideIcon> = {
-  commons: Coffee,
-  engineering: Code2,
-  'ai-data': BrainCircuit,
-  design: Palette,
-  product: SquareKanban,
-  business: Briefcase,
-  'people-ops': HeartHandshake,
-  leadership: Crown
+const ICONS: Record<DistrictId, ComponentType<AppIconProps>> = {
+  commons: IconCoffee,
+  engineering: IconCode,
+  'ai-data': IconBrain,
+  design: IconPalette,
+  product: IconKanban,
+  business: IconBriefcase,
+  'people-ops': IconHeart,
+  leadership: IconCrown
 };
 /** Space between chips, as in shell.css. */
 const GAP = 4;
@@ -109,7 +109,7 @@ export function DistrictChips({
           <Chip key={id} id={id} active={false} />
         ))}
         <button tabIndex={-1}>
-          More <ChevronDown size={14} />
+          More <IconCaretDown size={14} />
         </button>
       </div>
       {visible.map((id) => (
@@ -128,7 +128,7 @@ export function DistrictChips({
             }
             onClick={() => setOpen(!open)}
           >
-            More <ChevronDown size={14} />
+            More <IconCaretDown size={14} />
           </button>
           {open && (
             <div className="office-chip-menu" role="menu" aria-label="More districts">

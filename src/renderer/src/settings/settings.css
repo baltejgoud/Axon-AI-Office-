@@ -478,6 +478,12 @@
 .tint-qwen {
   --tint: #615ced;
 }
+.tint-groq {
+  --tint: #f55036;
+}
+.tint-cerebras {
+  --tint: #ff6f00;
+}
 .tint-openrouter {
   --tint: #6467f2;
 }

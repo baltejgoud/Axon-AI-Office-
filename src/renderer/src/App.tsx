@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
 import { useApp, perform } from './state';
-import { AxonLogo, Button, ToastStack } from './ui';
+import { AxonLogo, Button, IconClose, ToastStack } from './ui';
 import { OfficePage } from './features/office/OfficePage';
 import { useOfficeStore } from './features/office/store/officeStore';
 import { RECEPTIONIST_ID } from '../../shared/coworkers';
@@ -187,7 +186,7 @@ export function App() {
             <Button
               variant="ghost"
               size="sm"
-              icon={X}
+              icon={IconClose}
               iconOnly
               aria-label="Dismiss error"
               onClick={() => patch({ error: '' })}

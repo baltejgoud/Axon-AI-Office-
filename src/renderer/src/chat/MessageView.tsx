@@ -2,11 +2,10 @@ import { Fragment, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { Copy, Sparkles, User, Wrench } from 'lucide-react';
 import type { Message, ToolCall } from '../../../shared/types';
 import { perform } from '../state';
 import { timeAgo } from '../format';
-import { Button, Icon } from '../ui';
+import { Button, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
 import { CodeBlock } from './CodeBlock';
 
 /** What the user typed, without the attachment and file-context blocks appended for the model. */
@@ -31,7 +30,7 @@ export function MessageView({
   return (
     <article className={`message ${m.role}${m.streaming ? ' streaming' : ''}`}>
       <div className="message-avatar">
-        <Icon icon={m.role === 'user' ? User : Sparkles} size="sm" />
+        {m.role === 'user' ? <IconUser size={15} /> : <IconSparkle size={14} />}
       </div>
       <div className="message-body">
         <div className="message-meta">
@@ -65,7 +64,7 @@ export function MessageView({
                 <details key={tc.id} className="tool-call-item">
                   <summary className="tool-call-summary">
                     <span className="tool-call-name">
-                      <Icon icon={Wrench} size="sm" />
+                      <IconTerminal size={14} />
                       <strong>{tc.name}</strong>
                     </span>
                     <span
@@ -112,7 +111,7 @@ export function MessageView({
               <Button
                 variant="ghost"
                 size="sm"
-                icon={Copy}
+                icon={IconCopy}
                 onClick={() =>
                   void perform(() => navigator.clipboard.writeText(m.content), 'Copied to clipboard')
                 }

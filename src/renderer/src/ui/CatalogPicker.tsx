@@ -1,8 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Lock, X } from 'lucide-react';
 import type { Selection } from '../../../shared/types';
 import { useApp } from '../state';
-import { Icon, Modal } from './index';
+import { Icon, IconClose, IconLock, Modal } from './index';
 
 interface Item {
   id: string;
@@ -250,7 +249,7 @@ export function SelectionChips({
       return (
         <span key={`${kind}:${id}`} className={cls} title={locked ? 'Set by the workspace' : undefined}>
           {label}
-          {locked && <Icon icon={Lock} size="sm" />}
+          {locked && <Icon icon={IconLock} size="sm" />}
         </span>
       );
     return (
@@ -262,7 +261,7 @@ export function SelectionChips({
         onClick={() => onRemove(kind, id)}
       >
         {label}
-        <Icon icon={X} size="sm" />
+        <Icon icon={IconClose} size="sm" />
       </button>
     );
   };

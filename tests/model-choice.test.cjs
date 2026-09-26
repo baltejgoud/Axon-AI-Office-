@@ -1,19 +1,23 @@
 // Setting up a provider from just a key: which service a key is for, and which models to use.
 const ts = require('typescript');
 const fs = require('node:fs');
-require.extensions['.ts'] = (module, file) =>
+const loadTs = (module, file) =>
   module._compile(
     ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, jsx: ts.JsxEmit.React }
     }).outputText,
     file
   );
+require.extensions['.ts'] = loadTs;
+require.extensions['.tsx'] = loadTs;
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const choice = require('../src/renderer/src/settings/modelChoice.ts');
 const { PREFERENCES, chooseModels, serviceFromKey } = choice;
 
 test('keys that name their service pick it; plain sk- keys wait for a choice', () => {
+  assert.equal(serviceFromKey('gsk_abc12345'), 'Groq');
+  assert.equal(serviceFromKey('csk-abc12345'), 'Cerebras');
   assert.equal(serviceFromKey('sk-ant-api03-abc'), 'Anthropic');
   assert.equal(serviceFromKey('AIzaSyD-abc123'), 'Gemini');
   assert.equal(serviceFromKey('sk-or-v1-abc'), 'OpenRouter');
@@ -53,4 +57,26 @@ test('a local Ollama or a custom gateway: whatever chat models it has', () => {
 
 test('models the user chose stay chosen when the key has them', () => {
   assert.deepEqual(chooseModels(['kimi-k3', 'kimi-k2.7-code'], ['kimi-k2.7-code'], PREFERENCES.Kimi), ['kimi-k2.7-code']);
+});
+
+test('normalizeIconKey resolves provider names and models to official icon keys', () => {
+  const { normalizeIconKey } = require('../src/renderer/src/settings/ModelIcon.tsx');
+  assert.equal(normalizeIconKey('OpenAI'), 'openai');
+  assert.equal(normalizeIconKey('gpt-4o'), 'openai');
+  assert.equal(normalizeIconKey('Anthropic'), 'anthropic');
+  assert.equal(normalizeIconKey('Claude 3.7'), 'anthropic');
+  assert.equal(normalizeIconKey('Gemini'), 'gemini');
+  assert.equal(normalizeIconKey('Google Gemini'), 'gemini');
+  assert.equal(normalizeIconKey('DeepSeek'), 'deepseek');
+  assert.equal(normalizeIconKey('Groq'), 'groq');
+  assert.equal(normalizeIconKey('Cerebras'), 'cerebras');
+  assert.equal(normalizeIconKey('Kimi'), 'kimi');
+  assert.equal(normalizeIconKey('Moonshot'), 'kimi');
+  assert.equal(normalizeIconKey('Qwen'), 'qwen');
+  assert.equal(normalizeIconKey('Alibaba Model Studio'), 'qwen');
+  assert.equal(normalizeIconKey('OpenRouter'), 'openrouter');
+  assert.equal(normalizeIconKey('Ollama'), 'ollama');
+  assert.equal(normalizeIconKey('Union Alpha'), 'union');
+  assert.equal(normalizeIconKey('Custom'), 'custom');
+  assert.equal(normalizeIconKey('Unknown'), '');
 });

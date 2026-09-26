@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Check,
-  CircleAlert,
-  CircleCheck,
-  Info,
-  ListPlus,
-  LoaderCircle,
-  PlugZap,
-  Plus,
-  Search,
-  X
-} from 'lucide-react';
 import type { ProviderConfig, ProviderKind } from '../../../shared/types';
 import type { ProviderModelsResult, ProviderTestResult } from '../../../shared/platform';
 import { useApp, perform } from '../state';
-import { Button, Icon, Modal } from '../ui';
+import {
+  Button,
+  Icon,
+  IconAlertCircle,
+  IconCheck,
+  IconCircleCheck,
+  IconClose,
+  IconInfo,
+  IconListPlus,
+  IconLoader,
+  IconPlug,
+  IconPlus,
+  IconSearch,
+  Modal
+} from '../ui';
 import { PREFERENCES, chooseModels, serviceFromKey } from './modelChoice';
+import { ModelIcon } from './ModelIcon';
 
 /** Where set-up from a pasted key stands. */
 type Setup =
@@ -90,11 +93,27 @@ export const PRESETS: readonly Preset[] = [
     tint: 'qwen'
   },
   {
+    name: 'Groq',
+    kind: 'openai-compatible',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'],
+    description: 'Groq high-speed inference. Low-latency inference for GPT-OSS 120B and open-source models.',
+    tint: 'groq'
+  },
+  {
+    name: 'Cerebras',
+    kind: 'openai-compatible',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    models: ['gpt-oss-120b', 'llama3.3-70b'],
+    description: 'Cerebras wafer-scale cloud inference for fast GPT-OSS 120B and Llama.',
+    tint: 'cerebras'
+  },
+  {
     name: 'OpenRouter',
     kind: 'openai-compatible',
     baseUrl: 'https://openrouter.ai/api/v1',
-    models: ['moonshotai/kimi-k3', 'qwen/qwen3.8-max-0902'],
-    description: 'One key for Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.',
+    models: ['openai/gpt-oss-120b', 'moonshotai/kimi-k3', 'qwen/qwen3.8-max-0902'],
+    description: 'One key for GPT-OSS 120B, Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.',
     tint: 'openrouter'
   },
   {
@@ -161,7 +180,7 @@ function SetupStatus({ setup, service, isKeyless }: { setup: Setup; service: str
     case 'checking':
       return (
         <div className="setup-status span-2" role="status">
-          <Icon icon={LoaderCircle} size="sm" className="spin" />
+          <Icon icon={IconLoader} size="sm" className="spin" />
           <span>
             {isKeyless
               ? `Connecting${service ? ` to ${service}` : ''} and finding models…`
@@ -172,14 +191,14 @@ function SetupStatus({ setup, service, isKeyless }: { setup: Setup; service: str
     case 'needs-service':
       return (
         <div className="setup-status span-2" role="status">
-          <Icon icon={Info} size="sm" />
+          <Icon icon={IconInfo} size="sm" />
           <span>Choose the service this key is for, above.</span>
         </div>
       );
     case 'ready':
       return (
         <div className="setup-status span-2 is-ready" role="status">
-          <Icon icon={CircleCheck} size="sm" />
+          <Icon icon={IconCircleCheck} size="sm" />
           <span>
             {isKeyless ? 'Connected.' : 'Key works.'} Ready to use: {setup.models.join(', ')}.
             {setup.movedTo &&
@@ -190,7 +209,7 @@ function SetupStatus({ setup, service, isKeyless }: { setup: Setup; service: str
     case 'failed':
       return (
         <div className="setup-status span-2 is-failed" role="alert">
-          <Icon icon={CircleAlert} size="sm" />
+          <Icon icon={IconAlertCircle} size="sm" />
           <span>{setup.message}</span>
         </div>
       );
@@ -433,7 +452,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               onClick={() => choosePreset(p)}
             >
               <span className={`preset-mark tint-${p.tint}`} aria-hidden="true">
-                {p.name === 'Custom' ? <Icon icon={Plus} size="sm" /> : p.name.slice(0, 1)}
+                <ModelIcon name={p.name} size={18} fallback={p.name === 'Custom' ? <Icon icon={IconPlus} size="sm" /> : p.name.slice(0, 1)} />
               </span>
               <span className="preset-name">{p.name}</span>
             </button>
@@ -528,7 +547,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
       <section className="provider-section">
         <div className="provider-section-head">
           <h3 className="provider-section-title">Models</h3>
-          <Button size="sm" icon={ListPlus} disabled={finding} onClick={() => void findModels()}>
+          <Button size="sm" icon={IconListPlus} disabled={finding} onClick={() => void findModels()}>
             {finding ? 'Finding…' : 'Find models'}
           </Button>
         </div>
@@ -538,7 +557,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               <li key={id} className="model-token">
                 <span>{id}</span>
                 <button type="button" aria-label={`Remove ${id}`} onClick={() => toggleModel(id)}>
-                  <Icon icon={X} size="sm" />
+                  <Icon icon={IconClose} size="sm" />
                 </button>
               </li>
             ))}
@@ -560,7 +579,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               }
             }}
           />
-          <Button icon={Plus} disabled={!newModel.trim()} onClick={() => addModel(newModel)}>
+          <Button icon={IconPlus} disabled={!newModel.trim()} onClick={() => addModel(newModel)}>
             Add
           </Button>
         </div>
@@ -574,7 +593,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               </span>
               {shownModels.models.length > 8 && (
                 <label className="model-search">
-                  <Icon icon={Search} size="sm" />
+                  <Icon icon={IconSearch} size="sm" />
                   <input
                     type="search"
                     aria-label="Search models"
@@ -618,7 +637,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
       <section className="provider-section">
         <div className="provider-section-head">
           <h3 className="provider-section-title">Check</h3>
-          <Button size="sm" icon={PlugZap} disabled={testing} onClick={() => void testConnection()}>
+          <Button size="sm" icon={IconPlug} disabled={testing} onClick={() => void testConnection()}>
             {testing ? 'Testing…' : 'Test connection'}
           </Button>
         </div>
@@ -626,7 +645,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
           <ul className="test-results" aria-live="polite">
             {shownTest.results.map((r) => (
               <li key={r.modelId} className={r.ok ? 'is-ok' : 'is-failed'}>
-                <Icon icon={r.ok ? Check : X} size="sm" />
+                <Icon icon={r.ok ? IconCheck : IconClose} size="sm" />
                 <span className="test-model">{r.modelId}</span>
                 <span className="test-detail">
                   {r.ok ? `answered in ${((r.ms ?? 0) / 1000).toFixed(1)} s` : r.error}

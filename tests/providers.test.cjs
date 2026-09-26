@@ -410,7 +410,7 @@ test('the regions of one service: Moonshot global and China, Alibaba by region; 
 });
 
 test('thinking models get room to think before they answer; others keep the setting', () => {
-  for (const model of ['kimi-k3', 'kimi-k2.6', 'kimi-k2.7-code', 'moonshotai/kimi-k3', 'deepseek-reasoner', 'qwq-plus', 'qwen3-max-thinking', 'o3', 'gpt-5.1'])
+  for (const model of ['kimi-k3', 'kimi-k2.6', 'kimi-k2.7-code', 'moonshotai/kimi-k3', 'deepseek-reasoner', 'qwq-plus', 'qwen3-max-thinking', 'o3', 'gpt-5.1', 'openai/gpt-oss-120b'])
     assert.equal(providers.outputLimit(model, 4096), 16384, model);
   for (const model of ['gpt-4o', 'deepseek-chat', 'qwen-plus', 'claude-sonnet-5', 'kimi-k2-turbo-preview'])
     assert.equal(providers.outputLimit(model, 4096), 4096, model);

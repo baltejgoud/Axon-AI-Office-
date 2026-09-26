@@ -1,21 +1,30 @@
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ButtonHTMLAttributes,
+  type ComponentType,
+  type FormEvent,
+  type ReactNode
+} from 'react';
 import { createPortal } from 'react-dom';
-import { Check, X, type LucideIcon } from 'lucide-react';
 import { useApp } from '../state';
 import { useEscape } from './escape';
+import { IconCheck, IconClose, type AppIconProps } from './AppIcons';
 
 /* ---------- Icon ---------- */
 const iconSizes = { sm: 14, md: 16, lg: 20, xl: 32 } as const;
 export type IconSize = keyof typeof iconSizes;
+export type IconGlyph = ComponentType<AppIconProps>;
 
-/** Lucide icon with a tokenised size. Decorative by default (aria-hidden). */
+/** Icon component with a tokenised size. Decorative by default (aria-hidden). */
 export function Icon({
   icon: Glyph,
   size = 'md',
   label,
   className = ''
 }: {
-  icon: LucideIcon;
+  icon: IconGlyph;
   size?: IconSize;
   label?: string;
   className?: string;
@@ -63,12 +72,12 @@ export function AxonLogo({ size = 20, className = '' }: { size?: number; classNa
 type ButtonBase = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md';
-  icon?: LucideIcon;
+  icon?: IconGlyph;
   block?: boolean;
 };
 type ButtonProps =
   | (ButtonBase & { children: ReactNode; iconOnly?: false })
-  | (ButtonBase & { children?: never; iconOnly: true; 'aria-label': string; icon: LucideIcon });
+  | (ButtonBase & { children?: never; iconOnly: true; 'aria-label': string; icon: IconGlyph });
 
 export function Button({
   variant = 'secondary',
@@ -157,7 +166,7 @@ export function Modal({
             <h2 id={titleId}>{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <Button variant="ghost" size="sm" icon={X} iconOnly aria-label="Close" onClick={onClose} />
+          <Button variant="ghost" size="sm" icon={IconClose} iconOnly aria-label="Close" onClick={onClose} />
         </div>
         <div className="overlay-body">{children}</div>
         <div className="overlay-footer">
@@ -216,7 +225,7 @@ export function ToastStack() {
     <div className="toast-stack" role="status" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className={`toast toast-${t.tone}`} onClick={() => dismissToast(t.id)}>
-          <Icon icon={t.tone === 'error' ? X : Check} size="sm" />
+          <Icon icon={t.tone === 'error' ? IconClose : IconCheck} size="sm" />
           <span>{t.message}</span>
         </div>
       ))}
@@ -232,7 +241,7 @@ export function EmptyState({
   description,
   action
 }: {
-  icon: LucideIcon;
+  icon: ComponentType<AppIconProps>;
   title: string;
   description: string;
   action?: ReactNode;
@@ -248,3 +257,6 @@ export function EmptyState({
     </div>
   );
 }
+
+export * from './AppIcons';
+
