@@ -251,6 +251,8 @@ export interface RunFile {
   added: number;
   removed: number;
   known: boolean;
+  /** The run made it: it did not exist before its first write. */
+  created: boolean;
   /** The latest write to it. */
   step: WorkStep;
 }
@@ -277,9 +279,16 @@ export function runSummary(
   for (const step of steps) {
     if (step.name !== 'write_file') continue;
     const path = stepPath(step);
-    const file = files.get(path) ?? { path, added: 0, removed: 0, known: false, step };
-    file.step = step;
     const change = step.change ?? proposed.get(step.id);
+    const file = files.get(path) ?? {
+      path,
+      added: 0,
+      removed: 0,
+      known: false,
+      created: Boolean(change?.created),
+      step
+    };
+    file.step = step;
     if (change) {
       file.added += change.added;
       file.removed += change.removed;
@@ -330,11 +339,33 @@ export function diffRows(diff: string): DiffRow[] {
 /** Lines added and removed in a diff (an approval preview's, before the write). */
 export function diffStats(diff: string): FileChange {
   const rows = diffRows(diff);
-  return {
-    added: rows.filter((row) => row.kind === 'add').length,
-    removed: rows.filter((row) => row.kind === 'del').length,
-    created: false
-  };
+  const added = rows.filter((row) => row.kind === 'add').length;
+  const removed = rows.filter((row) => row.kind === 'del').length;
+  // A preview of a new file compares it with nothing: "@@ -1,0 +1,n @@" and only added lines.
+  const created =
+    /^@@ -\d+,0 /m.test(diff) && added > 0 && rows.every((row) => row.kind === 'hunk' || row.kind === 'add');
+  return { added, removed, created };
+}
+
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A run's heading in the side panel: "Working on 2 files…" while it runs; after, what it did,
+ * such as "Changed 2 files, ran 1 command" (at most two things, the most telling first).
+ */
+export function runTitle(summary: RunSummary, live: boolean): string {
+  const { files, commands, pages, tools, looked } = summary;
+  if (live) return files.length ? `Working on ${count(files.length, 'file')}…` : 'Working…';
+  const parts = [
+    files.length && `changed ${count(files.length, 'file')}`,
+    commands.length && `ran ${count(commands.length, 'command')}`,
+    pages.length && `viewed ${count(pages.length, 'page')}`,
+    tools.length && `used ${count(tools.length, 'tool')}`
+  ].filter((part): part is string => Boolean(part));
+  const title = parts.length
+    ? parts.slice(0, 2).join(', ')
+    : `looked through ${count(looked.length, 'thing')}`;
+  return title[0].toUpperCase() + title.slice(1);
 }
 
 /** The first changed line, in the new file. */

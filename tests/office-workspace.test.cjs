@@ -251,3 +251,27 @@ test('a thread is cut into runs at your messages; replies that are only work are
   assert.equal(work.onlyWork(asking), false, 'a colleague’s answer keeps its own card');
   assert.equal(work.isWorkCall(call('z', 'write_file', { path: 'a' }), 1), true);
 });
+
+test('a run’s title says what it did, the most telling first', () => {
+  const steps = (...calls) => work.workOf([assistant(...calls)]).steps;
+  const summary = (s) => work.runSummary(s);
+  const write = call('w', 'write_file', { path: 'a.ts', content: 'x' }, { result: 'ok', change: { added: 1, removed: 0, created: true } });
+  const run = call('r', 'run_command', { command: 'npm test' }, { result: 'ok' });
+  const page = call('p', 'mcp_pw_browser_navigate', { url: 'http://localhost:5173' }, { result: 'ok' });
+  const read = call('d', 'read_file', { path: 'a.ts' }, { result: '1: x' });
+  assert.equal(work.runTitle(summary(steps(write, run, page)), false), 'Changed 1 file, ran 1 command');
+  assert.equal(work.runTitle(summary(steps(run, page)), false), 'Ran 1 command, viewed 1 page');
+  assert.equal(work.runTitle(summary(steps(read)), false), 'Looked through 1 thing');
+  assert.equal(work.runTitle(summary(steps(write, run)), true), 'Working on 1 file…');
+  assert.equal(work.runTitle(summary(steps(run)), true), 'Working…');
+});
+
+test('a file the run made is known as new, from its saved change or its proposal', () => {
+  const saved = work.runSummary(
+    work.workOf([assistant(call('w', 'write_file', { path: 'a.ts', content: 'x' }, { result: 'ok', change: { added: 1, removed: 0, created: true } }))]).steps
+  );
+  assert.equal(saved.files[0].created, true);
+  const proposal = work.diffStats('--- a/b.ts\n+++ b/b.ts\n@@ -1,0 +1,2 @@\n+one\n+two');
+  assert.deepEqual(proposal, { added: 2, removed: 0, created: true });
+  assert.equal(work.diffStats('--- a/b.ts\n+++ b/b.ts\n@@ -1,1 +1,2 @@\n one\n+two').created, false);
+});

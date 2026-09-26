@@ -252,9 +252,9 @@ app.on('web-contents-created', (_, contents) => {
       check('older work does not open the surface by itself', full(g), `${g.office} of ${g.ws[1]}`);
       check('the office offers to show their work', (await evaluate(`document.querySelector('[aria-label="Work surface"]')?.getAttribute('aria-pressed')`)) === 'false');
       // The side panel sums up the run instead of listing its tool calls.
-      check('the run is summed up in the side panel', (await text('.work-summary-head')) === 'Changed 2 files', await text('.work-summary-head'));
+      check('the run is summed up in the side panel', (await text('.work-summary-head')) === 'Changed 2 files, ran 1 command', await text('.work-summary-head'));
       const rows = await evaluate(`[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent)`);
-      check('files show lines added and removed', rows.some((r) => /TaskFilters\.tsx.*\+2\d−0.*Saved/.test(r)) && rows.some((r) => /TaskList\.tsx.*\+2−1.*Saved/.test(r)), rows.join(' | '));
+      check('files show lines added and removed, and which are new', rows.some((r) => /TaskFilters\.tsx.*\+2\dnew.*Saved/.test(r)) && rows.some((r) => /TaskList\.tsx.*\+2−1.*Saved/.test(r)), rows.join(' | '));
       check('commands and what was looked at have rows', rows.some((r) => /npm test -- TaskFilters.*Done/.test(r)) && rows.some((r) => /Read 2 files · 1 search · 1 listing/.test(r)), rows.join(' | '));
       check('raw tool calls are not listed in the thread', (await evaluate(`document.querySelectorAll('.office-thread .message .tool-call-item').length`)) === 0);
       await snap('1-summary.png');
@@ -321,7 +321,7 @@ app.on('web-contents-created', (_, contents) => {
       await drag(mid(), yFor(0.55), Math.round(g.divider[2]));
       g = await geometry();
       const kept = g.officeShare;
-      check('the tight office keeps a wordmark and its team', g.size?.includes('tight') ? (await evaluate(`getComputedStyle(document.querySelector('.office-stage-mark')).display`)) === 'block' : true, g.size);
+      check('the tight office keeps a wordmark and its team', g.size?.includes('tight') ? (await evaluate(`getComputedStyle(document.querySelector('.office-directory-mark')).display`)) === 'block' : true, g.size);
 
       // Frame rate while dragging the divider back and forth, against idle just before and after.
       // The office settles its quality for a few seconds after it changes size, so wait that out.
@@ -368,6 +368,7 @@ app.on('web-contents-created', (_, contents) => {
       await choosePerson('Backend Developer');
       g = await geometry();
       check('older work of another coworker waits too', full(g));
+      check('a mixed run says what it did', (await text('.work-summary-head')) === 'Ran 1 command, viewed 1 page', await text('.work-summary-head'));
       await click('[aria-label="Work surface"]');
       await pause(500);
       g = await geometry();
@@ -377,6 +378,16 @@ app.on('web-contents-created', (_, contents) => {
       await pause(450);
       g = await geometry();
       check('closing gives the office the height again', full(g), `open ${g.open}, office ${Math.round(g.office)} of ${Math.round(g.ws[1])}`);
+      // Ctrl+J shows and hides it.
+      const ctrl = async (keyCode) => {
+        contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] });
+        contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control'] });
+        await pause(450);
+      };
+      await ctrl('J');
+      check('Ctrl+J shows their work', (await geometry()).open);
+      await ctrl('J');
+      check('and hides it again', full(await geometry()));
 
       // A live run: they propose a change, you approve it on the surface; then a command, run from there.
       await evaluate('window.axon.projectChoose()');
@@ -401,7 +412,13 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor(`document.querySelector('.activity-agent-meta h3').textContent === 'Backend Developer' && document.querySelector('.work-file-path .work-approve')`, 'back at the proposal');
       await pause(600);
       check('the pill takes you back to the step that waits', (await geometry()).open);
-      await click('.work-file-path .work-approve');
+      check('you can always allow it, and see what that covers', (await evaluate(`document.querySelector('.work-file-path .work-always')?.title`)) === 'Save files without asking again this session');
+      // Ctrl+Enter approves, but not while you are typing.
+      await evaluate(`document.querySelector('.activity-composer textarea').focus()`);
+      await ctrl('Return');
+      check('Ctrl+Enter in a text box leaves the approval alone', Boolean(await evaluate(`document.querySelector('.work-file-path .work-approve')`)));
+      await evaluate('document.activeElement.blur()');
+      await ctrl('Return');
       await waitFor(`document.querySelector('.work-term-note .work-approve')`, 'the command waiting on the surface');
       await pause(1000);
       g = await geometry();
@@ -414,7 +431,7 @@ app.on('web-contents-created', (_, contents) => {
       check('only the current step shows as generating', (await evaluate(`document.querySelectorAll('.office-thread .message-status').length`)) <= 1);
       await snap('8-running.png');
       await waitFor(`/line 5/.test(document.querySelector('.work-terminal').textContent) && !document.querySelector('.work-term-cursor')`, 'the command to finish');
-      await waitFor(`document.querySelector('.work-summary:last-of-type .work-summary-head')?.textContent === 'Changed 1 file'`, 'the run summed up');
+      await waitFor(`document.querySelector('.work-summary:last-of-type .work-summary-head')?.textContent === 'Changed 1 file, ran 1 command'`, 'the run summed up');
       const done = await evaluate(`[...document.querySelectorAll('.work-summary')].at(-1).textContent`);
       check('the run is summed up when it ends', /todo\.md.*\+2−1.*Saved/.test(done) && /node -e.*Done/.test(done), done);
       g = await geometry();

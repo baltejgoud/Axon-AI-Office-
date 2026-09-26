@@ -10,6 +10,7 @@ import {
   diffStats,
   pageAddress,
   runSummary,
+  runTitle,
   stepPath,
   toolLabel,
   type WorkStep
@@ -55,19 +56,7 @@ export function WorkSummary({
           : { label: done, tone: 'done' };
 
   const { files, commands, looked, pages, tools } = summary;
-  const title = live
-    ? files.length
-      ? `Working on ${plural(files.length, 'file')}…`
-      : 'Working…'
-    : files.length
-      ? `Changed ${plural(files.length, 'file')}`
-      : commands.length
-        ? `Ran ${plural(commands.length, 'command')}`
-        : pages.length
-          ? `Browsed ${plural(pages.length, 'page')}`
-          : tools.length
-            ? `Used ${plural(tools.length, 'tool')}`
-            : `Looked through ${plural(looked.length, 'thing')}`;
+  const title = runTitle(summary, live);
   const reads = looked.filter((s) => s.name === 'read_file');
   const searches = looked.filter((s) => s.name === 'search_code');
   const listings = looked.filter((s) => s.name === 'list_files');
@@ -102,7 +91,11 @@ export function WorkSummary({
               {file.known && (
                 <span className="work-summary-stat">
                   <span className="add">+{file.added}</span>
-                  <span className="del">−{file.removed}</span>
+                  {file.created ? (
+                    <span className="new">new</span>
+                  ) : (
+                    <span className="del">−{file.removed}</span>
+                  )}
                 </span>
               )}
             </Row>

@@ -16,6 +16,7 @@ import {
   baseName,
   commandLine,
   diffRows,
+  diffStats,
   fileTree,
   firstChange,
   languageOf,
@@ -205,13 +206,25 @@ function FileBar({
         : null;
   const added = rows?.filter((row) => row.kind === 'add').length ?? 0;
   const removed = rows?.filter((row) => row.kind === 'del').length ?? 0;
+  // A new file: what it adds is all there is to it.
+  const created =
+    request?.preview?.type === 'diff'
+      ? diffStats(request.preview.content).created
+      : Boolean(file.written?.change?.created);
   return (
     <div className={`work-file-path is-${request ? 'waiting' : step.state}`}>
       <span className="work-file-name">{file.path}</span>
       {rows && rows.length > 0 && (
-        <span className="work-stat" aria-label={`${added} lines added, ${removed} removed`}>
+        <span
+          className="work-stat"
+          aria-label={created ? `a new file of ${added} lines` : `${added} lines added, ${removed} removed`}
+        >
           <span className="work-stat-add">+{added}</span>
-          <span className="work-stat-del">−{removed}</span>
+          {created ? (
+            <span className="work-stat-new">new file</span>
+          ) : (
+            <span className="work-stat-del">−{removed}</span>
+          )}
         </span>
       )}
       {note && <span className="work-file-note">{note}</span>}
@@ -234,17 +247,35 @@ function FileBar({
 
 /** Reject and approve, for a step waiting on you (the same answer as the card in the thread). */
 function Decision({ request, approve }: { request: ToolApprovalRequest; approve: string }) {
+  // For a command, "always" covers that exact command; for anything else, the tool itself.
+  const always = EXACT_GRANTS.has(request.toolName)
+    ? 'Run this exact command without asking again this session'
+    : request.toolName === 'write_file'
+      ? 'Save files without asking again this session'
+      : `Use ${toolLabel(request.toolName)} without asking again this session`;
   return (
     <span className="work-decision">
+      <button className="work-always" onClick={() => decideApproval(request, true, true)} title={always}>
+        Always allow
+      </button>
       <button className="work-reject" onClick={() => decideApproval(request, false)}>
         Reject
       </button>
-      <button className="work-approve" onClick={() => decideApproval(request, true)}>
+      <button
+        className="work-approve"
+        onClick={() => decideApproval(request, true)}
+        title={`${approve} (${SHORTCUT_KEY}+Enter)`}
+      >
         {approve}
       </button>
     </span>
   );
 }
+
+/** The key the office's shortcuts use: ⌘ on a Mac, Ctrl elsewhere. */
+export const SHORTCUT_KEY = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
+/** Commands whose "always allow" covers only the exact call (as in the main process's permissions). */
+const EXACT_GRANTS = new Set(['run_command', 'git_commit']);
 
 function FileTree({
   nodes,

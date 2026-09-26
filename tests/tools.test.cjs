@@ -293,14 +293,15 @@ test('run_command tells the window its output while it runs; the answer is the w
     const project = new Project();
     await project.choose(dir);
     const seen = [];
-    const script = "let i=0;const t=setInterval(()=>{console.log('line '+i);if(++i===4)clearInterval(t)},200)";
+    // Six lines 300 ms apart: plenty of room for the first update even on a busy machine.
+    const script = "let i=0;const t=setInterval(()=>{console.log('line '+i);if(++i===6)clearInterval(t)},300)";
     const result = await new ToolRegistry()
       .get('run_command')
       .execute({ command: `node -e "${script}"` }, { project, allowShell: true, onOutput: (soFar) => seen.push(soFar) });
     assert.ok(!result.isError, result.content);
-    assert.match(result.content, /line 0[\s\S]*line 3/);
-    assert.ok(seen.length >= 2, `output arrived ${seen.length} times`);
-    assert.ok(seen.some((soFar) => soFar.includes('line 0') && !soFar.includes('line 3')), 'some output came before the end');
+    assert.match(result.content, /line 0[\s\S]*line 5/);
+    assert.ok(seen.length >= 1, 'output arrived while it ran');
+    assert.ok(seen[0].includes('line 0') && !seen[0].includes('line 5'), `the first update came before the end: ${seen[0]}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

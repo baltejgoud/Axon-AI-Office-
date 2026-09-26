@@ -23,6 +23,7 @@ import { Minimap } from './shell/Minimap';
 import { SceneLabels, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
 import { WaitingPill } from './shell/WaitingPill';
+import { SHORTCUT_KEY } from './workspace/WorkViews';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
@@ -262,6 +263,10 @@ export function OfficeCanvas({
       </header>
 
       <div className="office-directory">
+        {/* Shown only when the office is short and its heading steps aside (workspace.css). */}
+        <span className="office-directory-mark" aria-hidden="true">
+          Axon<span>.</span>
+        </span>
         <DepartmentMenu current={focusDepartment} onChoose={chooseFromMenu} />
         <OfficeDirectory onChoose={chooseAgent} />
       </div>
@@ -274,7 +279,7 @@ export function OfficeCanvas({
             <button
               onClick={work.toggle}
               className={work.open ? 'active' : ''}
-              title={work.open ? 'Hide their work' : 'Show their work'}
+              title={`${work.open ? 'Hide' : 'Show'} their work (${SHORTCUT_KEY}+J)`}
               aria-label="Work surface"
               aria-pressed={work.open}
             >
@@ -369,10 +374,6 @@ export function OfficeCanvas({
               Opening your office…
             </div>
           )}
-          {/* Shown only when the office is short and its heading steps aside (workspace.css). */}
-          <span className="office-stage-mark" aria-hidden="true">
-            Axon<span>.</span>
-          </span>
           <SceneLabels
             ref={labels}
             tier={tier}

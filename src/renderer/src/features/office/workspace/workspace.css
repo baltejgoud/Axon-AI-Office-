@@ -75,7 +75,7 @@
   display: none;
 }
 /* The heading steps aside; a small wordmark stays on the floor, and the strip keeps its faces. */
-.office-workspace[data-office-size~='tight'] .office-stage-mark {
+.office-workspace[data-office-size~='tight'] .office-directory-mark {
   display: block;
 }
 .office-workspace[data-office-size~='tight'] .office-team-dock {
@@ -101,27 +101,19 @@
   display: none;
 }
 
-.office-stage-mark {
+.office-directory-mark {
   display: none;
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  z-index: 4;
-  padding: 3px 10px 4px;
-  border-radius: 10px;
-  background: #ffffffd9;
-  box-shadow: 0 4px 14px #223d7014;
-  font-size: 15px;
+  flex: none;
+  align-self: center;
+  margin: 0 6px 0 4px;
+  font-size: 22px;
   font-weight: 650;
-  letter-spacing: -0.5px;
+  letter-spacing: -1px;
+  line-height: 1;
   color: var(--office-ink);
-  pointer-events: none;
 }
-.office-stage-mark span {
+.office-directory-mark span {
   color: var(--office-blue);
-}
-[data-theme='dark'] .office-stage-mark {
-  background: #172239e0;
 }
 
 /* ---------- Divider ---------- */
@@ -550,6 +542,27 @@
 }
 .office-container .work-approve:hover {
   background: #2d5be8;
+}
+/* "Always allow": a quiet text button, so Approve stays the obvious choice. */
+.office-container .work-always {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--work-code-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+.office-container .work-always:hover {
+  color: #d6deec;
+  text-decoration: underline;
+}
+.work-muted .work-always {
+  color: var(--office-muted);
+}
+.work-stat-new {
+  color: #6fd3a8;
+  font-family: var(--font-sans);
 }
 .work-file-path.is-waiting .work-file-note {
   color: #f2c14e;

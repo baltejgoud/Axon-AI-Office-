@@ -26,6 +26,7 @@ import {
   TerminalView,
   ToolsView,
   baseName,
+  SHORTCUT_KEY,
   useSettled,
   type Requests
 } from './WorkViews';
@@ -133,7 +134,7 @@ export function WorkSurface({
           className="work-close"
           onClick={onClose}
           aria-label="Close the work surface"
-          title="Close · the office takes the full height again"
+          title={`Close (${SHORTCUT_KEY}+J) · the office takes the full height again`}
         >
           <IconClose size={14} />
         </button>

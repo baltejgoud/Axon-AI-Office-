@@ -14,6 +14,12 @@ import { OFFICE_AGENTS } from '../data/officeAgents';
 import { OfficeCanvas } from '../OfficeCanvas';
 import { activeThread, withOutcomes } from '../activity/thread';
 import { WorkSurface } from './WorkSurface';
+import { decideApproval } from '../../../chat/PendingApprovals';
+
+/** Focus is in something you type into. */
+const typing = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 import {
   DEFAULT_WORK_SPLIT,
   MAX_OFFICE_SHARE,
@@ -134,6 +140,29 @@ export function OfficeWorkspace() {
       useOfficeStore.getState().setWorkChoice(conversation.id, true, run);
     // Only a new request opens it; the run moving on doesn't.
   }, [focus]);
+
+  // Ctrl+J shows or hides their work. Ctrl+Enter approves the step the surface shows waiting, when
+  // you aren't typing (a text box keeps Ctrl+Enter for itself, as the commit message does).
+  const keys = useRef<(event: globalThis.KeyboardEvent) => void>(() => {});
+  keys.current = (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+    if (event.key.toLowerCase() === 'j' && conversation && work.latest) {
+      event.preventDefault();
+      setWork(!open);
+    } else if (event.key === 'Enter' && open && !typing(event.target)) {
+      const ids = new Set(work.steps.map((step) => step.id));
+      const waiting = Object.values(approvals).filter((r) => ids.has(r.toolCallId));
+      const request = waiting.find((r) => r.toolCallId === work.latest?.id) ?? waiting[0];
+      if (!request) return;
+      event.preventDefault();
+      decideApproval(request, true);
+    }
+  };
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => keys.current(event);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   /** The office's share for a pointer at `y`, keeping the grab point under the pointer. */
   const drag = useRef<{ offset: number; share: number } | null>(null);
