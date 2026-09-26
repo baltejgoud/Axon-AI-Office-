@@ -1,5 +1,6 @@
 import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget } from './types';
 import type { Briefing } from './planner';
+import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -99,6 +100,35 @@ export interface PlatformAPI {
   taskDelete(id: string): Promise<void>;
   /** Called once when a window opens: the day's briefing (once a day) and where to look first. */
   officeStart(): Promise<{ briefing: Briefing | null; focus: FocusTarget | null }>;
+  /** Who is signed in, which sign-ins this build offers, and the installed Git. */
+  accountsGet(): Promise<AccountsState>;
+  /** Opens github.com/login/device and returns the code to type there. */
+  githubSignInStart(): Promise<DeviceCode>;
+  /** Resolves once the code is approved on github.com. */
+  githubSignInFinish(): Promise<AccountProfile>;
+  githubSignInCancel(): Promise<void>;
+  githubSignOut(): Promise<void>;
+  /** Opens Google's sign-in in the browser; resolves when it returns to Axon. */
+  googleSignIn(): Promise<AccountProfile>;
+  googleSignInCancel(): Promise<void>;
+  googleSignOut(): Promise<void>;
+  githubRepos(): Promise<RepoSummary[]>;
+  /** Looks for Git again (after installing it). */
+  gitCheck(): Promise<string | null>;
+  scmStatus(): Promise<ScmStatus>;
+  scmDiff(path: string): Promise<ScmDiff>;
+  scmStage(paths: string[]): Promise<void>;
+  scmUnstage(paths: string[]): Promise<void>;
+  scmCommit(message: string): Promise<{ authorSet: boolean }>;
+  scmSync(): Promise<void>;
+  scmBranches(): Promise<{ current: string | null; local: string[]; remote: string[] }>;
+  scmCheckout(name: string): Promise<void>;
+  scmCreateBranch(name: string): Promise<void>;
+  /** Asks where to put the clone; the opened folder, or null when cancelled. */
+  scmClone(repo: string): Promise<string | null>;
+  /** The new repository's page on GitHub. */
+  scmPublish(input: PublishInput): Promise<string>;
+  openLink(url: string): Promise<void>;
   onStream(callback: (event: StreamEvent) => void): () => void;
 }
 declare global { interface Window { axon: PlatformAPI } }

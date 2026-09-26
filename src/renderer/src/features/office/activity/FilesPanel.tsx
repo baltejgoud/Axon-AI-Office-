@@ -9,7 +9,8 @@ import {
   IconFolderPlus,
   IconHandoff,
   IconSearch,
-  IconClose
+  IconClose,
+  IconDownload
 } from '../../../ui';
 import { districtById } from '../campus/districts';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -19,6 +20,9 @@ import { AgentPortrait } from '../AgentPortrait';
 import { useApp } from '../../../state';
 import { useEscape } from '../../../ui/escape';
 import type { HandedFile } from './fileContext';
+import { SourceControl } from './SourceControl';
+import { CloneDialog } from './CloneDialog';
+import { useAccounts } from '../../../accounts';
 
 /** Most files handed over at once; the message box holds five. */
 const MAX_FILES = 5;
@@ -37,11 +41,16 @@ export function FilesPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; folder?: string } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const refreshWall = async () => setWall(await window.axon.projectRecent());
   useEffect(() => {
     void refreshWall();
+    void useAccounts.getState().refresh();
   }, []);
+  /** A pull or a branch switch changes what's in the folder. */
+  const reloadFiles = async () =>
+    setFiles((await window.axon.projectList()).map((file) => file.replaceAll('\\', '/')));
 
   const show = async (chosen: string | null) => {
     if (!chosen) return;
@@ -126,6 +135,14 @@ export function FilesPanel() {
         >
           <IconFolderPlus size={18} />
           <span>{busy ? 'Opening…' : 'Open a folder'}</span>
+        </button>
+        <button
+          className="office-folder-cabinet add office-file-open office-clone-open"
+          disabled={busy}
+          onClick={() => setCloning(true)}
+        >
+          <IconDownload size={18} />
+          <span>Clone from GitHub</span>
         </button>
       </div>
       {error && (
@@ -223,6 +240,16 @@ export function FilesPanel() {
             </div>
           </div>
         </div>
+      )}
+      {root && <SourceControl root={root} onFilesChanged={() => void reloadFiles()} />}
+      {cloning && (
+        <CloneDialog
+          onClose={() => setCloning(false)}
+          onCloned={(folder) => {
+            setCloning(false);
+            void run(async () => show(folder));
+          }}
+        />
       )}
     </section>
   );

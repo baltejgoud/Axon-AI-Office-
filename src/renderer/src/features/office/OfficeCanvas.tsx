@@ -9,6 +9,7 @@ import { DISTRICTS, districtById, type DistrictId } from './campus/districts';
 import { AgentPortrait } from './AgentPortrait';
 import { OfficeDirectory } from './OfficeDirectory';
 import { DistrictChips } from './shell/DistrictChips';
+import { AccountButton } from './shell/AccountButton';
 import { DepartmentMenu, type DepartmentChoice } from './shell/DepartmentMenu';
 import { Minimap } from './shell/Minimap';
 import { SceneLabels, taggedPeople } from './shell/SceneLabels';
@@ -248,6 +249,7 @@ export function OfficeCanvas() {
       <nav className="office-navigation" aria-label="Office districts">
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
+          <AccountButton />
           <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
             <IconBook size={16} />
           </button>

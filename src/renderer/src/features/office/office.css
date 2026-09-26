@@ -2134,3 +2134,11 @@ sized for the side panel. */
   color: #92400e;
   font-size: 11px;
 }
+
+/* Your picture in the corner controls; opens Settings → Accounts. */
+.office-view-controls .office-account-button img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}

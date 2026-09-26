@@ -756,3 +756,78 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---------- Accounts ---------- */
+.account-avatar {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border-default);
+}
+.account-avatar-blank {
+  display: grid;
+  place-items: center;
+  background: var(--surface-hover);
+  color: var(--text-tertiary);
+}
+.account-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.account-google {
+  gap: var(--space-2);
+}
+.account-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.account-note code {
+  font-size: var(--text-xs);
+}
+.account-error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--danger-text, #bc3447);
+}
+.account-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.account-device-code {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.account-device-code code {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+  user-select: all;
+}
+.account-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}

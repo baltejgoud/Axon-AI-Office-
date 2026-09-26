@@ -18,6 +18,7 @@ import {
   IconShield,
   IconSparkle,
   IconTrash,
+  IconUser,
   Kbd,
   type AppIconProps
 } from './ui';
@@ -39,9 +40,12 @@ import { ProviderDialog, protocolLabel, tintOf } from './settings/ProviderDialog
 import { McpDialog } from './settings/McpDialog';
 import { ModelIcon } from './settings/ModelIcon';
 import { ServiceIcon } from './settings/ServiceIcon';
+import { AccountsSection } from './settings/AccountsSection';
+import { useOfficeStore } from './features/office/store/officeStore';
 
-type Section = 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
+type Section = 'accounts' | 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
+  { id: 'accounts', label: 'Accounts', icon: IconUser },
   { id: 'models', label: 'Models', icon: IconSparkle },
   { id: 'tools', label: 'Tools (MCP)', icon: IconPlug },
   { id: 'appearance', label: 'Appearance', icon: IconPalette },
@@ -75,7 +79,9 @@ const blankMcp = (): MCPServerConfig => ({
 
 /** Settings, as a sheet over the office: sections on the left, the chosen one on the right. */
 export function SettingsPanel() {
-  const [section, setSection] = useState<Section>('models');
+  const [section, setSection] = useState<Section>(
+    () => (useOfficeStore.getState().settingsSection as Section | null) ?? 'models'
+  );
   const [provider, setProvider] = useState<ProviderConfig | null>(null);
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
 
@@ -105,6 +111,7 @@ export function SettingsPanel() {
         aria-labelledby={`settings-tab-${section}`}
         key={section}
       >
+        {section === 'accounts' && <AccountsSection />}
         {section === 'models' && <ModelsSection onEdit={setProvider} />}
         {section === 'tools' && <ToolsSection onEdit={setMcpServer} />}
         {section === 'appearance' && <AppearanceSection />}

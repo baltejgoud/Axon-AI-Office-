@@ -34,6 +34,8 @@ interface OfficeStoreState {
   agentRuntime: Record<string, AgentRuntime>;
   is3dEnabled: boolean;
   overlay: Overlay | null;
+  /** The Settings section to open at, when something asked for one (the avatar opens Accounts). */
+  settingsSection: string | null;
 
   selectAgent: (id: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
@@ -44,7 +46,7 @@ interface OfficeStoreState {
   setLastResponse: (agentId: string, text: string) => void;
   pushActivity: (agentId: string, activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>) => void;
   toggle3d: () => void;
-  openOverlay: (overlay: Overlay | null) => void;
+  openOverlay: (overlay: Overlay | null, settingsSection?: string) => void;
   /** Files handed to each coworker from the Files room, waiting in their message box. */
   pendingFiles: Record<string, HandedFile[]>;
   handFiles: (agentId: string, files: HandedFile[]) => void;
@@ -82,6 +84,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   agentRuntime: initialRuntime,
   is3dEnabled: true,
   overlay: null,
+  settingsSection: null,
   pendingFiles: {},
   flyTo: null,
   teamBoard: null,
@@ -180,7 +183,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
 
   toggle3d: () => set({ is3dEnabled: !get().is3dEnabled }),
 
-  openOverlay: (overlay) => set({ overlay }),
+  openOverlay: (overlay, settingsSection) => set({ overlay, settingsSection: settingsSection ?? null }),
 
   handFiles: (agentId, files) => {
     const current = get().pendingFiles[agentId] ?? [];

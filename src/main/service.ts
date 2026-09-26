@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron';
+import { app, dialog, shell } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
@@ -26,6 +26,12 @@ import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderRese
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
 import { Reminders, TICK_MS, type Notice } from './reminders';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
+import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from '../shared/scm';
+import { Accounts } from './accounts/accounts';
+import { GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './accounts/clients';
+import { SourceControl } from './git/sourceControl';
+import { SignedOutError, listRepos } from './git/githubApi';
+import { parseRepoInput } from './git/parse';
 
 /** What the receptionist says when her model can't call tools, so she can't keep the planner. */
 export const NO_TOOLS = "This model can't use tools, so I can't keep your planner. Pick another model.";
@@ -82,9 +88,21 @@ export class Service {
   /** The to-dos' reminders; they start once there is a shell to show them. */
   readonly reminders: Reminders;
   private shell: ShellPort | null = null;
+  /** GitHub and Google sign-in. */
+  readonly accounts: Accounts;
+  /** The Files room's Git: status, commit, sync, clone and publish. */
+  readonly scm: SourceControl;
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
+    this.accounts = new Accounts({
+      dir: dataPath, vault, openExternal: url => shell.openExternal(url),
+      github: { clientId: GITHUB_CLIENT_ID }, google: { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET }
+    });
+    this.scm = new SourceControl({
+      root: () => this.project.root, token: () => this.accounts.githubToken(), profile: () => this.accounts.githubProfile,
+      progress: line => this.emit({ channel: 'git', line })
+    });
     this.parsers = new ParsePool(parserPath);
     this.mcp = new MCPClientManager(this.tools);
     this.tasks = new TaskStore(this.state, () => this.repo.id(), (tasks) => {
@@ -912,6 +930,8 @@ export class Service {
     this.reminders.stop();
     this.parsers.destroy();
     this.mcp.stopAll();
+    this.accounts.githubCancel();
+    this.accounts.googleCancel();
     this.stopTicking();
   }
   async attach(): Promise<{ id: string; name: string }[]> {
@@ -975,6 +995,67 @@ export class Service {
       detail: `${path}\n\nThis creates or overwrites the file with the editor contents. Review your changes first. Use version control for recovery.`, buttons: ['Cancel', 'Save file'], defaultId: 0, cancelId: 0 });
     if (choice.response !== 1) throw new Error('Save cancelled.'); await this.project.write(path, content);
   }
+  // ---------------------------------------------------------------- Accounts and source control
+
+  async accountsGet(): Promise<AccountsState> {
+    return {
+      github: { configured: this.accounts.githubConfigured, profile: this.accounts.githubProfile },
+      google: { configured: this.accounts.googleConfigured, profile: this.accounts.googleProfile },
+      git: await this.scm.git()
+    };
+  }
+  githubSignInStart(): Promise<DeviceCode> { return this.accounts.githubStart(); }
+  githubSignInFinish(): Promise<AccountProfile> { return this.accounts.githubFinish(); }
+  githubSignInCancel(): void { this.accounts.githubCancel(); }
+  githubSignOut(): void { this.accounts.githubSignOut(); }
+  googleSignIn(): Promise<AccountProfile> { return this.accounts.googleSignIn(); }
+  googleSignInCancel(): void { this.accounts.googleCancel(); }
+  googleSignOut(): void { this.accounts.googleSignOut(); }
+  /** A revoked token signs you out of GitHub, so the office asks you to sign in again. */
+  private async withGitHub<T>(task: () => Promise<T>): Promise<T> {
+    try { return await task(); }
+    catch (error) { if (error instanceof SignedOutError) this.accounts.githubSignOut(); throw error; }
+  }
+  githubRepos(): Promise<RepoSummary[]> {
+    const token = this.accounts.githubToken();
+    if (!token) return Promise.reject(new Error('Sign in to GitHub first (Settings → Accounts).'));
+    return this.withGitHub(() => listRepos(token));
+  }
+  gitCheck(): Promise<string | null> { return this.scm.git(true); }
+  scmStatus(): Promise<ScmStatus> { return this.scm.status(); }
+  scmDiff(path: string): Promise<ScmDiff> { return this.scm.diff(text(path, 2000)); }
+  scmStage(paths: string[]): Promise<void> { return this.scm.stage(this.paths(paths)); }
+  scmUnstage(paths: string[]): Promise<void> { return this.scm.unstage(this.paths(paths)); }
+  scmCommit(message: string): Promise<{ authorSet: boolean }> { return this.scm.commit(text(message, 20000)); }
+  scmSync(): Promise<void> { return this.withGitHub(() => this.scm.sync()); }
+  scmBranches() { return this.scm.branches(); }
+  scmCheckout(name: string): Promise<void> { return this.scm.checkout(text(name, 250)); }
+  scmCreateBranch(name: string): Promise<void> { return this.scm.createBranch(text(name, 250)); }
+  private paths(paths: unknown): string[] {
+    if (!Array.isArray(paths) || paths.length > 5000) throw new Error('Invalid file list.');
+    return paths.map(p => text(p, 2000));
+  }
+  /** Clones a GitHub repository into a folder you choose, then opens it and puts it on the folder wall. */
+  async scmClone(repo: string): Promise<string | null> {
+    const { name } = parseRepoInput(text(repo, 500));
+    const choice = await dialog.showOpenDialog({ title: `Choose where to put ${name}`, buttonLabel: 'Clone here', properties: ['openDirectory', 'createDirectory'] });
+    if (choice.canceled || !choice.filePaths[0]) return null;
+    const folder = await this.scm.clone(repo, choice.filePaths[0]);
+    await this.project.choose(folder);
+    if (this.project.root) this.setWall(remember(this.wall(), this.project.root));
+    return this.project.root;
+  }
+  scmPublish(input: PublishInput): Promise<string> {
+    return this.withGitHub(() => this.scm.publish({ name: text(input?.name, 100).trim(), description: text(input?.description ?? '', 350),
+      private: input?.private !== false, gitignore: input?.gitignore === true }));
+  }
+  /** Opens a page in your browser: only GitHub's, and Git's download page. */
+  async openLink(url: string): Promise<void> {
+    text(url, 2000);
+    if (!/^https:\/\/(github\.com|git-scm\.com)\//.test(url)) throw new Error('Axon only opens GitHub and Git pages.');
+    await shell.openExternal(url);
+  }
+
   async agentImport(): Promise<void> {
     const choice = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Axon profile', extensions: ['json'] }] });
     if (choice.canceled) return;

@@ -367,6 +367,11 @@ export type StreamEvent =
       channel: 'focus';
     } & FocusTarget)
   | {
+      /** A line of clone, pull or push progress from git. */
+      channel: 'git';
+      line: string;
+    }
+  | {
       channel: 'agent';
       agentId: ID;
       runId: ID;
