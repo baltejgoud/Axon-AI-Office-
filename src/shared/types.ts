@@ -60,6 +60,20 @@ export interface ToolCall {
   arguments: string;
   result?: string;
   error?: string;
+  /** What a file write changed. Kept with the call; never sent to the model. */
+  change?: FileChange;
+  /** A running command's output so far. Sent to the window while it runs; never saved. */
+  progress?: string;
+}
+
+/** Lines a file write added and removed, and the changed lines with a little context around them. */
+export interface FileChange {
+  added: number;
+  removed: number;
+  /** The file did not exist before. */
+  created: boolean;
+  /** Unified-diff hunks (`@@ -a,b +c,d @@` and ` `/`+`/`-` lines); left out for new or very large files. */
+  hunks?: string;
 }
 
 export interface Message {

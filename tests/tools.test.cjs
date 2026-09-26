@@ -255,3 +255,53 @@ test('git_commit passes the message and files to git without a shell', { skip: !
     assert.equal(execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim(), message);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('fileChange counts lines and keeps only the changed hunks, with context', () => {
+  const { fileChange } = require('../src/main/tools/diff.ts');
+  const before = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n');
+  const after = before.replace('line 3', 'line three').replace('line 18\n', 'line 18\nline 18b\n');
+  const change = fileChange(before, after);
+  assert.deepEqual([change.added, change.removed, change.created], [2, 1, false]);
+  const lines = change.hunks.split('\n');
+  assert.deepEqual(lines.filter((l) => l.startsWith('@@')), ['@@ -1,6 +1,6 @@', '@@ -16,5 +16,6 @@']);
+  assert.ok(lines.includes('-line 3') && lines.includes('+line three') && lines.includes('+line 18b'));
+  assert.ok(!lines.includes(' line 10'), 'unchanged lines far from a change are left out');
+  assert.deepEqual(fileChange(null, 'a\nb'), { added: 2, removed: 0, created: true });
+  assert.deepEqual(fileChange('same', 'same'), { added: 0, removed: 0, created: false });
+});
+
+test('write_file keeps what it changed with its answer', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-change-'));
+  try {
+    const project = new Project();
+    await project.choose(dir);
+    const write = new ToolRegistry().get('write_file');
+    const ctx = { project, allowShell: false };
+    const created = await write.execute({ path: 'a.ts', content: 'one\ntwo' }, ctx);
+    assert.deepEqual(created.change, { added: 2, removed: 0, created: true });
+    const edited = await write.execute({ path: 'a.ts', content: 'one\n2\nthree' }, ctx);
+    assert.deepEqual([edited.change.added, edited.change.removed, edited.change.created], [2, 1, false]);
+    assert.match(edited.content, /^Successfully wrote/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('run_command tells the window its output while it runs; the answer is the whole output', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-stream-'));
+  try {
+    const project = new Project();
+    await project.choose(dir);
+    const seen = [];
+    const script = "let i=0;const t=setInterval(()=>{console.log('line '+i);if(++i===4)clearInterval(t)},200)";
+    const result = await new ToolRegistry()
+      .get('run_command')
+      .execute({ command: `node -e "${script}"` }, { project, allowShell: true, onOutput: (soFar) => seen.push(soFar) });
+    assert.ok(!result.isError, result.content);
+    assert.match(result.content, /line 0[\s\S]*line 3/);
+    assert.ok(seen.length >= 2, `output arrived ${seen.length} times`);
+    assert.ok(seen.some((soFar) => soFar.includes('line 0') && !soFar.includes('line 3')), 'some output came before the end');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

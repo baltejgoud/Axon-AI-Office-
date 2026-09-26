@@ -2,7 +2,7 @@ import { app, dialog, shell } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
-import type { FocusTarget, Settings, TaskItem } from '../shared/types';
+import type { FileChange, FocusTarget, Settings, TaskItem } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
@@ -517,6 +517,8 @@ export class Service {
 
     const key = this.providerKey(provider.id), controller = new AbortController();
     this.runs.set(id, controller);
+    // Recorded before the run's messages, so everything the run writes is dated from its start on.
+    this.tracker.runStarted(chat, input);
 
     let activeAssistant: Message = {
       id: this.repo.id(),
@@ -535,12 +537,11 @@ export class Service {
     );
     if (chat.title === 'New conversation' && this.state.settings.autoTitleConversations) chat.title = input.slice(0, 65);
     chat.updatedAt = Date.now();
-    this.tracker.runStarted(chat, input);
 
     const agent = chat.agentId ? this.state.agents.find(a => a.id === chat.agentId) : undefined;
     const maxSteps = Math.max(1, Math.min(30, agent?.maxSteps ?? 20));
     /** Records a call's outcome: a tool message, the next request, the call itself, and the window. */
-    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean }): void => {
+    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean; change?: FileChange }): void => {
       this.state.messages.push({
         id: this.repo.id(),
         conversationId: id,
@@ -551,7 +552,7 @@ export class Service {
         createdAt: Date.now()
       });
       requests.push({ role: 'tool', toolCallId: tc.id, name: tc.name, content: outcome.content });
-      Object.assign(tc, outcome.isError ? { error: outcome.content } : { result: outcome.content });
+      Object.assign(tc, outcome.isError ? { error: outcome.content } : { result: outcome.content, ...(outcome.change ? { change: outcome.change } : {}) });
       this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, toolCall: { ...tc }, streaming: true, done: false });
     };
     let step = 0;
@@ -717,9 +718,14 @@ export class Service {
             }
           }
 
+          // The window shows the call as running (a command in its terminal, with its output so far) until it answers.
+          const running = (progress?: string) =>
+            this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, toolCall: { ...tc, ...(progress !== undefined ? { progress } : {}) }, streaming: true, done: false });
+          running();
           answer(tc, await toolImpl.execute(parsedArgs, {
             project: this.project,
             allowShell: scope.allowShell,
+            onOutput: running,
             subagentRunner: async (subRole, subTask) =>
               this.runSubagent(provider.id, chat.modelId, subRole, subTask, chat.workspaceId, agent?.maxSteps, controller.signal, scope)
           }));

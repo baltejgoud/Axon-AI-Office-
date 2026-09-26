@@ -1,8 +1,12 @@
 import { exec, execFile } from 'node:child_process';
 import { resolve, relative, isAbsolute } from 'node:path';
-import type { ToolDefinition } from '../../shared/types';
+import type { FileChange, ToolDefinition } from '../../shared/types';
 import type { Project } from '../project';
-import { createUnifiedDiff } from './diff';
+import { createUnifiedDiff, fileChange } from './diff';
+
+/** How often a running command's output goes to the window, and how much of its tail. */
+const OUTPUT_EVERY_MS = 120;
+const OUTPUT_TAIL = 64_000;
 
 /** The files a commit names; anything that isn't a plain string is left out. */
 const gitFiles = (value: unknown): string[] =>
@@ -14,11 +18,15 @@ export interface ToolContext {
   project: Project;
   allowShell: boolean;
   subagentRunner?: (role: string, task: string) => Promise<string>;
+  /** A running command's output so far, a few times a second, for the window. */
+  onOutput?: (soFar: string) => void;
 }
 
 export interface ToolHandlerResult {
   content: string;
   isError?: boolean;
+  /** A file write's change, kept with the call for the window. */
+  change?: FileChange;
   preview?: {
     type: 'diff' | 'command' | 'generic';
     content: string;
@@ -190,8 +198,17 @@ export class ToolRegistry {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
           const filePath = String(args.path);
           const content = String(args.content);
+          let before: string | null = null;
+          try {
+            before = await ctx.project.read(filePath);
+          } catch {
+            before = null; // A new file
+          }
           await ctx.project.write(filePath, content);
-          return { content: `Successfully wrote ${content.length} characters to ${filePath}.` };
+          return {
+            content: `Successfully wrote ${content.length} characters to ${filePath}.`,
+            change: fileChange(before, content)
+          };
         } catch (err: any) {
           return { content: `Error writing file: ${err.message}`, isError: true };
         }
@@ -239,7 +256,19 @@ export class ToolRegistry {
         }
 
         return new Promise<ToolHandlerResult>((resolvePromise) => {
-          exec(
+          // The window sees the output as it comes; the model gets it whole, as before.
+          let soFar = '';
+          let finished = false;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const send = () => {
+            timer = undefined;
+            if (!finished) ctx.onOutput?.(soFar);
+          };
+          const heard = (chunk: string | Buffer) => {
+            soFar = (soFar + String(chunk)).slice(-OUTPUT_TAIL);
+            if (!timer && !finished) timer = setTimeout(send, OUTPUT_EVERY_MS);
+          };
+          const child = exec(
             cmd,
             {
               cwd: targetCwd,
@@ -248,6 +277,8 @@ export class ToolRegistry {
               env: { ...process.env, CI: '1' }
             },
             (error, stdout, stderr) => {
+              finished = true;
+              if (timer) clearTimeout(timer);
               const combined = [
                 stdout ? stdout.trim() : '',
                 stderr ? `[stderr]\n${stderr.trim()}` : ''
@@ -265,6 +296,10 @@ export class ToolRegistry {
               }
             }
           );
+          if (ctx.onOutput) {
+            child.stdout?.on('data', heard);
+            child.stderr?.on('data', heard);
+          }
         });
       }
     });
