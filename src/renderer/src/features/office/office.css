@@ -340,10 +340,11 @@
   color: var(--office-muted);
   margin: 0;
 }
+/* The left side keeps about 60% of the width, the coworker's panel about 40%. */
 .office-activity-panel {
-  flex: 0 0 28%;
-  min-width: 310px;
-  max-width: 430px;
+  flex: 0 0 40%;
+  min-width: 340px;
+  max-width: 760px;
   display: flex;
   flex-direction: column;
   min-height: 0;

@@ -1,6 +1,14 @@
 import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { IconLayoutGrid, IconBook, IconRotateCcw, IconScan, IconSettings, IconZoomIn } from '../../ui';
+import {
+  IconCode,
+  IconLayoutGrid,
+  IconBook,
+  IconRotateCcw,
+  IconScan,
+  IconSettings,
+  IconZoomIn
+} from '../../ui';
 import { OfficeScene, type OfficeView } from './scene/OfficeScene';
 import { loadOfficeModels, officeModelsLoaded } from './scene/room/models';
 import { useOfficeStore } from './store/officeStore';
@@ -22,7 +30,12 @@ import { activeHelp } from './tasks';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 
-export function OfficeCanvas() {
+export function OfficeCanvas({
+  work
+}: {
+  /** The selected coworker's work surface, when they have used a tool: whether it is open, and a toggle. */
+  work?: { open: boolean; toggle: () => void };
+}) {
   const container = useRef<HTMLDivElement>(null);
   const labels = useRef<HTMLDivElement>(null);
   const scene = useRef<OfficeScene | null>(null);
@@ -126,6 +139,12 @@ export function OfficeCanvas() {
     // With the Files room open, the Files Agent goes to the cabinets.
     if (selectedAgentId === 'files-agent') scene.current?.sendTo('files-agent', 'cabinet');
   }, [selectedAgentId]);
+
+  // The work surface's divider is held: the office draws cheaply until it is let go.
+  const resizingWork = useOfficeStore((s) => s.resizingWork);
+  useEffect(() => {
+    scene.current?.setLiveResize(resizingWork);
+  }, [resizingWork]);
 
   // Someone asked the office to go to a person (handing over files, clicking the cabinets).
   useEffect(() => {
@@ -249,6 +268,17 @@ export function OfficeCanvas() {
       <nav className="office-navigation" aria-label="Office districts">
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
+          {work && (
+            <button
+              onClick={work.toggle}
+              className={work.open ? 'active' : ''}
+              title={work.open ? 'Hide their work' : 'Show their work'}
+              aria-label="Work surface"
+              aria-pressed={work.open}
+            >
+              <IconCode size={16} />
+            </button>
+          )}
           <AccountButton />
           <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
             <IconBook size={16} />
@@ -337,6 +367,10 @@ export function OfficeCanvas() {
               Opening your office…
             </div>
           )}
+          {/* Shown only when the office is short and its heading steps aside (workspace.css). */}
+          <span className="office-stage-mark" aria-hidden="true">
+            Axon<span>.</span>
+          </span>
           <SceneLabels
             ref={labels}
             tier={tier}

@@ -1,7 +1,7 @@
 import './office.css';
 import { useEffect } from 'react';
 import { useApp } from '../../state';
-import { OfficeCanvas } from './OfficeCanvas';
+import { OfficeWorkspace } from './workspace/OfficeWorkspace';
 import { ActivityPanel } from './activity/ActivityPanel';
 import { Overlay } from './shell/Overlay';
 import { useOfficeStore } from './store/officeStore';
@@ -18,7 +18,7 @@ export function OfficePage() {
   const close = () => useOfficeStore.getState().openOverlay(null);
   return (
     <div className="office-container">
-      <OfficeCanvas />
+      <OfficeWorkspace />
       <ActivityPanel />
       {overlay === 'settings' && (
         <Overlay title="Settings" onClose={close} wide flush>

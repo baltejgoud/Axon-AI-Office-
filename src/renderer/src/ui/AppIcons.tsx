@@ -1337,6 +1337,16 @@ export const IconDownload = tabler([
   'M7 11l5 5l5 -5',
   'M12 4l0 12'
 ]);
+/** A globe, for the browser, from Tabler Icons (MIT) */
+export const IconWorld = tabler([
+  'M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0',
+  'M3.6 9h16.8',
+  'M3.6 15h16.8',
+  'M11.5 3a17 17 0 0 0 0 18',
+  'M12.5 3a17 17 0 0 1 0 18'
+]);
+/** Right arrow, for Forward, from Tabler Icons (MIT) */
+export const IconArrowRight = tabler(['M5 12l14 0', 'M13 18l6 -6', 'M13 6l6 6']);
 /** Opens in the browser, from Tabler Icons (MIT) */
 export const IconExternalLink = tabler([
   'M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6',

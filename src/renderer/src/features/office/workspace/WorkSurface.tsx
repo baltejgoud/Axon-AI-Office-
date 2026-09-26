@@ -1,0 +1,199 @@
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useApp } from '../../../state';
+import { OFFICE_AGENTS } from '../data/officeAgents';
+import {
+  IconClose,
+  IconCode,
+  IconFolder,
+  IconTerminal,
+  IconTool,
+  IconWorld,
+  type IconGlyph
+} from '../../../ui';
+import {
+  WORK_TABS,
+  commandLine,
+  pageAddress,
+  toolLabel,
+  type Work,
+  type WorkKind,
+  type WorkStep
+} from './work';
+import {
+  BrowserView,
+  CodeView,
+  FilesView,
+  TerminalView,
+  ToolsView,
+  baseName,
+  useSettled,
+  type Requests
+} from './WorkViews';
+
+const TAB_ICONS: Record<WorkKind, IconGlyph> = {
+  code: IconCode,
+  files: IconFolder,
+  terminal: IconTerminal,
+  browser: IconWorld,
+  tool: IconTool
+};
+
+/**
+ * What the selected coworker is working in, below the office. It follows them: each new step
+ * brings its tab (and file) forward. A tab the user picks stays until their next step.
+ */
+export function WorkSurface({
+  work,
+  agentId,
+  project,
+  focus,
+  onClose
+}: {
+  work: Work;
+  agentId: string;
+  project: string | null;
+  /** A step the side panel asked to show. */
+  focus: { stepId: string; at: number } | null;
+  onClose: () => void;
+}) {
+  const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
+  const approvals = useApp((s) => s.pendingApprovals);
+  const requests: Requests = useMemo(
+    () => new Map(Object.values(approvals).map((request) => [request.toolCallId, request])),
+    [approvals]
+  );
+  const latest = work.latest;
+  const [pick, setPick] = useState<{ tab: WorkKind; after?: string } | null>(null);
+  const followed = useSettled(latest?.kind ?? work.tabs[0]);
+  const tab: WorkKind =
+    pick && pick.after === latest?.id && work.tabs.includes(pick.tab)
+      ? pick.tab
+      : work.tabs.includes(followed)
+        ? followed
+        : work.tabs[0];
+  // A step picked in the side panel: its tab, and (below) its file or command.
+  const focused = focus ? work.steps.find((step) => step.id === focus.stepId) : undefined;
+  useEffect(() => {
+    if (focused) setPick({ tab: focused.kind, after: latest?.id });
+    // A new request only; later steps don't re-apply it.
+  }, [focus?.at]);
+  const target = focused && focus ? { stepId: focused.id, at: focus.at } : null;
+  const tabs = WORK_TABS.filter((t) => work.tabs.includes(t.kind));
+  const tabRefs = useRef(new Map<WorkKind, HTMLButtonElement>());
+  const choose = (kind: WorkKind) => setPick({ tab: kind, after: latest?.id });
+  const onTabKey = (event: KeyboardEvent) => {
+    const at = tabs.findIndex((t) => t.kind === tab);
+    const next = event.key === 'ArrowRight' ? at + 1 : event.key === 'ArrowLeft' ? at - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    const kind = tabs[(next + tabs.length) % tabs.length].kind;
+    choose(kind);
+    tabRefs.current.get(kind)?.focus();
+  };
+
+  return (
+    <section className="work-surface" aria-label={`${agent?.name ?? 'Coworker'} at work`}>
+      <header className="work-bar">
+        <div className="work-tabs" role="tablist" aria-label="What they are working in" onKeyDown={onTabKey}>
+          {tabs.map(({ kind, label }) => {
+            const Icon = TAB_ICONS[kind];
+            const live = latest?.kind === kind && latest.state === 'running';
+            return (
+              <button
+                key={kind}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(kind, el);
+                  else tabRefs.current.delete(kind);
+                }}
+                role="tab"
+                id={`work-tab-${kind}`}
+                aria-selected={tab === kind}
+                aria-controls="work-panel"
+                tabIndex={tab === kind ? 0 : -1}
+                className={`work-tab${tab === kind ? ' active' : ''}`}
+                onClick={() => choose(kind)}
+              >
+                <Icon size={14} />
+                {label}
+                {live && <span className="work-tab-live" aria-label="(working here now)" />}
+              </button>
+            );
+          })}
+        </div>
+        {latest && (
+          <p
+            className={`work-now is-${requests.has(latest.id) ? 'waiting' : latest.state}`}
+            aria-live="polite"
+          >
+            <span className="work-now-dot" />
+            <span className="work-now-text">{describe(latest, requests.has(latest.id), work)}</span>
+          </p>
+        )}
+        <button
+          className="work-close"
+          onClick={onClose}
+          aria-label="Close the work surface"
+          title="Close · the office takes the full height again"
+        >
+          <IconClose size={14} />
+        </button>
+      </header>
+      <div className="work-panel" id="work-panel" role="tabpanel" aria-labelledby={`work-tab-${tab}`}>
+        {tab === 'code' && <CodeView work={work} requests={requests} project={project} target={target} />}
+        {tab === 'files' && <FilesView searches={work.searches} />}
+        {tab === 'terminal' && (
+          <TerminalView commands={work.commands} requests={requests} project={project} target={target} />
+        )}
+        {tab === 'browser' && <BrowserView pages={work.pages} />}
+        {tab === 'tool' && <ToolsView tools={work.tools} requests={requests} />}
+      </div>
+    </section>
+  );
+}
+
+/** One line on what the coworker is doing (or last did), as the status on the surface's bar. */
+function describe(step: WorkStep, waiting: boolean, work: Work): string {
+  const file = baseName(String(step.args.path ?? ''));
+  const running = step.state === 'running';
+  const failed = step.state === 'failed';
+  switch (step.name) {
+    case 'read_file':
+      return running ? `Opening ${file}` : failed ? `Couldn’t open ${file}` : `Reading ${file}`;
+    case 'write_file':
+      return waiting
+        ? `Waiting for your OK to save ${file}`
+        : running
+          ? `Saving ${file}`
+          : failed
+            ? `${file} was not saved`
+            : `Saved ${file}`;
+    case 'list_files': {
+      const where = String(step.args.directory ?? '').trim();
+      return running ? 'Looking through the files' : `Looked through ${where ? where + '/' : 'the project'}`;
+    }
+    case 'search_code':
+      return `${running ? 'Searching' : 'Searched'} for “${String(step.args.query ?? '')}”`;
+    case 'run_command':
+    case 'git_commit': {
+      const line = commandLine(step);
+      return waiting
+        ? `Waiting for your OK to run ${line}`
+        : running
+          ? `Running ${line}`
+          : failed
+            ? `${line} failed`
+            : `Ran ${line}`;
+    }
+  }
+  if (step.kind === 'browser') {
+    const address = pageAddress(work.pages, step);
+    let host = address;
+    try {
+      host = new URL(address).host || address;
+    } catch {
+      // Not a full address: show it as given.
+    }
+    return `${running ? 'Browsing' : 'Viewed'} ${host || 'a page'}`;
+  }
+  return `${waiting ? 'Waiting for your OK to use' : running ? 'Using' : failed ? 'Couldn’t use' : 'Used'} ${toolLabel(step.name)}`;
+}
