@@ -22,6 +22,7 @@ import { DepartmentMenu, type DepartmentChoice } from './shell/DepartmentMenu';
 import { Minimap } from './shell/Minimap';
 import { SceneLabels, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
+import { WaitingPill } from './shell/WaitingPill';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
@@ -268,6 +269,7 @@ export function OfficeCanvas({
       <nav className="office-navigation" aria-label="Office districts">
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
+          <WaitingPill />
           {work && (
             <button
               onClick={work.toggle}

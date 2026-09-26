@@ -391,6 +391,16 @@ app.on('web-contents-created', (_, contents) => {
       const liveRow = await evaluate(`[...document.querySelectorAll('.work-summary.is-live .work-summary-row')].map((r) => r.textContent).join(' | ')`);
       check('the side panel says it is waiting for you, and by how much', (await text('.work-summary.is-live .work-summary-head')) === 'Working on 1 file…' && /todo\.md.*\+2−1.*Waiting for your OK/.test(liveRow) && !/npm run dev/.test(liveRow), liveRow);
       await snap('7-proposal.png');
+      // Away from them, the office says someone is waiting, and takes you back.
+      check('the office says someone is waiting', (await text('.office-waiting')) === '1 needs your OK', await text('.office-waiting'));
+      await evaluate(`[...document.querySelectorAll('.office-team-people button')].find((b) => !/Frontend|Backend/.test(b.title)).click()`);
+      await pause(400);
+      check('still waiting while you look at someone else', (await text('.office-waiting')) === '1 needs your OK' && full(await geometry()));
+      await snap('7b-waiting-pill.png');
+      await click('.office-waiting');
+      await waitFor(`document.querySelector('.activity-agent-meta h3').textContent === 'Backend Developer' && document.querySelector('.work-file-path .work-approve')`, 'back at the proposal');
+      await pause(600);
+      check('the pill takes you back to the step that waits', (await geometry()).open);
       await click('.work-file-path .work-approve');
       await waitFor(`document.querySelector('.work-term-note .work-approve')`, 'the command waiting on the surface');
       await pause(1000);

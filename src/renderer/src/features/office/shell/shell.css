@@ -325,3 +325,36 @@
     animation: none;
   }
 }
+
+/* Coworkers waiting for your OK, anywhere in the office. */
+.office-container .office-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  width: auto;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #f1d58a;
+  border-radius: 20px;
+  background: #fff6da;
+  color: #8e5c08;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.office-container .office-waiting:hover {
+  border-color: #d99a14;
+}
+.office-waiting-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d99a14;
+  animation: office-pulse 1.5s infinite;
+}
+[data-theme='dark'] .office-container .office-waiting {
+  border-color: #6b5316;
+  background: #2f2610;
+  color: #f2c14e;
+}
