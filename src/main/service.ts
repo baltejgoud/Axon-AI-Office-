@@ -21,7 +21,7 @@ import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
 import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
-import { READ_ONLY_TOOLS, toolsFor } from './officeTools';
+import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
 import { Reminders, TICK_MS, type Notice } from './reminders';
@@ -482,16 +482,13 @@ export class Service {
     const roleText = rolesBlock(roleProfiles(dedupe(workspace?.roleIds ?? [], chat.roleIds)));
     const skillText = skillsBlock(skillBodies(dedupe(workspace?.skillIds ?? [], chat.skillIds))); // throws over budget
 
-    // Scoped tool access: only include roots if file access is enabled in workspace or conversation
-    const roots: string[] = [];
-    if (workspace?.fileAccess?.enabled) {
-      roots.push(...(workspace.fileAccess.roots || []));
-      if (this.project.root && !roots.includes(this.project.root)) {
-        roots.push(this.project.root);
-      }
-    } else if (chat.projectRoot) {
-      roots.push(chat.projectRoot);
-    }
+    // Scoped tool access: the workspace's or conversation's folders, or for an office coworker the open project
+    const roots = runRoots({
+      agentId: chat.agentId,
+      workspaceRoots: workspace?.fileAccess?.enabled ? workspace.fileAccess.roots || [] : null,
+      conversationRoot: chat.projectRoot,
+      projectRoot: this.project.root
+    });
 
     const projectContext = roots.length > 0 && this.project.root ? await this.project.getProjectContext() : '';
     const system = [

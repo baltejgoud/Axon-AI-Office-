@@ -7,6 +7,26 @@ import { PLANNER_TOOLS } from './tasks/tools';
 export const READ_ONLY_TOOLS: readonly string[] = ['read_file', 'list_files', 'search_code'];
 
 /**
+ * The folders a run may work in. A workspace with file access brings its folders and the project
+ * open in the app; a conversation with its own folder keeps to it; an office coworker works in the
+ * project open in the app (reading freely, asking before any write or command). The receptionist
+ * keeps to her planner, and a plain chat without a folder gets none.
+ */
+export function runRoots(input: {
+  agentId?: string;
+  /** The workspace's folders when it has file access turned on. */
+  workspaceRoots?: readonly string[] | null;
+  conversationRoot?: string | null;
+  projectRoot: string | null;
+}): string[] {
+  const { agentId, workspaceRoots, conversationRoot, projectRoot } = input;
+  if (workspaceRoots) return [...new Set([...workspaceRoots, ...(projectRoot ? [projectRoot] : [])])];
+  if (conversationRoot) return [conversationRoot];
+  if (projectRoot && coworkerById(agentId) && agentId !== RECEPTIONIST_ID) return [projectRoot];
+  return [];
+}
+
+/**
  * The tools a conversation offers the model. File tools (and MCP servers) still need a folder;
  * every coworker can ask a colleague, and coworkers do that instead of dispatching sub-agents. The
  * receptionist also keeps the planner.

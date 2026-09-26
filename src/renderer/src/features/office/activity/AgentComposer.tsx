@@ -2,7 +2,8 @@ import { useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
-import { IconPaperclip, IconSend, IconClose, IconFileText } from '../../../ui';
+import { IconPaperclip, IconSend, IconClose, IconFileText, IconFolder } from '../../../ui';
+import { baseName } from '../workspace/work';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
@@ -28,6 +29,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const isBusy = sending || runtime?.status === 'working';
   const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
   const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
+  // Where they work: their conversation's own folder, else the project open in the app.
+  const folder = conversation?.projectRoot ?? data?.projectRoot ?? null;
   const needsModel = !conversation && !model;
   // The receptionist keeps the planner with tools; a model marked as having none can't.
   const chosen = conversation ? `${conversation.providerId}::${conversation.modelId}` : model;
@@ -148,6 +151,23 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       <div className="composer-recipient">
         <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
         Message {agent?.name}
+        {agentId !== RECEPTIONIST_ID &&
+          (folder ? (
+            <span className="composer-folder" title={`They can read and change files in ${folder}`}>
+              <IconFolder size={12} />
+              in {baseName(folder)}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="composer-folder is-none"
+              title="Open a folder in the Files room"
+              onClick={() => useOfficeStore.getState().flyToAgent('files-agent')}
+            >
+              <IconFolder size={12} />
+              Open a project for them to work in
+            </button>
+          ))}
       </div>
       {noTools && (
         <p className="composer-notice" role="note">

@@ -49,6 +49,8 @@ export function OfficeWorkspace() {
   const conversations = useApp((s) => s.data?.conversations);
   const allMessages = useApp((s) => s.data?.messages);
   const tasks = useApp((s) => s.data?.tasks);
+  /** The project open in the app, where office coworkers work unless their conversation has a folder. */
+  const openProject = useApp((s) => s.data?.projectRoot);
   const approvals = useApp((s) => s.pendingApprovals);
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
   const conversation = activeThread(conversations ?? [], agent.id, runtime);
@@ -91,7 +93,7 @@ export function OfficeWorkspace() {
       work,
       agentId: agent.id,
       conversationId: conversation.id,
-      project: conversation.projectRoot ?? null
+      project: conversation.projectRoot ?? openProject ?? null
     };
   const shown = last.current;
   // A closed surface takes no clicks or focus while it is out of sight.

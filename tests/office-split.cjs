@@ -39,6 +39,8 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
 const SLOW = "let i=0;const t=setInterval(()=>{console.log('line '+i);if(++i===6)clearInterval(t)},300)";
 const toolCall = (id, name, args) =>
   `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id, function: { name, arguments: JSON.stringify(args) } }] } }] })}\n\ndata: [DONE]\n\n`;
+/** The tools the model was offered when asked to read the notes. */
+let offered = null;
 const server = http.createServer((request, response) => {
   let body = '';
   request.on('data', (c) => (body += c));
@@ -48,6 +50,12 @@ const server = http.createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     if (last?.role === 'user' && /notes file/i.test(last.content)) {
       response.end(toolCall('call_write', 'write_file', { path: 'notes/todo.md', content: '# Todo\n\n- Filters\n- Sorting by due date\n- Tests\n- Docs\n' }));
+      return;
+    }
+    // A coworker whose conversation has no folder of its own reads from the project open in the app.
+    if (last?.role === 'user' && /read the notes/i.test(last.content)) {
+      offered = (parsed.tools ?? []).map((tool) => tool.function?.name);
+      response.end(toolCall('call_read', 'read_file', { path: 'notes/todo.md' }));
       return;
     }
     if (last?.role === 'tool' && last.tool_call_id === 'call_write') {
@@ -234,6 +242,11 @@ app.on('web-contents-created', (_, contents) => {
         })()`);
       const full = (g) => !g.open && g.office > g.ws[1] - 3;
 
+      // With no project open, a coworker without a folder of their own offers to open one.
+      await choosePerson('Full-Stack Developer');
+      check('with no project open, the composer offers to open one', (await text('.composer-folder')) === 'Open a project for them to work in', await text('.composer-folder'));
+      await choosePerson('Frontend Developer');
+
       // Older work waits: the frontend developer's last run is over, so the office keeps the height.
       let g = await geometry();
       check('older work does not open the surface by itself', full(g), `${g.office} of ${g.ws[1]}`);
@@ -399,6 +412,18 @@ app.on('web-contents-created', (_, contents) => {
       await pause(400);
       await choosePerson('Backend Developer');
       check('coming back after the run: it waits again', full(await geometry()));
+
+      // A coworker with no conversation yet works in the project open in the app.
+      await choosePerson('Full-Stack Developer');
+      check('the composer says where they work', (await text('.composer-folder')) === 'in axon-platform', await text('.composer-folder'));
+      await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please read the notes.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await pause(100);
+      await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
+      await waitFor(`document.querySelector('.work-editor-tab.active')?.textContent.startsWith('todo.md')`, 'their read on the surface');
+      check('they are offered the file tools', Boolean(offered?.includes('read_file') && offered.includes('write_file')), String(offered));
+      check('and read the file from the open project', (await text('.work-code-text')).includes('Sorting by due date'));
+      check('the explorer names the open project', (await text('.work-explorer-title')) === 'axon-platform', await text('.work-explorer-title'));
+      await snap('10-open-project.png');
     } catch (error) {
       results.push('ERROR ' + (error && error.stack));
     }
