@@ -39,6 +39,9 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
 const SLOW = "let i=0;const t=setInterval(()=>{console.log('line '+i);if(++i===6)clearInterval(t)},300)";
 const toolCall = (id, name, args) =>
   `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id, function: { name, arguments: JSON.stringify(args) } }] } }] })}\n\ndata: [DONE]\n\n`;
+/** A page on a port of its own, saying where it listens as a development server would. */
+const SERVER =
+  "const s=require('http').createServer((q,r)=>{r.setHeader('content-type','text/html');r.end('<h1>Axon preview works</h1>')});s.listen(0,'127.0.0.1',()=>console.log('Local: http://127.0.0.1:'+s.address().port+'/'))";
 /** The tools the model was offered when asked to read the notes. */
 let offered = null;
 const server = http.createServer((request, response) => {
@@ -50,6 +53,11 @@ const server = http.createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     if (last?.role === 'user' && /notes file/i.test(last.content)) {
       response.end(toolCall('call_write', 'write_file', { path: 'notes/todo.md', content: '# Todo\n\n- Filters\n- Sorting by due date\n- Tests\n- Docs\n' }));
+      return;
+    }
+    // A development server: a tiny page, and the address it serves.
+    if (last?.role === 'user' && /start the dev server/i.test(last.content)) {
+      response.end(toolCall('call_start', 'start_process', { command: `node -e "${SERVER}"` }));
       return;
     }
     // A coworker whose conversation has no folder of its own reads from the project open in the app.
@@ -453,6 +461,29 @@ app.on('web-contents-created', (_, contents) => {
       check('and read the file from the open project', (await text('.work-code-text')).includes('Sorting by due date'));
       check('the explorer names the open project', (await text('.work-explorer-title')) === 'axon-platform', await text('.work-explorer-title'));
       await snap('10-open-project.png');
+
+      // A development server, previewed live on the surface, and stopped from there.
+      await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please start the dev server.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await pause(100);
+      await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
+      await waitFor(`document.querySelector('.work-term-note .work-approve')?.textContent === 'Start'`, 'the server waiting for your OK');
+      await click('.work-term-note .work-approve');
+      await waitFor(`document.querySelector('.work-preview-frame')`, 'the preview');
+      await pause(1500);
+      g = await geometry();
+      const src = await evaluate(`document.querySelector('.work-preview-frame').src`);
+      check('the surface follows to the preview of the page it serves', g.tab?.startsWith('Preview') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(src), `${g.tab} ${src}`);
+      const frame = contents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('http://127.0.0.1'));
+      const shown = frame ? await frame.executeJavaScript('document.body.innerText') : null;
+      check('the page shows in the frame', shown === 'Axon preview works', String(shown));
+      check('the frame is sandboxed', (await evaluate(`document.querySelector('.work-preview-frame').getAttribute('sandbox')`)) === 'allow-scripts allow-forms allow-same-origin');
+      const serving = await evaluate(`[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent).find((t) => /node -e/.test(t)) ?? ''`);
+      check('the side panel says it is serving', /Serving 127\.0\.0\.1:\d+\//.test(serving), serving);
+      await snap('11-preview.png');
+      await click('.work-browser-bar .work-term-stop');
+      await waitFor(`!document.querySelector('.work-preview-frame') && /stopped/.test(document.querySelector('.work-page')?.textContent ?? '')`, 'the stopped server');
+      check('Stop ends it and says so', true);
+      await snap('12-stopped.png');
     } catch (error) {
       results.push('ERROR ' + (error && error.stack));
     }

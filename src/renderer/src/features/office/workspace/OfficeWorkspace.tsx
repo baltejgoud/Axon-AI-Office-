@@ -248,6 +248,7 @@ export function OfficeWorkspace() {
             key={shown.conversationId}
             work={shown.work}
             agentId={shown.agentId}
+            conversationId={shown.conversationId}
             project={shown.project}
             focus={focus?.conversationId === shown.conversationId ? focus : null}
             onClose={() => setWork(false)}

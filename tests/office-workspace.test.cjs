@@ -261,7 +261,9 @@ test('a run’s title says what it did, the most telling first', () => {
   const read = call('d', 'read_file', { path: 'a.ts' }, { result: '1: x' });
   assert.equal(work.runTitle(summary(steps(write, run, page)), false), 'Changed 1 file, ran 1 command');
   assert.equal(work.runTitle(summary(steps(run, page)), false), 'Ran 1 command, viewed 1 page');
-  assert.equal(work.runTitle(summary(steps(read)), false), 'Looked through 1 thing');
+  assert.equal(work.runTitle(summary(steps(read)), false), 'Read 1 file');
+  const search = call('q', 'search_code', { query: 'due' }, { result: 'No matches found.' });
+  assert.equal(work.runTitle(summary(steps(read, search)), false), 'Read 1 file, searched once');
   assert.equal(work.runTitle(summary(steps(write, run)), true), 'Working on 1 file…');
   assert.equal(work.runTitle(summary(steps(run)), true), 'Working…');
 });
@@ -274,4 +276,23 @@ test('a file the run made is known as new, from its saved change or its proposal
   const proposal = work.diffStats('--- a/b.ts\n+++ b/b.ts\n@@ -1,0 +1,2 @@\n+one\n+two');
   assert.deepEqual(proposal, { added: 2, removed: 0, created: true });
   assert.equal(work.diffStats('--- a/b.ts\n+++ b/b.ts\n@@ -1,1 +1,2 @@\n one\n+two').created, false);
+});
+
+test('background processes: their tools show in the terminal, and only starting one counts as a command', () => {
+  const w = work.workOf([
+    assistant(
+      call('s', 'start_process', { command: 'npm run dev' }, { result: 'Started', process: { id: 'p1' } }),
+      call('r', 'read_process', { id: 'p1' }, { result: 'ok' }),
+      call('x', 'stop_process', { id: 'p1' }, { result: 'Stopped p1.' })
+    )
+  ]);
+  assert.deepEqual(w.steps.map((s) => [s.kind, s.processId]), [
+    ['terminal', 'p1'],
+    ['terminal', 'p1'],
+    ['terminal', 'p1']
+  ]);
+  const summary = work.runSummary(w.steps);
+  assert.deepEqual(summary.commands.map((s) => s.name), ['start_process']);
+  assert.equal(work.runTitle(summary, false), 'Ran 1 command');
+  assert.equal(work.WORK_TABS.some((t) => t.kind === 'preview'), true);
 });

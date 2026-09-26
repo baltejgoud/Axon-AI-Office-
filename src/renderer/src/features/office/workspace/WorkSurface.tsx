@@ -5,6 +5,7 @@ import {
   IconClose,
   IconCode,
   IconFolder,
+  IconMonitor,
   IconTerminal,
   IconTool,
   IconWorld,
@@ -23,11 +24,13 @@ import {
   BrowserView,
   CodeView,
   FilesView,
+  PreviewView,
   TerminalView,
   ToolsView,
   baseName,
   SHORTCUT_KEY,
   useSettled,
+  type Processes,
   type Requests
 } from './WorkViews';
 
@@ -35,6 +38,7 @@ const TAB_ICONS: Record<WorkKind, IconGlyph> = {
   code: IconCode,
   files: IconFolder,
   terminal: IconTerminal,
+  preview: IconMonitor,
   browser: IconWorld,
   tool: IconTool
 };
@@ -46,12 +50,14 @@ const TAB_ICONS: Record<WorkKind, IconGlyph> = {
 export function WorkSurface({
   work,
   agentId,
+  conversationId,
   project,
   focus,
   onClose
 }: {
   work: Work;
   agentId: string;
+  conversationId: string;
   project: string | null;
   /** A step the side panel asked to show. */
   focus: { stepId: string; at: number } | null;
@@ -63,23 +69,37 @@ export function WorkSurface({
     () => new Map(Object.values(approvals).map((request) => [request.toolCallId, request])),
     [approvals]
   );
+  // Their background processes, and the page the newest of them serves (the Preview tab).
+  const allProcesses = useApp((s) => s.data?.processes);
+  const processes: Processes = useMemo(
+    () =>
+      new Map((allProcesses ?? []).filter((p) => p.conversationId === conversationId).map((p) => [p.id, p])),
+    [allProcesses, conversationId]
+  );
+  const served = [...processes.values()].filter((p) => p.url).sort((a, b) => b.startedAt - a.startedAt)[0];
+  const kinds: WorkKind[] = served ? [...work.tabs, 'preview'] : work.tabs;
+  /** Where a step is best seen: a server they started, on its page once it has one. */
+  const kindOf = (step: WorkStep): WorkKind =>
+    step.name === 'start_process' && step.processId && processes.get(step.processId)?.url
+      ? 'preview'
+      : step.kind;
   const latest = work.latest;
   const [pick, setPick] = useState<{ tab: WorkKind; after?: string } | null>(null);
-  const followed = useSettled(latest?.kind ?? work.tabs[0]);
+  const followed = useSettled(latest ? kindOf(latest) : kinds[0]);
   const tab: WorkKind =
-    pick && pick.after === latest?.id && work.tabs.includes(pick.tab)
+    pick && pick.after === latest?.id && kinds.includes(pick.tab)
       ? pick.tab
-      : work.tabs.includes(followed)
+      : kinds.includes(followed)
         ? followed
-        : work.tabs[0];
+        : kinds[0];
   // A step picked in the side panel: its tab, and (below) its file or command.
   const focused = focus ? work.steps.find((step) => step.id === focus.stepId) : undefined;
   useEffect(() => {
-    if (focused) setPick({ tab: focused.kind, after: latest?.id });
+    if (focused) setPick({ tab: kindOf(focused), after: latest?.id });
     // A new request only; later steps don't re-apply it.
   }, [focus?.at]);
   const target = focused && focus ? { stepId: focused.id, at: focus.at } : null;
-  const tabs = WORK_TABS.filter((t) => work.tabs.includes(t.kind));
+  const tabs = WORK_TABS.filter((t) => kinds.includes(t.kind));
   const tabRefs = useRef(new Map<WorkKind, HTMLButtonElement>());
   const choose = (kind: WorkKind) => setPick({ tab: kind, after: latest?.id });
   const onTabKey = (event: KeyboardEvent) => {
@@ -98,7 +118,10 @@ export function WorkSurface({
         <div className="work-tabs" role="tablist" aria-label="What they are working in" onKeyDown={onTabKey}>
           {tabs.map(({ kind, label }) => {
             const Icon = TAB_ICONS[kind];
-            const live = latest?.kind === kind && latest.state === 'running';
+            const live =
+              kind === 'preview'
+                ? Boolean(served?.running)
+                : latest?.kind === kind && latest.state === 'running';
             return (
               <button
                 key={kind}
@@ -127,7 +150,9 @@ export function WorkSurface({
             aria-live="polite"
           >
             <span className="work-now-dot" />
-            <span className="work-now-text">{describe(latest, requests.has(latest.id), work)}</span>
+            <span className="work-now-text">
+              {describe(latest, requests.has(latest.id), work, processes)}
+            </span>
           </p>
         )}
         <button
@@ -143,8 +168,15 @@ export function WorkSurface({
         {tab === 'code' && <CodeView work={work} requests={requests} project={project} target={target} />}
         {tab === 'files' && <FilesView searches={work.searches} />}
         {tab === 'terminal' && (
-          <TerminalView commands={work.commands} requests={requests} project={project} target={target} />
+          <TerminalView
+            commands={work.commands}
+            requests={requests}
+            processes={processes}
+            project={project}
+            target={target}
+          />
         )}
+        {tab === 'preview' && served && <PreviewView process={served} />}
         {tab === 'browser' && <BrowserView pages={work.pages} />}
         {tab === 'tool' && <ToolsView tools={work.tools} requests={requests} />}
       </div>
@@ -153,7 +185,7 @@ export function WorkSurface({
 }
 
 /** One line on what the coworker is doing (or last did), as the status on the surface's bar. */
-function describe(step: WorkStep, waiting: boolean, work: Work): string {
+function describe(step: WorkStep, waiting: boolean, work: Work, processes: Processes): string {
   const file = baseName(String(step.args.path ?? ''));
   const running = step.state === 'running';
   const failed = step.state === 'failed';
@@ -186,15 +218,28 @@ function describe(step: WorkStep, waiting: boolean, work: Work): string {
             : `Ran ${line}`;
     }
   }
+  if (step.name === 'start_process') {
+    const line = commandLine(step);
+    const process = step.processId ? processes.get(step.processId) : undefined;
+    if (waiting) return `Waiting for your OK to start ${line}`;
+    if (step.state === 'running') return `Starting ${line}`;
+    if (!process) return step.state === 'failed' ? `${line} failed` : `Started ${line}`;
+    if (!process.running) return `${line} stopped`;
+    return process.url ? `Serving ${hostOf(process.url)}` : `${line} is running`;
+  }
+  if (step.name === 'read_process') return `Checked the output of ${step.processId ?? 'a process'}`;
+  if (step.name === 'stop_process') return `Stopped ${step.processId ?? 'a process'}`;
   if (step.kind === 'browser') {
-    const address = pageAddress(work.pages, step);
-    let host = address;
-    try {
-      host = new URL(address).host || address;
-    } catch {
-      // Not a full address: show it as given.
-    }
-    return `${running ? 'Browsing' : 'Viewed'} ${host || 'a page'}`;
+    return `${running ? 'Browsing' : 'Viewed'} ${hostOf(pageAddress(work.pages, step)) || 'a page'}`;
   }
   return `${waiting ? 'Waiting for your OK to use' : running ? 'Using' : failed ? 'Couldn’t use' : 'Used'} ${toolLabel(step.name)}`;
+}
+
+/** An address's host and port, or the address as given when it isn't a full one. */
+function hostOf(address: string): string {
+  try {
+    return new URL(address).host || address;
+  } catch {
+    return address;
+  }
 }

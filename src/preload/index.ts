@@ -20,6 +20,7 @@ const api: PlatformAPI = {
   scmStatus: invoke('scmStatus'), scmDiff: invoke('scmDiff'), scmStage: invoke('scmStage'), scmUnstage: invoke('scmUnstage'), scmCommit: invoke('scmCommit'),
   scmSync: invoke('scmSync'), scmBranches: invoke('scmBranches'), scmCheckout: invoke('scmCheckout'), scmCreateBranch: invoke('scmCreateBranch'),
   scmClone: invoke('scmClone'), scmPublish: invoke('scmPublish'), openLink: invoke('openLink'),
+  processStop: invoke('processStop'), processOpen: invoke('processOpen'),
   onStream(callback) {
     const listener = (_: Electron.IpcRendererEvent, event: StreamEvent) => callback(event);
     ipcRenderer.on('platform:stream', listener);

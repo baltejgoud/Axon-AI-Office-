@@ -927,3 +927,61 @@
 .work-page {
   contain: strict;
 }
+
+/* ---------- Preview and background processes ---------- */
+.office-container .work-browser-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--office-muted);
+}
+.office-container .work-browser-button:hover:not(:disabled) {
+  background: var(--office-paper);
+  color: var(--office-ink);
+}
+.work-preview-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+.work-term-badge {
+  padding: 0 7px;
+  border-radius: 5px;
+  background: #1b2740;
+  color: #8fa0bd;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+}
+.work-term-badge.is-running {
+  background: #12392e;
+  color: #7fd4b3;
+}
+.office-container .work-term-stop {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid #5a3040;
+  border-radius: 6px;
+  background: transparent;
+  color: #ffb3bc;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+}
+.office-container .work-term-stop:hover {
+  background: #3d1a24;
+}
+.work-browser-bar .work-term-stop {
+  border-color: #f0c2c9;
+  color: #bb3344;
+}
+.work-term-event {
+  color: #8fa0bd;
+  font-family: var(--font-sans);
+}

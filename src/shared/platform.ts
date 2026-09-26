@@ -1,4 +1,4 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo } from './types';
 import type { Briefing } from './planner';
 import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
 export interface PlatformState {
@@ -26,6 +26,8 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   projectRoot?: string | null;
   /** Tool calls waiting for the user, so a reopened window can still answer them. */
   pendingApprovals: ToolApprovalRequest[];
+  /** Commands the coworkers left running in the background. */
+  processes: ProcessInfo[];
   /** Start with Windows needs the installed app. */
   startWithWindowsAvailable: boolean;
 }
@@ -129,6 +131,10 @@ export interface PlatformAPI {
   /** The new repository's page on GitHub. */
   scmPublish(input: PublishInput): Promise<string>;
   openLink(url: string): Promise<void>;
+  /** Stops a background process a coworker started. */
+  processStop(id: string): Promise<void>;
+  /** Opens the page a background process serves in your browser. */
+  processOpen(id: string): Promise<void>;
   onStream(callback: (event: StreamEvent) => void): () => void;
 }
 declare global { interface Window { axon: PlatformAPI } }

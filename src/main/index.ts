@@ -26,7 +26,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart',
   'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut',
   'githubRepos', 'gitCheck', 'scmStatus', 'scmDiff', 'scmStage', 'scmUnstage', 'scmCommit', 'scmSync', 'scmBranches', 'scmCheckout', 'scmCreateBranch',
-  'scmClone', 'scmPublish', 'openLink'
+  'scmClone', 'scmPublish', 'openLink', 'processStop', 'processOpen'
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');
 function createWindow(): void {
@@ -39,6 +39,11 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  // A coworker's development server shows in a frame on their work surface; that frame may only go
+  // to pages on this machine (the page's own Content-Security-Policy frame-src says the same).
+  window.webContents.on('will-frame-navigate', event => {
+    if (!event.isMainFrame && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(event.url)) event.preventDefault();
+  });
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   window.once('ready-to-show', () => {
     if (saved.maximized) window?.maximize();

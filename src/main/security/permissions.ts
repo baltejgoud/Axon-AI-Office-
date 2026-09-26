@@ -23,7 +23,7 @@ interface PendingApproval {
 }
 
 /** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
-const EXACT_GRANTS = new Set(['run_command', 'git_commit']);
+const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
 
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
@@ -73,8 +73,11 @@ export class PermissionManager {
       }
     }
 
-    // 3. Shell execution permission check
-    if (toolName === 'run_command') {
+    // A background process's output and stop touch only what the same conversation started (the tools check).
+    if (toolName === 'read_process' || toolName === 'stop_process') return { action: 'allow' };
+
+    // 3. Shell execution permission check (a background process is a command that keeps running)
+    if (toolName === 'run_command' || toolName === 'start_process') {
       if (!allowShell) {
         return { action: 'deny', reason: 'Shell command execution is disabled in workspace settings.' };
       }

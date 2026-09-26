@@ -10,12 +10,14 @@ export const clampWorkSplit = (share: number): number =>
   Number.isFinite(share) ? Math.min(MAX_OFFICE_SHARE, Math.max(MIN_OFFICE_SHARE, share)) : DEFAULT_WORK_SPLIT;
 
 /** What a coworker is working in, each on its own tab of the work surface. */
-export type WorkKind = 'code' | 'files' | 'terminal' | 'browser' | 'tool';
+export type WorkKind = 'code' | 'files' | 'terminal' | 'preview' | 'browser' | 'tool';
 
 export const WORK_TABS: readonly { kind: WorkKind; label: string }[] = [
   { kind: 'code', label: 'Code' },
   { kind: 'files', label: 'Files' },
   { kind: 'terminal', label: 'Terminal' },
+  // A page a coworker's background process serves on this machine; shown when there is one.
+  { kind: 'preview', label: 'Preview' },
   { kind: 'browser', label: 'Browser' },
   { kind: 'tool', label: 'Tools' }
 ];
@@ -47,6 +49,9 @@ export function workKind(name: string, args: Record<string, unknown>): WorkKind 
       return 'files';
     case 'run_command':
     case 'git_commit':
+    case 'start_process':
+    case 'read_process':
+    case 'stop_process':
       return 'terminal';
   }
   if (OFFICE_TOOLS.has(name)) return null;
@@ -70,6 +75,8 @@ export interface WorkStep {
   change?: FileChange;
   /** A finished read, as the file's own lines. */
   read?: { text: string; firstLine: number };
+  /** The background process a start_process call began (or read_process and stop_process name). */
+  processId?: string;
   call: ToolCall;
 }
 
@@ -134,6 +141,9 @@ function stepOf(call: ToolCall, at: number): WorkStep | null {
     at,
     change: call.change,
     read: call.name === 'read_file' && state === 'done' ? readText(call.result ?? '') : undefined,
+    processId:
+      call.process?.id ??
+      (call.name.endsWith('_process') && typeof args.id === 'string' ? args.id : undefined),
     call
   };
   stepCache.set(call, step);
@@ -298,7 +308,10 @@ export function runSummary(
   }
   return {
     files: [...files.values()],
-    commands: steps.filter((s) => s.kind === 'terminal'),
+    // Checking on or stopping a background process isn't running anything new.
+    commands: steps.filter(
+      (s) => s.kind === 'terminal' && s.name !== 'read_process' && s.name !== 'stop_process'
+    ),
     looked: steps.filter((s) => s.name === 'read_file' || s.kind === 'files'),
     pages: steps.filter((s) => s.kind === 'browser'),
     tools: steps.filter((s) => s.kind === 'tool')
@@ -362,9 +375,16 @@ export function runTitle(summary: RunSummary, live: boolean): string {
     pages.length && `viewed ${count(pages.length, 'page')}`,
     tools.length && `used ${count(tools.length, 'tool')}`
   ].filter((part): part is string => Boolean(part));
-  const title = parts.length
-    ? parts.slice(0, 2).join(', ')
-    : `looked through ${count(looked.length, 'thing')}`;
+  // Only looked around: say how (files read, searches, listings).
+  const reads = new Set(looked.filter((s) => s.name === 'read_file').map(stepPath)).size;
+  const searches = looked.filter((s) => s.name === 'search_code').length;
+  const listings = looked.filter((s) => s.name === 'list_files').length;
+  const lookedParts = [
+    reads && `read ${count(reads, 'file')}`,
+    searches && `searched ${searches === 1 ? 'once' : `${searches} times`}`,
+    listings && 'listed files'
+  ].filter((part): part is string => Boolean(part));
+  const title = (parts.length ? parts : lookedParts).slice(0, 2).join(', ') || 'looked around';
   return title[0].toUpperCase() + title.slice(1);
 }
 

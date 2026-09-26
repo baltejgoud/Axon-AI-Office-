@@ -64,6 +64,23 @@ export interface ToolCall {
   change?: FileChange;
   /** A running command's output so far. Sent to the window while it runs; never saved. */
   progress?: string;
+  /** The background process a start_process call began. */
+  process?: { id: string };
+}
+
+/** A command left running in the background (a development server, a watcher). */
+export interface ProcessInfo {
+  id: string;
+  conversationId: string;
+  command: string;
+  cwd: string;
+  /** The page it serves on this machine, once it says so. */
+  url?: string;
+  running: boolean;
+  exitCode?: number | null;
+  /** The end of what it has printed. */
+  output: string;
+  startedAt: number;
 }
 
 /** Lines a file write added and removed, and the changed lines with a little context around them. */
@@ -384,6 +401,11 @@ export type StreamEvent =
       /** A line of clone, pull or push progress from git. */
       channel: 'git';
       line: string;
+    }
+  | {
+      /** A background process started, printed something, found its page, or ended. */
+      channel: 'process';
+      process: ProcessInfo;
     }
   | {
       channel: 'agent';

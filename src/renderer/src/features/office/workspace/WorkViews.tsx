@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ToolApprovalRequest } from '../../../../../shared/types';
+import type { ProcessInfo, ToolApprovalRequest } from '../../../../../shared/types';
 import { decideApproval } from '../../../chat/PendingApprovals';
 import hljs from 'highlight.js/lib/common';
 import {
   IconArrowLeft,
   IconArrowRight,
+  IconExternalLink,
   IconFileText,
   IconFolderOpen,
   IconLoader,
@@ -56,6 +57,8 @@ export function useSettled<T>(value: T, hold = HOLD_MS): T {
 
 /** Approval requests waiting on the user, by the tool call that asked. */
 export type Requests = ReadonlyMap<string, ToolApprovalRequest>;
+/** A conversation's background processes, by id. */
+export type Processes = ReadonlyMap<string, ProcessInfo>;
 
 /** Keeps a log scrolled to its newest line, unless the user scrolled up to read. */
 function useFollowScroll(progress: unknown) {
@@ -275,7 +278,7 @@ function Decision({ request, approve }: { request: ToolApprovalRequest; approve:
 /** The key the office's shortcuts use: ⌘ on a Mac, Ctrl elsewhere. */
 export const SHORTCUT_KEY = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 /** Commands whose "always allow" covers only the exact call (as in the main process's permissions). */
-const EXACT_GRANTS = new Set(['run_command', 'git_commit']);
+const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
 
 function FileTree({
   nodes,
@@ -457,18 +460,25 @@ function DiffText({ rows, path }: { rows: DiffRow[]; path: string }) {
 /* --------------------------------- Terminal ---------------------------------- */
 
 export function TerminalView({
-  commands,
+  commands: all,
   requests,
+  processes,
   project,
   target
 }: {
   commands: WorkStep[];
   requests: Requests;
+  processes: Processes;
   project: string | null;
   target: Target;
 }) {
+  // Reading a background process's output is the coworker checking its log: nothing to show.
+  const commands = all.filter((step) => step.name !== 'read_process');
   const last = commands[commands.length - 1];
-  const scroller = useFollowScroll(`${commands.length}|${last?.state}|${last?.output.length}`);
+  const lastProcess = last?.processId ? processes.get(last.processId) : undefined;
+  const scroller = useFollowScroll(
+    `${commands.length}|${last?.state}|${last?.output.length}|${lastProcess?.output.length}|${lastProcess?.running}`
+  );
   const home = project ? baseName(project) : 'project';
   // A command picked in the side panel scrolls into view.
   useLayoutEffect(() => {
@@ -481,22 +491,44 @@ export function TerminalView({
       {commands.map((step) => {
         const cwd = typeof step.args.cwd === 'string' && step.args.cwd ? `${home}/${step.args.cwd}` : home;
         const request = requests.get(step.id);
+        const process = step.processId ? processes.get(step.processId) : undefined;
+        if (step.name === 'stop_process')
+          return (
+            <div key={step.id} className="work-term-entry work-term-event" data-step={step.id}>
+              Stopped {process ? `${process.id} (${process.command})` : (step.processId ?? 'a process')}
+            </div>
+          );
+        // A background process: its own output as it goes, for as long as it runs.
+        const output = process?.output || step.output;
+        const running = process ? process.running : step.state === 'running';
         return (
           <div key={step.id} className={`work-term-entry is-${step.state}`} data-step={step.id}>
             <div className="work-term-command">
               <span className="work-term-cwd">{cwd}</span>
               <span className="work-term-sigil">$</span>
               <span>{commandLine(step)}</span>
+              {process && (
+                <span className={`work-term-badge${process.running ? ' is-running' : ''}`}>
+                  {process.running
+                    ? `${process.id} · running in the background`
+                    : `${process.id} · stopped${process.exitCode ? ` (exit ${process.exitCode})` : ''}`}
+                </span>
+              )}
+              {process?.running && (
+                <button className="work-term-stop" onClick={() => void window.axon.processStop(process.id)}>
+                  Stop
+                </button>
+              )}
             </div>
             {request ? (
               <div className="work-term-note">
-                Waiting for your OK to run this
-                <Decision request={request} approve="Run" />
+                Waiting for your OK to {step.name === 'start_process' ? 'start' : 'run'} this
+                <Decision request={request} approve={step.name === 'start_process' ? 'Start' : 'Run'} />
               </div>
             ) : (
               <>
-                {step.output && <TerminalOutput text={step.output} />}
-                {step.state === 'running' && <span className="work-term-cursor" aria-label="Running" />}
+                {output && <TerminalOutput text={output} />}
+                {running && <span className="work-term-cursor" aria-label="Running" />}
               </>
             )}
           </div>
@@ -641,6 +673,84 @@ export function BrowserView({ pages }: { pages: WorkStep[] }) {
           <pre className={step.state === 'failed' ? 'work-error' : ''}>{step.output}</pre>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Preview ---------------------------------- */
+
+/** An address on this machine the Preview may show: http(s) on localhost, 127.0.0.1 or [::1]. */
+const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i;
+
+/**
+ * The page a coworker's background process serves, live, as they build it. It shows in a
+ * sandboxed frame: it may run its scripts and forms, but not reach Axon, open windows or leave
+ * this machine (the window's content policy and navigation guard say the same).
+ */
+export function PreviewView({ process }: { process: ProcessInfo }) {
+  const [reload, setReload] = useState(0);
+  const url = process.url ?? '';
+  // Axon's own page (while developing Axon) is never framed: it would share its origin.
+  const sameOrigin = (() => {
+    try {
+      return new URL(url).origin === window.location.origin;
+    } catch {
+      return true;
+    }
+  })();
+  const allowed = LOOPBACK.test(url) && !sameOrigin;
+  return (
+    <div className="work-browser">
+      <div className="work-browser-bar">
+        <button
+          className="work-browser-button"
+          onClick={() => setReload((n) => n + 1)}
+          disabled={!process.running || !allowed}
+          aria-label="Reload the preview"
+          title="Reload"
+        >
+          <IconRefresh size={14} />
+        </button>
+        <div className="work-address" title={url}>
+          <IconWorld size={13} />
+          <span>{url}</span>
+        </div>
+        <button
+          className="work-browser-button"
+          onClick={() => void window.axon.processOpen(process.id)}
+          disabled={!process.running}
+          aria-label="Open in your browser"
+          title="Open in your browser"
+        >
+          <IconExternalLink size={14} />
+        </button>
+        {process.running && (
+          <button className="work-term-stop" onClick={() => void window.axon.processStop(process.id)}>
+            Stop
+          </button>
+        )}
+      </div>
+      {!allowed ? (
+        <div className="work-page">
+          <p className="work-error">Axon only previews pages on this machine, other than its own.</p>
+        </div>
+      ) : process.running ? (
+        <iframe
+          key={reload}
+          className="work-preview-frame"
+          src={url}
+          title={`Preview of ${url}`}
+          sandbox="allow-scripts allow-forms allow-same-origin"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className="work-page">
+          <p className="work-muted">
+            {process.command} stopped{process.exitCode ? ` (exit ${process.exitCode})` : ''}. Its last output:
+          </p>
+          <pre>{process.output.slice(-3000)}</pre>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import './workSummary.css';
 import { useMemo, type ReactNode } from 'react';
 import { useApp } from '../../../state';
 import { ToolCallDetails } from '../../../chat/MessageView';
-import { IconFileText, IconSearch, IconTerminal, IconTool, IconWorld } from '../../../ui';
+import { IconFileText, IconMonitor, IconSearch, IconTerminal, IconTool, IconWorld } from '../../../ui';
 import { useOfficeStore } from '../store/officeStore';
 import {
   baseName,
@@ -33,6 +33,7 @@ export function WorkSummary({
   live: boolean;
 }) {
   const approvals = useApp((s) => s.pendingApprovals);
+  const processes = useApp((s) => s.data?.processes);
   const requests = useMemo(
     () => new Map(Object.values(approvals).map((request) => [request.toolCallId, request])),
     [approvals]
@@ -102,11 +103,21 @@ export function WorkSummary({
           );
         })}
         {commands.map((step) => {
-          const { label, tone } = state(step, 'Done', 'Failed');
+          // A background process: whether it still runs, and the page it serves.
+          const process = step.processId ? processes?.find((p) => p.id === step.processId) : undefined;
+          const { label, tone } =
+            process && !requests.has(step.id)
+              ? process.running
+                ? {
+                    label: process.url ? `Serving ${process.url.replace(/^https?:\/\//, '')}` : 'Running',
+                    tone: 'running'
+                  }
+                : { label: 'Stopped', tone: 'done' }
+              : state(step, 'Done', 'Failed');
           return (
             <Row
               key={step.id}
-              icon={<IconTerminal size={14} />}
+              icon={process?.url ? <IconMonitor size={14} /> : <IconTerminal size={14} />}
               onClick={() => show(step)}
               tone={tone}
               label={label}

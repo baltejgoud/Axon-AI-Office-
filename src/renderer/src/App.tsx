@@ -51,6 +51,21 @@ export function App() {
         useOfficeStore.getState().focusOn(event);
         return;
       }
+      // A background process's news (several a second while a server starts): update it in place.
+      if (event.channel === 'process') {
+        const current = useApp.getState().data;
+        if (current)
+          useApp.getState().patch({
+            data: {
+              ...current,
+              processes: [
+                ...(current.processes ?? []).filter((p) => p.id !== event.process.id),
+                event.process
+              ]
+            }
+          });
+        return;
+      }
       // Task records arrive whole after every change: swap them in without a full refresh.
       if (event.channel === 'tasks') {
         const current = useApp.getState().data;

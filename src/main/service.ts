@@ -15,6 +15,7 @@ import { catalog, hasSkill, skillBodies } from './skills';
 import { roles, hasRole, roleProfiles } from './roles';
 import { dedupe, rolesBlock, skillsBlock } from './prompt';
 import { ToolRegistry } from './tools/registry';
+import { ProcessManager, localAddress } from './tools/processes';
 import { PermissionManager, type PermissionScope } from './security/permissions';
 import { fitToBudget, requestHistory } from './history';
 import { MCPClientManager } from './mcp/client-manager';
@@ -76,6 +77,8 @@ export class Service {
   readonly tools = new ToolRegistry();
   readonly permissions = new PermissionManager([], false);
   readonly mcp: MCPClientManager;
+  /** Commands the coworkers left running (development servers); the window hears their news. */
+  readonly processes = new ProcessManager(info => this.emit({ channel: 'process', process: info }));
   private runs = new Map<string, AbortController>();
   private attachments = new Map<string, { name: string; text: string }>();
   private readonly parsers: ParsePool;
@@ -146,6 +149,7 @@ export class Service {
       mcpServers: (this.state.mcpServers || []).map(({ apiKey: _secret, ...server }) => ({ ...server, hasApiKey: this.vault.has(mcpSecret(server.id)) })),
       projectRoot: this.project.root,
       pendingApprovals: this.permissions.pending(),
+      processes: this.processes.list(),
       startWithWindowsAvailable: process.platform === 'win32' && app.isPackaged
     };
   }
@@ -538,7 +542,7 @@ export class Service {
     const agent = chat.agentId ? this.state.agents.find(a => a.id === chat.agentId) : undefined;
     const maxSteps = Math.max(1, Math.min(30, agent?.maxSteps ?? 20));
     /** Records a call's outcome: a tool message, the next request, the call itself, and the window. */
-    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean; change?: FileChange }): void => {
+    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean; change?: FileChange; process?: { id: string } }): void => {
       this.state.messages.push({
         id: this.repo.id(),
         conversationId: id,
@@ -549,7 +553,8 @@ export class Service {
         createdAt: Date.now()
       });
       requests.push({ role: 'tool', toolCallId: tc.id, name: tc.name, content: outcome.content });
-      Object.assign(tc, outcome.isError ? { error: outcome.content } : { result: outcome.content, ...(outcome.change ? { change: outcome.change } : {}) });
+      Object.assign(tc, outcome.isError ? { error: outcome.content } : { result: outcome.content, ...(outcome.change ? { change: outcome.change } : {}) },
+        outcome.process ? { process: outcome.process } : {});
       this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, toolCall: { ...tc }, streaming: true, done: false });
     };
     let step = 0;
@@ -723,6 +728,8 @@ export class Service {
             project: this.project,
             allowShell: scope.allowShell,
             onOutput: running,
+            processes: this.processes,
+            conversationId: id,
             subagentRunner: async (subRole, subTask) =>
               this.runSubagent(provider.id, chat.modelId, subRole, subTask, chat.workspaceId, agent?.maxSteps, controller.signal, scope)
           }));
@@ -929,9 +936,11 @@ export class Service {
   stopAll(): void {
     for (const run of this.runs.values()) run.abort();
     this.mcp.stopAll();
+    this.processes.stopAll();
     this.stopTicking();
   }
   shutdown(): void {
+    this.processes.stopAll();
     this.reminders.stop();
     this.parsers.destroy();
     this.mcp.stopAll();
@@ -1053,6 +1062,16 @@ export class Service {
   scmPublish(input: PublishInput): Promise<string> {
     return this.withGitHub(() => this.scm.publish({ name: text(input?.name, 100).trim(), description: text(input?.description ?? '', 350),
       private: input?.private !== false, gitignore: input?.gitignore === true }));
+  }
+  /** Stops a background process a coworker started (the Stop button on their work surface). */
+  async processStop(id: string): Promise<void> {
+    this.processes.stop(text(id, 20));
+  }
+  /** Opens a background process's own page in your browser: only an address on this machine it printed. */
+  async processOpen(id: string): Promise<void> {
+    const url = this.processes.read(text(id, 20))?.url;
+    if (!url || localAddress(url) !== url) throw new Error('That process serves no page on this machine.');
+    await shell.openExternal(url);
   }
   /** Opens a page in your browser: only GitHub's, and Git's download page. */
   async openLink(url: string): Promise<void> {
