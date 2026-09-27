@@ -536,3 +536,107 @@ test('each step of a run stops showing as generating when the next one starts', 
   const second = events.findIndex((e) => e.channel === 'chat' && e.messageId === replies[1].id);
   assert.ok(events.indexOf(first[finished]) < second, 'before the next step speaks');
 });
+
+test('the context meter comes with each step, measured as fitToBudget measures, and again when the run ends', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  let sent;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    sent = { system: req.system, size: JSON.stringify(req.messages).length };
+    onChunk('Hello there.');
+    return { toolCalls: [], promptTokens: 20, completionTokens: 3 };
+  });
+  await service.chatSend(chat.id, 'Say hello', []);
+  const metered = events.filter((e) => e.channel === 'chat' && e.contextUsage);
+  const first = metered[0].contextUsage;
+  assert.equal(first.budgetChars, 300000);
+  assert.equal(first.usedChars, sent.system.length + sent.size);
+  assert.equal(first.estimated, true);
+  const last = metered.at(-1);
+  assert.equal(last.done, true);
+  assert.ok(last.contextUsage.usedChars > first.usedChars, 'the reply counts once it is part of the conversation');
+});
+
+test('a conversation past the budget shows a full meter as older turns are left out', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  for (let i = 0; i < 5; i++)
+    repo.state.messages.push({ id: repo.id(), conversationId: chat.id, role: i % 2 === 0 ? 'user' : 'assistant', content: `Message ${i}: ${'A'.repeat(80000)}`, createdAt: Date.now() + i });
+  let count;
+  mockModel(t, async (_p, _k, req, onChunk) => { count = req.messages.length; onChunk('ok'); return { toolCalls: [] }; });
+  await service.chatSend(chat.id, 'New user prompt', []);
+  const first = events.find((e) => e.channel === 'chat' && e.contextUsage).contextUsage;
+  assert.equal(first.pct, 1);
+  assert.ok(first.usedChars > first.budgetChars);
+  assert.ok(count < 6, 'and the request was trimmed');
+});
+
+test('the meter is there before anything is sent, in tokens once the model has a window and a reported prompt', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  repo.state.providers[0].models[0].contextWindow = 8192;
+  const chat = await service.chatCreate('p1', 'm1', null);
+  assert.equal(await service.getContextUsage('nope'), null);
+  const fresh = await service.getContextUsage(chat.id);
+  assert.equal(fresh.estimated, true);
+  assert.ok(fresh.usedChars > 0, 'the system prompt already takes room');
+  repo.state.messages.push(
+    { id: repo.id(), conversationId: chat.id, role: 'user', content: 'hi', createdAt: 1 },
+    { id: repo.id(), conversationId: chat.id, role: 'assistant', content: 'hello', createdAt: 2, providerId: 'p1', modelId: 'm1', usage: { promptTokens: 4096, completionTokens: 5 } }
+  );
+  const measured = await service.getContextUsage(chat.id);
+  assert.deepEqual(measured.tokenBasis, { usedTokens: 4096, windowTokens: 8192 });
+  assert.equal(measured.estimated, false);
+  assert.equal(measured.pct, 0.5);
+});
+
+test('a priced model gets an estimate before each call; an unpriced one gets none', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  let sent;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    sent = { size: req.system.length + JSON.stringify(req.messages).length, maxTokens: req.maxTokens };
+    onChunk('ok');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Unpriced', []);
+  assert.ok(!events.some((e) => e.estimate), 'no price, no estimate');
+  Object.assign(repo.state.providers[0].models[0], { pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15 });
+  events.length = 0;
+  await service.chatSend(chat.id, 'Priced', []);
+  const { estimate } = events.find((e) => e.estimate);
+  assert.equal(estimate.inputTokens, Math.ceil(sent.size / 4));
+  assert.equal(estimate.maxOutputTokens, sent.maxTokens);
+  assert.ok(Math.abs(estimate.maxOutputCost - (sent.maxTokens * 15) / 1e6) < 1e-12);
+});
+
+test("each step's reported usage reaches the window as the step ends", async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    if (++calls === 1) {
+      onChunk('Let me look.');
+      return { toolCalls: [{ id: 't1', name: 'list_files', arguments: '{}' }], promptTokens: 100, completionTokens: 10 };
+    }
+    onChunk('Done.');
+    return { toolCalls: [], promptTokens: 150, completionTokens: 5 };
+  });
+  await service.chatSend(chat.id, 'Look around', []);
+  const replies = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant');
+  const ended = events.find((e) => e.channel === 'chat' && e.messageId === replies[0].id && e.streaming === false);
+  assert.deepEqual(ended.usage, { promptTokens: 100, completionTokens: 10 });
+});

@@ -3,6 +3,8 @@
  * Everything persisted in the storage layer or crossing the IPC boundary
  * must be expressed with these types.
  */
+import type { ContextUsage } from './context-usage';
+import type { RunEstimate } from './cost';
 
 export type ID = string;
 
@@ -430,6 +432,10 @@ export type StreamEvent =
       done: boolean;
       toolCall?: ToolCall;
       approvalRequired?: ToolApprovalRequest;
+      /** How full the conversation's context is: as each step's call goes out, and when the run ends. */
+      contextUsage?: ContextUsage;
+      /** Before each call on a priced model: what it should cost. An estimate, until its usage arrives. */
+      estimate?: RunEstimate;
     }
   | {
       /** Every task record, after any change. */
