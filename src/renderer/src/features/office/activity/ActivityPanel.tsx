@@ -22,6 +22,7 @@ import { useEscape } from '../../../ui/escape';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 import { Planner } from './Planner';
 import { Briefing } from './Briefing';
+import { ConnectorRow } from './ConnectorRow';
 
 const FEED_PREVIEW = 3;
 
@@ -97,6 +98,7 @@ export function ActivityPanel() {
             <span className="status-dot-sm" />
             {status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1)}
           </span>
+          <ConnectorRow key={agent.id} agent={agent} />
         </div>
         <ConversationMenu
           open={menuOpen}
