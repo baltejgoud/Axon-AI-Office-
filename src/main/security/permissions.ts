@@ -8,7 +8,12 @@ export type PermissionAction = 'allow' | 'ask' | 'deny';
 export interface CheckResult {
   action: PermissionAction;
   reason?: string;
+  /** A session grant allowed it ("Always allow this session"). */
+  bySession?: boolean;
 }
+
+/** How an approval request ended. */
+export type ApprovalOutcome = 'approved' | 'approved-session' | 'rejected' | 'timed-out' | 'withdrawn';
 
 /** What one run may touch: its folders, and whether shell commands are on. */
 export interface PermissionScope {
@@ -18,7 +23,7 @@ export interface PermissionScope {
 
 interface PendingApproval {
   request: ToolApprovalRequest;
-  resolve: (approved: boolean) => void;
+  resolve: (outcome: ApprovalOutcome) => void;
   timer: NodeJS.Timeout;
 }
 
@@ -67,7 +72,7 @@ export class PermissionManager {
 
     // 1. Session-level grant check
     if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${toolName}:*`)) {
-      return { action: 'allow' };
+      return { action: 'allow', bySession: true };
     }
     // A connector tool: your override, or its server's read-only mark.
     if (connector) return { action: connector };
@@ -116,7 +121,7 @@ export class PermissionManager {
     toolName: string;
     args: Record<string, any>;
     preview?: ToolApprovalRequest['preview'];
-  }): { request: ToolApprovalRequest; promise: Promise<boolean> } {
+  }): { request: ToolApprovalRequest; promise: Promise<boolean>; outcome: Promise<ApprovalOutcome> } {
     const id = randomUUID();
     const request: ToolApprovalRequest = {
       id,
@@ -128,25 +133,21 @@ export class PermissionManager {
       preview: params.preview
     };
 
-    let resolver: (approved: boolean) => void = () => {};
-    const promise = new Promise<boolean>((resolve) => {
-      resolver = resolve;
+    let settle: (outcome: ApprovalOutcome) => void = () => {};
+    const outcome = new Promise<ApprovalOutcome>((resolve) => {
+      settle = resolve;
     });
+    const promise = outcome.then((ended) => ended === 'approved' || ended === 'approved-session');
 
     // 5-minute timeout on user approvals; a waiting approval never keeps the app from quitting.
     const timer = setTimeout(() => {
       this.pendingApprovals.delete(id);
-      resolver(false);
+      settle('timed-out');
     }, 300_000);
     timer.unref?.();
 
-    this.pendingApprovals.set(id, {
-      request,
-      resolve: resolver,
-      timer
-    });
-
-    return { request, promise };
+    this.pendingApprovals.set(id, { request, resolve: settle, timer });
+    return { request, promise, outcome };
   }
 
   /** Every request still waiting for the user. */
@@ -155,31 +156,33 @@ export class PermissionManager {
   }
 
   resolveApproval(decision: ToolApprovalDecision): boolean {
-    const pending = this.pendingApprovals.get(decision.requestId);
+    return this.settle(decision.requestId,
+      !decision.approved ? 'rejected' : decision.alwaysAllowSession ? 'approved-session' : 'approved');
+  }
+
+  /** The run that asked has stopped: the request is answered as withdrawn and leaves the pending list. */
+  withdraw(requestId: string): void {
+    this.settle(requestId, 'withdrawn');
+  }
+
+  private settle(requestId: string, outcome: ApprovalOutcome): boolean {
+    const pending = this.pendingApprovals.get(requestId);
     if (!pending) return false;
-
     clearTimeout(pending.timer);
-    this.pendingApprovals.delete(decision.requestId);
-
-    if (decision.approved && decision.alwaysAllowSession) {
+    this.pendingApprovals.delete(requestId);
+    if (outcome === 'approved-session') {
       const { toolName, arguments: args } = pending.request;
       this.sessionGrants.add(EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${toolName}:*`);
     }
-
-    pending.resolve(decision.approved);
+    pending.resolve(outcome);
     return true;
-  }
-
-  /** The run that asked has stopped: the request is answered as rejected and leaves the pending list. */
-  withdraw(requestId: string): void {
-    this.resolveApproval({ requestId, approved: false });
   }
 
   clearSession() {
     this.sessionGrants.clear();
     for (const pending of this.pendingApprovals.values()) {
       clearTimeout(pending.timer);
-      pending.resolve(false);
+      pending.resolve('withdrawn');
     }
     this.pendingApprovals.clear();
   }
