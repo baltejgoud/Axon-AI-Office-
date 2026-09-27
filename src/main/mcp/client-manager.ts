@@ -546,12 +546,21 @@ export class McpClient {
   }
 }
 
+export interface ManagerOptions {
+  /** How an HTTP server signs its requests; undefined for no sign-in (or a static API key). */
+  bearerFor?: (config: MCPServerConfig) => BearerSource | undefined;
+  /** A server's connection status changed. */
+  onChange?: (serverId: string, status: McpStatus) => void;
+}
+
 export class MCPClientManager {
   private clients = new Map<string, McpClient>();
-  /** The tool names each server registered, so removing one server removes exactly its tools. */
-  private names = new Map<string, string[]>();
+  /** Per server: its tools' own names → the names the model sees, so removing one server removes exactly its tools. */
+  private names = new Map<string, Map<string, string>>();
+  /** Per model-facing name: whose tool it is. */
+  private owners = new Map<string, { serverId: string; tool: DiscoveredMcpTool }>();
 
-  constructor(private readonly toolRegistry: ToolRegistry) {}
+  constructor(private readonly toolRegistry: ToolRegistry, readonly options: ManagerOptions = {}) {}
 
   getClients(): McpClient[] {
     return Array.from(this.clients.values());
@@ -561,67 +570,119 @@ export class MCPClientManager {
     return this.clients.get(id);
   }
 
+  /** One server's live state, for the window. */
+  info(id: string): { status: McpStatus; error: string | null; tools: McpToolInfo[] } | undefined {
+    const client = this.clients.get(id);
+    if (!client) return undefined;
+    const names = this.names.get(id);
+    const tools = names
+      ? client.tools.filter((tool) => names.has(tool.name)).map((tool) => ({
+          name: tool.name,
+          axonName: names.get(tool.name)!,
+          ...(tool.description ? { description: tool.description } : {}),
+          ...(tool.annotations ? { annotations: tool.annotations } : {})
+        }))
+      : [];
+    return { status: client.status, error: client.errorMessage, tools };
+  }
+
+  /** Whether a model-facing tool name is a connector's. */
+  isConnectorTool(name: string): boolean {
+    return this.owners.has(name);
+  }
+
+  toolOwner(name: string): { serverId: string; tool: DiscoveredMcpTool } | undefined {
+    return this.owners.get(name);
+  }
+
+  /** The definitions one server registered, in its order. */
+  definitionsFor(id: string): ToolDefinition[] {
+    return [...(this.names.get(id)?.values() ?? [])].flatMap((name) => {
+      const tool = this.toolRegistry.get(name);
+      return tool ? [tool.definition] : [];
+    });
+  }
+
   async syncServers(configs: MCPServerConfig[]): Promise<void> {
     const configMap = new Map(configs.map(c => [c.id, c]));
-
-    // 1. Remove clients that no longer exist or are disabled
+    // Servers removed or switched off go first.
     for (const [id, client] of this.clients) {
       const cfg = configMap.get(id);
-      if (!cfg || !cfg.enabled) {
-        client.disconnect();
-        this.unregisterTools(client);
-        this.clients.delete(id);
-      }
+      if (!cfg || !cfg.enabled) this.drop(id, client);
     }
-
-    // 2. Add or update enabled clients
+    // New ones connect; changed ones connect again.
     for (const cfg of configs) {
       if (!cfg.enabled) continue;
-
       const existing = this.clients.get(cfg.id);
-      if (existing) {
-        const changed =
-          existing.config.command !== cfg.command ||
-          existing.config.url !== cfg.url ||
-          existing.config.transport !== cfg.transport ||
-          existing.config.apiKey !== cfg.apiKey ||
-          JSON.stringify(existing.config.args) !== JSON.stringify(cfg.args) ||
-          JSON.stringify(existing.config.env) !== JSON.stringify(cfg.env) ||
-          JSON.stringify(existing.config.headers) !== JSON.stringify(cfg.headers);
-
-        if (changed) {
-          existing.disconnect();
-          this.unregisterTools(existing);
-          const client = new McpClient(cfg);
-          this.clients.set(cfg.id, client);
-          void this.initClient(client);
-        }
-      } else {
-        const client = new McpClient(cfg);
-        this.clients.set(cfg.id, client);
-        void this.initClient(client);
+      if (!existing) {
+        void this.start(cfg);
+        continue;
+      }
+      const changed =
+        existing.config.name !== cfg.name ||
+        existing.config.command !== cfg.command ||
+        existing.config.url !== cfg.url ||
+        existing.config.transport !== cfg.transport ||
+        existing.config.apiKey !== cfg.apiKey ||
+        JSON.stringify(existing.config.args) !== JSON.stringify(cfg.args) ||
+        JSON.stringify(existing.config.env) !== JSON.stringify(cfg.env) ||
+        JSON.stringify(existing.config.headers) !== JSON.stringify(cfg.headers);
+      if (changed) {
+        this.drop(cfg.id, existing);
+        void this.start(cfg);
       }
     }
+  }
+
+  /** Connects one server again from scratch (after a sign-in, or to retry); resolves once it has tried. */
+  async reconnect(config: MCPServerConfig): Promise<void> {
+    const existing = this.clients.get(config.id);
+    if (existing) this.drop(config.id, existing);
+    if (config.enabled) await this.start(config);
+  }
+
+  private drop(id: string, client: McpClient): void {
+    client.onStatusChange = null;
+    client.disconnect();
+    this.unregisterTools(client);
+    this.clients.delete(id);
+  }
+
+  private start(config: MCPServerConfig): Promise<void> {
+    const client = new McpClient(config, this.options.bearerFor?.(config));
+    client.onStatusChange = () => {
+      if (client.status === 'needs-sign-in') this.unregisterTools(client);
+      this.options.onChange?.(config.id, client.status);
+    };
+    this.clients.set(config.id, client);
+    return this.initClient(client);
   }
 
   private async initClient(client: McpClient) {
+    const id = client.config.id;
+    this.options.onChange?.(id, 'connecting');
     try {
       const tools = await client.connect();
+      // Replaced while it connected: the newer client registers its own tools.
+      if (this.clients.get(id) !== client) return client.disconnect();
       this.registerTools(client, tools);
     } catch (err: any) {
-      console.warn(`[MCPManager] Failed to connect to '${client.config.name}':`, err.message);
+      console.warn(`[MCPManager] Failed to connect to '${client.config.name}':`, err?.message);
     }
+    if (this.clients.get(id) === client) this.options.onChange?.(id, client.status);
   }
 
-  private registerTools(client: McpClient, tools: DiscoveredMcpTool[]) {
+  private registerTools(client: Pick<McpClient, 'config' | 'callTool'>, tools: DiscoveredMcpTool[]) {
+    this.unregisterTools(client);
     const taken = new Set(this.toolRegistry.getDefinitions().map((definition) => definition.name));
-    const names: string[] = [];
+    const names = new Map<string, string>();
     this.names.set(client.config.id, names);
 
     for (const tool of tools) {
       const toolName = mcpToolName(client.config.name, tool.name, taken);
       taken.add(toolName);
-      names.push(toolName);
+      names.set(tool.name, toolName);
+      this.owners.set(toolName, { serverId: client.config.id, tool });
 
       this.toolRegistry.register({
         definition: {
@@ -642,16 +703,15 @@ export class MCPClientManager {
     }
   }
 
-  private unregisterTools(client: McpClient) {
-    for (const name of this.names.get(client.config.id) ?? []) this.toolRegistry.unregister(name);
+  private unregisterTools(client: { config: { id: string } }) {
+    for (const name of this.names.get(client.config.id)?.values() ?? []) {
+      this.toolRegistry.unregister(name);
+      this.owners.delete(name);
+    }
     this.names.delete(client.config.id);
   }
 
   stopAll() {
-    for (const client of this.clients.values()) {
-      client.disconnect();
-      this.unregisterTools(client);
-    }
-    this.clients.clear();
+    for (const [id, client] of this.clients) this.drop(id, client);
   }
 }

@@ -115,3 +115,56 @@ test('a failed connection keeps its error status and message', async () => {
   assert.equal(client.status, 'error');
   assert.match(client.errorMessage, /exited with code 3/);
 });
+
+const { ToolRegistry } = require('../src/main/tools/registry.ts');
+const { MCPClientManager } = require('../src/main/mcp/client-manager.ts');
+
+test('the manager reports status, knows whose tools are whose, and reconnects on request', async (t) => {
+  const { url } = await mockServer(t, (req, res, msg) => {
+    if (req.method === 'DELETE') return accepted(res);
+    if (msg.method === 'initialize') return json(res, result(msg, { protocolVersion: '2025-06-18' }));
+    if (msg.id === undefined) return accepted(res);
+    return json(res, result(msg, { tools: [{ name: 'search', description: 'Find', annotations: { readOnlyHint: true } }] }));
+  });
+  const registry = new ToolRegistry();
+  const changes = [];
+  const manager = new MCPClientManager(registry, { onChange: (id, status) => changes.push(`${id}:${status}`) });
+  t.after(() => manager.stopAll());
+  const config = { id: 's1', name: 'Notes', transport: 'http', url, enabled: true };
+  await manager.reconnect(config);
+  assert.deepEqual(changes, ['s1:connecting', 's1:connected']);
+  const info = manager.info('s1');
+  assert.equal(info.status, 'connected');
+  assert.deepEqual(info.tools, [{ name: 'search', axonName: 'mcp_notes_search', description: 'Find', annotations: { readOnlyHint: true } }]);
+  assert.ok(manager.isConnectorTool('mcp_notes_search'));
+  assert.equal(manager.isConnectorTool('read_file'), false);
+  assert.equal(manager.toolOwner('mcp_notes_search').serverId, 's1');
+  assert.deepEqual(manager.definitionsFor('s1').map((d) => d.name), ['mcp_notes_search']);
+  await manager.reconnect({ ...config, enabled: false });
+  assert.equal(manager.info('s1'), undefined);
+  assert.equal(registry.get('mcp_notes_search'), undefined);
+});
+
+test('a server that loses its sign-in during a call withdraws its tools', async (t) => {
+  let signedIn = true;
+  const { url } = await mockServer(t, (req, res, msg) => {
+    if (req.method === 'DELETE') return accepted(res);
+    if (!signedIn) { res.writeHead(401); return res.end(); }
+    if (msg.method === 'initialize') return json(res, result(msg, { protocolVersion: '2025-06-18' }));
+    if (msg.id === undefined) return accepted(res);
+    return json(res, result(msg, { tools: [{ name: 'search' }] }));
+  });
+  const registry = new ToolRegistry();
+  const changes = [];
+  const manager = new MCPClientManager(registry, {
+    bearerFor: () => ({ token: async () => 't', refresh: async () => null }),
+    onChange: (id, status) => changes.push(status)
+  });
+  t.after(() => manager.stopAll());
+  await manager.reconnect({ id: 's1', name: 'Notes', transport: 'http', url, enabled: true });
+  signedIn = false;
+  const out = await registry.get('mcp_notes_search').execute({}, {});
+  assert.equal(out.isError, true);
+  assert.equal(changes.at(-1), 'needs-sign-in');
+  assert.equal(registry.get('mcp_notes_search'), undefined);
+});
