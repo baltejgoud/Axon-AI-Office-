@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ProcessInfo, ToolApprovalRequest } from '../../../../../shared/types';
 import { decideApproval } from '../../../chat/PendingApprovals';
+import { DiffLines, escapeHtml } from '../../../ui/DiffLines';
 import hljs from 'highlight.js/lib/common';
 import {
   IconArrowLeft,
@@ -168,7 +169,7 @@ export function CodeView({
         )}
         {file &&
           (showChanges && rows ? (
-            <DiffText key={`${file.path}|changes`} rows={rows} path={file.path} />
+            <DiffLines key={`${file.path}|changes`} rows={rows} path={file.path} />
           ) : (
             <CodeText
               key={file.path}
@@ -328,8 +329,6 @@ function FileTree({
   );
 }
 
-const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
 /** Highlighted markup for a file's text; highlight.js escapes what it is given. */
 function highlighted(text: string, path: string): string {
   const language = languageOf(path);
@@ -388,71 +387,6 @@ function CodeText({
       <pre className="work-code-text">
         <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
       </pre>
-    </div>
-  );
-}
-
-/** Diffs longer than this are shown without highlighting, to stay quick. */
-const HIGHLIGHT_ROWS = 3000;
-
-/** "Lines 16–21", from a hunk header's new side. */
-function hunkLabel(header: string): string {
-  const [, start, count = '1'] = /\+(\d+)(?:,(\d+))?/.exec(header) ?? [];
-  const from = Number(start);
-  const to = from + Number(count) - 1;
-  return to > from ? `Lines ${from}–${to}` : `Line ${from}`;
-}
-
-/** A file's changes: each hunk with its old and new line numbers, starting at the first change. */
-function DiffText({ rows, path }: { rows: DiffRow[]; path: string }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const language = languageOf(path);
-  const markup = useMemo(
-    () =>
-      rows.map((row) =>
-        row.kind === 'hunk'
-          ? ''
-          : rows.length <= HIGHLIGHT_ROWS && language && hljs.getLanguage(language)
-            ? hljs.highlight(row.text, { language, ignoreIllegals: true }).value
-            : escapeHtml(row.text)
-      ),
-    [rows, language]
-  );
-  const first = rows.findIndex((row) => row.kind === 'add' || row.kind === 'del');
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    const row = el?.querySelector<HTMLElement>(`[data-row="${first}"]`);
-    if (el && row) el.scrollTop = Math.max(0, row.offsetTop - el.clientHeight / 3);
-  }, [first]);
-  return (
-    <div
-      className="work-code-scroll work-diff"
-      ref={scroller}
-      tabIndex={0}
-      aria-label={`Changes to ${baseName(path)}`}
-    >
-      <table className="work-diff-table">
-        <tbody>
-          {rows.map((row, i) =>
-            row.kind === 'hunk' ? (
-              <tr key={i} className="work-diff-hunk">
-                <td colSpan={3}>{hunkLabel(row.text)}</td>
-              </tr>
-            ) : (
-              <tr key={i} className={`work-diff-${row.kind}`} data-row={i}>
-                <td className="work-diff-num">{row.oldLine ?? ''}</td>
-                <td className="work-diff-num">{row.newLine ?? ''}</td>
-                <td className="work-diff-code">
-                  <span className="work-diff-mark" aria-hidden="true">
-                    {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ' '}
-                  </span>
-                  <code className="hljs" dangerouslySetInnerHTML={{ __html: markup[i] }} />
-                </td>
-              </tr>
-            )
-          )}
-        </tbody>
-      </table>
     </div>
   );
 }

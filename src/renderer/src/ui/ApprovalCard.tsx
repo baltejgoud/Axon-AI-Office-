@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ToolApprovalRequest } from '../../../shared/types';
 import { Button, IconCheck, IconClose, IconShieldAlert, IconTerminal } from './index';
+import { DiffLines } from './DiffLines';
+import { diffRows, diffStats } from '../features/office/workspace/work';
 
 export function ApprovalCard({
   request,
@@ -17,6 +19,8 @@ export function ApprovalCard({
   };
 
   const preview = request.preview;
+  const path = preview?.path ?? String(request.arguments.path ?? '');
+  const stats = preview?.type === 'diff' ? diffStats(preview.content) : null;
 
   return (
     <div className="approval-card">
@@ -31,35 +35,37 @@ export function ApprovalCard({
       </div>
 
       <div className="approval-description">
-        The assistant is requesting permission to execute <code>{request.toolName}</code>
-        {request.arguments.path ? (
+        {stats ? (
+          stats.created ? (
+            <>
+              Create <code>{path}</code>: {stats.added} line{stats.added === 1 ? '' : 's'}.
+            </>
+          ) : (
+            <>
+              Save changes to <code>{path}</code>: {stats.added} added, {stats.removed} removed.
+            </>
+          )
+        ) : (
           <>
-            {' '}
-            on file <code>{String(request.arguments.path)}</code>
+            The assistant is requesting permission to execute <code>{request.toolName}</code>
+            {request.arguments.path ? (
+              <>
+                {' '}
+                on file <code>{String(request.arguments.path)}</code>
+              </>
+            ) : request.arguments.command ? (
+              <>
+                : command <code>{String(request.arguments.command)}</code>
+              </>
+            ) : null}
+            .
           </>
-        ) : request.arguments.command ? (
-          <>
-            : command <code>{String(request.arguments.command)}</code>
-          </>
-        ) : null}
-        .
+        )}
       </div>
 
       {preview?.type === 'diff' && (
         <div className="approval-preview-diff">
-          {preview.content.split('\n').map((line, idx) => {
-            const isAdd = line.startsWith('+') && !line.startsWith('+++');
-            const isDel = line.startsWith('-') && !line.startsWith('---');
-            const isHdr = line.startsWith('@@') || line.startsWith('---') || line.startsWith('+++');
-            return (
-              <div
-                key={idx}
-                className={`approval-diff-line ${isAdd ? 'add' : isDel ? 'del' : isHdr ? 'hdr' : ''}`}
-              >
-                {line}
-              </div>
-            );
-          })}
+          <DiffLines rows={diffRows(preview.content)} path={path} limit={400} />
         </div>
       )}
 
