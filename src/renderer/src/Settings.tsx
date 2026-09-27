@@ -43,6 +43,7 @@ import { AccountsSection } from './settings/AccountsSection';
 import { ConnectorsSection } from './settings/ConnectorsSection';
 import { ConnectorDialog } from './settings/ConnectorDialog';
 import { UsageSection } from './settings/UsageSection';
+import { RestorePoints } from './settings/RestorePoints';
 import { useOfficeStore } from './features/office/store/officeStore';
 
 type Section = 'accounts' | 'models' | 'usage' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
@@ -496,6 +497,7 @@ function PrivacySection() {
           </div>
         </SettingRow>
       </SettingsGroup>
+      <RestorePoints />
       <p className="settings-footnote">Axon is in beta: import only documents you trust.</p>
     </div>
   );

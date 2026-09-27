@@ -990,3 +990,19 @@
   font-weight: normal;
   color: var(--text-tertiary);
 }
+
+/* Restore points: now, then one row per snapshot */
+.restore-points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.restore-points > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+.restore-now .settings-item-title {
+  color: var(--text-secondary);
+}
+.restore-point .settings-item-title .usage-muted {
+  font-weight: normal;
+}
