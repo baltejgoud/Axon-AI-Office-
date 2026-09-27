@@ -39,7 +39,22 @@ const mock = http.createServer((request, response) => {
   });
 });
 mock.listen(0, '127.0.0.1', () => { globalThis.__axonMockPort = mock.address().port; });
-const timeout = setTimeout(() => { console.error('SMOKE_FAIL: timed out'); app.exit(1); }, 30000);
+// Loopback-only MCP server (Streamable HTTP, no sign-in) for the connector round trip.
+const mcpMock = http.createServer((request, response) => {
+  let body = '';
+  request.on('data', (c) => (body += c));
+  request.on('end', () => {
+    if (request.method !== 'POST') { response.writeHead(200); response.end(); return; }
+    const msg = JSON.parse(body);
+    if (msg.id === undefined) { response.writeHead(202); response.end(); return; }
+    const reply = (result) => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result })); };
+    if (msg.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} } });
+    if (msg.method === 'tools/list') return reply({ tools: [{ name: 'lookup', description: 'Find a note', annotations: { readOnlyHint: true } }, { name: 'create_note', description: 'Write a note' }] });
+    reply({ content: [{ type: 'text', text: 'ok' }] });
+  });
+});
+mcpMock.listen(0, '127.0.0.1', () => { globalThis.__axonMcpPort = mcpMock.address().port; });
+const timeout = setTimeout(() => { console.error('SMOKE_FAIL: timed out'); app.exit(1); }, 45000);
 app.on('web-contents-created', (_, contents) => {
   contents.on('did-fail-load', (_, code, description) => console.error('LOAD_FAIL', code, description));
   contents.on('preload-error', (_, file, error) => console.error('PRELOAD_FAIL', file, error.message));
@@ -69,6 +84,44 @@ app.on('web-contents-created', (_, contents) => {
         if (assistant.usage?.promptTokens !== 7 || assistant.usage?.completionTokens !== 4) throw new Error('Usage not captured: ' + JSON.stringify(assistant.usage));
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
+        // A connector over Streamable HTTP connects, and its tools reach the window.
+        await window.axon.mcpServerSave({ id: 'smoke-conn', name: 'Smoke Notes', transport: 'http', url: 'http://127.0.0.1:${globalThis.__axonMcpPort}/mcp', enabled: true, coworkers: ['chats'], args: [], env: {}, headers: {} });
+        let conn;
+        for (let i = 0; i < 50; i++) {
+          conn = (await window.axon.snapshot()).mcpServers.find((s) => s.id === 'smoke-conn');
+          if (conn?.status === 'connected') break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        if (conn?.status !== 'connected' || conn.tools.map((t) => t.axonName).join() !== 'mcp_smoke_notes_lookup,mcp_smoke_notes_create_note') throw new Error('Connector did not connect: ' + JSON.stringify(conn));
+        let refused = false;
+        try { await window.axon.connectorAdd('no-such-connector'); } catch { refused = true; }
+        if (!refused) throw new Error('An unknown connector was accepted');
+        window.__smoke = { chatId: chat.id, providerId: id };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, providerTest: true, selection: true, connector: true };
+      })()`);
+      // Settings → Connectors shows the connected one and the catalog; its picture is saved for review.
+      result.connectorsPage = await contents.executeJavaScript(`(async () => {
+        const wait = () => new Promise(resolve => setTimeout(resolve, 300));
+        document.querySelector('button[aria-label="Office settings"]').click();
+        await wait();
+        document.querySelector('#settings-tab-tools').click();
+        await wait();
+        const row = [...document.querySelectorAll('.settings-item')].find(item => item.textContent.includes('Smoke Notes'));
+        if (!row || !row.textContent.includes('Connected · 2 tools')) throw new Error('Connected connector not shown: ' + row?.textContent);
+        const cards = document.querySelectorAll('.connector-card').length;
+        if (cards < 35) throw new Error('Catalog shows ' + cards + ' connectors');
+        return { cards };
+      })()`);
+      fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
+      fs.writeFileSync(path.join(__dirname, '../test-results/connectors.png'), (await contents.capturePage()).toPNG());
+      await contents.executeJavaScript(`(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        if (document.querySelector('.office-overlay')) throw new Error('Esc did not close the Settings sheet');
+        await window.axon.mcpServerDelete('smoke-conn');
+      })()`);
+      result.layeredEscape = await contents.executeJavaScript(`(async () => {
+        const { chatId, providerId: id } = window.__smoke;
         // Layered Esc: a modal opened inside the Settings sheet closes first; the sheet stays open.
         const wait = () => new Promise(resolve => setTimeout(resolve, 200));
         document.querySelector('button[aria-label="Office settings"]').click();
@@ -102,9 +155,10 @@ app.on('web-contents-created', (_, contents) => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         await wait();
         if (document.querySelector('.office-overlay')) throw new Error('Esc did not close the Settings sheet');
-        await window.axon.chatDelete(chat.id); await window.axon.providerDelete(id);
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, providerTest: true, selection: true, layeredEscape: true, title: document.title };
+        await window.axon.chatDelete(chatId); await window.axon.providerDelete(id);
+        return true;
       })()`);
+      result.title = await contents.executeJavaScript('document.title');
       if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
       const sent = bodies.map((body) => JSON.parse(body)).find((body) => body.messages?.some((m) => m.role === 'system'));
       if (!sent) throw new Error('The chat request never reached the provider');
@@ -118,8 +172,8 @@ app.on('web-contents-created', (_, contents) => {
       const image = await contents.capturePage();
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
       fs.writeFileSync(path.join(__dirname, '../test-results/desktop.png'), image.toPNG());
-      clearTimeout(timeout); mock.close(); app.quit();
-    } catch (error) { console.error('SMOKE_FAIL', error); clearTimeout(timeout); mock.close(); app.exit(1); }
+      clearTimeout(timeout); mock.close(); mcpMock.close(); app.quit();
+    } catch (error) { console.error('SMOKE_FAIL', error); clearTimeout(timeout); mock.close(); mcpMock.close(); app.exit(1); }
   });
 });
 require('../out/main/index.js');

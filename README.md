@@ -32,7 +32,8 @@ How keys, requests, streaming, tools and storage work end to end: [docs/backend.
 
 ```powershell
 npm run typecheck
-npm test        # unit tests: protocols, history, permissions, MCP, storage, office
+npm test        # unit tests: protocols, history, permissions, MCP, connectors, storage, office
+npm run connectors:check   # every catalog connector against its live service (network)
 npm run build
 npm run test:desktop
 npm run package:dir
@@ -47,7 +48,7 @@ Unit tests use Node's test runner and the installed TypeScript compiler. Protoco
 - `D:\Baltej IDE\src\main\providers.ts`: endpoint policy, SSE parser, three protocol adapters, retries, timeouts, provider error messages, replay of thinking/tool turns, usage capture.
 - `D:\Baltej IDE\src\main\history.ts`: the history each request carries (every tool call paired with its result, trimmed by whole turns).
 - `D:\Baltej IDE\src\main\tools\registry.ts`, `src\main\security\permissions.ts`: built-in tools and the allow/ask/deny policy with approvals.
-- `D:\Baltej IDE\src\main\mcp\client-manager.ts`: MCP servers over stdio and SSE; their tools join the registry.
+- `D:\Baltej IDE\src\main\mcp\client-manager.ts`, `src\main\mcp\oauth.ts`, `src\connectors\catalog.json`: connectors, i.e. MCP servers over Streamable HTTP, stdio and SSE with a browser sign-in; a catalog of 39; their tools join the registry and go to the coworkers they're given to.
 - `D:\Baltej IDE\src\main\colleagues.ts`, `src\main\tasks`, `src\main\reminders.ts`, `src\main\shell`: office coworkers asking each other, task records, the planner, reminders, tray and notifications.
 - `D:\Baltej IDE\src\main\repository.ts`: validated schema-v1 state, corruption quarantine, migration seam, rolling backups.
 - `D:\Baltej IDE\src\main\parse-pool.ts` and `src\main\workers\parse-worker.ts`: document parsing isolated in utilityProcess workers (30s timeout, crash respawn).
@@ -68,7 +69,7 @@ One versioned JSON document is persisted with serialized replacement writes, ser
 
 - Conversation/document text is not encrypted on disk. Use full-disk encryption.
 - Selected content goes to your chosen provider; its privacy and billing policies apply.
-- Tools run only in conversations with a project folder. Reading is automatic; writing files, running commands (off by default in settings), commits, sub-agents and MCP tools each need approval. "Always allow" lasts until Axon restarts.
+- File tools run only in conversations with a project folder. Reading is automatic; writing files, running commands (off by default in settings), commits and sub-agents each need approval. Connector tools a catalog server marks read-only run on their own; every other connector tool asks. "Always allow" lasts until Axon restarts. Connector sign-ins are kept in the OS vault.
 - Nothing runs on a schedule: agents only work when you ask. Interval schedules saved by older builds are switched off when data loads. Reminders are the only timed events.
 - No vector search, OCR, image understanding, repository-wide knowledge import or executable plugins. MCP environment variables and custom headers are stored unencrypted; use the API key field for secrets.
 - File checks block ordinary traversal and symlink/junction escapes but not a malicious local process racing file replacement. Keep projects under your control.
