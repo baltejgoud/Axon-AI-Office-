@@ -55,6 +55,40 @@ export interface ProviderConnectResult {
   models: string[] | null;
   savedKeyWithheld: boolean;
 }
+/** Tokens replies reported, and what they cost at the prices you set. */
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+  /** Dollars for replies whose model has a price; null when none of them has one. */
+  cost: number | null;
+  /** Replies that reported usage. */
+  turns: number;
+  /** Of those, replies whose model has no price: in the tokens, not in the cost. */
+  unpricedTurns: number;
+}
+/** One line of a Usage table: a day, a provider, a model or a conversation. */
+export interface UsageRow {
+  key: string;
+  label: string;
+  detail?: string;
+  totals: UsageTotals;
+}
+/** Settings → Usage, added up from every reply's reported usage when asked. */
+export interface UsageReport {
+  today: UsageTotals;
+  /** The last 7 days, today included. */
+  week: UsageTotals;
+  allTime: UsageTotals;
+  /** Newest first; days without usage left out. */
+  byDay: UsageRow[];
+  byProvider: UsageRow[];
+  /** Whether the model has a price set now. */
+  byModel: (UsageRow & { priced: boolean })[];
+  /** Most recently used first. */
+  conversations: (UsageRow & { lastUsedAt: number })[];
+  /** Replies that finished without reporting usage. */
+  unreportedTurns: number;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
