@@ -1,6 +1,7 @@
 import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo } from './types';
 import type { Briefing } from './planner';
 import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
+import type { ContextUsage } from './context-usage';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -141,6 +142,14 @@ export interface PlatformAPI {
   chatDelete(id: string): Promise<void>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;
   chatStop(id: string): Promise<void>;
+  /** The context meter for a conversation before anything is sent; null for an unknown conversation. */
+  getContextUsage(conversationId: string): Promise<ContextUsage | null>;
+  /** Settings → Usage: every reply's reported usage, added up; dollars only for models with prices. */
+  usageReport(): Promise<UsageReport>;
+  /** Settings → Restore points: the rolling backups, newest first. */
+  listBackups(): Promise<BackupSummary[]>;
+  /** Asks natively first; then restores the backup and restarts Axon. Rejects with "Restore cancelled." on Cancel. */
+  restoreBackup(file: string): Promise<void>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
   knowledgeImport(): Promise<void>;

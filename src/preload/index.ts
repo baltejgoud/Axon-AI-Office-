@@ -12,6 +12,7 @@ const api: PlatformAPI = {
   connectorSignOut: invoke('connectorSignOut'), connectorAppSave: invoke('connectorAppSave'), chatCreate: invoke('chatCreate'), chatRename: invoke('chatRename'),
   chatSelectionSet: invoke('chatSelectionSet'),
   chatDelete: invoke('chatDelete'), chatSend: invoke('chatSend'), chatStop: invoke('chatStop'), toolApprove: invoke('toolApprove'), attach: invoke('attach'),
+  getContextUsage: invoke('getContextUsage'), usageReport: invoke('usageReport'), listBackups: invoke('listBackups'), restoreBackup: invoke('restoreBackup'),
   knowledgeImport: invoke('knowledgeImport'), knowledgeDelete: invoke('knowledgeDelete'), knowledgeSearch: invoke('knowledgeSearch'),
   projectChoose: invoke('projectChoose'), projectRecent: invoke('projectRecent'), projectOpen: invoke('projectOpen'), projectForget: invoke('projectForget'), projectList: invoke('projectList'), projectRead: invoke('projectRead'),
   projectWrite: invoke('projectWrite'), projectSearch: invoke('projectSearch'),

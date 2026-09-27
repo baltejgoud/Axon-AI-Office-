@@ -4,8 +4,10 @@ const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
 const original = Module._load;
+/** Electron as the service sees it; a test sets the native dialog's answer and watches restarts. */
+const electron = { app: { isPackaged: false, relaunch() {}, quit() {} }, dialog: {}, utilityProcess: { fork: () => ({ on() {}, postMessage() {}, kill() {} }) } };
 Module._load = function (name, ...args) {
-  if (name === 'electron') return { app: { isPackaged: false }, dialog: {}, utilityProcess: { fork: () => ({ on() {}, postMessage() {}, kill() {} }) } };
+  if (name === 'electron') return electron;
   return original.call(this, name, ...args);
 };
 require.extensions['.ts'] = (module, file) => module._compile(
@@ -639,4 +641,90 @@ test("each step's reported usage reaches the window as the step ends", async (t)
   const replies = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant');
   const ended = events.find((e) => e.channel === 'chat' && e.messageId === replies[0].id && e.streaming === false);
   assert.deepEqual(ended.usage, { promptTokens: 100, completionTokens: 10 });
+});
+
+test("a model keeps the context window and prices you give it; a detail that isn't a number is refused", async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const provider = {
+    id: 'px', name: 'Priced', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', enabled: true, createdAt: 0, hasApiKey: false,
+    models: [
+      { id: 'm', displayName: 'm', contextWindow: 128000, pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15, junk: 'x' },
+      { id: 'free', displayName: 'free', pricePerMillionInputTokens: 0, pricePerMillionOutputTokens: 0 }
+    ]
+  };
+  await service.providerSave(provider);
+  assert.deepEqual(repo.state.providers[0].models, [
+    { id: 'm', displayName: 'm', contextWindow: 128000, pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15 },
+    { id: 'free', displayName: 'free', pricePerMillionInputTokens: 0, pricePerMillionOutputTokens: 0 }
+  ]);
+  for (const bad of [{ pricePerMillionInputTokens: -1 }, { pricePerMillionOutputTokens: 'lots' }, { pricePerMillionInputTokens: NaN }, { contextWindow: 0 }, { contextWindow: 1.5 }])
+    await assert.rejects(service.providerSave({ ...provider, id: 'py', models: [{ id: 'm', displayName: 'm', ...bad }] }), /whole number of tokens|dollar amount/, JSON.stringify(bad));
+  assert.equal(repo.state.providers.length, 1);
+});
+
+test("Settings → Usage adds up every reply's reported usage", async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  Object.assign(repo.state.providers[0].models[0], { pricePerMillionInputTokens: 2, pricePerMillionOutputTokens: 10 });
+  const chat = await service.chatCreate('p1', 'm1', null);
+  repo.state.messages.push({ id: repo.id(), conversationId: chat.id, role: 'assistant', content: 'ok', createdAt: Date.now(), providerId: 'p1', modelId: 'm1', usage: { promptTokens: 1000, completionTokens: 200 } });
+  const report = service.usageReport();
+  assert.equal(report.allTime.turns, 1);
+  assert.ok(Math.abs(report.allTime.cost - 0.004) < 1e-12);
+  assert.equal(report.conversations[0].key, chat.id);
+});
+
+const backupFile = 'state-2026-09-20T08-00-00-000Z.json';
+const seedBackup = (dir) => fs.writeFileSync(path.join(dir, 'backups', backupFile),
+  JSON.stringify({ version: 1, settings: {}, providers: [], conversations: [{ id: 'old' }], messages: [], workspaces: [], agents: [], documents: [], chunks: [] }));
+const answerDialog = (t, response) => {
+  const seen = { asked: null, restarts: 0, quits: 0 };
+  electron.dialog.showMessageBox = async (options) => { seen.asked = options; return { response }; };
+  electron.app.relaunch = () => { seen.restarts++; };
+  electron.app.quit = () => { seen.quits++; };
+  t.after(() => { delete electron.dialog.showMessageBox; electron.app.relaunch = () => {}; electron.app.quit = () => {}; });
+  return seen;
+};
+
+test('restore points are listed over IPC', async (t) => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  seedBackup(dir);
+  assert.equal((await service.listBackups()).find((b) => b.file === backupFile)?.conversations, 1);
+});
+
+test('restoring asks first, Cancel being the default, and Cancel changes nothing', async (t) => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  seedBackup(dir);
+  const seen = answerDialog(t, 0);
+  await assert.rejects(service.restoreBackup(backupFile), /cancelled/);
+  assert.match(seen.asked.detail, /backed up first/);
+  assert.equal(seen.asked.defaultId, 0);
+  assert.equal(seen.asked.cancelId, 0);
+  assert.equal(seen.restarts, 0);
+  const saved = path.join(dir, 'db', 'platform-v1.json');
+  assert.ok(!fs.existsSync(saved) || !JSON.parse(fs.readFileSync(saved, 'utf8')).conversations.some((c) => c.id === 'old'), 'nothing restored');
+});
+
+test('restoring after you confirm puts the backup back and restarts Axon', async (t) => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  seedBackup(dir);
+  const seen = answerDialog(t, 1);
+  await service.restoreBackup(backupFile);
+  assert.equal(seen.restarts, 1);
+  assert.equal(seen.quits, 1);
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'db', 'platform-v1.json'), 'utf8'));
+  assert.deepEqual(saved.conversations.map((c) => c.id), ['old']);
+});
+
+test('an unknown restore point is refused before anything is asked', async (t) => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const seen = answerDialog(t, 1);
+  await assert.rejects(service.restoreBackup('state-2026-01-01T00-00-00-000Z.json'), /gone/);
+  assert.equal(seen.asked, null);
 });

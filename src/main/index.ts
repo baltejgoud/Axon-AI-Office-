@@ -22,7 +22,7 @@ const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerConnect', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
   'settingsSave', 'mcpServerSave', 'mcpServerDelete',
-  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
+  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
   'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart',
   'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',

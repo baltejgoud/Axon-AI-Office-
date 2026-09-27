@@ -1,8 +1,8 @@
 import { app, dialog, shell } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch } from '../shared/platform';
-import type { FileChange, FocusTarget, McpToolPolicy, Settings, TaskItem, ToolDefinition } from '../shared/types';
+import type { BackupSummary, PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch, UsageReport } from '../shared/platform';
+import type { FileChange, FocusTarget, McpToolPolicy, ModelSpec, Settings, TaskItem, ToolDefinition } from '../shared/types';
 import type { Agent, Message, Selection, StreamEvent, Workspace, ToolApprovalDecision, ToolCall, ChatRequestMessage, MCPServerConfig, Conversation, ProviderConfig } from '../shared/types';
 import { Repository } from './repository';
 import { Vault } from './infra/vault';
@@ -20,6 +20,7 @@ import { PermissionManager, type PermissionScope } from './security/permissions'
 import { fitToBudget, requestHistory, requestSize } from './history';
 import { contextUsage, type ContextUsage } from '../shared/context-usage';
 import { modelOf, runEstimate } from '../shared/cost';
+import { buildUsageReport } from './usage-report';
 import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
@@ -92,6 +93,26 @@ const toolArgs = (json: string): Record<string, any> | null => {
     return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
   } catch { return null; }
 };
+/** A model as saved: its id and name, and the details you gave it. A detail that makes no sense is refused. */
+function cleanModel(m: ModelSpec): ModelSpec {
+  const detail = (value: unknown, valid: (n: number) => boolean, problem: string): number | undefined => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== 'number' || !Number.isFinite(value) || !valid(value)) throw new Error(`${problem} (${m.id}).`);
+    return value;
+  };
+  const contextWindow = detail(m.contextWindow, n => Number.isInteger(n) && n > 0, 'A context window is a whole number of tokens');
+  const input = detail(m.pricePerMillionInputTokens, n => n >= 0, 'A price is a dollar amount of zero or more');
+  const output = detail(m.pricePerMillionOutputTokens, n => n >= 0, 'A price is a dollar amount of zero or more');
+  return {
+    id: m.id,
+    displayName: m.displayName,
+    ...(contextWindow !== undefined ? { contextWindow } : {}),
+    ...(typeof m.supportsTools === 'boolean' ? { supportsTools: m.supportsTools } : {}),
+    ...(typeof m.supportsVision === 'boolean' ? { supportsVision: m.supportsVision } : {}),
+    ...(input !== undefined ? { pricePerMillionInputTokens: input } : {}),
+    ...(output !== undefined ? { pricePerMillionOutputTokens: output } : {})
+  };
+}
 export class Service {
   readonly project = new Project();
   readonly tools = new ToolRegistry();
@@ -223,6 +244,7 @@ export class Service {
     text(p.name, 100);
     if (!p.name.trim()) throw new Error('Invalid provider.');
     this.checkConnection(p);
+    const models = p.models.map(cleanModel);
     // A pasted key is stored cleaned, exactly as Test connection sends it; an empty one removes the saved key.
     const secret = key === undefined ? undefined : this.typedKey(key);
     const previous = this.state.providers.find(item => item.id === p.id);
@@ -231,7 +253,7 @@ export class Service {
       if (choice.response !== 1) throw new Error('Endpoint change cancelled.');
     }
     if (secret !== undefined) this.vault.set(p.id, secret);
-    const clean = { id: p.id, name: p.name.trim(), kind: p.kind, baseUrl: p.baseUrl, models: p.models,
+    const clean = { id: p.id, name: p.name.trim(), kind: p.kind, baseUrl: p.baseUrl, models,
       enabled: Boolean(p.enabled), createdAt: previous?.createdAt ?? Date.now(), hasApiKey: this.vault.has(p.id) };
     this.state.providers = [...this.state.providers.filter(item => item.id !== p.id), clean];
     await this.repo.save();
@@ -373,6 +395,37 @@ export class Service {
       keepInTray: s.keepInTray !== false, startWithWindows: Boolean(s.startWithWindows) };
     await this.repo.save();
     this.shell?.applySettings(this.state.settings);
+  }
+  /** Settings → Usage: tokens and (for models you priced) dollars, added up from every reply's reported usage. */
+  usageReport(): UsageReport {
+    return buildUsageReport(this.state, new Date());
+  }
+  /** Settings → Restore points: the rolling backups that could be restored, newest first. */
+  listBackups(): Promise<BackupSummary[]> {
+    return this.repo.listBackups();
+  }
+  /**
+   * Settings → Restore points: after you confirm, puts a backup back and restarts Axon. What you have
+   * now is backed up first, so this can be undone the same way. Nothing restores in place: connectors,
+   * reminders and open windows hold state from the old data, so the app restarts clean.
+   */
+  async restoreBackup(file: string): Promise<void> {
+    const name = text(file, 200);
+    const point = (await this.repo.listBackups()).find(b => b.file === name);
+    if (!point) throw new Error('That restore point is gone. Open Restore points again to see the ones there are.');
+    const counts = `${point.conversations} conversation${point.conversations === 1 ? '' : 's'}, ${point.providers} provider${point.providers === 1 ? '' : 's'}`;
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      message: 'Restore this snapshot and restart Axon?',
+      detail: `Everything goes back to how it was on ${new Date(point.timestamp).toLocaleString()} (${counts}). What you have now is backed up first, so you can restore it the same way. Axon restarts to finish.`,
+      buttons: ['Cancel', 'Restore and restart'],
+      defaultId: 0,
+      cancelId: 0
+    });
+    if (choice.response !== 1) throw new Error('Restore cancelled.');
+    await this.repo.restoreBackup(point.file);
+    app.relaunch();
+    app.quit();
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
