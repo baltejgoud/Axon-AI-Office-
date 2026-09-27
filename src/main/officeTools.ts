@@ -27,14 +27,16 @@ export function runRoots(input: {
 }
 
 /**
- * The tools a conversation offers the model. File tools (and MCP servers) still need a folder;
- * every coworker can ask a colleague, and coworkers do that instead of dispatching sub-agents. The
- * receptionist also keeps the planner.
+ * The tools a conversation offers the model. File tools still need a folder; connector tools come
+ * with the coworker (or your own chats) and don't. Every coworker can ask a colleague, and coworkers
+ * do that instead of dispatching sub-agents. The receptionist also keeps the planner.
  */
 export function toolsFor(input: {
   agentId?: string;
   hasFolder: boolean;
   registry: ToolDefinition[];
+  /** The run's connector tools, already chosen for its coworker. */
+  connectorTools?: ToolDefinition[];
 }): ToolDefinition[] {
   const coworker = coworkerById(input.agentId);
   const tools = input.hasFolder
@@ -42,5 +44,6 @@ export function toolsFor(input: {
     : [];
   if (coworker) tools.push(ASK_COLLEAGUE);
   if (input.agentId === RECEPTIONIST_ID) tools.push(...PLANNER_TOOLS);
+  tools.push(...(input.connectorTools ?? []));
   return tools;
 }

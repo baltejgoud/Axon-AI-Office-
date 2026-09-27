@@ -110,6 +110,8 @@ export interface Message {
   usage?: ChatUsage;
   /** True while assistant tokens are still streaming. */
   streaming?: boolean;
+  /** A note about the run itself, e.g. connectors left out for too many tools. */
+  notice?: string;
 }
 
 export interface Conversation {

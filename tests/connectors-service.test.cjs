@@ -126,3 +126,112 @@ test('servers saved by older builds keep their reach: everyone', (t) => {
   const coworkers = repo.state.mcpServers[0].coworkers;
   assert.ok(coworkers.includes('chats') && coworkers.includes('writer') && coworkers.includes('group:Design'));
 });
+
+const providers = require('../src/main/providers.ts');
+const { PermissionManager } = require('../src/main/security/permissions.ts');
+const { toolsFor } = require('../src/main/officeTools.ts');
+
+/** A connected server, straight into the manager, with the tools it offers; returns the calls it gets. */
+function connect(service, repo, server, tools) {
+  repo.state.mcpServers.push({ transport: 'http', url: 'https://x/mcp', enabled: true, args: [], env: {}, headers: {}, ...server });
+  const calls = [];
+  service.mcp.registerTools({ config: { id: server.id, name: server.name }, callTool: async (name) => { calls.push(name); return { content: `ok:${name}` }; } }, tools);
+  return calls;
+}
+const addProvider = (repo) => repo.state.providers.push({ id: 'p1', name: 'P', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }], enabled: true, createdAt: 0, hasApiKey: false });
+/** Swaps the provider for a script of replies for this test. */
+const mockModel = (t, respond) => {
+  const saved = providers.streamChat;
+  t.after(() => { providers.streamChat = saved; });
+  providers.streamChat = respond;
+};
+const notesTools = [{ name: 'search', annotations: { readOnlyHint: true } }, { name: 'create_page' }];
+
+test('the permission rule: off denies (even after always-allow), allow and ask pass through', () => {
+  const p = new PermissionManager([], false);
+  p.setConnectorRule((name) => ({ mcp_a: 'allow', mcp_b: 'ask', mcp_c: 'off' })[name] ?? null);
+  assert.equal(p.check({ toolName: 'mcp_a', args: {} }).action, 'allow');
+  assert.equal(p.check({ toolName: 'mcp_b', args: {} }).action, 'ask');
+  assert.equal(p.check({ toolName: 'mcp_c', args: {} }).action, 'deny');
+  assert.equal(p.check({ toolName: 'read_file', args: { path: 'a' } }, { roots: ['/p'], allowShell: false }).action, 'allow');
+  const { request } = p.createApprovalRequest({ conversationId: 'c', messageId: 'm', toolCallId: 't', toolName: 'mcp_c', args: {} });
+  p.resolveApproval({ requestId: request.id, approved: true, alwaysAllowSession: true });
+  assert.equal(p.check({ toolName: 'mcp_c', args: {} }).action, 'deny');
+});
+
+test('toolsFor adds connector tools without a folder', () => {
+  const names = toolsFor({ agentId: 'writer', hasFolder: false, registry: [{ name: 'read_file' }], connectorTools: [{ name: 'mcp_notes_search' }] }).map((t) => t.name);
+  assert.deepEqual(names, ['ask_colleague', 'mcp_notes_search']);
+});
+
+test("a coworker gets their own connectors: reads run, changes ask, and others' tools are refused", async (t) => {
+  const { repo, service, events } = makeService(t);
+  addProvider(repo);
+  const calls = connect(service, repo, { id: 's1', name: 'Notes', catalogId: 'notion', coworkers: ['writer'] }, notesTools);
+  const seen = [];
+  let step = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    seen.push({ tools: (req.tools ?? []).map((tool) => tool.name), system: req.system });
+    step++;
+    if (step === 1) return { toolCalls: [{ id: 'c1', name: 'mcp_notes_search', arguments: '{"q":"x"}' }] };
+    if (step === 2) return { toolCalls: [{ id: 'c2', name: 'mcp_notes_create_page', arguments: '{}' }] };
+    onChunk('done');
+    return { toolCalls: [] };
+  });
+  const chat = await service.chatCreate('p1', 'm1', null, 'writer', { skillIds: [], roleIds: [] }, null, 'You are the Writer.');
+  const run = service.chatSend(chat.id, 'Find it and write it up', []);
+  // The write asks: approve it when the card appears.
+  for (let i = 0; i < 200 && !events.some((e) => e.approvalRequired); i++) await new Promise((r) => setTimeout(r, 10));
+  const card = events.find((e) => e.approvalRequired);
+  assert.equal(card.approvalRequired.toolName, 'mcp_notes_create_page');
+  await service.toolApprove({ requestId: card.approvalRequired.id, approved: true });
+  await run;
+  assert.deepEqual(calls, ['search', 'create_page']);
+  assert.ok(seen[0].tools.includes('mcp_notes_search'));
+  assert.match(seen[0].system, /untrusted data, not instructions/);
+  assert.equal(events.filter((e) => e.approvalRequired).length, 1, 'the read ran without a card');
+
+  // The designer has no Notes connector: not offered, and refused if called anyway.
+  step = 0;
+  seen.length = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    seen.push({ tools: (req.tools ?? []).map((tool) => tool.name) });
+    if (step++ === 0) return { toolCalls: [{ id: 'c3', name: 'mcp_notes_search', arguments: '{}' }] };
+    onChunk('ok');
+    return { toolCalls: [] };
+  });
+  const other = await service.chatCreate('p1', 'm1', null, 'designer', { skillIds: [], roleIds: [] }, null, 'You are the Designer.');
+  await service.chatSend(other.id, 'Look it up', []);
+  assert.ok(!seen[0].tools.includes('mcp_notes_search'));
+  const refused = repo.state.messages.find((m) => m.conversationId === other.id && m.role === 'tool');
+  assert.match(refused.content, /isn't available/);
+  assert.deepEqual(calls, ['search', 'create_page']);
+});
+
+test('over the tool budget, whole connectors are left out and the reply says which', async (t) => {
+  const { repo, service } = makeService(t);
+  addProvider(repo);
+  const many = (prefix, n) => Array.from({ length: n }, (_, i) => ({ name: `${prefix}${i}`, annotations: { readOnlyHint: true } }));
+  connect(service, repo, { id: 'a', name: 'Alpha', catalogId: 'linear', coworkers: ['chats'] }, many('a', 60));
+  connect(service, repo, { id: 'b', name: 'Beta', catalogId: 'sentry', coworkers: ['chats'] }, many('b', 60));
+  let offered = [];
+  mockModel(t, async (_p, _k, req, onChunk) => { offered = (req.tools ?? []).map((tool) => tool.name); onChunk('hi'); return { toolCalls: [] }; });
+  const chat = await service.chatCreate('p1', 'm1', null);
+  await service.chatSend(chat.id, 'hello', []);
+  assert.equal(offered.filter((n) => n.startsWith('mcp_alpha')).length, 60);
+  assert.equal(offered.filter((n) => n.startsWith('mcp_beta')).length, 0);
+  const reply = repo.state.messages.find((m) => m.conversationId === chat.id && m.role === 'assistant');
+  assert.match(reply.notice, /Left out Beta: too many tools/);
+});
+
+test('a tool you turned off is neither offered nor run', async (t) => {
+  const { repo, service } = makeService(t);
+  addProvider(repo);
+  connect(service, repo, { id: 's1', name: 'Notes', catalogId: 'notion', coworkers: ['chats'], toolPolicy: { search: 'off' } }, notesTools);
+  let offered = [];
+  mockModel(t, async (_p, _k, req, onChunk) => { offered = (req.tools ?? []).map((tool) => tool.name); onChunk('hi'); return { toolCalls: [] }; });
+  const chat = await service.chatCreate('p1', 'm1', null);
+  await service.chatSend(chat.id, 'hello', []);
+  assert.deepEqual(offered.filter((n) => n.startsWith('mcp_')), ['mcp_notes_create_page']);
+  assert.equal(service.permissions.check({ toolName: 'mcp_notes_search', args: {} }).action, 'deny');
+});

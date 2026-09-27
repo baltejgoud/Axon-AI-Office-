@@ -888,6 +888,11 @@
   color: var(--danger-text);
   font-size: var(--text-sm);
 }
+.message-notice {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
 .message-actions {
   display: flex;
   gap: var(--space-1);

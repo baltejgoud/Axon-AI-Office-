@@ -1,7 +1,7 @@
 import { PLANNER_TOOL_NAMES } from '../tasks/tools';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
-import type { ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
+import type { McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
 
 export type PermissionAction = 'allow' | 'ask' | 'deny';
 
@@ -28,6 +28,8 @@ const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
+  /** How a connector's tool is treated; null for tools that aren't a connector's. */
+  private connectorRule: ((toolName: string) => McpToolPolicy | null) | null = null;
 
   constructor(
     private roots: string[],
@@ -38,6 +40,10 @@ export class PermissionManager {
   updateConfig(roots: string[], allowShell: boolean) {
     this.roots = roots;
     this.allowShell = allowShell;
+  }
+
+  setConnectorRule(rule: (toolName: string) => McpToolPolicy | null): void {
+    this.connectorRule = rule;
   }
 
   /** Relative paths are read against each root (tools take project-relative paths); absolute ones as they are. */
@@ -55,10 +61,16 @@ export class PermissionManager {
     const roots = scope?.roots ?? this.roots;
     const allowShell = scope?.allowShell ?? this.allowShell;
 
+    // A connector tool you turned off stays off, whatever was allowed before.
+    const connector = this.connectorRule?.(toolName) ?? null;
+    if (connector === 'off') return { action: 'deny', reason: 'This tool is turned off in Settings → Connectors.' };
+
     // 1. Session-level grant check
     if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${toolName}:*`)) {
       return { action: 'allow' };
     }
+    // A connector tool: your override, or its server's read-only mark.
+    if (connector) return { action: connector };
 
     // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
     if (toolName === 'ask_colleague') return { action: 'allow' };

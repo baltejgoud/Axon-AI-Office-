@@ -115,6 +115,7 @@ export function MessageView({
               : m.content || (m.streaming ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
           </Markdown>
         </div>
+        {m.notice && <p className="message-notice">{m.notice}</p>}
         {m.error && <p className="message-error">{m.error}</p>}
         {(actions || copyable) && (
           <div className="message-actions">
