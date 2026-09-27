@@ -27,6 +27,9 @@ How keys, requests, streaming, tools and storage work end to end: [docs/backend.
 - Project folder selection, bounded file listing/content search, text editor, file creation/updates with native confirmation. Explicit opt-in sharing of the current editor buffer.
 - Dark/light/system themes, keyboard shortcuts and local data/security information.
 - Bundled skills (from public Agent-Skills repositories, see `skills.sources.json`) and 198 authored roles, selectable per conversation, workspace, or agent profile and injected into the system prompt. Regenerate skills with `npm run skills:ingest`. Scripts and tool servers referenced by a skill do not run.
+- A context meter above each conversation: how full its context is, by the same measure that leaves older turns out, and in tokens once a model has its context window set. Opens to the numbers and says which are estimates.
+- Settings → Usage: the tokens every reply reported, by day, provider, model and conversation. Dollars only for models you give a price in the provider dialog (Axon ships no price table); while a reply streams its cost is a labelled estimate that snaps to the reported usage.
+- Restore points (Settings → Privacy & security): the rolling snapshots of all saved data. Restoring asks natively, backs up the current state first, and restarts Axon.
 
 ## Validation
 

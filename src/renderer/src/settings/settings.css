@@ -944,6 +944,10 @@
 .usage-stats .settings-stat-value {
   font-variant-numeric: normal;
 }
+/* The period on one line, its tokens and replies on the next, so the three tiles line up. */
+.usage-stats .settings-stat-label span {
+  display: block;
+}
 .usage-muted {
   font-size: var(--text-sm);
   color: var(--text-tertiary);

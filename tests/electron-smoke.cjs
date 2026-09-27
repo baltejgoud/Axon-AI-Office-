@@ -70,7 +70,7 @@ app.on('web-contents-created', (_, contents) => {
         if (!document.querySelector('.office-viewport')) throw new Error('Office did not render');
         if (document.querySelector('.sidebar, .chat-view, .return-to-office')) throw new Error('A page other than the office is reachable');
         const id = crypto.randomUUID();
-        await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
+        await window.axon.providerSave({ id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model', pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15 }], enabled: true, createdAt: Date.now(), hasApiKey: false }, 'smoke-key-123');
         const form = { id, name: 'Mock provider', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:${globalThis.__axonMockPort}/v1', models: [{ id: 'mock-model', displayName: 'Mock model' }], enabled: true, createdAt: Date.now(), hasApiKey: true };
         const check = await window.axon.providerTest(form);
         if (!check.results[0]?.ok) throw new Error('Test connection with the saved key failed: ' + JSON.stringify(check));
@@ -82,6 +82,14 @@ app.on('web-contents-created', (_, contents) => {
         const assistant = after.messages.find(m => m.conversationId === chat.id && m.role === 'assistant');
         if (!assistant || assistant.content !== 'Hello from Axon mock') throw new Error('Streaming E2E failed: ' + JSON.stringify(assistant));
         if (assistant.usage?.promptTokens !== 7 || assistant.usage?.completionTokens !== 4) throw new Error('Usage not captured: ' + JSON.stringify(assistant.usage));
+        // Transparency: the context meter, the usage report (a hand-computed sum) and restore points.
+        const meter = await window.axon.getContextUsage(chat.id);
+        if (!meter || meter.budgetChars !== 300000 || !(meter.usedChars > 0) || !(meter.pct > 0 && meter.pct <= 1)) throw new Error('Context meter wrong: ' + JSON.stringify(meter));
+        const report = await window.axon.usageReport();
+        const expected = (7 * 3 + 4 * 15) / 1e6;
+        if (report.allTime.turns !== 1 || report.allTime.promptTokens !== 7 || report.allTime.completionTokens !== 4 || Math.abs(report.allTime.cost - expected) > 1e-12) throw new Error('Usage report wrong: ' + JSON.stringify(report.allTime));
+        const points = await window.axon.listBackups();
+        if (points.length !== 1 || points[0].providers !== 1 || points[0].workspaces !== 1) throw new Error('Restore points wrong: ' + JSON.stringify(points));
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
         // A connector over Streamable HTTP connects, and its tools reach the window.
@@ -97,7 +105,7 @@ app.on('web-contents-created', (_, contents) => {
         try { await window.axon.connectorAdd('no-such-connector'); } catch { refused = true; }
         if (!refused) throw new Error('An unknown connector was accepted');
         window.__smoke = { chatId: chat.id, providerId: id };
-        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, providerTest: true, selection: true, connector: true };
+        return { bridge: true, renderer: true, isolation: true, chatCRUD: true, streamingE2E: true, usageE2E: true, providerTest: true, selection: true, connector: true, transparency: true };
       })()`);
       // Settings → Connectors shows the connected one and the catalog; its picture is saved for review.
       result.connectorsPage = await contents.executeJavaScript(`(async () => {
@@ -114,8 +122,27 @@ app.on('web-contents-created', (_, contents) => {
       })()`);
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
       fs.writeFileSync(path.join(__dirname, '../test-results/connectors.png'), (await contents.capturePage()).toPNG());
-      // Accounts: real sign-in buttons even without an app in this build; the first click sets one up.
       const shot = async (name) => fs.writeFileSync(path.join(__dirname, `../test-results/${name}.png`), (await contents.capturePage()).toPNG());
+      // Settings → Usage shows the priced model's cost; Privacy & security lists the start-up snapshot.
+      result.usagePage = await contents.executeJavaScript(`(async () => {
+        document.querySelector('#settings-tab-usage').click();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const usage = document.querySelector('.settings-content').textContent;
+        if (!usage.includes('Mock model') || !usage.includes('<$0.0001')) throw new Error('Usage page wrong: ' + usage);
+        return true;
+      })()`);
+      await shot('usage');
+      result.restorePoints = await contents.executeJavaScript(`(async () => {
+        document.querySelector('#settings-tab-privacy').click();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const rows = document.querySelectorAll('.restore-point');
+        if (rows.length !== 1 || !rows[0].textContent.includes('Restore…')) throw new Error('Restore points not shown: ' + document.querySelector('.settings-content').textContent);
+        rows[0].scrollIntoView({ block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        return true;
+      })()`);
+      await shot('restore-points');
+      // Accounts: real sign-in buttons even without an app in this build; the first click sets one up.
       result.accounts = await contents.executeJavaScript(`(async () => {
         const wait = () => new Promise(resolve => setTimeout(resolve, 400));
         document.querySelector('#settings-tab-accounts').click();
@@ -151,6 +178,28 @@ app.on('web-contents-created', (_, contents) => {
         if (document.querySelector('.office-overlay')) throw new Error('Esc did not close the Settings sheet');
         await window.axon.mcpServerDelete('smoke-conn');
       })()`);
+      // The context meter sits above a coworker's thread, and opens to its numbers.
+      result.meter = await contents.executeJavaScript(`(async () => {
+        const wait = (ms = 400) => new Promise(resolve => setTimeout(resolve, ms));
+        const { providerId } = window.__smoke;
+        const chat = await window.axon.chatCreate(providerId, 'mock-model', null, 'writer', { skillIds: [], roleIds: [] }, null, "You are Axon's writer.");
+        await window.axon.chatSend(chat.id, 'Say hello', []);
+        const find = document.querySelector('input[aria-label="Find a coworker"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(find, 'writer');
+        find.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait();
+        const pick = [...document.querySelectorAll('.office-search-results button')].find(b => b.querySelector('strong')?.textContent === 'Writer');
+        if (!pick) throw new Error('Writer not in the directory: ' + document.querySelector('.office-search-results')?.textContent);
+        pick.click();
+        await wait(1200);
+        const meter = document.querySelector('.context-meter');
+        if (!meter || !/\\d+% context/.test(meter.textContent)) throw new Error('Context meter not shown: ' + meter?.textContent);
+        meter.querySelector('.context-meter-summary').click();
+        await wait();
+        if (!meter.textContent.includes('characters Axon can send')) throw new Error('Meter details wrong: ' + meter.textContent);
+        return meter.textContent;
+      })()`);
+      await shot('context-meter');
       result.layeredEscape = await contents.executeJavaScript(`(async () => {
         const { chatId, providerId: id } = window.__smoke;
         // Layered Esc: a modal opened inside the Settings sheet closes first; the sheet stays open.
