@@ -7,6 +7,7 @@ import {
   EmptyState,
   Icon,
   IconBook,
+  IconChartBar,
   IconCompose,
   IconCopy,
   IconKey,
@@ -41,12 +42,14 @@ import { ModelIcon } from './settings/ModelIcon';
 import { AccountsSection } from './settings/AccountsSection';
 import { ConnectorsSection } from './settings/ConnectorsSection';
 import { ConnectorDialog } from './settings/ConnectorDialog';
+import { UsageSection } from './settings/UsageSection';
 import { useOfficeStore } from './features/office/store/officeStore';
 
-type Section = 'accounts' | 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
+type Section = 'accounts' | 'models' | 'usage' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
   { id: 'accounts', label: 'Accounts', icon: IconUser },
   { id: 'models', label: 'Models', icon: IconSparkle },
+  { id: 'usage', label: 'Usage', icon: IconChartBar },
   { id: 'tools', label: 'Connectors', icon: IconPlug },
   { id: 'appearance', label: 'Appearance', icon: IconPalette },
   { id: 'system', label: 'System', icon: IconMonitor },
@@ -122,6 +125,7 @@ export function SettingsPanel() {
       >
         {section === 'accounts' && <AccountsSection />}
         {section === 'models' && <ModelsSection onEdit={setProvider} />}
+        {section === 'usage' && <UsageSection />}
         {section === 'tools' && (
           <ConnectorsSection onCustom={() => setMcpServer(blankMcp())} onManage={setManaged} />
         )}
