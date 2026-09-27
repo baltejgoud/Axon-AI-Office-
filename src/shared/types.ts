@@ -237,10 +237,32 @@ export interface Settings {
 
 /* ------------------------------------ MCP ------------------------------------- */
 
+/** What a server says about a tool. Hints only: believed from catalog servers, or when you say so. */
+export interface McpToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+/** Your choice for one tool: run it without asking, ask each time, or never offer it. */
+export type McpToolPolicy = 'allow' | 'ask' | 'off';
+export type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'needs-sign-in' | 'error';
+/** A tool a connected server offers, as the window shows it. */
+export interface McpToolInfo {
+  /** The server's own name for it; policies are kept by this name. */
+  name: string;
+  /** The name the model sees: `mcp_<server>_<tool>`. */
+  axonName: string;
+  description?: string;
+  annotations?: McpToolAnnotations;
+}
+
 export interface MCPServerConfig {
   id: ID;
   name: string;
-  transport: 'stdio' | 'sse';
+  /** stdio: a local command; sse: the 2024-11-05 HTTP+SSE transport; http: Streamable HTTP. */
+  transport: 'stdio' | 'sse' | 'http';
   command?: string;
   args?: string[];
   env?: Record<string, string>;
@@ -251,6 +273,20 @@ export interface MCPServerConfig {
   /** True when an API key is stored for this server. */
   hasApiKey?: boolean;
   enabled: boolean;
+  /** The catalog entry it was connected from; custom connectors have none. */
+  catalogId?: string;
+  /** Who may use it: coworker ids, `group:<department>`, `not:<coworker id>` and `chats`. */
+  coworkers?: string[];
+  /** Your override per tool, by the server's own tool name. */
+  toolPolicy?: Record<string, McpToolPolicy>;
+  /** Custom connectors: believe the server's read-only marks (catalog connectors always do). */
+  trustAnnotations?: boolean;
+  /** Snapshot only: the live connection. */
+  status?: McpStatus;
+  error?: string;
+  tools?: McpToolInfo[];
+  /** Snapshot only: a browser sign-in is saved for it. */
+  signedIn?: boolean;
 }
 
 /* ------------------------------ Provider runtime ------------------------------ */
