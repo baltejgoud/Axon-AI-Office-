@@ -129,7 +129,7 @@ interface ConnectorEntry {
   name: string;               // 'Notion'
   description: string;        // one line
   category: 'code' | 'docs' | 'design' | 'comms' | 'payments' | 'reference' | 'hubs' | 'local';
-  docsUrl: string;
+  site: string;               // the service's home page
   url?: string;               // hosted: always the 'http' transport
   command?: string; args?: string[]; // local: stdio
   auth: 'none' | 'oauth' | 'oauth-app' | 'github-account';
@@ -178,10 +178,11 @@ else the name's initial.
 
 ### 3. Who gets what, and approvals
 
-**Assignment.** `MCPServerConfig.coworkers: string[]` holds three kinds of entry:
+**Assignment.** `MCPServerConfig.coworkers: string[]` holds four kinds of entry:
 
 - a coworker id (`designer`, `frontend-developer`),
 - `group:<department>` for a whole specialist department (covers future members too),
+- `not:<coworker id>` to take one person out of a department that has it,
 - `chats` for the user's ordinary conversations outside the office.
 
 Catalog defaults:
@@ -263,8 +264,8 @@ retrieved documents. Writes still ask, so injected text cannot act on its own.
 **In the office.** A coworker's panel (`ActivityPanel.tsx`) shows their connectors as a row of up
 to six icons and "+N" under the capabilities. Clicking it opens a popover to switch this
 coworker's connected connectors on or off, with **Browse connectors** to Settings. When a
-connector drops to *Needs sign-in*, a toast with **Reconnect** appears and the Settings entry
-shows a dot.
+connector drops to *Needs sign-in*, a toast says so (pointing to Settings → Connectors, where
+**Sign in** is) and the Settings entry shows a dot.
 
 **Skill picker.** Rube skills show **Available via Composio** or **Connect Composio**.
 
