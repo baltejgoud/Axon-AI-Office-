@@ -134,3 +134,117 @@ test('interval schedules saved by older builds load switched off, keeping their 
     assert.equal(repo.state.agents[0].schedule.input, 'Write the digest.');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+const stateWith = (extra = {}) => JSON.stringify({ version: 1, settings: {}, providers: [], conversations: [], messages: [], workspaces: [], agents: [], documents: [], chunks: [], ...extra });
+/** A rolling backup's name, as the repository writes it. */
+const backupName = (iso) => `state-${iso.replace(/[:.]/g, '-')}.json`;
+const ids = (file) => JSON.parse(fs.readFileSync(file, 'utf8')).conversations.map((c) => c.id);
+
+test('restore points: none yet is an empty list', async () => {
+  const dir = temp();
+  try {
+    const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+    assert.deepEqual(await repo.listBackups(), []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('restore points list each backup newest first, with what it holds; a damaged one is left out', async () => {
+  const dir = temp();
+  try {
+    const backups = path.join(dir, 'backups');
+    fs.writeFileSync(path.join(backups, backupName('2026-09-20T08:00:00.000Z')), stateWith({
+      providers: [{ id: 'a' }], conversations: [{ id: 'c1' }, { id: 'c2' }],
+      messages: [{ id: 'm1', conversationId: 'c1', role: 'user', content: 'hi', createdAt: 1000 }, { id: 'm2', conversationId: 'c2', role: 'assistant', content: 'yo', createdAt: 5000 }]
+    }));
+    fs.writeFileSync(path.join(backups, backupName('2026-09-26T08:00:00.000Z')), stateWith());
+    fs.writeFileSync(path.join(backups, backupName('2026-09-24T08:00:00.000Z')), '{ half a file');
+    fs.writeFileSync(path.join(backups, backupName('2026-09-25T08:00:00.000Z')), stateWith({ providers: [{ id: 'a' }, { id: 'a' }] }));
+    fs.writeFileSync(path.join(backups, 'corrupt-123.json'), stateWith());
+    const repo = new Repository(path.join(dir, 'db'), backups);
+    const list = await repo.listBackups();
+    assert.deepEqual(list.map((b) => b.file), [backupName('2026-09-26T08:00:00.000Z'), backupName('2026-09-20T08:00:00.000Z')]);
+    assert.deepEqual(list[1], { file: backupName('2026-09-20T08:00:00.000Z'), timestamp: Date.parse('2026-09-20T08:00:00.000Z'), conversations: 2, workspaces: 0, providers: 1, lastMessageAt: 5000 });
+    assert.equal(list[0].lastMessageAt, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('restoring refuses anything but one of its own backups, and changes nothing', async () => {
+  const dir = temp();
+  try {
+    const db = path.join(dir, 'db'), backups = path.join(dir, 'backups');
+    fs.writeFileSync(path.join(db, 'platform-v1.json'), validState);
+    const repo = new Repository(db, backups);
+    const before = fs.readdirSync(backups).sort();
+    const real = backupName('2026-09-20T08:00:00.000Z');
+    for (const file of ['../db/platform-v1.json', '..\\db\\platform-v1.json', path.join(backups, real), 'corrupt-1.json', 'state-../../x.json', '', 42])
+      await assert.rejects(repo.restoreBackup(file), /not one of Axon's backups/, String(file));
+    assert.equal(fs.readFileSync(path.join(db, 'platform-v1.json'), 'utf8'), validState);
+    assert.deepEqual(fs.readdirSync(backups).sort(), before);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a backup that fails validation is refused, and the current state and backups are untouched', async () => {
+  const dir = temp();
+  try {
+    const db = path.join(dir, 'db'), backups = path.join(dir, 'backups');
+    fs.writeFileSync(path.join(db, 'platform-v1.json'), validState);
+    const bad = backupName('2026-09-20T08:00:00.000Z');
+    fs.writeFileSync(path.join(backups, bad), stateWith({ providers: [{ id: 'a' }, { id: 'a' }] }));
+    const repo = new Repository(db, backups);
+    const before = fs.readdirSync(backups).sort();
+    await assert.rejects(repo.restoreBackup(bad), /damaged/);
+    assert.equal(fs.readFileSync(path.join(db, 'platform-v1.json'), 'utf8'), validState);
+    assert.deepEqual(fs.readdirSync(backups).sort(), before, 'no pre-restore backup for a restore that never happened');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('restoring backs up the current state first, then puts the backup back for the next start', async () => {
+  const dir = temp();
+  try {
+    const db = path.join(dir, 'db'), backups = path.join(dir, 'backups');
+    fs.writeFileSync(path.join(db, 'platform-v1.json'), validState);
+    const older = backupName('2026-09-20T08:00:00.000Z');
+    fs.writeFileSync(path.join(backups, older), stateWith({ conversations: [{ id: 'old-chat' }] }));
+    let now = Date.parse('2026-09-27T10:00:00.000Z');
+    const repo = new Repository(db, backups, () => now);
+    repo.state.conversations.push({ id: 'unsaved', title: 'Only in memory', skillIds: [], roleIds: [] });
+    now += 60_000;
+    await repo.restoreBackup(older);
+    const undo = path.join(backups, backupName('2026-09-27T10:01:00.000Z'));
+    assert.ok(fs.existsSync(undo), 'the state being replaced is backed up first');
+    assert.deepEqual(ids(undo), ['unsaved'], 'including what was only in memory');
+    assert.deepEqual(ids(path.join(db, 'platform-v1.json')), ['old-chat']);
+    // The running app still holds the old state: nothing it saves, even at quit, may overwrite the restore.
+    await repo.save();
+    await repo.store.flushAll();
+    assert.deepEqual(ids(path.join(db, 'platform-v1.json')), ['old-chat']);
+    assert.deepEqual(new Repository(db, backups).state.conversations.map((c) => c.id), ['old-chat'], 'the next start loads it');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the oldest of ten backups can be restored, though backing up first prunes it', async () => {
+  const dir = temp();
+  try {
+    const db = path.join(dir, 'db'), backups = path.join(dir, 'backups');
+    const names = Array.from({ length: 10 }, (_, i) => backupName(`2026-09-${String(10 + i).padStart(2, '0')}T08:00:00.000Z`));
+    names.forEach((name, i) => fs.writeFileSync(path.join(backups, name), stateWith({ conversations: [{ id: `chat-${i}` }] })));
+    const repo = new Repository(db, backups, () => Date.parse('2026-09-27T10:00:00.000Z'));
+    await repo.restoreBackup(names[0]);
+    assert.deepEqual(ids(path.join(db, 'platform-v1.json')), ['chat-0']);
+    assert.ok(!fs.existsSync(path.join(backups, names[0])), 'pruned by the pre-restore backup, yet restored');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a backup from an older build is brought up to date as it is restored', async () => {
+  const dir = temp();
+  try {
+    const db = path.join(dir, 'db'), backups = path.join(dir, 'backups');
+    const older = backupName('2026-09-01T08:00:00.000Z');
+    fs.writeFileSync(path.join(backups, older), stateWith({ conversations: [{ id: 'c' }] })); // no tasks, no skillIds
+    const repo = new Repository(db, backups);
+    await repo.restoreBackup(older);
+    const saved = JSON.parse(fs.readFileSync(path.join(db, 'platform-v1.json'), 'utf8'));
+    assert.deepEqual(saved.tasks, []);
+    assert.deepEqual(saved.conversations[0].skillIds, []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

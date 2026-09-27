@@ -89,6 +89,18 @@ export interface UsageReport {
   /** Replies that finished without reporting usage. */
   unreportedTurns: number;
 }
+/** A restore point: one rolling backup of everything Axon saves, as Settings lists it. */
+export interface BackupSummary {
+  /** Its file name in the backups folder; what restoreBackup takes. */
+  file: string;
+  /** When it was taken. */
+  timestamp: number;
+  conversations: number;
+  workspaces: number;
+  providers: number;
+  /** Its newest message, or null when it has none. */
+  lastMessageAt: number | null;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
