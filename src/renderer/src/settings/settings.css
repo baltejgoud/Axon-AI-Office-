@@ -1010,3 +1010,64 @@
 .restore-point .settings-item-title .usage-muted {
   font-weight: normal;
 }
+
+/* Activity log: filters in one row, then one line per call */
+.activity-log-filters {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.activity-log-filters .select {
+  width: auto;
+}
+.activity-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity-log-row {
+  display: grid;
+  grid-template-columns: 9.5em minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
+}
+.activity-log-row + .activity-log-row {
+  border-top: 1px solid var(--border-subtle);
+}
+.activity-log-row time {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.activity-log-subject {
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  font-size: var(--text-xs);
+  word-break: break-all;
+}
+.audit-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.audit-badge.tone-ok {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.audit-badge.tone-bad {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.audit-badge.tone-warn {
+  background: var(--surface-hover);
+  color: var(--warning-text);
+}
+.audit-badge.tone-you {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
