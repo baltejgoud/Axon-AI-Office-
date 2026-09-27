@@ -30,6 +30,8 @@ How keys, requests, streaming, tools and storage work end to end: [docs/backend.
 - A context meter above each conversation: how full its context is, by the same measure that leaves older turns out, and in tokens once a model has its context window set. Opens to the numbers and says which are estimates.
 - Settings → Usage: the tokens every reply reported, by day, provider, model and conversation. Dollars only for models you give a price in the provider dialog (Axon ships no price table); while a reply streams its cost is a labelled estimate that snaps to the reported usage.
 - Restore points (Settings → Privacy & security): the rolling snapshots of all saved data. Restoring asks natively, backs up the current state first, and restarts Axon.
+- Settings → Activity log: every tool call any agent made (coworkers, the colleagues they consulted, sub-agents) with what was decided and by whom. Kept on this computer (newest 20,000), never with file contents; exportable.
+- Undo a coworker's saved file change from the work surface. Axon keeps the version each write replaced (newest 500), asks before undoing, and warns if the file changed since. Approval cards show the proposed change as a diff.
 
 ## Validation
 

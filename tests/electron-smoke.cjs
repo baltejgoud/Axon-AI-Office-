@@ -31,6 +31,17 @@ const mock = http.createServer((request, response) => {
     bodies.push(Buffer.concat(chunks).toString('utf8'));
     lastAuth = String(request.headers.authorization || '');
     if (lastAuth !== 'Bearer smoke-key-123') { response.writeHead(401); response.end(); return; }
+    // "List the files" gets a tool call first, so the activity log has a call to show.
+    const parsed = (() => { try { return JSON.parse(bodies.at(-1)); } catch { return {}; } })();
+    const last = parsed.messages?.at(-1);
+    if (last?.role === 'user' && last.content === 'List the files') {
+      response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_list","type":"function","function":{"name":"list_files","arguments":"{}"}}]}}]}\n\n');
+      response.write('data: {"choices":[{"finish_reason":"tool_calls"}]}\n\n');
+      response.write('data: [DONE]\n\n');
+      response.end();
+      return;
+    }
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     response.write('data: {"choices":[{"delta":{"content":"Hello from Axon mock"}}]}\n\n');
     response.write('data: {"choices":[{}],"usage":{"prompt_tokens":7,"completion_tokens":4}}\n\n');
@@ -90,6 +101,10 @@ app.on('web-contents-created', (_, contents) => {
         if (report.allTime.turns !== 1 || report.allTime.promptTokens !== 7 || report.allTime.completionTokens !== 4 || Math.abs(report.allTime.cost - expected) > 1e-12) throw new Error('Usage report wrong: ' + JSON.stringify(report.allTime));
         const points = await window.axon.listBackups();
         if (points.length !== 1 || points[0].providers !== 1 || points[0].workspaces !== 1) throw new Error('Restore points wrong: ' + JSON.stringify(points));
+        // Wave 2: a tool call lands in the activity log, with its decision.
+        await window.axon.chatSend(chat.id, 'List the files', []);
+        const activity = await window.axon.auditList({});
+        if (!activity.some((e) => e.tool === 'list_files' && e.decision === 'allowed')) throw new Error('Activity log wrong: ' + JSON.stringify(activity));
         await window.axon.chatRename(chat.id, 'Smoke conversation');
         if (!(await window.axon.snapshot()).conversations.some(c => c.title === 'Smoke conversation')) throw new Error('Chat persistence failed');
         // A connector over Streamable HTTP connects, and its tools reach the window.
@@ -128,7 +143,7 @@ app.on('web-contents-created', (_, contents) => {
         document.querySelector('#settings-tab-usage').click();
         await new Promise(resolve => setTimeout(resolve, 400));
         const usage = document.querySelector('.settings-content').textContent;
-        if (!usage.includes('Mock model') || !usage.includes('<$0.0001')) throw new Error('Usage page wrong: ' + usage);
+        if (!usage.includes('Mock model') || !/\\$0\\.000/.test(usage)) throw new Error('Usage page wrong: ' + usage);
         return true;
       })()`);
       await shot('usage');
@@ -142,6 +157,14 @@ app.on('web-contents-created', (_, contents) => {
         return true;
       })()`);
       await shot('restore-points');
+      result.activityLog = await contents.executeJavaScript(`(async () => {
+        document.querySelector('#settings-tab-activity').click();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const rows = document.querySelectorAll('.activity-log-row');
+        if (!rows.length || !rows[0].textContent.includes('list files') || !rows[0].textContent.includes('Allowed')) throw new Error('Activity log not shown: ' + document.querySelector('.settings-content').textContent);
+        return rows.length;
+      })()`);
+      await shot('activity-log');
       // Accounts: real sign-in buttons even without an app in this build; the first click sets one up.
       result.accounts = await contents.executeJavaScript(`(async () => {
         const wait = () => new Promise(resolve => setTimeout(resolve, 400));

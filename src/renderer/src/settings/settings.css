@@ -1027,7 +1027,7 @@
 }
 .activity-log-row {
   display: grid;
-  grid-template-columns: 9.5em minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3) var(--space-5);
@@ -1039,6 +1039,7 @@
 .activity-log-row time {
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .activity-log-subject {
   margin-left: var(--space-2);
