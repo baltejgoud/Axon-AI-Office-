@@ -23,7 +23,8 @@ export function requestHistory(messages: readonly Message[]): ChatRequestMessage
   return out;
 }
 
-const size = (messages: readonly ChatRequestMessage[]) => JSON.stringify(messages).length;
+/** A request list's size in characters: what `fitToBudget` trims by, and what the context meter shows. */
+export const requestSize = (messages: readonly ChatRequestMessage[]) => JSON.stringify(messages).length;
 
 /**
  * Keeps the most recent turns within `maxChars`. Whole turns go, oldest first, so the history still
@@ -32,14 +33,14 @@ const size = (messages: readonly ChatRequestMessage[]) => JSON.stringify(message
  */
 export function fitToBudget(requests: readonly ChatRequestMessage[], maxChars: number): ChatRequestMessage[] {
   let kept = [...requests];
-  while (size(kept) > maxChars) {
+  while (requestSize(kept) > maxChars) {
     const next = kept.findIndex((m, i) => i > 0 && m.role === 'user');
     if (next < 0) break;
     kept = kept.slice(next);
   }
   const last = kept[kept.length - 1];
-  if (size(kept) > maxChars && last?.role === 'user') {
-    const room = Math.max(1000, maxChars - size(kept.slice(0, -1)) - 1000);
+  if (requestSize(kept) > maxChars && last?.role === 'user') {
+    const room = Math.max(1000, maxChars - requestSize(kept.slice(0, -1)) - 1000);
     if (last.content.length > room)
       kept[kept.length - 1] = { ...last, content: `${last.content.slice(0, room)}\n\n[Content truncated to fit local context budget]` };
   }
