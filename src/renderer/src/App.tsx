@@ -72,6 +72,11 @@ export function App() {
         if (current) useApp.getState().patch({ data: { ...current, tasks: event.tasks } });
         return;
       }
+      // A connector lost its sign-in: say so (the refresh below shows its new state).
+      if (event.channel === 'connectors' && event.status === 'needs-sign-in')
+        useApp
+          .getState()
+          .pushToast(`${event.name} needs you to sign in again. Open Settings → Connectors.`, 'error');
       // Sync stream events with office runtime
       if (event.channel === 'chat') {
         const conv = useApp.getState().data?.conversations.find((c) => c.id === event.conversationId);

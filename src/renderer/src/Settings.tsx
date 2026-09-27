@@ -14,7 +14,6 @@ import {
   IconPalette,
   IconPlug,
   IconPlus,
-  IconServer,
   IconShield,
   IconSparkle,
   IconTrash,
@@ -39,15 +38,15 @@ import {
 import { ProviderDialog, protocolLabel, tintOf } from './settings/ProviderDialog';
 import { McpDialog } from './settings/McpDialog';
 import { ModelIcon } from './settings/ModelIcon';
-import { ServiceIcon } from './settings/ServiceIcon';
 import { AccountsSection } from './settings/AccountsSection';
+import { ConnectorsSection } from './settings/ConnectorsSection';
 import { useOfficeStore } from './features/office/store/officeStore';
 
 type Section = 'accounts' | 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
   { id: 'accounts', label: 'Accounts', icon: IconUser },
   { id: 'models', label: 'Models', icon: IconSparkle },
-  { id: 'tools', label: 'Tools (MCP)', icon: IconPlug },
+  { id: 'tools', label: 'Connectors', icon: IconPlug },
   { id: 'appearance', label: 'Appearance', icon: IconPalette },
   { id: 'system', label: 'System', icon: IconMonitor },
   { id: 'skills', label: 'Skills & roles', icon: IconBook },
@@ -67,14 +66,15 @@ const blankProvider = (): ProviderConfig => ({
 const blankMcp = (): MCPServerConfig => ({
   id: crypto.randomUUID(),
   name: '',
-  transport: 'stdio',
+  transport: 'http',
   command: '',
   args: [],
   env: {},
   headers: {},
   apiKey: '',
   url: '',
-  enabled: true
+  enabled: true,
+  coworkers: ['chats']
 });
 
 /** Settings, as a sheet over the office: sections on the left, the chosen one on the right. */
@@ -84,6 +84,11 @@ export function SettingsPanel() {
   );
   const [provider, setProvider] = useState<ProviderConfig | null>(null);
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
+  /** The connector whose Manage dialog is open. */
+  const [managed, setManaged] = useState<string | null>(null);
+  const needsSignIn = useApp(
+    (s) => s.data?.mcpServers.some((m) => m.enabled && m.status === 'needs-sign-in') ?? false
+  );
 
   return (
     <div className="settings">
@@ -101,6 +106,9 @@ export function SettingsPanel() {
           >
             <Icon icon={s.icon} size="md" />
             {s.label}
+            {s.id === 'tools' && needsSignIn && (
+              <span className="settings-nav-dot" title="A connector needs you to sign in" />
+            )}
           </button>
         ))}
       </nav>
@@ -113,7 +121,9 @@ export function SettingsPanel() {
       >
         {section === 'accounts' && <AccountsSection />}
         {section === 'models' && <ModelsSection onEdit={setProvider} />}
-        {section === 'tools' && <ToolsSection onEdit={setMcpServer} />}
+        {section === 'tools' && (
+          <ConnectorsSection onCustom={() => setMcpServer(blankMcp())} onManage={setManaged} />
+        )}
         {section === 'appearance' && <AppearanceSection />}
         {section === 'system' && <SystemSection />}
         {section === 'skills' && <SkillsSection />}
@@ -266,85 +276,6 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
           />
         </SettingRow>
       </SettingsGroup>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- Tools
-
-function ToolsSection({ onEdit }: { onEdit: (s: MCPServerConfig) => void }) {
-  const servers = useApp((s) => s.data!.mcpServers ?? []);
-  return (
-    <div className="settings-page">
-      <SectionHeader
-        title="Tools (MCP)"
-        description="Model Context Protocol servers give coworkers tools like files, GitHub or a database. Every tool use asks you first."
-        action={
-          <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankMcp())}>
-            Add server
-          </Button>
-        }
-      />
-      {servers.length ? (
-        <SettingsGroup title="Servers">
-          {servers.map((s) => (
-            <div className="settings-item" key={s.id}>
-              <span className="preset-mark tint-custom" aria-hidden="true">
-                <ServiceIcon name={s.name} size={16} fallback={<Icon icon={IconServer} size="sm" />} />
-              </span>
-              <div className="settings-item-main">
-                <div className="settings-item-title">
-                  {s.name}
-                  <span className="badge badge-outline">{s.transport === 'stdio' ? 'Local' : 'Remote'}</span>
-                </div>
-                <div className="settings-item-meta">
-                  {s.transport === 'stdio' ? `${s.command} ${(s.args || []).join(' ')}` : s.url}
-                </div>
-              </div>
-              <div className="settings-item-actions">
-                <Switch
-                  checked={s.enabled}
-                  label={`${s.name} enabled`}
-                  onChange={() =>
-                    void perform(
-                      () => window.axon.mcpServerSave({ ...s, enabled: !s.enabled }),
-                      s.enabled ? `${s.name} turned off` : `${s.name} turned on`
-                    )
-                  }
-                />
-                <Button size="sm" variant="ghost" icon={IconCompose} onClick={() => onEdit(s)}>
-                  Edit
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={IconTrash}
-                  iconOnly
-                  className="danger-hover"
-                  aria-label={`Remove ${s.name}`}
-                  onClick={() => {
-                    if (confirm(`Remove the MCP server "${s.name}"?`))
-                      void perform(() => window.axon.mcpServerDelete(s.id), 'MCP server removed');
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </SettingsGroup>
-      ) : (
-        <div className="settings-card settings-empty">
-          <EmptyState
-            icon={IconPlug}
-            title="No tools connected"
-            description="Connect an MCP server by the command that starts it (stdio) or by its URL (SSE)."
-            action={
-              <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankMcp())}>
-                Add server
-              </Button>
-            }
-          />
-        </div>
-      )}
     </div>
   );
 }

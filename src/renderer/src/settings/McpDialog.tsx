@@ -24,7 +24,7 @@ function pairs(text: string, separator: string): Record<string, string> {
   return out;
 }
 
-/** Add or edit an MCP server: a local command, or a remote URL. */
+/** Add or edit a custom connector (any MCP server): a remote URL, or a local command. */
 export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onClose: () => void }) {
   const isNew = !useApp((s) => s.data?.mcpServers?.some((server) => server.id === initial.id));
   const [server, setServer] = useState(initial);
@@ -39,7 +39,7 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
     if (!server.name?.trim()) return setError('Give the server a name.');
     if (server.transport === 'stdio' && !server.command?.trim())
       return setError('Enter the command that starts it.');
-    if (server.transport === 'sse' && !server.url?.trim()) return setError('Enter the server URL.');
+    if (server.transport !== 'stdio' && !server.url?.trim()) return setError('Enter the server URL.');
     try {
       await window.axon.mcpServerSave({
         ...server,
@@ -50,7 +50,7 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
         apiKey: apiKey.trim() || undefined
       });
       await useApp.getState().refresh();
-      useApp.getState().pushToast('MCP server saved');
+      useApp.getState().pushToast(isNew ? `${server.name.trim()} added` : 'Connector saved');
       onClose();
     } catch (err) {
       setError(errorText(err));
@@ -59,12 +59,12 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
 
   return (
     <Modal
-      title={isNew ? 'Add an MCP server' : server.name || 'MCP server'}
-      description="MCP servers give your coworkers tools: files, GitHub, databases and more."
+      title={isNew ? 'Add a custom connector' : server.name || 'Custom connector'}
+      description="Any MCP server: a remote address, or a command that runs on this PC."
       size="lg"
       onClose={onClose}
       onSubmit={() => void save()}
-      submitLabel={isNew ? 'Add server' : 'Save changes'}
+      submitLabel={isNew ? 'Add connector' : 'Save changes'}
       footerStart={
         <label className="switch-label">
           <Switch
@@ -87,7 +87,7 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
           <input
             className="input"
             required
-            placeholder="e.g. github"
+            placeholder="e.g. Team wiki"
             value={server.name}
             onChange={(e) => setServer({ ...server, name: e.target.value })}
           />
@@ -97,10 +97,13 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
           <select
             className="select"
             value={server.transport}
-            onChange={(e) => setServer({ ...server, transport: e.target.value as 'stdio' | 'sse' })}
+            onChange={(e) =>
+              setServer({ ...server, transport: e.target.value as MCPServerConfig['transport'] })
+            }
           >
-            <option value="stdio">Local process (stdio)</option>
-            <option value="sse">Remote server (HTTP / SSE)</option>
+            <option value="http">Remote server (HTTP)</option>
+            <option value="stdio">Runs on this PC (command)</option>
+            <option value="sse">Remote server (older SSE)</option>
           </select>
         </label>
         {server.transport === 'stdio' ? (
@@ -146,7 +149,9 @@ export function McpDialog({ initial, onClose }: { initial: MCPServerConfig; onCl
                 className="input"
                 required
                 type="url"
-                placeholder="http://localhost:8000/sse"
+                placeholder={
+                  server.transport === 'sse' ? 'https://example.com/sse' : 'https://example.com/mcp'
+                }
                 value={server.url || ''}
                 onChange={(e) => setServer({ ...server, url: e.target.value })}
               />
