@@ -95,7 +95,9 @@ Each run is checked against its own folders (`PermissionScope`), so two coworker
 4. The browser, through `accounts/loopback.ts` (shared with Google sign-in): PKCE S256, `state`, and `resource` = the server's URL (RFC 8707).
 5. Tokens go to the vault under `mcp-oauth:<id>`. They refresh within a minute of expiring and once after a 401; if that fails, the connector shows **Needs sign-in**, its tools are withdrawn, and the window says so.
 
-GitHub uses your Axon GitHub sign-in token as the bearer unless an app is configured for it.
+GitHub uses your Axon GitHub sign-in token as the bearer unless an app is configured for it. Gmail, Calendar and Drive sign in with the Google app that Google sign-in uses (`accountApp: "google"`).
+
+**Sign-in apps.** GitHub and Google sign-in need an OAuth app: this build's (`AXON_GITHUB_CLIENT_ID`, `AXON_GOOGLE_CLIENT_ID`/`_SECRET`), or one you set up the first time you click **Sign in** in Settings → Accounts (a GitHub OAuth app with device flow; a Google "Desktop app" client). Yours is kept in the vault and read at sign-in time.
 
 **The catalog** (`src/connectors/catalog.json`, `shared/connectors.ts`): 39 connectors, each with how it signs in (`none`, `oauth`, `oauth-app`, `github-account`) and who it starts with. `npm run connectors:check` checks every entry against the live service.
 
@@ -113,7 +115,7 @@ All data is in Electron's `userData` folder (`%APPDATA%\Axon` on Windows):
 | --- | --- |
 | `data/db/platform-v1.json` | Providers (no keys), conversations, messages, workspaces, agents, knowledge, settings, tasks. Written atomically. |
 | `backups/state-*.json` | A copy at start-up and at most every 10 minutes while saving, keeping 10. Corrupt files are set aside as `corrupt-*.json`. |
-| `secrets/os-vault.json` | Provider and MCP keys (`mcp:<id>`), connector sign-ins (`mcp-oauth:<id>`) and your own connector apps (`mcp-client:<catalog id>`), encrypted by the OS. An unreadable file is set aside and keys must be entered again. |
+| `secrets/os-vault.json` | Provider and MCP keys (`mcp:<id>`), connector sign-ins (`mcp-oauth:<id>`), your own connector apps (`mcp-client:<catalog id>`) and your own GitHub or Google sign-in app (`account-app:github`, `account-app:google`), encrypted by the OS. An unreadable file is set aside and keys must be entered again. |
 | `window-state.json`, `office-folders.json` | Window size and position, and recent project folders. |
 
 ## Testing it

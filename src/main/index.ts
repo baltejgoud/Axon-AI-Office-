@@ -25,7 +25,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
   'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart',
-  'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut',
+  'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',
   'githubRepos', 'gitCheck', 'scmStatus', 'scmDiff', 'scmStage', 'scmUnstage', 'scmCommit', 'scmSync', 'scmBranches', 'scmCheckout', 'scmCreateBranch',
   'scmClone', 'scmPublish', 'openLink', 'processStop', 'processOpen'
 ];

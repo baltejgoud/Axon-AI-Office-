@@ -121,6 +121,12 @@ export interface PlatformAPI {
   githubSignInFinish(): Promise<AccountProfile>;
   githubSignInCancel(): Promise<void>;
   githubSignOut(): Promise<void>;
+  /**
+   * Sets up the app GitHub or Google sign-in uses when this build has none: a GitHub OAuth app's
+   * Client ID, or a Google "Desktop app" client's ID and secret (which also sign in Gmail, Calendar
+   * and Drive). An empty Client ID forgets it.
+   */
+  accountAppSave(kind: 'github' | 'google', clientId: string, clientSecret?: string): Promise<void>;
   /** Opens Google's sign-in in the browser; resolves when it returns to Axon. */
   googleSignIn(): Promise<AccountProfile>;
   googleSignInCancel(): Promise<void>;

@@ -19,7 +19,8 @@ test('the catalog: unique ids, safe addresses, known categories and real coworke
     assert.ok(['none', 'oauth', 'oauth-app', 'github-account'].includes(entry.auth), entry.id);
     if (entry.url) assert.match(entry.url, /^https:\/\//, entry.id);
     else assert.ok(entry.command && Array.isArray(entry.args) && entry.auth === 'none', entry.id);
-    if (entry.auth === 'oauth-app') assert.match(entry.clientIdEnv, /^AXON_[A-Z_]+_CLIENT_ID$/, entry.id);
+    if (entry.auth === 'oauth-app' && !entry.accountApp) assert.match(entry.clientIdEnv, /^AXON_[A-Z_]+_CLIENT_ID$/, entry.id);
+    if (entry.accountApp) assert.equal(entry.accountApp, 'google', entry.id);
     for (const p of entry.defaultCoworkers) assert.ok(people.has(p), `${entry.id}: ${p}`);
     for (const g of entry.defaultGroups) assert.ok(SPECIALIST_GROUPS.includes(g), `${entry.id}: ${g}`);
   }

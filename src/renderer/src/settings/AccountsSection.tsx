@@ -14,6 +14,7 @@ import {
   IconUser
 } from '../ui';
 import { SettingsGroup } from './controls';
+import { AccountAppDialog } from './AccountAppDialog';
 
 /** Settings → Accounts: GitHub for your repositories, Google for who you are, and the Git they both need. */
 export function AccountsSection() {
@@ -29,8 +30,9 @@ export function AccountsSection() {
         <div>
           <h3>Accounts</h3>
           <p>
-            Sign in with GitHub to clone your repositories, publish folders and sync your work. Signing in
-            with Google shows who you are in Axon; nothing else is shared.
+            Sign in with GitHub to clone your repositories, publish folders and sync your work. Sign in with
+            Google to show who you are in Axon, then connect Gmail if you want your coworkers to read and
+            draft mail.
           </p>
         </div>
       </header>
@@ -39,9 +41,7 @@ export function AccountsSection() {
       ) : (
         <>
           <SettingsGroup title="GitHub">
-            {!accounts.github.configured ? (
-              <NotConfigured service="GitHub" variable="AXON_GITHUB_CLIENT_ID" />
-            ) : accounts.github.profile ? (
+            {accounts.github.profile ? (
               <SignedIn
                 profile={accounts.github.profile}
                 meta={`@${accounts.github.profile.login} · can read and push your repositories`}
@@ -54,6 +54,8 @@ export function AccountsSection() {
             ) : (
               <GitHubSignIn
                 onDone={refresh}
+                configured={accounts.github.configured}
+                ownApp={accounts.github.ownApp}
                 note={
                   revokeHint && (
                     <>
@@ -69,19 +71,22 @@ export function AccountsSection() {
             )}
           </SettingsGroup>
           <SettingsGroup title="Google">
-            {!accounts.google.configured ? (
-              <NotConfigured service="Google" variable="AXON_GOOGLE_CLIENT_ID" />
-            ) : accounts.google.profile ? (
+            {accounts.google.profile ? (
               <SignedIn
                 profile={accounts.google.profile}
                 meta={accounts.google.profile.email}
+                actions={<ConnectGmail />}
                 onSignOut={async () => {
                   await window.axon.googleSignOut();
                   await refresh();
                 }}
               />
             ) : (
-              <GoogleSignIn onDone={refresh} />
+              <GoogleSignIn
+                onDone={refresh}
+                configured={accounts.google.configured}
+                ownApp={accounts.google.ownApp}
+              />
             )}
           </SettingsGroup>
           <SettingsGroup title="Git">
@@ -110,10 +115,13 @@ function Avatar({ profile, size = 40 }: { profile: AccountProfile; size?: number
 function SignedIn({
   profile,
   meta,
+  actions,
   onSignOut
 }: {
   profile: AccountProfile;
   meta: string;
+  /** More buttons beside Sign out. */
+  actions?: ReactNode;
   onSignOut: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -126,6 +134,7 @@ function SignedIn({
         <div className="settings-item-meta">{meta}</div>
       </div>
       <div className="settings-item-actions">
+        {actions}
         <Button
           size="sm"
           disabled={busy}
@@ -146,11 +155,23 @@ function SignedIn({
   );
 }
 
-function GitHubSignIn({ onDone, note }: { onDone: () => Promise<void>; note?: ReactNode }) {
+function GitHubSignIn({
+  onDone,
+  note,
+  configured,
+  ownApp
+}: {
+  onDone: () => Promise<void>;
+  note?: ReactNode;
+  /** Axon has a GitHub app to sign in with; without one, the button sets it up first. */
+  configured: boolean;
+  ownApp: boolean;
+}) {
   const [code, setCode] = useState<DeviceCode | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [setup, setSetup] = useState(false);
   const pushToast = useApp((s) => s.pushToast);
   // Leaving Settings mid-sign-in stops the wait.
   useEffect(() => () => void window.axon.githubSignInCancel(), []);
@@ -221,7 +242,7 @@ function GitHubSignIn({ onDone, note }: { onDone: () => Promise<void>; note?: Re
       </span>
       <div className="settings-item-main">
         <div className="settings-item-title">Not signed in</div>
-        <div className="settings-item-meta">Clone, publish and sync need your GitHub account.</div>
+        <div className="settings-item-meta">For clone, publish, sync and the GitHub connector.</div>
         {error && (
           <p className="account-error" role="alert">
             {error}
@@ -230,17 +251,47 @@ function GitHubSignIn({ onDone, note }: { onDone: () => Promise<void>; note?: Re
         {note && <p className="account-note">{note}</p>}
       </div>
       <div className="settings-item-actions">
-        <Button variant="primary" icon={IconGitHub} disabled={busy} onClick={() => void start()}>
+        {ownApp && (
+          <Button size="sm" variant="ghost" onClick={() => setSetup(true)}>
+            Change app
+          </Button>
+        )}
+        <Button
+          variant="primary"
+          icon={IconGitHub}
+          disabled={busy}
+          onClick={() => (configured ? void start() : setSetup(true))}
+        >
           Sign in with GitHub
         </Button>
       </div>
+      {setup && (
+        <AccountAppDialog
+          kind="github"
+          onClose={() => setSetup(false)}
+          onSaved={() => {
+            setSetup(false);
+            void start();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function GoogleSignIn({ onDone }: { onDone: () => Promise<void> }) {
+function GoogleSignIn({
+  onDone,
+  configured,
+  ownApp
+}: {
+  onDone: () => Promise<void>;
+  /** Axon has a Google app to sign in with; without one, the button sets it up first. */
+  configured: boolean;
+  ownApp: boolean;
+}) {
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
+  const [setup, setSetup] = useState(false);
   const pushToast = useApp((s) => s.pushToast);
   useEffect(() => () => void window.axon.googleSignInCancel(), []);
   const start = async () => {
@@ -269,7 +320,7 @@ function GoogleSignIn({ onDone }: { onDone: () => Promise<void> }) {
         <div className="settings-item-meta">
           {waiting
             ? 'Choose your account on the Google page that opened.'
-            : 'Only your name, email and photo are used.'}
+            : 'Your name, email and photo; then you can connect Gmail.'}
         </div>
         {error && (
           <p className="account-error" role="alert">
@@ -283,27 +334,78 @@ function GoogleSignIn({ onDone }: { onDone: () => Promise<void> }) {
             Cancel
           </Button>
         ) : (
-          <Button className="account-google" onClick={() => void start()}>
-            <IconGoogle size={16} />
-            Sign in with Google
-          </Button>
+          <>
+            {ownApp && (
+              <Button size="sm" variant="ghost" onClick={() => setSetup(true)}>
+                Change app
+              </Button>
+            )}
+            <Button className="account-google" onClick={() => (configured ? void start() : setSetup(true))}>
+              <IconGoogle size={16} />
+              Sign in with Google
+            </Button>
+          </>
         )}
       </div>
+      {setup && (
+        <AccountAppDialog
+          kind="google"
+          onClose={() => setSetup(false)}
+          onSaved={() => {
+            setSetup(false);
+            void start();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function NotConfigured({ service, variable }: { service: string; variable: string }) {
+/** Gmail through the Google sign-in's app: connect it, or see how it's doing. */
+function ConnectGmail() {
+  const gmail = useApp((s) => s.data?.mcpServers.find((m) => m.catalogId === 'gmail'));
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState('');
+  const pushToast = useApp((s) => s.pushToast);
+  if (gmail?.status === 'connected') return <span className="badge badge-accent">Gmail connected</span>;
+  if (waiting)
+    return (
+      <Button size="sm" variant="ghost" onClick={() => void window.axon.connectorSignInCancel()}>
+        Cancel Gmail sign-in
+      </Button>
+    );
   return (
-    <div className="settings-item">
-      <div className="settings-item-main">
-        <div className="settings-item-title">{service} sign-in isn't set up in this build</div>
-        <p className="account-note">
-          Add the OAuth app's client ID in <code>src/main/accounts/clients.ts</code>, or set{' '}
-          <code>{variable}</code> when running Axon.
-        </p>
-      </div>
-    </div>
+    <>
+      {error && (
+        <span className="account-error" role="alert">
+          {error}
+        </span>
+      )}
+      <Button
+        size="sm"
+        icon={IconGoogle}
+        onClick={async () => {
+          setError('');
+          setWaiting(true);
+          try {
+            await window.axon.connectorAdd('gmail');
+            await useApp.getState().refresh();
+            const server = useApp.getState().data?.mcpServers.find((m) => m.catalogId === 'gmail');
+            if (server?.status === 'connected')
+              pushToast(`Gmail connected · ${server.tools?.length ?? 0} tools`);
+            else if (server)
+              setError(server.error || 'Gmail did not connect. Try again from Settings → Connectors.');
+          } catch (err) {
+            const message = errorText(err);
+            if (!/cancelled/i.test(message)) setError(message);
+          } finally {
+            setWaiting(false);
+          }
+        }}
+      >
+        {gmail ? 'Reconnect Gmail' : 'Connect Gmail'}
+      </Button>
+    </>
   );
 }
 

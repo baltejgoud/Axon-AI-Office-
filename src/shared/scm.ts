@@ -8,8 +8,9 @@ export interface AccountProfile {
   avatar: string;
 }
 export interface AccountsState {
-  github: { configured: boolean; profile: AccountProfile | null };
-  google: { configured: boolean; profile: AccountProfile | null };
+  /** `configured`: Axon has an app to sign in with; `ownApp`: it's the one you set up (not this build's). */
+  github: { configured: boolean; ownApp: boolean; profile: AccountProfile | null };
+  google: { configured: boolean; ownApp: boolean; profile: AccountProfile | null };
   /** The installed Git's version, or null when Git isn't installed. */
   git: string | null;
 }

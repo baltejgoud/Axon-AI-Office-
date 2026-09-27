@@ -26,6 +26,8 @@ export interface ConnectorEntry {
   /** Where the build's OAuth app for an `oauth-app` (or GitHub) connector comes from. */
   clientIdEnv?: string;
   clientSecretEnv?: string;
+  /** Signs in with the app you set up for an account in Settings → Accounts (Google's, for Gmail, Calendar and Drive). */
+  accountApp?: 'google';
   /** The service itself is in preview (Google's). */
   preview?: boolean;
   defaultCoworkers: string[];

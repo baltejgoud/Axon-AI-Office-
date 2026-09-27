@@ -236,6 +236,50 @@ test('a tool you turned off is neither offered nor run', async (t) => {
   assert.equal(service.permissions.check({ toolName: 'mcp_notes_search', args: {} }).action, 'deny');
 });
 
+test('your own GitHub app makes GitHub sign-in available, and can be changed or forgotten', async (t) => {
+  const { service, secrets } = makeService(t);
+  assert.equal(service.accounts.githubConfigured, false);
+  await service.accountAppSave('github', ' Ov23liAbCdEf123456 ');
+  assert.equal(service.accounts.githubConfigured, true);
+  const state = await service.accountsGet();
+  assert.deepEqual([state.github.configured, state.github.ownApp], [true, true]);
+  assert.deepEqual(JSON.parse(secrets.get('account-app:github')), { clientId: 'Ov23liAbCdEf123456' });
+  await assert.rejects(service.accountAppSave('github', 'has spaces in it'), /Client ID/);
+  await service.accountAppSave('github', '');
+  assert.equal(service.accounts.githubConfigured, false);
+});
+
+test('your Google app signs you in and powers Gmail, Calendar and Drive', async (t) => {
+  const { service, signIns } = makeService(t);
+  await assert.rejects(service.accountAppSave('google', 'not-a-google-id', 's'), /apps\.googleusercontent\.com/);
+  await assert.rejects(service.connectorAdd('gmail'), /Set up Google/);
+  await service.accountAppSave('google', '123-abc.apps.googleusercontent.com', 'GOCSPX-secret');
+  assert.equal(service.accounts.googleConfigured, true);
+  const apps = service.snapshot().connectorApps;
+  for (const id of ['gmail', 'google-calendar', 'google-drive']) assert.ok(apps.includes(id), id);
+  await service.connectorAdd('gmail');
+  assert.deepEqual(signIns[0].client, { clientId: '123-abc.apps.googleusercontent.com', clientSecret: 'GOCSPX-secret' });
+  assert.equal(signIns[0].serverUrl, 'https://gmailmcp.googleapis.com/mcp/v1');
+});
+
+test('setting up Google from a Gmail card saves the same Google app', async (t) => {
+  const { service } = makeService(t);
+  await service.connectorAppSave('google-drive', '456-def.apps.googleusercontent.com', 'GOCSPX-2');
+  assert.equal(service.accounts.googleConfigured, true);
+  assert.equal((await service.accountsGet()).google.ownApp, true);
+});
+
+test('Axon opens the pages app setup needs, and nothing else', async (t) => {
+  const { service } = makeService(t);
+  const opened = [];
+  service.connectorAuth.openExternal = async (url) => { opened.push(url); };
+  await service.openLink('https://console.cloud.google.com/apis/credentials');
+  await service.openLink('https://developers.google.com/workspace/guides/configure-mcp-servers');
+  await service.openLink('https://github.com/settings/applications/new');
+  await assert.rejects(service.openLink('https://evil.example/'), /only opens/);
+  assert.equal(opened.length, 3);
+});
+
 const { pointAtComposio } = require('../src/main/connectors/rube.ts');
 
 test("Rube tool names point at Composio's tools; unknown ones stay", () => {

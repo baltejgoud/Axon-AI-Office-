@@ -114,6 +114,37 @@ app.on('web-contents-created', (_, contents) => {
       })()`);
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
       fs.writeFileSync(path.join(__dirname, '../test-results/connectors.png'), (await contents.capturePage()).toPNG());
+      // Accounts: real sign-in buttons even without an app in this build; the first click sets one up.
+      const shot = async (name) => fs.writeFileSync(path.join(__dirname, `../test-results/${name}.png`), (await contents.capturePage()).toPNG());
+      result.accounts = await contents.executeJavaScript(`(async () => {
+        const wait = () => new Promise(resolve => setTimeout(resolve, 400));
+        document.querySelector('#settings-tab-accounts').click();
+        await wait();
+        const button = (text) => [...document.querySelectorAll('.office-overlay button')].find(b => b.textContent.trim() === text);
+        if (!button('Sign in with GitHub') || !button('Sign in with Google')) throw new Error('Sign-in buttons missing: ' + document.querySelector('.settings-content')?.textContent);
+        return true;
+      })()`);
+      await shot('accounts');
+      await contents.executeJavaScript(`(async () => {
+        [...document.querySelectorAll('.office-overlay button')].find(b => b.textContent.trim() === 'Sign in with GitHub').click();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const title = [...document.querySelectorAll('[role=dialog] h2')].map(h => h.textContent);
+        if (!title.includes('Set up GitHub sign-in')) throw new Error('GitHub setup did not open: ' + title);
+      })()`);
+      await shot('account-setup-github');
+      await contents.executeJavaScript(`(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        [...document.querySelectorAll('.office-overlay button')].find(b => b.textContent.trim() === 'Sign in with Google').click();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const title = [...document.querySelectorAll('[role=dialog] h2')].map(h => h.textContent);
+        if (!title.includes('Set up Google sign-in')) throw new Error('Google setup did not open: ' + title);
+      })()`);
+      await shot('account-setup-google');
+      await contents.executeJavaScript(`(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await new Promise(resolve => setTimeout(resolve, 300));
+      })()`);
       await contents.executeJavaScript(`(async () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         await new Promise(resolve => setTimeout(resolve, 300));

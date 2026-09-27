@@ -58,6 +58,10 @@ const mcpSecret = (id: string) => `mcp:${id}`;
 const oauthSecret = (id: string) => `mcp-oauth:${id}`;
 /** Your own OAuth app for a catalog connector, in the vault. */
 const appSecret = (catalogId: string) => `mcp-client:${catalogId}`;
+/** The accounts you can sign in with, each through an OAuth app: this build's, or one you set up. */
+type AccountAppKind = 'github' | 'google';
+/** Your own app for an account, in the vault. */
+const accountAppSecret = (kind: AccountAppKind) => `account-app:${kind}`;
 const POLICIES = new Set(['allow', 'ask', 'off']);
 /** Said in every run that has connector tools. */
 const UNTRUSTED_CONNECTORS =
@@ -115,9 +119,13 @@ export class Service {
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
+    // The apps are read at sign-in time: one you set up in Settings works without restarting.
+    const app = (kind: AccountAppKind) => () => this.accountApp(kind);
+    const github = app('github'), google = app('google');
     this.accounts = new Accounts({
       dir: dataPath, vault, openExternal: url => shell.openExternal(url),
-      github: { clientId: GITHUB_CLIENT_ID }, google: { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET }
+      github: { get clientId() { return github()?.clientId ?? ''; } },
+      google: { get clientId() { return google()?.clientId ?? ''; }, get clientSecret() { return google()?.clientSecret ?? ''; } }
     });
     this.scm = new SourceControl({
       root: () => this.project.root, token: () => this.accounts.githubToken(), profile: () => this.accounts.githubProfile,
@@ -179,7 +187,9 @@ export class Service {
           tools: live?.tools ?? []
         };
       }),
-      connectorApps: CONNECTORS.filter((entry) => clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv) || this.vault.has(appSecret(entry.id))).map((entry) => entry.id),
+      connectorApps: CONNECTORS.filter((entry) => entry.accountApp
+        ? !!this.accountApp(entry.accountApp)
+        : clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv) || this.vault.has(appSecret(entry.id))).map((entry) => entry.id),
       projectRoot: this.project.root,
       pendingApprovals: this.permissions.pending(),
       processes: this.processes.list(),
@@ -528,13 +538,16 @@ export class Service {
   async connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void> {
     const entry = connectorById(text(catalogId, 100));
     if (!entry || (entry.auth !== 'oauth-app' && entry.auth !== 'github-account')) throw new Error('This connector does not take an app of your own.');
+    // Gmail, Calendar and Drive sign in with your Google app: setting one up sets up Google.
+    if (entry.accountApp) return this.accountAppSave(entry.accountApp, clientId, clientSecret);
     const id = text(clientId, 500).trim();
     const secret = typeof clientSecret === 'string' ? text(clientSecret, 2000).trim() : '';
     if (!id) return this.vault.remove(appSecret(entry.id));
     this.vault.set(appSecret(entry.id), JSON.stringify(secret ? { clientId: id, clientSecret: secret } : { clientId: id }));
   }
-  /** The OAuth app a connector signs in with: this build's, else your own. */
+  /** The OAuth app a connector signs in with: your account's (Google), this build's, else your own. */
   private connectorClient(entry: ConnectorEntry): OAuthClient | undefined {
+    if (entry.accountApp) return this.accountApp(entry.accountApp);
     const built = clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv);
     if (built) return built;
     try {
@@ -549,7 +562,10 @@ export class Service {
       if (!this.accounts.githubToken()) throw new Error('Sign in to GitHub in Settings → Accounts first, or use your own GitHub app.');
       return;
     }
-    if (entry.auth === 'oauth-app' && !client) throw new Error(`${entry.name} isn't set up in this build of Axon. Use your own app to connect it.`);
+    if (entry.auth === 'oauth-app' && !client)
+      throw new Error(entry.accountApp
+        ? `Set up Google in Settings → Accounts first: ${entry.name} signs in with the same Google app.`
+        : `${entry.name} isn't set up in this build of Axon. Use your own app to connect it.`);
     await this.connectorBrowserSignIn(server, client);
   }
   private async connectorBrowserSignIn(server: MCPServerConfig, client?: OAuthClient): Promise<void> {
@@ -1203,11 +1219,41 @@ export class Service {
   // ---------------------------------------------------------------- Accounts and source control
 
   async accountsGet(): Promise<AccountsState> {
+    const own = (kind: AccountAppKind) => !this.builtApp(kind) && this.vault.has(accountAppSecret(kind));
     return {
-      github: { configured: this.accounts.githubConfigured, profile: this.accounts.githubProfile },
-      google: { configured: this.accounts.googleConfigured, profile: this.accounts.googleProfile },
+      github: { configured: this.accounts.githubConfigured, ownApp: own('github'), profile: this.accounts.githubProfile },
+      google: { configured: this.accounts.googleConfigured, ownApp: own('google'), profile: this.accounts.googleProfile },
       git: await this.scm.git()
     };
+  }
+  /** This build's app for an account, from `AXON_GITHUB_CLIENT_ID` or `AXON_GOOGLE_CLIENT_ID` (and secret). */
+  private builtApp(kind: AccountAppKind): OAuthClient | undefined {
+    if (kind === 'github') return GITHUB_CLIENT_ID ? { clientId: GITHUB_CLIENT_ID } : undefined;
+    return GOOGLE_CLIENT_ID ? { clientId: GOOGLE_CLIENT_ID, ...(GOOGLE_CLIENT_SECRET ? { clientSecret: GOOGLE_CLIENT_SECRET } : {}) } : undefined;
+  }
+  /** The app an account signs in with: this build's, else the one you set up. */
+  private accountApp(kind: AccountAppKind): OAuthClient | undefined {
+    const built = this.builtApp(kind);
+    if (built) return built;
+    try {
+      const own = this.vault.get(accountAppSecret(kind));
+      return own ? JSON.parse(own) as OAuthClient : undefined;
+    } catch { return undefined; }
+  }
+  /**
+   * Sets up the app GitHub or Google sign-in uses (a GitHub OAuth app with device flow; a Google
+   * "Desktop app" client, which also signs in Gmail, Calendar and Drive). An empty client id forgets it.
+   */
+  async accountAppSave(kind: AccountAppKind, clientId: string, clientSecret?: string): Promise<void> {
+    if (kind !== 'github' && kind !== 'google') throw new Error('Unknown account.');
+    const id = text(clientId, 500).trim();
+    const secret = typeof clientSecret === 'string' ? text(clientSecret, 2000).trim() : '';
+    if (!id) return this.vault.remove(accountAppSecret(kind));
+    if (!/^[\w.-]{8,200}$/.test(id)) throw new Error('That Client ID has characters a client ID never has. Copy it again.');
+    if (kind === 'google' && !id.endsWith('.apps.googleusercontent.com'))
+      throw new Error('A Google Client ID ends in .apps.googleusercontent.com. Copy it again from Google Cloud.');
+    if (kind === 'google' && !secret) throw new Error('Paste the Client secret too: Google asks for it when signing in.');
+    this.vault.set(accountAppSecret(kind), JSON.stringify(secret ? { clientId: id, clientSecret: secret } : { clientId: id }));
   }
   githubSignInStart(): Promise<DeviceCode> { return this.accounts.githubStart(); }
   githubSignInFinish(): Promise<AccountProfile> { return this.accounts.githubFinish(); }
@@ -1267,8 +1313,10 @@ export class Service {
   /** Opens a page in your browser: only GitHub's, and Git's download page. */
   async openLink(url: string): Promise<void> {
     text(url, 2000);
-    if (!/^https:\/\/(github\.com|git-scm\.com)\//.test(url)) throw new Error('Axon only opens GitHub and Git pages.');
-    await shell.openExternal(url);
+    // GitHub and Git, and the Google pages where you set up Google sign-in.
+    if (!/^https:\/\/(github\.com|git-scm\.com|console\.cloud\.google\.com|developers\.google\.com)\//.test(url))
+      throw new Error('Axon only opens GitHub, Git and Google Cloud setup pages.');
+    await this.connectorAuth.openExternal(url);
   }
 
   async agentImport(): Promise<void> {

@@ -17,7 +17,7 @@ const api: PlatformAPI = {
   projectWrite: invoke('projectWrite'), projectSearch: invoke('projectSearch'),
   taskAdd: invoke('taskAdd'), taskUpdate: invoke('taskUpdate'), taskDelete: invoke('taskDelete'), officeStart: invoke('officeStart'),
   accountsGet: invoke('accountsGet'), githubSignInStart: invoke('githubSignInStart'), githubSignInFinish: invoke('githubSignInFinish'),
-  githubSignInCancel: invoke('githubSignInCancel'), githubSignOut: invoke('githubSignOut'), googleSignIn: invoke('googleSignIn'),
+  githubSignInCancel: invoke('githubSignInCancel'), githubSignOut: invoke('githubSignOut'), googleSignIn: invoke('googleSignIn'), accountAppSave: invoke('accountAppSave'),
   googleSignInCancel: invoke('googleSignInCancel'), googleSignOut: invoke('googleSignOut'), githubRepos: invoke('githubRepos'), gitCheck: invoke('gitCheck'),
   scmStatus: invoke('scmStatus'), scmDiff: invoke('scmDiff'), scmStage: invoke('scmStage'), scmUnstage: invoke('scmUnstage'), scmCommit: invoke('scmCommit'),
   scmSync: invoke('scmSync'), scmBranches: invoke('scmBranches'), scmCheckout: invoke('scmCheckout'), scmCreateBranch: invoke('scmCreateBranch'),

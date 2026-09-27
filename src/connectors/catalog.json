@@ -257,9 +257,8 @@
     "site": "https://mail.google.com",
     "url": "https://gmailmcp.googleapis.com/mcp/v1",
     "auth": "oauth-app",
-    "clientIdEnv": "AXON_GOOGLE_MCP_CLIENT_ID",
-    "clientSecretEnv": "AXON_GOOGLE_MCP_CLIENT_SECRET",
     "preview": true,
+    "accountApp": "google",
     "defaultCoworkers": ["receptionist"],
     "defaultGroups": []
   },
@@ -271,9 +270,8 @@
     "site": "https://calendar.google.com",
     "url": "https://calendarmcp.googleapis.com/mcp/v1",
     "auth": "oauth-app",
-    "clientIdEnv": "AXON_GOOGLE_MCP_CLIENT_ID",
-    "clientSecretEnv": "AXON_GOOGLE_MCP_CLIENT_SECRET",
     "preview": true,
+    "accountApp": "google",
     "defaultCoworkers": ["receptionist"],
     "defaultGroups": []
   },
@@ -285,9 +283,8 @@
     "site": "https://drive.google.com",
     "url": "https://drivemcp.googleapis.com/mcp/v1",
     "auth": "oauth-app",
-    "clientIdEnv": "AXON_GOOGLE_MCP_CLIENT_ID",
-    "clientSecretEnv": "AXON_GOOGLE_MCP_CLIENT_SECRET",
     "preview": true,
+    "accountApp": "google",
     "defaultCoworkers": ["knowledge-librarian", "research-analyst", "writer"],
     "defaultGroups": []
   },
