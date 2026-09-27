@@ -48,13 +48,15 @@ export function WorkSummary({
   }, [steps, requests]);
   const show = (step: WorkStep) => useOfficeStore.getState().focusWork(conversationId, step.id);
   const state = (step: WorkStep, done: string, failed: string) =>
-    requests.has(step.id)
-      ? { label: 'Waiting for your OK', tone: 'waiting' }
-      : step.state === 'running'
-        ? { label: step.name === 'write_file' ? 'Saving…' : 'Running…', tone: 'running' }
-        : step.state === 'failed'
-          ? { label: failed, tone: 'failed' }
-          : { label: done, tone: 'done' };
+    step.change?.revertedAt
+      ? { label: 'Undone', tone: 'done' }
+      : requests.has(step.id)
+        ? { label: 'Waiting for your OK', tone: 'waiting' }
+        : step.state === 'running'
+          ? { label: step.name === 'write_file' ? 'Saving…' : 'Running…', tone: 'running' }
+          : step.state === 'failed'
+            ? { label: failed, tone: 'failed' }
+            : { label: done, tone: 'done' };
 
   const { files, commands, looked, pages, tools } = summary;
   const title = runTitle(summary, live);

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ProcessInfo, ToolApprovalRequest } from '../../../../../shared/types';
 import { decideApproval } from '../../../chat/PendingApprovals';
 import { DiffLines, escapeHtml } from '../../../ui/DiffLines';
+import { useApp } from '../../../state';
 import hljs from 'highlight.js/lib/common';
 import {
   IconArrowLeft,
@@ -184,6 +185,41 @@ export function CodeView({
   );
 }
 
+/** Undo for a saved write: asks natively first, and says why when it can't. */
+function UndoChange({ step }: { step: WorkStep }) {
+  const [busy, setBusy] = useState(false);
+  const change = step.change;
+  if (!change || step.state !== 'done') return null;
+  if (change.revertedAt) return <span className="work-file-note">Undone</span>;
+  if (change.undo !== 'kept')
+    return (
+      <span className="work-file-note">
+        {change.undo === 'unreadable' ? "Can't be undone: over 1 MB or not text" : "Can't be undone"}
+      </span>
+    );
+  const undo = async () => {
+    setBusy(true);
+    try {
+      await window.axon.revertChange(step.id);
+      await useApp.getState().refresh();
+      useApp.getState().pushToast('Change undone');
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+          : String(error);
+      if (!/cancelled/i.test(message)) useApp.getState().patch({ error: message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="work-undo" disabled={busy} onClick={() => void undo()}>
+      {busy ? 'Undoing…' : 'Undo this change'}
+    </button>
+  );
+}
+
 /** The open file's path, what is happening to it, and what you can do: see changes or the file, approve. */
 function FileBar({
   file,
@@ -244,6 +280,7 @@ function FileBar({
           </span>
         )}
         {request && <Decision request={request} approve="Approve" />}
+        {!request && file.written && <UndoChange step={file.written} />}
       </span>
     </div>
   );

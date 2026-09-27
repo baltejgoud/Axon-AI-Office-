@@ -985,3 +985,22 @@
   color: #8fa0bd;
   font-family: var(--font-sans);
 }
+
+/* Undo a saved change: quiet until you need it. */
+.work-undo {
+  padding: 3px 9px;
+  border: 1px solid var(--office-border);
+  border-radius: 7px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.work-undo:hover:not(:disabled) {
+  background: var(--office-soft);
+}
+.work-undo:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
