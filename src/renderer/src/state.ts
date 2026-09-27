@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Snapshot } from '../../shared/platform';
 import type { Selection, ToolApprovalRequest } from '../../shared/types';
+import type { ContextUsage } from '../../shared/context-usage';
+import type { RunEstimate } from '../../shared/cost';
 export interface Toast {
   id: string;
   message: string;
@@ -15,6 +17,10 @@ interface UIState {
   pendingApprovals: Record<string, ToolApprovalRequest>;
   /** Selection for a conversation that doesn't exist yet. */
   pendingSelection: Selection;
+  /** Each conversation's context meter: asked for when it opens, then kept current by its runs' events. */
+  contextUsage: Record<string, ContextUsage>;
+  /** What each call still generating should cost, by its reply's message id (priced models only). */
+  estimates: Record<string, RunEstimate>;
   toasts: Toast[];
   refresh(): Promise<void>;
   patch(value: Partial<UIState>): void;
@@ -29,6 +35,8 @@ export const useApp = create<UIState>((set, get) => ({
   error: '',
   pendingApprovals: {},
   pendingSelection: { skillIds: [], roleIds: [] },
+  contextUsage: {},
+  estimates: {},
   toasts: [],
   patch: (value) => set(value),
   refresh: async () => {

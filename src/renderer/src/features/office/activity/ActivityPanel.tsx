@@ -23,6 +23,7 @@ import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 import { Planner } from './Planner';
 import { Briefing } from './Briefing';
 import { ConnectorRow } from './ConnectorRow';
+import { ContextMeter } from '../../../chat/ContextMeter';
 
 const FEED_PREVIEW = 3;
 
@@ -132,6 +133,7 @@ export function ActivityPanel() {
         />
       </div>
       {reception && <Planner />}
+      {conversation && <ContextMeter key={conversation.id} conversation={conversation} />}
       <div className="activity-body">
         {agent.id === 'files-agent' && <FilesPanel />}
         {reception && briefing && <Briefing briefing={briefing} />}

@@ -109,6 +109,17 @@ export function App() {
         }
       }
 
+      // The context meter and the reply's cost estimate travel with the run's events, the last one included.
+      if (event.channel === 'chat' && (event.contextUsage || event.estimate)) {
+        const state = useApp.getState();
+        state.patch({
+          ...(event.contextUsage && {
+            contextUsage: { ...state.contextUsage, [event.conversationId]: event.contextUsage }
+          }),
+          ...(event.estimate && { estimates: { ...state.estimates, [event.messageId]: event.estimate } })
+        });
+      }
+
       if (event.channel !== 'chat' || event.done) {
         if (!timer)
           timer = setTimeout(() => {
