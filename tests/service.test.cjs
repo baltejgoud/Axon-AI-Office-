@@ -860,3 +860,44 @@ test('the activity log is listed and exported over IPC', async (t) => {
   assert.equal(await service.auditExport(), true);
   assert.equal(JSON.parse(fs.readFileSync(out, 'utf8'))[0].subject, 'a.txt');
 });
+
+/** A chat in a project folder whose model writes `file` once; the write is approved. */
+const writeOnce = async (t, file, content) => {
+  const events = [];
+  const made = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(made.dir, { recursive: true, force: true }));
+  addProvider(made.repo);
+  const folder = path.join(made.dir, 'project');
+  fs.mkdirSync(folder, { recursive: true });
+  await made.service.project.choose(folder);
+  const chat = await made.service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  let calls = 0;
+  mockModel(t, async () => (++calls === 1 ? { toolCalls: [{ id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: file, content }) }] } : { toolCalls: [] }));
+  return { ...made, folder, chat, events, run: async (before) => {
+    if (before !== undefined) fs.writeFileSync(path.join(folder, file), before);
+    const run = made.service.chatSend(chat.id, 'Write it', []);
+    const request = await waitFor(() => events.find((e) => e.approvalRequired)?.approvalRequired, 'the approval');
+    await made.service.toolApprove({ requestId: request.id, approved: true });
+    await run;
+    return made.repo.state.messages.flatMap((m) => m.toolCalls ?? []).find((c) => c.id === 'w1');
+  } };
+};
+
+test('a saved write keeps the version it replaced, so it can be undone', async (t) => {
+  const { service, run } = await writeOnce(t, 'a.txt', 'new');
+  const call = await run('old');
+  assert.equal(call.change.undo, 'kept');
+  const kept = await service.checkpoints.get('w1');
+  assert.equal(kept.before, 'old');
+  assert.equal(kept.existed, true);
+  assert.equal(kept.path, 'a.txt');
+});
+
+test("an existing file Axon couldn't read is saved, is not reported as new, and can't be undone", async (t) => {
+  const { service, run } = await writeOnce(t, 'big.txt', 'small now');
+  const call = await run('x'.repeat(1_000_001));
+  assert.equal(call.change.created, false);
+  assert.equal(call.change.undo, 'unreadable');
+  assert.equal(await service.checkpoints.get('w1'), null);
+  assert.equal(service.audit.all().at(-1).detail, "Can't be undone");
+});

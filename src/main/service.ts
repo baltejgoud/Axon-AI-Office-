@@ -22,6 +22,8 @@ import { contextUsage, type ContextUsage } from '../shared/context-usage';
 import { modelOf, runEstimate } from '../shared/cost';
 import { buildUsageReport } from './usage-report';
 import { AuditLog } from './audit/log';
+import { Checkpoints, hashText } from './audit/checkpoints';
+import type { ToolHandlerResult } from './tools/registry';
 import { auditSubject, type AuditActor, type AuditDecision, type AuditEntry, type AuditQuery } from '../shared/audit';
 import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
@@ -138,6 +140,8 @@ export class Service {
   readonly accounts: Accounts;
   /** Every tool call any agent makes, and what was decided. */
   readonly audit: AuditLog;
+  /** The versions writes replaced, for undo. */
+  readonly checkpoints: Checkpoints;
   /** The Files room's Git: status, commit, sync, clone and publish. */
   readonly scm: SourceControl;
   /** Connectors' browser sign-in; tests replace it. */
@@ -155,6 +159,7 @@ export class Service {
       google: { get clientId() { return google()?.clientId ?? ''; }, get clientSecret() { return google()?.clientSecret ?? ''; } }
     });
     this.audit = new AuditLog(join(dataPath, 'audit'));
+    this.checkpoints = new Checkpoints(join(dataPath, 'checkpoints'));
     this.scm = new SourceControl({
       root: () => this.project.root, token: () => this.accounts.githubToken(), profile: () => this.accounts.githubProfile,
       progress: line => this.emit({ channel: 'git', line })
@@ -792,6 +797,25 @@ export class Service {
     return coworker ? { kind: 'coworker', id: coworker.id, name: coworker.name } : { kind: 'chat', name: 'Assistant' };
   }
 
+  /** Keeps the version a write replaced so you can undo it, and says on the change whether it could. */
+  private async keepCheckpoint(conversationId: string, tc: ToolCall, args: Record<string, any>, result: ToolHandlerResult): Promise<void> {
+    const previous = result.previous!;
+    if (previous.existed && previous.content === null) {
+      result.change!.undo = 'unreadable';
+      return;
+    }
+    const kept = await this.checkpoints.save({
+      toolCallId: tc.id,
+      conversationId,
+      root: this.project.root!,
+      path: String(args.path),
+      existed: previous.existed,
+      ...(previous.content !== null ? { before: previous.content } : {}),
+      afterHash: hashText(String(args.content))
+    });
+    if (kept) result.change!.undo = 'kept';
+  }
+
   /** The context meter for a conversation as it stands, before anything is sent; null for one that doesn't exist. */
   async getContextUsage(conversationId: string): Promise<ContextUsage | null> {
     const chat = this.state.conversations.find(c => c.id === text(conversationId, 100));
@@ -1070,7 +1094,13 @@ export class Service {
             subagentRunner: async (subRole, subTask) =>
               this.runSubagent(provider.id, chat.modelId, subRole, subTask, chat.workspaceId, agent?.maxSteps, controller.signal, scope, { conversationId: id, name: actor.name })
           });
-          answer(tc, result, decision, check.bySession ? 'Allowed for this session' : undefined);
+          if (tc.name === 'write_file' && result.previous && result.change && !result.isError && this.project.root)
+            await this.keepCheckpoint(id, tc, parsedArgs, result);
+          const notes = [
+            check.bySession ? 'Allowed for this session' : '',
+            tc.name === 'write_file' && result.change && result.change.undo !== 'kept' ? "Can't be undone" : ''
+          ].filter(Boolean);
+          answer(tc, result, decision, notes.join('. ') || undefined);
         }
 
         if (controller.signal.aborted) break;

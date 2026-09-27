@@ -98,6 +98,10 @@ export interface FileChange {
   created: boolean;
   /** Unified-diff hunks (`@@ -a,b +c,d @@` and ` `/`+`/`-` lines); left out for new or very large files. */
   hunks?: string;
+  /** Undo: 'kept' when Axon kept the version this write replaced; 'unreadable' when it couldn't (over 1 MB or not text). */
+  undo?: 'kept' | 'unreadable';
+  /** When you undid this change. */
+  revertedAt?: number;
 }
 
 export interface Message {

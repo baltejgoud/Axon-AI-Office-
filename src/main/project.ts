@@ -49,6 +49,15 @@ export class Project {
     if (text.includes('\0')) throw new Error('Binary files are not supported.');
     return text;
   }
+  /** Whether a file is there, by the same checks as reading it. */
+  async exists(path: string): Promise<boolean> {
+    try {
+      await lstat(await this.safe(path));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   async write(path: string, text: string): Promise<void> {
     if (text.length > 1_000_000) throw new Error('File too large.');
     const target = await this.safe(path, true);

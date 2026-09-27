@@ -41,6 +41,8 @@ export interface ToolHandlerResult {
   change?: FileChange;
   /** The background process a call started. */
   process?: { id: string };
+  /** A write's previous content, for undo; kept by the service, never sent to the model or the window. */
+  previous?: { existed: boolean; content: string | null };
   preview?: {
     type: 'diff' | 'command' | 'generic';
     content: string;
@@ -212,16 +214,23 @@ export class ToolRegistry {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
           const filePath = String(args.path);
           const content = String(args.content);
+          // Whether it exists is asked first: a file too big (or too binary) to read is not a new file.
+          const existed = await ctx.project.exists(filePath);
           let before: string | null = null;
-          try {
-            before = await ctx.project.read(filePath);
-          } catch {
-            before = null; // A new file
+          if (existed) {
+            try {
+              before = await ctx.project.read(filePath);
+            } catch {
+              before = null;
+            }
           }
           await ctx.project.write(filePath, content);
+          const change = fileChange(before, content);
+          if (existed && before === null) change.created = false;
           return {
             content: `Successfully wrote ${content.length} characters to ${filePath}.`,
-            change: fileChange(before, content)
+            change,
+            previous: { existed, content: before }
           };
         } catch (err: any) {
           return { content: `Error writing file: ${err.message}`, isError: true };
