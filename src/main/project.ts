@@ -1,4 +1,4 @@
-import { lstat, realpath, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { lstat, realpath, readdir, readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, extname } from 'node:path';
 import { execFile } from 'node:child_process';
 const excluded = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.next', 'vendor', '.venv', '.ssh', '.aws']);
@@ -57,6 +57,12 @@ export class Project {
     } catch {
       return false;
     }
+  }
+  /** Deletes a file inside the project (undoing one a coworker created). Same checks as reading it. */
+  async remove(path: string): Promise<void> {
+    const target = await this.safe(path);
+    if ((await lstat(target)).isDirectory()) throw new Error('Only files can be removed.');
+    await unlink(target);
   }
   async write(path: string, text: string): Promise<void> {
     if (text.length > 1_000_000) throw new Error('File too large.');

@@ -155,6 +155,8 @@ export interface PlatformAPI {
   auditList(query: AuditQuery): Promise<AuditEntry[]>;
   /** Saves the activity log where you choose; false when cancelled. */
   auditExport(): Promise<boolean>;
+  /** Undoes a coworker's saved write after asking; rejects with "Undo cancelled." on Cancel. */
+  revertChange(toolCallId: string): Promise<void>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
   knowledgeImport(): Promise<void>;

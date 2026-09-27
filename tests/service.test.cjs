@@ -901,3 +901,56 @@ test("an existing file Axon couldn't read is saved, is not reported as new, and 
   assert.equal(await service.checkpoints.get('w1'), null);
   assert.equal(service.audit.all().at(-1).detail, "Can't be undone");
 });
+
+test('undo puts back the version a write replaced, once, and says so in the audit trail', async (t) => {
+  const { service, repo, folder, run } = await writeOnce(t, 'a.txt', 'new');
+  await run('old');
+  const seen = answerDialog(t, 1);
+  await service.revertChange('w1');
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'old');
+  assert.match(seen.asked.message, /Undo .*a\.txt/);
+  assert.equal(seen.asked.defaultId, 0);
+  const call = repo.state.messages.flatMap((m) => m.toolCalls ?? []).find((c) => c.id === 'w1');
+  assert.equal(typeof call.change.revertedAt, 'number');
+  assert.equal(service.audit.all().at(-1).decision, 'reverted');
+  await assert.rejects(service.revertChange('w1'), /can't be undone any more/);
+});
+
+test('undo of a file a coworker created deletes it', async (t) => {
+  const { service, folder, run } = await writeOnce(t, 'fresh.txt', 'hello');
+  await run();
+  const seen = answerDialog(t, 1);
+  await service.revertChange('w1');
+  assert.equal(fs.existsSync(path.join(folder, 'fresh.txt')), false);
+  assert.match(seen.asked.detail, /Deletes the file/);
+});
+
+test('undo asks first, and Cancel changes nothing', async (t) => {
+  const { service, folder, run } = await writeOnce(t, 'a.txt', 'new');
+  await run('old');
+  answerDialog(t, 0);
+  await assert.rejects(service.revertChange('w1'), /cancelled/);
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'new');
+  assert.ok(await service.checkpoints.get('w1'), 'still undoable');
+});
+
+test('undo warns when the file changed since the write', async (t) => {
+  const { service, folder, run } = await writeOnce(t, 'a.txt', 'new');
+  await run('old');
+  fs.writeFileSync(path.join(folder, 'a.txt'), 'edited later');
+  const seen = answerDialog(t, 1);
+  await service.revertChange('w1');
+  assert.match(seen.asked.detail, /changed since/);
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'old');
+});
+
+test('undo only works in the project the change was made in', async (t) => {
+  const { service, dir, run } = await writeOnce(t, 'a.txt', 'new');
+  await run('old');
+  const other = path.join(dir, 'other');
+  fs.mkdirSync(other);
+  await service.project.choose(other);
+  const seen = answerDialog(t, 1);
+  await assert.rejects(service.revertChange('w1'), /Open .* to undo this change/);
+  assert.equal(seen.asked, null);
+});

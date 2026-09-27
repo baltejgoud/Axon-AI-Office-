@@ -1,5 +1,5 @@
 import { app, dialog, shell } from 'electron';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { BackupSummary, PlatformAPI, ProviderConnectResult, ProviderModelsResult, ProviderTestResult, Snapshot, TaskPatch, UsageReport } from '../shared/platform';
 import type { FileChange, FocusTarget, McpToolPolicy, ModelSpec, Settings, TaskItem, ToolDefinition } from '../shared/types';
@@ -456,6 +456,45 @@ export class Service {
     await this.audit.flush();
     await writeFile(file.filePath, JSON.stringify(this.audit.all(), null, 2));
     return true;
+  }
+  /**
+   * Undoes a coworker's saved write: puts back the version it replaced, or deletes a file it created.
+   * Only a path from the write's checkpoint, only in the project it was made in, and only after you
+   * confirm (Cancel is the default); it warns when the file has changed since.
+   */
+  async revertChange(toolCallId: string): Promise<void> {
+    const point = await this.checkpoints.get(text(toolCallId, 200));
+    if (!point) throw new Error("This change can't be undone any more (only the last 500 are kept).");
+    if (point.existed && point.before === undefined) throw new Error("Axon couldn't keep this file's previous version (it's over 1 MB or not text).");
+    if (!this.project.root || resolve(this.project.root) !== resolve(point.root)) throw new Error(`Open ${point.root} to undo this change.`);
+    let current: string | null = null;
+    try { current = await this.project.read(point.path); } catch { current = null; }
+    const changedSince = current === null ? point.existed : hashText(current) !== point.afterHash;
+    const message = this.state.messages.find(m => m.toolCalls?.some(c => c.id === point.toolCallId));
+    const call = message?.toolCalls?.find(c => c.id === point.toolCallId);
+    const chat = this.state.conversations.find(c => c.id === point.conversationId);
+    const who = coworkerById(chat?.agentId)?.name ?? 'the assistant';
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      message: `Undo ${who}'s change to ${point.path}?`,
+      detail: [
+        point.existed ? `Puts back the version from before ${new Date(point.savedAt).toLocaleString()}.` : 'Deletes the file they created.',
+        changedSince ? 'The file has changed since they saved it: undoing replaces those later edits too.' : ''
+      ].filter(Boolean).join('\n\n'),
+      buttons: ['Cancel', 'Undo change'],
+      defaultId: 0,
+      cancelId: 0
+    });
+    if (choice.response !== 1) throw new Error('Undo cancelled.');
+    if (point.existed) await this.project.write(point.path, point.before!);
+    else if (current !== null) await this.project.remove(point.path);
+    if (call?.change) call.change.revertedAt = Date.now();
+    this.audit.record({
+      conversationId: point.conversationId, actor: { kind: 'you', name: 'You' }, tool: 'write_file', subject: point.path,
+      decision: 'reverted', toolCallId: point.toolCallId, detail: point.existed ? 'Put back the previous version.' : 'Deleted the file they created.'
+    });
+    await this.checkpoints.remove(point.toolCallId);
+    await this.repo.save();
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
