@@ -33,6 +33,7 @@ import { GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, clientFromEnv
 import { CONNECTORS, connectorById, defaultAssignees, isSecureMcpUrl, servesRun, toolAction, withinBudget, type ConnectorEntry } from '../shared/connectors';
 import { signIn, TokenKeeper, type McpTokens, type OAuthClient } from './mcp/oauth';
 import type { BearerSource } from './mcp/client-manager';
+import { pointAtComposio } from './connectors/rube';
 import { SourceControl } from './git/sourceControl';
 import { SignedOutError, listRepos } from './git/githubApi';
 import { parseRepoInput } from './git/parse';
@@ -648,7 +649,9 @@ export class Service {
     const roleText = rolesBlock(roleProfiles(dedupe(workspace?.roleIds ?? [], chat.roleIds)));
     /** The connectors this run's coworker (or your own chat) has. */
     const connectors = this.connectorToolsFor(coworkerById(chat.agentId));
-    const skillText = skillsBlock(skillBodies(dedupe(workspace?.skillIds ?? [], chat.skillIds))); // throws over budget
+    // Skills written for Rube name Composio's tools when this run has Composio Connect.
+    const skillText = skillsBlock(skillBodies(dedupe(workspace?.skillIds ?? [], chat.skillIds))
+      .map(skill => ({ ...skill, body: pointAtComposio(skill.body, connectors.composio) }))); // throws over budget
 
     // Scoped tool access: the workspace's or conversation's folders, or for an office coworker the open project
     const roots = runRoots({

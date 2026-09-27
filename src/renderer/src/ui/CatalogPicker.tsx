@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Selection } from '../../../shared/types';
+import { REQUIREMENT_CONNECTORS, connectorById } from '../../../shared/connectors';
 import { useApp } from '../state';
 import { Icon, IconClose, IconLock, Modal } from './index';
 
@@ -139,22 +140,14 @@ export function SkillPicker({
   const { items, bySize } = useMemo(() => {
     const mcpServers = data.mcpServers || [];
     const items: Item[] = data.skills.map((s) => {
-      let mcpMatch: string | null = null;
-      if (!s.supported && s.requires?.length) {
-        for (const req of s.requires) {
-          if (req.startsWith('mcp:')) {
-            const needed = req.slice(4).toLowerCase();
-            const matching = mcpServers.find(
-              (srv) =>
-                srv.enabled &&
-                (srv.name.toLowerCase().includes(needed) || srv.id.toLowerCase().includes(needed))
-            );
-            if (matching) {
-              mcpMatch = matching.name;
-              break;
-            }
-          }
-        }
+      /** The connector a skill needs, and whether it is connected. */
+      let via: { name: string; ready: boolean } | null = null;
+      for (const req of s.supported ? [] : (s.requires ?? [])) {
+        const entry = connectorById(REQUIREMENT_CONNECTORS[req]);
+        if (!entry) continue;
+        const server = mcpServers.find((srv) => srv.catalogId === entry.id && srv.enabled);
+        via = { name: entry.name, ready: server?.status === 'connected' };
+        break;
       }
 
       return {
@@ -165,10 +158,14 @@ export function SkillPicker({
         meta: (
           <>
             {!s.supported &&
-              (mcpMatch ? (
-                <span className="badge badge-accent" title={`Provided by active MCP server: ${mcpMatch}`}>
-                  Available via {mcpMatch}
-                </span>
+              (via ? (
+                via.ready ? (
+                  <span className="badge badge-accent">Available via {via.name}</span>
+                ) : (
+                  <span className="badge" title={`Connect ${via.name} in Settings → Connectors`}>
+                    Needs {via.name}
+                  </span>
+                )
               ) : (
                 <span className="badge">Needs tools</span>
               ))}

@@ -235,3 +235,27 @@ test('a tool you turned off is neither offered nor run', async (t) => {
   assert.deepEqual(offered.filter((n) => n.startsWith('mcp_')), ['mcp_notes_create_page']);
   assert.equal(service.permissions.check({ toolName: 'mcp_notes_search', args: {} }).action, 'deny');
 });
+
+const { pointAtComposio } = require('../src/main/connectors/rube.ts');
+
+test("Rube tool names point at Composio's tools; unknown ones stay", () => {
+  const composio = new Map([['COMPOSIO_SEARCH_TOOLS', 'mcp_composio_connect_composio_search_tools']]);
+  assert.equal(pointAtComposio('Call RUBE_SEARCH_TOOLS, then RUBE_UNKNOWN_THING.', composio),
+    'Call mcp_composio_connect_composio_search_tools, then RUBE_UNKNOWN_THING.');
+  assert.equal(pointAtComposio('Call RUBE_SEARCH_TOOLS.', new Map()), 'Call RUBE_SEARCH_TOOLS.');
+});
+
+test("a Rube skill in a chat with Composio connected names Composio's tools", async (t) => {
+  const { repo, service } = makeService(t);
+  addProvider(repo);
+  connect(service, repo, { id: 'cx', name: 'Composio Connect', catalogId: 'composio', coworkers: ['chats'] }, [{ name: 'COMPOSIO_SEARCH_TOOLS', annotations: { readOnlyHint: true } }]);
+  service.mcp.info = (id) => (id === 'cx' ? { status: 'connected', error: null, tools: [{ name: 'COMPOSIO_SEARCH_TOOLS', axonName: 'mcp_composio_connect_composio_search_tools' }] } : undefined);
+  const bodies = require('../src/skills/bodies.json');
+  const skill = require('../src/skills/catalog.json').skills.find((s) => (s.requires ?? []).includes('mcp:rube') && String(bodies[s.id]).includes('RUBE_SEARCH_TOOLS'));
+  let system = '';
+  mockModel(t, async (_p, _k, req, onChunk) => { system = req.system; onChunk('ok'); return { toolCalls: [] }; });
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, { skillIds: [skill.id], roleIds: [] });
+  await service.chatSend(chat.id, 'go', []);
+  assert.match(system, /mcp_composio_connect_composio_search_tools/);
+  assert.doesNotMatch(system, /RUBE_SEARCH_TOOLS/);
+});
