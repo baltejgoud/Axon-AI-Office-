@@ -40,6 +40,7 @@ import { McpDialog } from './settings/McpDialog';
 import { ModelIcon } from './settings/ModelIcon';
 import { AccountsSection } from './settings/AccountsSection';
 import { ConnectorsSection } from './settings/ConnectorsSection';
+import { ConnectorDialog } from './settings/ConnectorDialog';
 import { useOfficeStore } from './features/office/store/officeStore';
 
 type Section = 'accounts' | 'models' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
@@ -131,6 +132,16 @@ export function SettingsPanel() {
       </div>
       {provider && <ProviderDialog initial={provider} onClose={() => setProvider(null)} />}
       {mcpServer && <McpDialog initial={mcpServer} onClose={() => setMcpServer(null)} />}
+      {managed && (
+        <ConnectorDialog
+          serverId={managed}
+          onClose={() => setManaged(null)}
+          onEdit={(server) => {
+            setManaged(null);
+            setMcpServer(server);
+          }}
+        />
+      )}
     </div>
   );
 }
