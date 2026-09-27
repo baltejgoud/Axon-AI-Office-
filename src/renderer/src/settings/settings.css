@@ -894,3 +894,44 @@
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
+
+/* A provider's models: optional context window and prices, collapsed until opened */
+.model-details {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+.model-details > summary {
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+.model-details > .field-hint {
+  display: block;
+  margin: var(--space-2) 0;
+}
+.model-details-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.model-details-table th,
+.model-details-table td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  text-align: left;
+  vertical-align: middle;
+}
+.model-details-table thead th {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+.model-details-table th[scope='row'] {
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+.model-details-table .input {
+  width: 100%;
+  min-width: 6em;
+}

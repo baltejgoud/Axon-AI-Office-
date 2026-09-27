@@ -19,6 +19,7 @@ import {
 } from '../ui';
 import { PREFERENCES, chooseModels, serviceFromKey } from './modelChoice';
 import { ModelIcon } from './ModelIcon';
+import { blankDetails, detailsOf, withDetails, type ModelDetailsInput } from './modelDetails';
 
 /** Where set-up from a pasted key stands. */
 type Setup =
@@ -223,6 +224,13 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
   const [preset, setPreset] = useState<Preset | undefined>(() => (isNew ? undefined : presetOf(initial)));
   const [key, setKey] = useState('');
   const [models, setModels] = useState<string[]>(initial.models.map((m) => m.id));
+  /** Each model's optional context window and prices, as typed; kept when the model list changes. */
+  const [details, setDetails] = useState<Record<string, ModelDetailsInput>>(() => detailsOf(initial.models));
+  const setDetail = (id: string, field: keyof ModelDetailsInput, value: string) =>
+    setDetails((all) => ({ ...all, [id]: { ...(all[id] ?? blankDetails()), [field]: value } }));
+  const detailed = models.filter((id) =>
+    Object.values(details[id] ?? blankDetails()).some((v) => v.trim())
+  ).length;
   const [newModel, setNewModel] = useState('');
   const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
@@ -402,9 +410,11 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
         );
     }
     if (!target.models.length) return setError('Add at least one model.');
+    const specs = withDetails(target.models, details);
+    if ('error' in specs) return setError(specs.error);
     try {
       await window.axon.providerSave(
-        { ...provider, baseUrl: target.baseUrl, name: provider.name.trim(), models: target.models.map(spec) },
+        { ...provider, baseUrl: target.baseUrl, name: provider.name.trim(), models: specs.models },
         key || undefined
       );
       await useApp.getState().refresh();
@@ -583,6 +593,75 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
             Add
           </Button>
         </div>
+
+        {models.length > 0 && (
+          <details className="model-details">
+            <summary>
+              Context window and cost (optional)
+              {detailed > 0 && (
+                <span className="text-caption">
+                  {' '}
+                  · {detailed} of {models.length} set
+                </span>
+              )}
+            </summary>
+            <p className="field-hint">
+              Axon doesn't know what models cost. Enter your provider's prices to see dollars beside each
+              conversation and in Settings → Usage; set both prices for a model. Without them you see tokens
+              only.
+            </p>
+            <table className="model-details-table">
+              <thead>
+                <tr>
+                  <th scope="col">Model</th>
+                  <th scope="col">Context window (tokens)</th>
+                  <th scope="col">$ per 1M input tokens</th>
+                  <th scope="col">$ per 1M output tokens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map((id) => {
+                  const typed = details[id] ?? blankDetails();
+                  return (
+                    <tr key={id}>
+                      <th scope="row">{id}</th>
+                      <td>
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          aria-label={`Context window for ${id}`}
+                          placeholder="e.g. 128000"
+                          value={typed.contextWindow}
+                          onChange={(e) => setDetail(id, 'contextWindow', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          inputMode="decimal"
+                          aria-label={`Price per million input tokens for ${id}`}
+                          placeholder="e.g. 3"
+                          value={typed.inputPrice}
+                          onChange={(e) => setDetail(id, 'inputPrice', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          inputMode="decimal"
+                          aria-label={`Price per million output tokens for ${id}`}
+                          placeholder="e.g. 15"
+                          value={typed.outputPrice}
+                          onChange={(e) => setDetail(id, 'outputPrice', e.target.value)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </details>
+        )}
 
         {shownModels && (
           <div className="model-browser">
