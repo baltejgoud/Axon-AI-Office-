@@ -15,9 +15,14 @@ export interface ModelSpec {
   id: string;
   /** Human friendly label, e.g. "GPT-5 Thinking". */
   displayName: string;
+  /** Tokens the model can take in one request, as you entered it; measures the context meter in tokens. */
   contextWindow?: number;
   supportsTools?: boolean;
   supportsVision?: boolean;
+  /** USD per million input tokens, as you entered it. Axon ships no prices. */
+  pricePerMillionInputTokens?: number;
+  /** USD per million output tokens, as you entered it. */
+  pricePerMillionOutputTokens?: number;
 }
 
 export interface ProviderConfig {
