@@ -21,6 +21,8 @@ import { fitToBudget, requestHistory, requestSize } from './history';
 import { contextUsage, type ContextUsage } from '../shared/context-usage';
 import { modelOf, runEstimate } from '../shared/cost';
 import { buildUsageReport } from './usage-report';
+import { AuditLog } from './audit/log';
+import { auditSubject, type AuditActor, type AuditDecision, type AuditEntry, type AuditQuery } from '../shared/audit';
 import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
@@ -134,6 +136,8 @@ export class Service {
   private shell: ShellPort | null = null;
   /** GitHub and Google sign-in. */
   readonly accounts: Accounts;
+  /** Every tool call any agent makes, and what was decided. */
+  readonly audit: AuditLog;
   /** The Files room's Git: status, commit, sync, clone and publish. */
   readonly scm: SourceControl;
   /** Connectors' browser sign-in; tests replace it. */
@@ -150,6 +154,7 @@ export class Service {
       github: { get clientId() { return github()?.clientId ?? ''; } },
       google: { get clientId() { return google()?.clientId ?? ''; }, get clientSecret() { return google()?.clientSecret ?? ''; } }
     });
+    this.audit = new AuditLog(join(dataPath, 'audit'));
     this.scm = new SourceControl({
       root: () => this.project.root, token: () => this.accounts.githubToken(), profile: () => this.accounts.githubProfile,
       progress: line => this.emit({ channel: 'git', line })
@@ -426,6 +431,26 @@ export class Service {
     await this.repo.restoreBackup(point.file);
     app.relaunch();
     app.quit();
+  }
+  /** Settings → Activity log: newest first, filtered. */
+  auditList(query: AuditQuery): AuditEntry[] {
+    const q = query ?? {};
+    const id = (value: unknown) => (typeof value === 'string' ? text(value, 200) : undefined);
+    return this.audit.list({
+      conversationId: id(q.conversationId),
+      actorId: id(q.actorId),
+      group: q.group && ['all', 'asked', 'refused', 'changes'].includes(q.group) ? q.group : 'all',
+      afterId: id(q.afterId),
+      limit: typeof q.limit === 'number' ? q.limit : undefined
+    });
+  }
+  /** Saves the whole activity log where you choose, as JSON; false when you cancel. */
+  async auditExport(): Promise<boolean> {
+    const file = await dialog.showSaveDialog({ defaultPath: `axon-activity-${dayKey(new Date())}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (file.canceled || !file.filePath) return false;
+    await this.audit.flush();
+    await writeFile(file.filePath, JSON.stringify(this.audit.all(), null, 2));
+    return true;
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
@@ -761,6 +786,12 @@ export class Service {
     });
   }
 
+  /** Who is acting in a conversation's run, for the audit trail. */
+  private actorOf(chat: Conversation): AuditActor {
+    const coworker = coworkerById(chat.agentId);
+    return coworker ? { kind: 'coworker', id: coworker.id, name: coworker.name } : { kind: 'chat', name: 'Assistant' };
+  }
+
   /** The context meter for a conversation as it stands, before anything is sent; null for one that doesn't exist. */
   async getContextUsage(conversationId: string): Promise<ContextUsage | null> {
     const chat = this.state.conversations.find(c => c.id === text(conversationId, 100));
@@ -828,8 +859,9 @@ export class Service {
 
     const agent = chat.agentId ? this.state.agents.find(a => a.id === chat.agentId) : undefined;
     const maxSteps = Math.max(1, Math.min(30, agent?.maxSteps ?? 20));
-    /** Records a call's outcome: a tool message, the next request, the call itself, and the window. */
-    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean; change?: FileChange; process?: { id: string } }): void => {
+    const actor = this.actorOf(chat);
+    /** Records a call's outcome: a tool message, the next request, the call itself, the window, and the audit trail. */
+    const answer = (tc: ToolCall, outcome: { content: string; isError?: boolean; change?: FileChange; process?: { id: string } }, decision: AuditDecision, note?: string): void => {
       this.state.messages.push({
         id: this.repo.id(),
         conversationId: id,
@@ -843,6 +875,13 @@ export class Service {
       Object.assign(tc, outcome.isError ? { error: outcome.content } : { result: outcome.content, ...(outcome.change ? { change: outcome.change } : {}) },
         outcome.process ? { process: outcome.process } : {});
       this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, toolCall: { ...tc }, streaming: true, done: false });
+      const ran = decision === 'allowed' || decision === 'approved' || decision === 'approved-session';
+      this.audit.record({
+        conversationId: id, actor, tool: tc.name, subject: auditSubject(tc.name, toolArgs(tc.arguments) ?? {}), decision, toolCallId: tc.id,
+        ...(ran ? { result: outcome.isError ? 'error' as const : 'ok' as const } : {}),
+        ...(outcome.isError ? { detail: outcome.content } : note ? { detail: note } : {}),
+        ...(outcome.change ? { change: outcome.change } : {})
+      });
     };
     let step = 0;
 
@@ -926,45 +965,44 @@ export class Service {
 
           const parsedArgs = toolArgs(tc.arguments);
           if (!parsedArgs) {
-            answer(tc, { content: `The arguments for ${tc.name} were not valid JSON (perhaps cut off), so it was not run. Call it again with complete arguments.`, isError: true });
+            answer(tc, { content: `The arguments for ${tc.name} were not valid JSON (perhaps cut off), so it was not run. Call it again with complete arguments.`, isError: true }, 'skipped');
             continue;
           }
 
           // A coworker asking a colleague: answered by a consult, never by the tool registry.
           if (tc.name === ASK_COLLEAGUE.name && coworkerById(chat.agentId)) {
-            const allowed = this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow';
-            answer(tc, allowed
-              ? await this.askColleague(chat, provider, parsedArgs, scope, asks, controller.signal)
-              : { content: 'Tool execution denied by security policy.', isError: true });
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow')
+              answer(tc, await this.askColleague(chat, provider, parsedArgs, scope, asks, controller.signal), 'allowed');
+            else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }
 
           // The receptionist keeping the planner: the task records, never the tool registry.
           if (PLANNER_TOOL_NAMES.has(tc.name) && chat.agentId === RECEPTIONIST_ID) {
-            const allowed = this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow';
-            answer(tc, allowed
-              ? runPlannerTool(tc.name, parsedArgs, this.tasks, new Date())
-              : { content: 'Tool execution denied by security policy.', isError: true });
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow')
+              answer(tc, runPlannerTool(tc.name, parsedArgs, this.tasks, new Date()), 'allowed');
+            else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             await this.repo.save();
             continue;
           }
 
           if (this.mcp.isConnectorTool(tc.name) && !offered.has(tc.name)) {
-            answer(tc, { content: `${tc.name} isn't available in this conversation.`, isError: true });
+            answer(tc, { content: `${tc.name} isn't available in this conversation.`, isError: true }, 'skipped');
             continue;
           }
 
           const toolImpl = this.tools.get(tc.name);
           if (!toolImpl) {
-            answer(tc, { content: `Unknown tool: ${tc.name}`, isError: true });
+            answer(tc, { content: `Unknown tool: ${tc.name}`, isError: true }, 'skipped');
             continue;
           }
 
           const check = this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope);
           if (check.action === 'deny') {
-            answer(tc, { content: check.reason || 'Tool execution denied by security policy.', isError: true });
+            answer(tc, { content: check.reason || 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }
+          let decision: AuditDecision = 'allowed';
           if (check.action === 'ask') {
             let preview = undefined;
             if (toolImpl.preparePreview) {
@@ -974,7 +1012,7 @@ export class Service {
               });
             }
 
-            const { request, promise } = this.permissions.createApprovalRequest({
+            const { request, outcome } = this.permissions.createApprovalRequest({
               conversationId: id,
               messageId: activeAssistant.id,
               toolCallId: tc.id,
@@ -1005,29 +1043,34 @@ export class Service {
             // Stopping the run withdraws the request, so a late approval can never run the tool.
             const withdraw = () => this.permissions.withdraw(request.id);
             controller.signal.addEventListener('abort', withdraw, { once: true });
-            const approved = await promise;
+            const ended = await outcome;
             controller.signal.removeEventListener('abort', withdraw);
             this.tracker.approvalResolved(id);
-            if (controller.signal.aborted) break;
-            if (!approved) {
-              answer(tc, { content: 'Tool execution was rejected by the user.', isError: true });
+            if (controller.signal.aborted) {
+              this.audit.record({ conversationId: id, actor, tool: tc.name, subject: auditSubject(tc.name, parsedArgs), decision: 'withdrawn', toolCallId: tc.id });
+              break;
+            }
+            if (ended !== 'approved' && ended !== 'approved-session') {
+              answer(tc, { content: ended === 'timed-out' ? 'Nobody answered within 5 minutes, so it was not run.' : 'Tool execution was rejected by the user.', isError: true }, ended);
               continue;
             }
+            decision = ended;
           }
 
           // The window shows the call as running (a command in its terminal, with its output so far) until it answers.
           const running = (progress?: string) =>
             this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, toolCall: { ...tc, ...(progress !== undefined ? { progress } : {}) }, streaming: true, done: false });
           running();
-          answer(tc, await toolImpl.execute(parsedArgs, {
+          const result = await toolImpl.execute(parsedArgs, {
             project: this.project,
             allowShell: scope.allowShell,
             onOutput: running,
             processes: this.processes,
             conversationId: id,
             subagentRunner: async (subRole, subTask) =>
-              this.runSubagent(provider.id, chat.modelId, subRole, subTask, chat.workspaceId, agent?.maxSteps, controller.signal, scope)
-          }));
+              this.runSubagent(provider.id, chat.modelId, subRole, subTask, chat.workspaceId, agent?.maxSteps, controller.signal, scope, { conversationId: id, name: actor.name })
+          });
+          answer(tc, result, decision, check.bySession ? 'Allowed for this session' : undefined);
         }
 
         if (controller.signal.aborted) break;
@@ -1093,6 +1136,8 @@ export class Service {
     if (!question) return { content: 'Say what you want to ask them.', isError: true };
     asks.count++;
     const colleague = found.coworker;
+    const helper: AuditActor = { kind: 'colleague', id: colleague.id, name: colleague.name, onBehalfOf: coworkerById(chat.agentId)?.name };
+    const entry = (name: string, args: Record<string, unknown>) => ({ conversationId: chat.id, actor: helper, tool: name, subject: auditSubject(name, args) });
     const help = this.tracker.helpStarted(colleague.id, chat.agentId ?? '', chat.id, question);
     try {
       const answer = await consult(
@@ -1113,9 +1158,15 @@ export class Service {
           ],
           execute: async (name, toolArgs) => {
             const tool = this.tools.get(name);
-            if (!tool || this.permissions.check({ toolName: name, args: toolArgs }, scope).action !== 'allow') return 'Not allowed.';
-            return (await tool.execute(toolArgs, { project: this.project, allowShell: false })).content;
-          }
+            if (!tool || this.permissions.check({ toolName: name, args: toolArgs }, scope).action !== 'allow') {
+              this.audit.record({ ...entry(name, toolArgs), decision: tool ? 'denied' : 'skipped' });
+              return 'Not allowed.';
+            }
+            const result = await tool.execute(toolArgs, { project: this.project, allowShell: false });
+            this.audit.record({ ...entry(name, toolArgs), decision: 'allowed', result: result.isError ? 'error' : 'ok', ...(result.isError ? { detail: result.content } : {}) });
+            return result.content;
+          },
+          refused: (name, toolArgs) => this.audit.record({ ...entry(name, toolArgs), decision: 'skipped', detail: 'Not available to a colleague.' })
         }
       );
       this.tracker.helpEnded(help.id);
@@ -1135,7 +1186,8 @@ export class Service {
     _workspaceId: string | null,
     configuredMaxSteps?: number,
     signal?: AbortSignal,
-    scope: PermissionScope = { roots: this.project.root ? [this.project.root] : [], allowShell: false }
+    scope: PermissionScope = { roots: this.project.root ? [this.project.root] : [], allowShell: false },
+    parent?: { conversationId: string; name: string }
   ): Promise<string> {
     const provider = this.state.providers.find(p => p.id === providerId && p.enabled);
     if (!provider) return 'Subagent error: Provider not configured or enabled.';
@@ -1148,6 +1200,12 @@ export class Service {
 
     let output = '';
     const messages: ChatRequestMessage[] = [{ role: 'user', content: task }];
+    const subagent: AuditActor = { kind: 'subagent', name: `Sub-agent (${role.slice(0, 60)})`, ...(parent ? { onBehalfOf: parent.name } : {}) };
+    /** Answers a call the sub-agent may not make, and records why. */
+    const refuse = (tc: { id: string; name: string; arguments: string }, content: string, decision: AuditDecision) => {
+      messages.push({ role: 'tool', toolCallId: tc.id, content });
+      this.audit.record({ conversationId: parent?.conversationId, actor: subagent, tool: tc.name, subject: auditSubject(tc.name, toolArgs(tc.arguments) ?? {}), decision, detail: content, toolCallId: tc.id });
+    };
     const tools = this.tools.getDefinitions().filter(t => t.name !== 'dispatch_subagent' && !this.mcp.isConnectorTool(t.name));
     const maxSteps = Math.max(1, Math.min(10, configuredMaxSteps ?? 5));
 
@@ -1175,26 +1233,26 @@ export class Service {
 
       for (const tc of toolCalls) {
         if (signal?.aborted) {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: 'Stopped.' });
+          refuse(tc, 'Stopped.', 'skipped');
           continue;
         }
         if (tc.name === 'dispatch_subagent') {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: 'Permission denied: Subagents cannot recursively dispatch subagents.' });
+          refuse(tc, 'Permission denied: Subagents cannot recursively dispatch subagents.', 'denied');
           continue;
         }
 
         const args = toolArgs(tc.arguments);
         if (!args) {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: `The arguments for ${tc.name} were not valid JSON, so it was not run.` });
+          refuse(tc, `The arguments for ${tc.name} were not valid JSON, so it was not run.`, 'skipped');
           continue;
         }
         if (this.mcp.isConnectorTool(tc.name)) {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: `${tc.name} isn't available to sub-agents.` });
+          refuse(tc, `${tc.name} isn't available to sub-agents.`, 'skipped');
           continue;
         }
         const tool = this.tools.get(tc.name);
         if (!tool) {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: `Unknown tool: ${tc.name}` });
+          refuse(tc, `Unknown tool: ${tc.name}`, 'skipped');
           continue;
         }
 
@@ -1202,20 +1260,17 @@ export class Service {
         // Mutating actions ('ask' or 'deny') cannot run silently without user approval
         const check = this.permissions.check({ toolName: tc.name, args }, scope);
         if (check.action === 'deny') {
-          messages.push({ role: 'tool', toolCallId: tc.id, content: check.reason || 'Tool execution denied by security policy.' });
+          refuse(tc, check.reason || 'Tool execution denied by security policy.', 'denied');
           continue;
         }
         if (check.action === 'ask') {
-          messages.push({
-            role: 'tool',
-            toolCallId: tc.id,
-            content: `Permission denied: Mutating tool '${tc.name}' requires interactive user approval and cannot be executed by an autonomous subagent.`
-          });
+          refuse(tc, `Permission denied: Mutating tool '${tc.name}' requires interactive user approval and cannot be executed by an autonomous subagent.`, 'denied');
           continue;
         }
 
         const res = await tool.execute(args, { project: this.project, allowShell: scope.allowShell });
         messages.push({ role: 'tool', toolCallId: tc.id, content: res.content });
+        this.audit.record({ conversationId: parent?.conversationId, actor: subagent, tool: tc.name, subject: auditSubject(tc.name, args), decision: 'allowed', result: res.isError ? 'error' : 'ok', ...(res.isError ? { detail: res.content } : {}), toolCallId: tc.id });
       }
     }
 

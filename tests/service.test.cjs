@@ -728,3 +728,135 @@ test('an unknown restore point is refused before anything is asked', async (t) =
   await assert.rejects(service.restoreBackup('state-2026-01-01T00-00-00-000Z.json'), /gone/);
   assert.equal(seen.asked, null);
 });
+
+const decisions = (service) => service.audit.all().map((e) => [e.tool, e.decision, e.result ?? null]);
+
+test('every call in a run is in the audit trail with its decision and result', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder);
+  await service.project.choose(folder);
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    calls++;
+    if (calls === 1) return { toolCalls: [
+      { id: 'l', name: 'list_files', arguments: '{}' },
+      { id: 'b', name: 'bogus_tool', arguments: '{}' },
+      { id: 'j', name: 'read_file', arguments: '{"path": ' },
+      { id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'one' }) },
+      { id: 'r', name: 'run_command', arguments: JSON.stringify({ command: 'npm test' }) }
+    ] };
+    if (calls === 2) return { toolCalls: [{ id: 'w2', name: 'write_file', arguments: JSON.stringify({ path: 'b.txt', content: 'two' }) }] };
+    if (calls === 3) return { toolCalls: [{ id: 'w3', name: 'write_file', arguments: JSON.stringify({ path: 'c.txt', content: 'three' }) }] };
+    onChunk('Done.');
+    return { toolCalls: [] };
+  });
+  const run = service.chatSend(chat.id, 'Do things', []);
+  const first = await waitFor(() => events.filter((e) => e.approvalRequired)[0]?.approvalRequired, 'the first approval');
+  await service.toolApprove({ requestId: first.id, approved: false });
+  const second = await waitFor(() => events.filter((e) => e.approvalRequired)[1]?.approvalRequired, 'the second approval');
+  await service.toolApprove({ requestId: second.id, approved: true, alwaysAllowSession: true });
+  await run;
+  assert.deepEqual(decisions(service), [
+    ['list_files', 'allowed', 'ok'],
+    ['bogus_tool', 'skipped', null],
+    ['read_file', 'skipped', null],
+    ['write_file', 'rejected', null],
+    ['run_command', 'denied', null],
+    ['write_file', 'approved-session', 'ok'],
+    ['write_file', 'allowed', 'ok']
+  ]);
+  const entries = service.audit.all();
+  assert.deepEqual(entries[0].actor, { kind: 'chat', name: 'Assistant' });
+  assert.equal(entries[0].conversationId, chat.id);
+  assert.equal(entries[3].subject, 'a.txt');
+  assert.deepEqual(entries[5].change, { added: 1, removed: 0, created: true });
+  assert.equal(entries[6].detail, 'Allowed for this session');
+  assert.match(entries[4].detail, /disabled/);
+});
+
+test("a stopped run's waiting call is recorded as withdrawn", async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder);
+  await service.project.choose(folder);
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  mockModel(t, async () => ({ toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }] }));
+  const run = service.chatSend(chat.id, 'Write a.txt', []);
+  await waitFor(() => events.find((e) => e.approvalRequired), 'the approval');
+  service.chatStop(chat.id);
+  await within(run, 2000, 'the stopped run');
+  assert.deepEqual(decisions(service), [['write_file', 'withdrawn', null]]);
+});
+
+test("a colleague's lookups are recorded on behalf of the coworker who asked", async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder);
+  fs.writeFileSync(path.join(folder, 'a.txt'), 'hello');
+  await service.project.choose(folder);
+  const { coworkerById } = require('../src/shared/coworkers.ts');
+  const chat = await coworkerChat(service, 'frontend-developer');
+  let asker = 0, consulted = 0;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (req.system.includes('is asking you a question')) {
+      if (++consulted === 1) return { toolCalls: [
+        { id: 'cr', name: 'read_file', arguments: JSON.stringify({ path: 'a.txt' }) },
+        { id: 'cw', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'no' }) }
+      ] };
+      onChunk('It says hello.');
+      return { toolCalls: [] };
+    }
+    if (++asker === 1) return { toolCalls: [{ id: 'ask', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'What is in a.txt?' }) }] };
+    onChunk('Thanks.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Ask about a.txt', []);
+  const entries = service.audit.all();
+  const asking = coworkerById('frontend-developer').name, helping = coworkerById('backend-developer').name;
+  assert.deepEqual(entries.map((e) => [e.actor.kind, e.actor.name, e.actor.onBehalfOf ?? null, e.tool, e.decision]), [
+    ['colleague', helping, asking, 'read_file', 'allowed'],
+    ['colleague', helping, asking, 'write_file', 'skipped'],
+    ['coworker', asking, null, 'ask_colleague', 'allowed']
+  ]);
+  assert.ok(entries.every((e) => e.conversationId === chat.id));
+});
+
+test("a sub-agent's calls are recorded on behalf of the run that sent it", async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  let calls = 0;
+  mockModel(t, async () => (++calls === 1
+    ? { toolCalls: [
+      { id: 's1', name: 'write_file', arguments: JSON.stringify({ path: 'x.ts', content: 'boom' }) },
+      { id: 's2', name: 'dispatch_subagent', arguments: JSON.stringify({ role: 'nested', task: 'more' }) }
+    ] }
+    : { toolCalls: [] }));
+  await service.runSubagent('p1', 'm1', 'researcher', 'Look around', null, undefined, undefined, undefined, { conversationId: 'c1', name: 'Assistant' });
+  assert.deepEqual(service.audit.all().map((e) => [e.actor.kind, e.actor.onBehalfOf, e.tool, e.decision, e.conversationId]), [
+    ['subagent', 'Assistant', 'write_file', 'denied', 'c1'],
+    ['subagent', 'Assistant', 'dispatch_subagent', 'denied', 'c1']
+  ]);
+});
+
+test('the activity log is listed and exported over IPC', async (t) => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  service.audit.record({ actor: { kind: 'you', name: 'You' }, tool: 'write_file', subject: 'a.txt', decision: 'reverted' });
+  assert.equal(service.auditList({ group: 'changes' }).length, 1);
+  const out = path.join(dir, 'export.json');
+  electron.dialog.showSaveDialog = async () => ({ canceled: false, filePath: out });
+  t.after(() => { delete electron.dialog.showSaveDialog; });
+  assert.equal(await service.auditExport(), true);
+  assert.equal(JSON.parse(fs.readFileSync(out, 'utf8'))[0].subject, 'a.txt');
+});

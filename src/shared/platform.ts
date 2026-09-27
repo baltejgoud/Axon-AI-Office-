@@ -2,6 +2,7 @@ import type { ProviderConfig, Conversation, Message, Workspace, Agent, Knowledge
 import type { Briefing } from './planner';
 import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
 import type { ContextUsage } from './context-usage';
+import type { AuditEntry, AuditQuery } from './audit';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -150,6 +151,10 @@ export interface PlatformAPI {
   listBackups(): Promise<BackupSummary[]>;
   /** Asks natively first; then restores the backup and restarts Axon. Rejects with "Restore cancelled." on Cancel. */
   restoreBackup(file: string): Promise<void>;
+  /** Settings → Activity log: every tool call any agent made, newest first. */
+  auditList(query: AuditQuery): Promise<AuditEntry[]>;
+  /** Saves the activity log where you choose; false when cancelled. */
+  auditExport(): Promise<boolean>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
   knowledgeImport(): Promise<void>;

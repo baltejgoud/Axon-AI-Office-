@@ -84,6 +84,8 @@ export interface ConsultDeps {
   /** Read-only tools when the asker's conversation has a folder; otherwise none. */
   tools: ToolDefinition[];
   execute: (name: string, args: Record<string, unknown>) => Promise<string>;
+  /** A tool the colleague asked for but wasn't given: for the audit trail. */
+  refused?: (name: string, args: Record<string, unknown>) => void;
 }
 
 /** The colleague thinks it through, reading files if allowed, and returns their answer. */
@@ -124,16 +126,15 @@ export async function consult(
     if (!calls.length) break;
     messages.push({ role: 'assistant', content: text, toolCalls: calls, replay: result.replay });
     for (const call of calls) {
-      let content = 'Not available to you here.';
-      if (allowed.has(call.name)) {
-        let args: Record<string, unknown> = {};
-        try {
-          args = JSON.parse(call.arguments);
-        } catch {
-          // Arguments the model mangled read as none.
-        }
-        content = await deps.execute(call.name, args);
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(call.arguments);
+      } catch {
+        // Arguments the model mangled read as none.
       }
+      let content = 'Not available to you here.';
+      if (allowed.has(call.name)) content = await deps.execute(call.name, args);
+      else deps.refused?.(call.name, args);
       messages.push({ role: 'tool', toolCallId: call.id, content });
     }
   }
