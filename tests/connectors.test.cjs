@@ -73,6 +73,16 @@ test('everyone: every core coworker, every department and your chats', () => {
   for (const g of SPECIALIST_GROUPS) assert.ok(all.includes(`group:${g}`));
 });
 
+test('every catalog connector has its own logo, and nothing else is there', () => {
+  const dir = require('node:path').join(__dirname, '../src/renderer/src/assets/connectors');
+  const files = fs.readdirSync(dir).filter((f) => f !== 'SOURCES.md');
+  const ids = c.CONNECTORS.map((entry) => entry.id);
+  for (const id of ids) assert.equal(files.filter((f) => f.replace(/\.(svg|png|ico)$/, '') === id).length, 1, `logo for ${id}`);
+  assert.equal(files.length, ids.length, `unexpected files: ${files.filter((f) => !ids.includes(f.replace(/\.\w+$/, ''))).join(', ')}`);
+  const sources = fs.readFileSync(require('node:path').join(dir, 'SOURCES.md'), 'utf8');
+  for (const id of ids) assert.match(sources, new RegExp(`\`${id}\\.`), `source for ${id}`);
+});
+
 test('safe MCP addresses', () => {
   assert.ok(c.isSecureMcpUrl('https://mcp.notion.com/mcp'));
   assert.ok(c.isSecureMcpUrl('http://127.0.0.1:8000/mcp'));

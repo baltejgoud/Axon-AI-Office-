@@ -104,7 +104,7 @@ export function ConnectorDialog({
         </div>
       )}
       <section className="connector-status-row">
-        <ConnectorMark name={server.name} size={18} />
+        <ConnectorMark name={server.name} catalogId={server.catalogId} size={18} />
         <div className="connector-status-text">
           {waiting ? 'Waiting for your browser…' : statusText(server)}
         </div>

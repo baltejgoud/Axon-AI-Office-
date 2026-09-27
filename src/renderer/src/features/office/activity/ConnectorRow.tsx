@@ -25,7 +25,7 @@ export function ConnectorRow({ agent }: { agent: { id: string; name: string; dep
         {mine.length ? (
           <>
             {mine.slice(0, 6).map((s) => (
-              <ConnectorMark key={s.id} name={s.name} size={11} />
+              <ConnectorMark key={s.id} name={s.name} catalogId={s.catalogId} size={11} />
             ))}
             {mine.length > 6 && <span className="activity-connectors-more">+{mine.length - 6}</span>}
           </>
@@ -54,7 +54,7 @@ export function ConnectorRow({ agent }: { agent: { id: string; name: string; dep
                     )
                   }
                 />
-                <ConnectorMark name={s.name} size={11} />
+                <ConnectorMark name={s.name} catalogId={s.catalogId} size={11} />
                 {s.name}
               </label>
             ))

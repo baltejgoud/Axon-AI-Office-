@@ -11,6 +11,7 @@ import { useApp } from '../state';
 import { Button, EmptyState, IconPlug, IconPlus, Modal } from '../ui';
 import { SettingsGroup } from './controls';
 import { ServiceIcon } from './ServiceIcon';
+import { connectorLogo } from './connectorLogos';
 import './connectors.css';
 
 export const errorText = (err: unknown) =>
@@ -18,8 +19,27 @@ export const errorText = (err: unknown) =>
     ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
     : String(err);
 
-/** A connector's mark: its brand icon where Axon has one, else its initial. */
-export function ConnectorMark({ name, size = 16 }: { name: string; size?: number }) {
+/** A connector's mark: its own logo on a white tile, else (custom connectors) a brand glyph or its initial. */
+export function ConnectorMark({
+  name,
+  catalogId,
+  size = 16
+}: {
+  name: string;
+  catalogId?: string;
+  size?: number;
+}) {
+  const logo = connectorLogo(catalogId);
+  if (logo)
+    return (
+      <span
+        className="connector-mark connector-logo"
+        aria-hidden="true"
+        style={{ width: size + 12, height: size + 12 }}
+      >
+        <img src={logo} alt="" width={size} height={size} />
+      </span>
+    );
   return (
     <span className="connector-mark" aria-hidden="true" style={{ width: size + 12, height: size + 12 }}>
       <ServiceIcon
@@ -159,7 +179,7 @@ export function ConnectorsSection({
         <SettingsGroup title="Connected">
           {servers.map((s) => (
             <div className="settings-item" key={s.id}>
-              <ConnectorMark name={s.name} />
+              <ConnectorMark name={s.name} catalogId={s.catalogId} />
               <div className="settings-item-main">
                 <div className="settings-item-title">
                   {s.name}
@@ -210,7 +230,7 @@ export function ConnectorsSection({
               return (
                 <article className="connector-card" key={entry.id}>
                   <div className="connector-card-head">
-                    <ConnectorMark name={entry.name} size={18} />
+                    <ConnectorMark name={entry.name} catalogId={entry.id} size={18} />
                     <div>
                       <h5>{entry.name}</h5>
                       <div className="connector-badges">
