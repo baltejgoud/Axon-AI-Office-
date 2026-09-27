@@ -1,4 +1,5 @@
 import type { PlatformState } from '../shared/platform';
+import { everyone } from '../shared/connectors';
 import { JsonStore } from './infra/store';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
@@ -69,6 +70,8 @@ export class Repository {
     for (const agent of state.agents ?? [])
       if (agent.schedule?.kind === 'interval') agent.schedule = { ...agent.schedule, kind: 'manual' };
     state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
+    // Connectors are given to people (2026-09): servers from older builds keep the reach they had, for everyone.
+    for (const server of state.mcpServers) server.coworkers ??= everyone();
     // Task records arrived with the office's task boards (2026-09).
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
     // The receptionist and the tray arrived with the planner (2026-09).

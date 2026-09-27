@@ -180,15 +180,20 @@ app.on('web-contents-created', (_, contents) => {
         );
         assert.ok(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'));
       }
-      // The composer's model chip shows a short name over the native select, and the hint stays.
+      // The composer's model picker shows a short name and opens a searchable list; the hint stays.
       assert.equal(
-        await evaluate('document.querySelector(".activity-composer .model-chip-label").textContent'),
+        await evaluate('document.querySelector(".activity-composer .model-picker-label").textContent'),
         'Fixture'
       );
-      assert.equal(
-        await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').tagName`),
-        'SELECT'
+      await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').click()`);
+      await waitFor('document.querySelector(".model-picker-pop [role=option]")', 'model list');
+      assert.deepEqual(
+        await evaluate('[...document.querySelectorAll(".model-picker-pop [role=option]")].map((o) => [o.textContent, o.getAttribute("aria-selected")])'),
+        [['Fixture', 'true']]
       );
+      await evaluate(`document.querySelector('.model-picker-pop input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      await pause(50);
+      assert.equal(await evaluate('document.querySelector(".model-picker-pop")'), null);
       assert.equal(
         await evaluate('getComputedStyle(document.querySelector(".composer-hint")).display'),
         'block'
@@ -450,23 +455,23 @@ app.on('web-contents-created', (_, contents) => {
       await pause(400);
       await snap('office-settings.png');
       // Keep running in the tray is on; Start with Windows waits for the installed app.
-      await evaluate(`[...document.querySelectorAll('.office-overlay [role="tab"]')].find((t) => t.textContent === 'Appearance').click()`);
+      const openSection = (name) =>
+        evaluate(`[...document.querySelectorAll('.office-overlay [role="tab"]')].find((t) => t.textContent === ${JSON.stringify(name)}).click()`);
+      await openSection('System');
       await pause(80);
-      const trayBox = (label) =>
-        `[...document.querySelectorAll('.office-overlay label.checkbox')].find((l) => l.textContent.includes(${JSON.stringify(label)})).querySelector('input')`;
-      assert.equal(await evaluate(`${trayBox('Keep running in the tray')}.checked`), true);
-      assert.equal(await evaluate(`${trayBox('Start with Windows')}.disabled`), true);
+      const toggle = (label) => `document.querySelector('.office-overlay [role="switch"][aria-label=${JSON.stringify(label)}]')`;
+      assert.equal(await evaluate(`${toggle('Keep running in the tray')}.getAttribute('aria-checked')`), 'true');
+      assert.equal(await evaluate(`${toggle('Start with Windows')}.disabled`), true);
       // The office quality setting reaches the scene at once.
-      const qualitySelect = `[...document.querySelectorAll('.office-overlay .select')].find((s) => [...s.options].some((o) => o.value === 'balanced'))`;
-      assert.equal(await evaluate(`${qualitySelect}.value`), 'auto');
-      await evaluate(
-        `(() => { const s = ${qualitySelect}; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'high'); s.dispatchEvent(new Event('change', { bubbles: true })); })()`
-      );
+      await openSection('Appearance');
+      await pause(80);
+      const quality = (label) =>
+        `[...document.querySelectorAll('.office-overlay [role="radiogroup"][aria-label="Office quality"] [role="radio"]')].find((r) => r.textContent === ${JSON.stringify(label)})`;
+      assert.equal(await evaluate(`${quality('Auto')}.getAttribute('aria-checked')`), 'true');
+      await evaluate(`${quality('High')}.click()`);
       await pause(100);
       assert.deepEqual(await evaluate('window.__axonOffice.quality()'), { mode: 'high', level: 'high' });
-      await evaluate(
-        `(() => { const s = ${qualitySelect}; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'auto'); s.dispatchEvent(new Event('change', { bubbles: true })); })()`
-      );
+      await evaluate(`${quality('Auto')}.click()`);
       await pause(100);
       assert.equal((await evaluate('window.__axonOffice.quality()')).mode, 'auto');
       await evaluate("window.__axonOffice.setQuality('balanced')");
@@ -759,6 +764,9 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor('document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")', 'planner card');
       assert.match(await evaluate('document.querySelector(".planner-card").textContent'), /due Tomorrow/);
       await waitFor(`(${plannerGroup('This week')}).includes('Book the venue')`, 'her to-do in the planner');
+      // She has no task record to say her run ended, so the stream frees her for the next message.
+      await waitFor('document.querySelector(".status-badge.completed")', 'the receptionist shows completed');
+      assert.equal(await evaluate('document.querySelector(".composer-textarea").disabled'), false);
       assert.ok(providerRequest.messages.some((message) => message.role === 'system' && /Now: .* Today is /.test(message.content)));
       await snap('c-reception.png');
       // A reminder fires once, on time, as a notification that leads to her planner.

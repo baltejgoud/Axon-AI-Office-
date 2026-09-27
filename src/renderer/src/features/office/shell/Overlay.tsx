@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { IconClose } from '../../../ui';
 import { useEscape } from '../../../ui/escape';
 
 const FOCUSABLE =
@@ -10,12 +10,15 @@ export function Overlay({
   title,
   onClose,
   children,
-  wide = false
+  wide = false,
+  flush = false
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** The content lays itself out edge to edge and scrolls its own parts; the sheet keeps one height. */
+  flush?: boolean;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -49,7 +52,7 @@ export function Overlay({
     <div className="office-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={panel}
-        className={`office-overlay-panel ${wide ? 'wide' : ''}`}
+        className={`office-overlay-panel ${wide ? 'wide' : ''} ${flush ? 'flush' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -59,10 +62,10 @@ export function Overlay({
         <header className="office-overlay-header">
           <h2 id={titleId}>{title}</h2>
           <button className="office-overlay-close" aria-label={`Close ${title}`} onClick={onClose}>
-            <X size={18} />
+            <IconClose size={18} />
           </button>
         </header>
-        <div className="office-overlay-body">{children}</div>
+        <div className={`office-overlay-body ${flush ? 'flush' : ''}`}>{children}</div>
       </div>
     </div>
   );

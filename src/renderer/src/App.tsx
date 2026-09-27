@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
 import { useApp, perform } from './state';
-import { AxonLogo, Button, ToastStack } from './ui';
+import { AxonLogo, Button, IconClose, ToastStack } from './ui';
 import { OfficePage } from './features/office/OfficePage';
 import { useOfficeStore } from './features/office/store/officeStore';
 import { RECEPTIONIST_ID } from '../../shared/coworkers';
@@ -52,12 +51,32 @@ export function App() {
         useOfficeStore.getState().focusOn(event);
         return;
       }
+      // A background process's news (several a second while a server starts): update it in place.
+      if (event.channel === 'process') {
+        const current = useApp.getState().data;
+        if (current)
+          useApp.getState().patch({
+            data: {
+              ...current,
+              processes: [
+                ...(current.processes ?? []).filter((p) => p.id !== event.process.id),
+                event.process
+              ]
+            }
+          });
+        return;
+      }
       // Task records arrive whole after every change: swap them in without a full refresh.
       if (event.channel === 'tasks') {
         const current = useApp.getState().data;
         if (current) useApp.getState().patch({ data: { ...current, tasks: event.tasks } });
         return;
       }
+      // A connector lost its sign-in: say so (the refresh below shows its new state).
+      if (event.channel === 'connectors' && event.status === 'needs-sign-in')
+        useApp
+          .getState()
+          .pushToast(`${event.name} needs you to sign in again. Open Settings → Connectors.`, 'error');
       // Sync stream events with office runtime
       if (event.channel === 'chat') {
         const conv = useApp.getState().data?.conversations.find((c) => c.id === event.conversationId);
@@ -70,7 +89,10 @@ export function App() {
           if (event.contentSoFar !== undefined) {
             office.setLastResponse(agentId, event.contentSoFar);
           }
-          // Status comes from the task records; the feed keeps its own entries.
+          // Status comes from the task records; the feed keeps its own entries. The receptionist
+          // has no task records, so her run's end frees her here.
+          if (event.done && agentId === RECEPTIONIST_ID)
+            office.setAgentStatus(agentId, event.error ? 'error' : 'idle');
           if (event.done && event.error) {
             office.pushActivity(agentId, {
               type: 'error',
@@ -128,7 +150,7 @@ export function App() {
               role: 'assistant' as const,
               content: event.contentSoFar ?? '',
               thought: event.thoughtSoFar ?? '',
-              streaming: true,
+              streaming: event.streaming ?? true,
               createdAt: Date.now(),
               toolCalls: event.toolCall ? [event.toolCall] : []
             }
@@ -184,7 +206,7 @@ export function App() {
             <Button
               variant="ghost"
               size="sm"
-              icon={X}
+              icon={IconClose}
               iconOnly
               aria-label="Dismiss error"
               onClick={() => patch({ error: '' })}

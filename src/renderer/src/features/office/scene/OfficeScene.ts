@@ -185,6 +185,10 @@ export class OfficeScene {
   private shadowExtent = 0;
   private fps = 60;
   private ready = false;
+  /** The canvas size last set, so a resize is applied (and the canvas cleared) only when it changes. */
+  private drawnSize = { width: 0, height: 0 };
+  /** The work surface's divider is being dragged (see setLiveResize). */
+  private liveResize = false;
   private cleanupListeners: () => void = () => {};
 
   constructor(
@@ -721,6 +725,8 @@ export class OfficeScene {
     this.cameraRig.update(dt, this.reducedMotion);
     this.updateSigns();
     this.updateQuality(dt);
+    // A size change (the work surface opening, its divider dragged) is drawn in this frame, once.
+    this.syncSize();
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.placeLabels();
     this.notifyView(dt);
@@ -863,7 +869,22 @@ export class OfficeScene {
   }
 
   /** High draws sharper (more pixels, a finer sun shadow); Auto judges the frame rate once the view has settled. */
+  /**
+   * While the work surface's divider is held, the canvas is resized every frame: draw it at one
+   * pixel per CSS pixel then (reallocating a quarter of the pixels), and keep the automatic quality
+   * from reading the drag as a slow office. Letting go brings back the full quality.
+   */
+  public setLiveResize(live: boolean): void {
+    if (live === this.liveResize) return;
+    this.liveResize = live;
+    if (live) this.renderer.setPixelRatio(1);
+    else if (this.qualityLevel) applyRenderQuality(this.renderer, this.sun, this.qualityLevel);
+    else this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.drawnSize = { width: 0, height: 0 };
+  }
+
   private updateQuality(dt: number): void {
+    if (this.liveResize) return;
     let level: QualityLevel;
     if (this.qualityMode !== 'auto') level = this.qualityMode;
     else if (this.elapsed < QUALITY_WARMUP) level = this.autoQuality.level;
@@ -873,12 +894,22 @@ export class OfficeScene {
     applyRenderQuality(this.renderer, this.sun, level);
   }
 
-  public handleResize(): void {
+  /** Matches the canvas and camera to the container; true when the size changed. */
+  private syncSize(): boolean {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
-    if (!width || !height) return;
+    if (!width || !height || (width === this.drawnSize.width && height === this.drawnSize.height))
+      return false;
+    this.drawnSize = { width, height };
     this.cameraRig.resize(width, height);
     this.renderer.setSize(width, height);
+    return true;
+  }
+
+  public handleResize(): void {
+    // The frame loop usually matched the size before drawing. A resize it missed clears the canvas
+    // after this frame was drawn: draw again, so the office never blinks empty.
+    if (this.syncSize() && this.ready) this.renderer.render(this.scene, this.cameraRig.camera);
   }
 
   public destroy(): void {

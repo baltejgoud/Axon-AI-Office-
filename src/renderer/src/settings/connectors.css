@@ -1,0 +1,221 @@
+/* Settings → Connectors */
+.connector-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+/* A connector's own logo sits on white, as app icons do, so dark marks stay visible in the dark theme. */
+.connector-logo {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.08);
+}
+.connector-logo img {
+  display: block;
+  object-fit: contain;
+}
+.connector-initial {
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+}
+.badge-danger {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+.connector-catalog {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.connector-catalog-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.connector-catalog-bar h4 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.connector-search {
+  max-width: 240px;
+}
+.connector-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.connector-chip {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.connector-chip[aria-selected='true'] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.connector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+.connector-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+.connector-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.connector-card h5 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.connector-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.connector-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+.connector-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.connector-waiting {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+/* Manage a connector */
+.connector-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.connector-status-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.connector-section {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.connector-section h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.connector-warning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgb(245 158 11 / 0.12);
+  color: var(--warning-text);
+  font-size: var(--text-sm);
+}
+.connector-people,
+.connector-departments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-1) var(--space-3);
+}
+.connector-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.connector-department {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.connector-count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.connector-disclose {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.connector-members {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding-left: var(--space-5);
+}
+.connector-tools {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.connector-tools li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.connector-tool-text {
+  display: grid;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.connector-tool-text span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connector-tool-text em {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-style: normal;
+}
+.connector-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.settings-nav-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--warning-text);
+}

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Users } from 'lucide-react';
 import type { ToolCall } from '../../../../../shared/types';
+import { IconUsers } from '../../../ui';
 import { AgentPortrait } from '../AgentPortrait';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { parseColleagueCall } from '../tasks';
@@ -28,7 +28,7 @@ export function ColleagueCard({ call }: { call: ToolCall }) {
           <AgentPortrait agent={agent} className="colleague-portrait" />
         ) : (
           <span className="colleague-portrait fallback">
-            <Users size={14} />
+            <IconUsers size={14} />
           </span>
         )}
         <span className="colleague-who">

@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Check, ShieldAlert, Terminal, X } from 'lucide-react';
 import type { ToolApprovalRequest } from '../../../shared/types';
-import { Button, Icon } from './index';
+import { Button, IconCheck, IconClose, IconShieldAlert, IconTerminal } from './index';
 
 export function ApprovalCard({
   request,
@@ -24,7 +23,7 @@ export function ApprovalCard({
       <div className="approval-header">
         <div className="approval-title">
           <span className="approval-icon">
-            <Icon icon={ShieldAlert} size="md" />
+            <IconShieldAlert size={16} />
           </span>
           <strong>Tool execution approval required</strong>
         </div>
@@ -66,13 +65,13 @@ export function ApprovalCard({
 
       {preview?.type === 'command' && (
         <div className="approval-preview-cmd">
-          <Icon icon={Terminal} size="sm" />
+          <IconTerminal size={14} />
           <span>$ {preview.content}</span>
         </div>
       )}
 
       <div className="approval-actions">
-        <Button variant="ghost" size="sm" icon={X} disabled={submitting} onClick={() => handle(false)}>
+        <Button variant="ghost" size="sm" icon={IconClose} disabled={submitting} onClick={() => handle(false)}>
           Reject
         </Button>
         <Button variant="secondary" size="sm" disabled={submitting} onClick={() => handle(true, true)}>
@@ -81,7 +80,7 @@ export function ApprovalCard({
         <Button
           variant="primary"
           size="sm"
-          icon={Check}
+          icon={IconCheck}
           disabled={submitting}
           onClick={() => handle(true, false)}
         >

@@ -135,3 +135,14 @@ test('a consult may read files when given read-only tools, and nothing else', as
   assert.deepEqual(ran, [['read_file', 'schema.sql']]);
   assert.equal(answer, 'CREATE TABLE users | Not available to you here.');
 });
+
+test('runRoots: office coworkers work in the open project; chats and the receptionist do not', () => {
+  const run = (input) => office.runRoots({ projectRoot: '/p', ...input });
+  assert.deepEqual(run({ agentId: 'frontend-developer' }), ['/p']);
+  assert.deepEqual(run({ agentId: 'frontend-developer', projectRoot: null }), [], 'nothing open, nothing to use');
+  assert.deepEqual(run({ agentId: 'receptionist' }), [], 'the receptionist keeps to her planner');
+  assert.deepEqual(run({ agentId: undefined }), [], 'a plain chat needs its own folder');
+  assert.deepEqual(run({ agentId: 'frontend-developer', conversationRoot: '/own' }), ['/own'], 'its own folder comes first');
+  assert.deepEqual(run({ agentId: undefined, workspaceRoots: ['/w', '/p'] }), ['/w', '/p'], 'a workspace adds the project once');
+  assert.deepEqual(run({ agentId: 'writer', workspaceRoots: [] }), ['/p']);
+});

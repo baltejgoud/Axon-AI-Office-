@@ -1,7 +1,7 @@
 import { PLANNER_TOOL_NAMES } from '../tasks/tools';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
-import type { ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
+import type { McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
 
 export type PermissionAction = 'allow' | 'ask' | 'deny';
 
@@ -23,11 +23,13 @@ interface PendingApproval {
 }
 
 /** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
-const EXACT_GRANTS = new Set(['run_command', 'git_commit']);
+const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
 
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
+  /** How a connector's tool is treated; null for tools that aren't a connector's. */
+  private connectorRule: ((toolName: string) => McpToolPolicy | null) | null = null;
 
   constructor(
     private roots: string[],
@@ -38,6 +40,10 @@ export class PermissionManager {
   updateConfig(roots: string[], allowShell: boolean) {
     this.roots = roots;
     this.allowShell = allowShell;
+  }
+
+  setConnectorRule(rule: (toolName: string) => McpToolPolicy | null): void {
+    this.connectorRule = rule;
   }
 
   /** Relative paths are read against each root (tools take project-relative paths); absolute ones as they are. */
@@ -55,10 +61,16 @@ export class PermissionManager {
     const roots = scope?.roots ?? this.roots;
     const allowShell = scope?.allowShell ?? this.allowShell;
 
+    // A connector tool you turned off stays off, whatever was allowed before.
+    const connector = this.connectorRule?.(toolName) ?? null;
+    if (connector === 'off') return { action: 'deny', reason: 'This tool is turned off in Settings → Connectors.' };
+
     // 1. Session-level grant check
     if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${toolName}:*`)) {
       return { action: 'allow' };
     }
+    // A connector tool: your override, or its server's read-only mark.
+    if (connector) return { action: connector };
 
     // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
     if (toolName === 'ask_colleague') return { action: 'allow' };
@@ -73,8 +85,11 @@ export class PermissionManager {
       }
     }
 
-    // 3. Shell execution permission check
-    if (toolName === 'run_command') {
+    // A background process's output and stop touch only what the same conversation started (the tools check).
+    if (toolName === 'read_process' || toolName === 'stop_process') return { action: 'allow' };
+
+    // 3. Shell execution permission check (a background process is a command that keeps running)
+    if (toolName === 'run_command' || toolName === 'start_process') {
       if (!allowShell) {
         return { action: 'deny', reason: 'Shell command execution is disabled in workspace settings.' };
       }

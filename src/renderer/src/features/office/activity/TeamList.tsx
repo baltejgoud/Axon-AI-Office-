@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { IconArrowLeft } from '../../../ui';
 import type { TaskItem } from '../../../../../shared/types';
 import { timeAgo } from '../../../format';
 import { useApp } from '../../../state';
@@ -44,7 +44,7 @@ export function TeamList({ team }: { team: Team }) {
     <div className="team-list" style={{ '--team-color': board?.color ?? '#3867f6' } as CSSProperties}>
       <header className="team-list-header">
         <button className="team-list-back" aria-label="Back to the coworker" onClick={close}>
-          <ArrowLeft size={16} />
+          <IconArrowLeft size={16} />
         </button>
         <div>
           <h2>{board?.title ?? team}</h2>

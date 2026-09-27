@@ -394,3 +394,39 @@ test('a server that refuses both limit names gets no limit rather than bouncing 
   assert.equal(bodies.length, 3);
   assert.equal('max_tokens' in bodies[2] || 'max_completion_tokens' in bodies[2], false);
 });
+
+test('the regions of one service: Moonshot global and China, Alibaba by region; no one else', () => {
+  assert.deepEqual(providers.otherRegions('https://api.moonshot.ai/v1'), ['https://api.moonshot.cn/v1']);
+  assert.deepEqual(
+    providers.otherRegions('https://dashscope-intl.aliyuncs.com/compatible-mode/v1'),
+    [
+      'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+      'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      'https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1'
+    ]
+  );
+  assert.deepEqual(providers.otherRegions('https://api.openai.com/v1'), []);
+  assert.deepEqual(providers.otherRegions('not a url'), []);
+});
+
+test('thinking models get room to think before they answer; others keep the setting', () => {
+  for (const model of ['kimi-k3', 'kimi-k2.6', 'kimi-k2.7-code', 'moonshotai/kimi-k3', 'deepseek-reasoner', 'qwq-plus', 'qwen3-max-thinking', 'o3', 'gpt-5.1', 'openai/gpt-oss-120b'])
+    assert.equal(providers.outputLimit(model, 4096), 16384, model);
+  for (const model of ['gpt-4o', 'deepseek-chat', 'qwen-plus', 'claude-sonnet-5', 'kimi-k2-turbo-preview'])
+    assert.equal(providers.outputLimit(model, 4096), 4096, model);
+  assert.equal(providers.outputLimit('kimi-k3', 32000), 32000, 'a higher setting stands');
+});
+
+test('an address that cannot be reached is named, with what to check', async (t) => {
+  const saved = global.fetch;
+  global.fetch = async () => { throw new TypeError('fetch failed'); };
+  t.after(() => { global.fetch = saved; });
+  await assert.rejects(
+    providers.listModels({ kind: 'openai-compatible', baseUrl: 'http://localhost:11434/v1', models: [] }, null),
+    /Could not reach localhost:11434\. Is the server running on this computer\?/
+  );
+  await assert.rejects(
+    streamChat({ kind: 'openai-compatible', baseUrl: 'https://offline.example/v1', models: [] }, 'k', { model: 'm', messages: hi }, () => {}),
+    /Could not reach offline\.example\. Check your internet connection/
+  );
+});

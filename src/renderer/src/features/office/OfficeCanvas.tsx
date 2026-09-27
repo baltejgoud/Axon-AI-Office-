@@ -1,6 +1,14 @@
 import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGrid, Library, RotateCcw, Scan, Settings, ZoomIn } from 'lucide-react';
+import {
+  IconCode,
+  IconLayoutGrid,
+  IconBook,
+  IconRotateCcw,
+  IconScan,
+  IconSettings,
+  IconZoomIn
+} from '../../ui';
 import { OfficeScene, type OfficeView } from './scene/OfficeScene';
 import { loadOfficeModels, officeModelsLoaded } from './scene/room/models';
 import { useOfficeStore } from './store/officeStore';
@@ -9,10 +17,13 @@ import { DISTRICTS, districtById, type DistrictId } from './campus/districts';
 import { AgentPortrait } from './AgentPortrait';
 import { OfficeDirectory } from './OfficeDirectory';
 import { DistrictChips } from './shell/DistrictChips';
+import { AccountButton } from './shell/AccountButton';
 import { DepartmentMenu, type DepartmentChoice } from './shell/DepartmentMenu';
 import { Minimap } from './shell/Minimap';
 import { SceneLabels, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
+import { WaitingPill } from './shell/WaitingPill';
+import { SHORTCUT_KEY } from './workspace/WorkViews';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
@@ -21,7 +32,12 @@ import { activeHelp } from './tasks';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 
-export function OfficeCanvas() {
+export function OfficeCanvas({
+  work
+}: {
+  /** The selected coworker's work surface, when they have used a tool: whether it is open, and a toggle. */
+  work?: { open: boolean; toggle: () => void };
+}) {
   const container = useRef<HTMLDivElement>(null);
   const labels = useRef<HTMLDivElement>(null);
   const scene = useRef<OfficeScene | null>(null);
@@ -125,6 +141,12 @@ export function OfficeCanvas() {
     // With the Files room open, the Files Agent goes to the cabinets.
     if (selectedAgentId === 'files-agent') scene.current?.sendTo('files-agent', 'cabinet');
   }, [selectedAgentId]);
+
+  // The work surface's divider is held: the office draws cheaply until it is let go.
+  const resizingWork = useOfficeStore((s) => s.resizingWork);
+  useEffect(() => {
+    scene.current?.setLiveResize(resizingWork);
+  }, [resizingWork]);
 
   // Someone asked the office to go to a person (handing over files, clicking the cabinets).
   useEffect(() => {
@@ -241,6 +263,10 @@ export function OfficeCanvas() {
       </header>
 
       <div className="office-directory">
+        {/* Shown only when the office is short and its heading steps aside (workspace.css). */}
+        <span className="office-directory-mark" aria-hidden="true">
+          Axon<span>.</span>
+        </span>
         <DepartmentMenu current={focusDepartment} onChoose={chooseFromMenu} />
         <OfficeDirectory onChoose={chooseAgent} />
       </div>
@@ -248,11 +274,24 @@ export function OfficeCanvas() {
       <nav className="office-navigation" aria-label="Office districts">
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
+          <WaitingPill />
+          {work && (
+            <button
+              onClick={work.toggle}
+              className={work.open ? 'active' : ''}
+              title={`${work.open ? 'Hide' : 'Show'} their work (${SHORTCUT_KEY}+J)`}
+              aria-label="Work surface"
+              aria-pressed={work.open}
+            >
+              <IconCode size={16} />
+            </button>
+          )}
+          <AccountButton />
           <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
-            <Library size={16} />
+            <IconBook size={16} />
           </button>
           <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
-            <Settings size={16} />
+            <IconSettings size={16} />
           </button>
           <button
             onClick={() => scene.current?.overview()}
@@ -260,7 +299,7 @@ export function OfficeCanvas() {
             aria-label="Whole campus"
             disabled={roster}
           >
-            <Scan size={16} />
+            <IconScan size={16} />
           </button>
           <button
             onClick={() => {
@@ -271,7 +310,7 @@ export function OfficeCanvas() {
             aria-label="Reset view"
             disabled={roster}
           >
-            <RotateCcw size={16} />
+            <IconRotateCcw size={16} />
           </button>
           <button
             onClick={() => {
@@ -281,7 +320,7 @@ export function OfficeCanvas() {
             title={roster ? 'Office view' : 'Team view'}
             aria-label={roster ? 'Office view' : 'Team view'}
           >
-            <LayoutGrid size={16} />
+            <IconLayoutGrid size={16} />
           </button>
         </div>
       </nav>
@@ -353,7 +392,7 @@ export function OfficeCanvas() {
             />
           )}
           <div className="office-map-hint">
-            <ZoomIn size={13} />
+            <IconZoomIn size={13} />
             <span>
               {hovered
                 ? `Select ${OFFICE_AGENTS.find((a) => a.id === hovered)?.name}`

@@ -36,6 +36,18 @@ test('local dates parse strictly', () => {
   assert.equal(p.dayKey(now), '2026-09-24');
 });
 
+test('seconds and a trailing Z from a model still read as the local time it meant', () => {
+  const ten = at('2026-09-25T10:00:00').getTime();
+  for (const value of ['2026-09-25T10:00:00', '2026-09-25T10:00:00.000', '2026-09-25T10:00Z', '2026-09-25T10:00:00Z']) {
+    assert.equal(p.parseLocal(value).at, ten, value);
+    assert.equal(p.parseLocal(value).time, '10:00', value);
+  }
+  assert.equal(p.parseLocal('2026-09-25T10:00:00+05:30'), null);
+  assert.equal(p.parseLocal('2026-09-25Z'), null);
+  const checked = tools.validateTaskInput({ title: 'Call the bank', due: '2026-09-25T10:00:00' }, now, false);
+  assert.equal(checked.value.due, '2026-09-25T10:00');
+});
+
 test('the planner groups by day', () => {
   const g = p.groupPlanner(
     [

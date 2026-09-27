@@ -4,6 +4,7 @@ import type { HandedFile } from '../activity/fileContext';
 import type { FocusTarget, TaskItem } from '../../../../../shared/types';
 import type { Briefing } from '../../../../../shared/planner';
 import { statusesFromTasks, type Team } from '../tasks';
+import { DEFAULT_WORK_SPLIT, clampWorkSplit } from '../workspace/work';
 
 export interface AgentActivity {
   id: string;
@@ -34,6 +35,8 @@ interface OfficeStoreState {
   agentRuntime: Record<string, AgentRuntime>;
   is3dEnabled: boolean;
   overlay: Overlay | null;
+  /** The Settings section to open at, when something asked for one (the avatar opens Accounts). */
+  settingsSection: string | null;
 
   selectAgent: (id: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
@@ -44,7 +47,7 @@ interface OfficeStoreState {
   setLastResponse: (agentId: string, text: string) => void;
   pushActivity: (agentId: string, activity: Omit<AgentActivity, 'id' | 'timestamp' | 'agentId'>) => void;
   toggle3d: () => void;
-  openOverlay: (overlay: Overlay | null) => void;
+  openOverlay: (overlay: Overlay | null, settingsSection?: string) => void;
   /** Files handed to each coworker from the Files room, waiting in their message box. */
   pendingFiles: Record<string, HandedFile[]>;
   handFiles: (agentId: string, files: HandedFile[]) => void;
@@ -65,6 +68,24 @@ interface OfficeStoreState {
   setPlannerOpen: (open: boolean) => void;
   /** Goes where a notification, the tray or the Today board points: someone, their thread, the planner. */
   focusOn: (target: FocusTarget) => void;
+  /**
+   * The office's share of the left side while a work surface is open below it. Starts at 60/40 and
+   * keeps whatever the user drags it to, for this session, across tabs and coworkers.
+   */
+  workSplit: number;
+  setWorkSplit: (share: number) => void;
+  /** The divider is being dragged: the office draws more cheaply until it is let go. */
+  resizingWork: boolean;
+  setResizingWork: (resizing: boolean) => void;
+  /**
+   * The user opened or closed a conversation's work surface during one of its runs (a run is keyed
+   * by when it started). The choice holds for that run; the next run opens by itself again.
+   */
+  workChoice: Record<string, { open: boolean; run: string }>;
+  setWorkChoice: (conversationId: string, open: boolean, run: string) => void;
+  /** Something asked the work surface to show one step: a file or command in the side panel. */
+  workFocus: { conversationId: string; stepId: string; at: number } | null;
+  focusWork: (conversationId: string, stepId: string) => void;
 }
 
 const initialRuntime: Record<string, AgentRuntime> = {};
@@ -82,6 +103,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   agentRuntime: initialRuntime,
   is3dEnabled: true,
   overlay: null,
+  settingsSection: null,
   pendingFiles: {},
   flyTo: null,
   teamBoard: null,
@@ -95,6 +117,15 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     if (target.conversationId) get().setAgentConversation(target.agentId, target.conversationId);
     if (target.planner) set({ plannerOpen: true });
   },
+  workSplit: DEFAULT_WORK_SPLIT,
+  setWorkSplit: (share) => set({ workSplit: clampWorkSplit(share) }),
+  resizingWork: false,
+  setResizingWork: (resizing) => set({ resizingWork: resizing }),
+  workChoice: {},
+  setWorkChoice: (conversationId, open, run) =>
+    set({ workChoice: { ...get().workChoice, [conversationId]: { open, run } } }),
+  workFocus: null,
+  focusWork: (conversationId, stepId) => set({ workFocus: { conversationId, stepId, at: Date.now() } }),
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
@@ -180,7 +211,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
 
   toggle3d: () => set({ is3dEnabled: !get().is3dEnabled }),
 
-  openOverlay: (overlay) => set({ overlay }),
+  openOverlay: (overlay, settingsSection) => set({ overlay, settingsSection: settingsSection ?? null }),
 
   handFiles: (agentId, files) => {
     const current = get().pendingFiles[agentId] ?? [];

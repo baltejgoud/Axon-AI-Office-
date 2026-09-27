@@ -1,5 +1,6 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo } from './types';
 import type { Briefing } from './planner';
+import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
 export interface PlatformState {
   version: 1;
   providers: ProviderConfig[];
@@ -22,9 +23,13 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   skillSources: SkillSourceInfo[];
   roles: Role[];
   mcpServers: MCPServerConfig[];
+  /** Catalog connectors that have an OAuth app to sign in with: this build's, or your own. */
+  connectorApps: string[];
   projectRoot?: string | null;
   /** Tool calls waiting for the user, so a reopened window can still answer them. */
   pendingApprovals: ToolApprovalRequest[];
+  /** Commands the coworkers left running in the background. */
+  processes: ProcessInfo[];
   /** Start with Windows needs the installed app. */
   startWithWindowsAvailable: boolean;
 }
@@ -42,6 +47,14 @@ export interface ProviderModelsResult {
   /** A key is saved, but the form's endpoint differs from the saved one, so it wasn't sent. */
   savedKeyWithheld: boolean;
 }
+/** Settings' set-up from a pasted key: where the key works, and the models it can use there. */
+export interface ProviderConnectResult {
+  /** The service's address that accepted the key; another region's when the form's did not. */
+  baseUrl: string;
+  /** The models the key can use, or null when the endpoint lists none. */
+  models: string[] | null;
+  savedKeyWithheld: boolean;
+}
 /** What the planner may write to a to-do. `null` clears a field. */
 export interface TaskPatch {
   title?: string;
@@ -56,6 +69,7 @@ export interface PlatformAPI {
   /** Checks the form's endpoint, key and models without saving. With no key typed, the saved key is used only for the saved endpoint. */
   providerTest(provider: ProviderConfig, key?: string): Promise<ProviderTestResult>;
   providerModels(provider: ProviderConfig, key?: string): Promise<ProviderModelsResult>;
+  providerConnect(provider: ProviderConfig, key?: string): Promise<ProviderConnectResult>;
   providerDelete(id: string): Promise<void>;
   workspaceSave(workspace: Workspace): Promise<void>;
   workspaceDelete(id: string): Promise<void>;
@@ -66,6 +80,15 @@ export interface PlatformAPI {
   settingsSave(settings: Settings): Promise<void>;
   mcpServerSave(server: MCPServerConfig): Promise<void>;
   mcpServerDelete(id: string): Promise<void>;
+  /** Adds a catalog connector, signing in first in the browser when it needs to. */
+  connectorAdd(catalogId: string): Promise<void>;
+  /** Tries a connector again, signing in first if it lost its sign-in. */
+  connectorReconnect(id: string): Promise<void>;
+  connectorSignInCancel(): Promise<void>;
+  /** Forgets a connector's sign-in. */
+  connectorSignOut(id: string): Promise<void>;
+  /** Your own OAuth app for a connector this build has none for. */
+  connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void>;
   chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null, systemPrompt?: string): Promise<Conversation>;
   chatRename(id: string, title: string): Promise<void>;
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
@@ -90,6 +113,45 @@ export interface PlatformAPI {
   taskDelete(id: string): Promise<void>;
   /** Called once when a window opens: the day's briefing (once a day) and where to look first. */
   officeStart(): Promise<{ briefing: Briefing | null; focus: FocusTarget | null }>;
+  /** Who is signed in, which sign-ins this build offers, and the installed Git. */
+  accountsGet(): Promise<AccountsState>;
+  /** Opens github.com/login/device and returns the code to type there. */
+  githubSignInStart(): Promise<DeviceCode>;
+  /** Resolves once the code is approved on github.com. */
+  githubSignInFinish(): Promise<AccountProfile>;
+  githubSignInCancel(): Promise<void>;
+  githubSignOut(): Promise<void>;
+  /**
+   * Sets up the app GitHub or Google sign-in uses when this build has none: a GitHub OAuth app's
+   * Client ID, or a Google "Desktop app" client's ID and secret (which also sign in Gmail, Calendar
+   * and Drive). An empty Client ID forgets it.
+   */
+  accountAppSave(kind: 'github' | 'google', clientId: string, clientSecret?: string): Promise<void>;
+  /** Opens Google's sign-in in the browser; resolves when it returns to Axon. */
+  googleSignIn(): Promise<AccountProfile>;
+  googleSignInCancel(): Promise<void>;
+  googleSignOut(): Promise<void>;
+  githubRepos(): Promise<RepoSummary[]>;
+  /** Looks for Git again (after installing it). */
+  gitCheck(): Promise<string | null>;
+  scmStatus(): Promise<ScmStatus>;
+  scmDiff(path: string): Promise<ScmDiff>;
+  scmStage(paths: string[]): Promise<void>;
+  scmUnstage(paths: string[]): Promise<void>;
+  scmCommit(message: string): Promise<{ authorSet: boolean }>;
+  scmSync(): Promise<void>;
+  scmBranches(): Promise<{ current: string | null; local: string[]; remote: string[] }>;
+  scmCheckout(name: string): Promise<void>;
+  scmCreateBranch(name: string): Promise<void>;
+  /** Asks where to put the clone; the opened folder, or null when cancelled. */
+  scmClone(repo: string): Promise<string | null>;
+  /** The new repository's page on GitHub. */
+  scmPublish(input: PublishInput): Promise<string>;
+  openLink(url: string): Promise<void>;
+  /** Stops a background process a coworker started. */
+  processStop(id: string): Promise<void>;
+  /** Opens the page a background process serves in your browser. */
+  processOpen(id: string): Promise<void>;
   onStream(callback: (event: StreamEvent) => void): () => void;
 }
 declare global { interface Window { axon: PlatformAPI } }

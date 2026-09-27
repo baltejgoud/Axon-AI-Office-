@@ -41,7 +41,9 @@ body {
 button,
 input,
 textarea,
-select {
+select,
+optgroup,
+option {
   font: inherit;
   color: inherit;
 }
@@ -430,94 +432,6 @@ svg {
   color: var(--danger-text);
   font-size: var(--text-sm);
 }
-/* Find models in the provider dialog: the endpoint's models as toggles that add to the list. */
-.provider-models {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-.provider-models .input {
-  width: 100%;
-}
-.provider-model-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  max-height: 180px;
-  overflow-y: auto;
-}
-.provider-model {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 26px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  background: var(--surface-app);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-.provider-model:hover {
-  border-color: var(--accent);
-}
-.provider-model[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.provider-model:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* Test connection in the provider dialog: one line per model, a tick or a cross. */
-.provider-test {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-.provider-test-results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-}
-.provider-test-results li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  overflow-wrap: anywhere;
-}
-.provider-test-results li > svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.provider-test-results .is-ok {
-  color: var(--accent-text);
-}
-.provider-test-results .is-failed {
-  color: var(--danger-text);
-}
-.provider-test-results code {
-  /* A model ID stays on one line unless it is longer than half the row. */
-  flex: none;
-  max-width: 50%;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
-.provider-test-results span {
-  min-width: 0;
-}
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -555,34 +469,62 @@ svg {
   background: var(--surface-scrim);
   backdrop-filter: blur(4px);
 }
+/* A dialog: the title and the Cancel/Save row stay put while a long form scrolls between them. */
 .overlay {
+  display: flex;
+  flex-direction: column;
   width: min(var(--overlay-width), 100%);
   max-height: calc(100vh - var(--space-8));
-  overflow: auto;
-  padding: var(--overlay-padding);
+  overflow: hidden;
   background: var(--surface-raised);
   border: 1px solid var(--border-default);
   border-radius: var(--overlay-radius);
   box-shadow: var(--shadow-overlay);
   animation: overlay-in var(--duration-base) var(--ease-out);
 }
+.overlay-lg {
+  width: min(680px, 100%);
+}
 .overlay-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  padding: var(--space-5) var(--overlay-padding) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex: none;
+}
+.overlay-title h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+.overlay-title p {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 .overlay-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  padding: var(--space-5) var(--overlay-padding) var(--space-6);
+  overflow-y: auto;
+  min-height: 0;
 }
 .overlay-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  margin-top: var(--space-6);
+  padding: var(--space-4) var(--overlay-padding);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-app);
+  flex: none;
+}
+.overlay-footer-start {
+  margin-right: auto;
+  min-width: 0;
 }
 
 /* ---------- Tabs ---------- */

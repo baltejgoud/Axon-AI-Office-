@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Building2, ChevronDown, Search } from 'lucide-react';
+import { IconBuilding, IconCaretDown, IconSearch } from '../../../ui';
 import { districtById } from '../campus/districts';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import type { ZoneId } from '../simulation/types';
@@ -83,14 +83,14 @@ export function DepartmentMenu({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Building2 size={17} />
+        <IconBuilding size={17} />
         <span>{current ?? 'Go to department…'}</span>
-        <ChevronDown size={16} />
+        <IconCaretDown size={16} />
       </button>
       {open && (
         <div className="office-department-popover">
           <label className="office-department-search">
-            <Search size={15} />
+            <IconSearch size={15} />
             <input
               ref={input}
               aria-label="Filter departments"

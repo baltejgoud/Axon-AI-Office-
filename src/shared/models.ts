@@ -20,6 +20,7 @@ const capitalise = (word: string) => word.charAt(0).toUpperCase() + word.slice(1
 function styled(token: string): string {
   if (token === 'mini' || token === 'nano') return token;
   if (token === 'deepseek') return 'DeepSeek';
+  if (token === 'oss') return 'OSS';
   if (/^o\d/.test(token) || /^\d/.test(token)) return token;
   return capitalise(token);
 }
@@ -55,7 +56,7 @@ export function shortModelName(id: string, displayName?: string): string {
   }
   const words: string[] = [];
   for (let i = 0; i < kept.length; i++) {
-    if (kept[i] === 'gpt' && kept[i + 1]) words.push(`GPT-${kept[++i]}`);
+    if (kept[i] === 'gpt' && kept[i + 1]) words.push(`GPT-${styled(kept[++i])}`);
     else words.push(styled(kept[i]));
   }
   const short = words.join(' ') || id;

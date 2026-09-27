@@ -32,6 +32,7 @@ test('short model names', () => {
     ['models/gemini-2.5-flash-preview-05-20', undefined, 'Gemini 2.5 Flash'],
     ['deepseek-chat', undefined, 'DeepSeek'],
     ['meta-llama/llama-3.1-70b-instruct', undefined, 'Llama 3.1 70b'],
+    ['openai/gpt-oss-120b', undefined, 'GPT-OSS 120b'],
     ['fixture', 'Fixture', 'Fixture'],
     ['x', 'Claude Sonnet 4.5 (Thinking)', 'Sonnet 4.5 Thin…']
   ];

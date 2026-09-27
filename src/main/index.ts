@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, dialog, screen, type Tray } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog, screen, nativeImage, type Tray } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PathService } from './infra/paths';
@@ -12,6 +12,7 @@ import { RECEPTIONIST_ID } from '../shared/coworkers';
 import { afterLastWindow, appUserModelId, loginItem, startedInBackground } from './shell/lifecycle';
 import { showNotice } from './shell/notify';
 import { createTray } from './shell/tray';
+import { WINDOW_ICON } from './shell/icon';
 let window: BrowserWindow | null = null;
 let service: Service;
 let quitting = false;
@@ -19,10 +20,14 @@ let quitting = false;
 let tray: Tray | null = null;
 const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
-  'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
-  'settingsSave', 'mcpServerSave', 'mcpServerDelete', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
+  'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerConnect', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
+  'settingsSave', 'mcpServerSave', 'mcpServerDelete',
+  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
-  'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart'
+  'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart',
+  'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',
+  'githubRepos', 'gitCheck', 'scmStatus', 'scmDiff', 'scmStage', 'scmUnstage', 'scmCommit', 'scmSync', 'scmBranches', 'scmCheckout', 'scmCreateBranch',
+  'scmClone', 'scmPublish', 'openLink', 'processStop', 'processOpen'
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');
 function createWindow(): void {
@@ -31,9 +36,15 @@ function createWindow(): void {
   const saved = loadWindowState(stateFile, screen.getAllDisplays().map(d => d.workArea));
   window = new BrowserWindow({ ...(saved.bounds ?? { width: 1380, height: 900 }), minWidth: 980, minHeight: 680, show: false,
     title: 'Axon — AI Studio', backgroundColor: '#f7f8fa', autoHideMenuBar: true,
+    icon: nativeImage.createFromDataURL(WINDOW_ICON),
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  // A coworker's development server shows in a frame on their work surface; that frame may only go
+  // to pages on this machine (the page's own Content-Security-Policy frame-src says the same).
+  window.webContents.on('will-frame-navigate', event => {
+    if (!event.isMainFrame && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(event.url)) event.preventDefault();
+  });
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   window.once('ready-to-show', () => {
     if (saved.maximized) window?.maximize();

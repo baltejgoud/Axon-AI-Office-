@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import '@fontsource-variable/inter';
 import './style.css';
 import 'highlight.js/styles/github-dark.css';
 

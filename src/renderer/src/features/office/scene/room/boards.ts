@@ -6,6 +6,7 @@ import { shortName } from '../../shell/framing';
 import type { FurnitureItem } from '../../simulation/layout';
 import { boardCards, todayLines, type Team, type TodayLine } from '../../tasks';
 import { dayKey, shortDate } from '../../../../../../shared/planner';
+import { UI_FONT, uiFontReady } from '../../../../fonts';
 
 /**
  * Every task board's face, drawn into one atlas and shown by one mesh (a single draw call). A team's
@@ -20,7 +21,7 @@ const FACE_Y = 1.41;
 const FACE_OUT = 0.045;
 const SLOT_HEIGHT = 176;
 const ATLAS_WIDTH = 2048;
-const FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
+const FONT = UI_FONT;
 const STATUS: Record<TaskStatus, { color: string; label: string }> = {
   working: { color: '#3867f6', label: 'Working' },
   attention: { color: '#d97706', label: 'Needs attention' },
@@ -107,7 +108,7 @@ export class BoardLayer {
     );
     this.object.name = 'task-boards';
     // Redraw once the UI font has loaded, so the cards match the rest of the app.
-    void document.fonts?.ready.then(() => {
+    void uiFontReady().then(() => {
       for (const place of this.placed) this.draw(place);
       this.texture.needsUpdate = true;
     });

@@ -46,7 +46,7 @@ function heldProp(item: HeldItem, accent: string): THREE.Object3D {
       return new THREE.Group().add(pad);
     }
     case 'plate':
-      // Lunch from the café counter, carried level.
+      // Lunch from the cafÃ© counter, carried level.
       return servedPlate(accent.length);
     case 'clipboard':
       return new THREE.Group().add(

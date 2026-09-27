@@ -340,10 +340,11 @@
   color: var(--office-muted);
   margin: 0;
 }
+/* The left side keeps about 60% of the width, the coworker's panel about 40%. */
 .office-activity-panel {
-  flex: 0 0 28%;
-  min-width: 310px;
-  max-width: 430px;
+  flex: 0 0 40%;
+  min-width: 340px;
+  max-width: 760px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -523,6 +524,65 @@
   padding: 5px 7px;
   color: var(--office-muted);
 }
+/* A coworker's connectors, under their status. */
+.activity-connectors {
+  position: relative;
+  margin-top: 8px;
+}
+.activity-connectors-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border: 1px solid var(--office-border);
+  border-radius: 6px;
+  background: var(--office-soft);
+  cursor: pointer;
+}
+.activity-connectors-row .connector-mark {
+  border-radius: 4px;
+}
+.activity-connectors-more,
+.activity-connectors-empty {
+  font-size: 9px;
+  color: var(--office-muted);
+}
+.activity-connectors-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-paper);
+  box-shadow: var(--office-shadow);
+  color: var(--office-ink);
+  font-size: 11px;
+}
+.activity-connectors-popover label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.activity-connectors-popover p {
+  margin: 0;
+  color: var(--office-muted);
+}
+.activity-connectors-browse {
+  justify-self: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--office-blue);
+  font: inherit;
+  cursor: pointer;
+}
 .activity-session-label {
   font-size: 9px;
   color: var(--office-muted);
@@ -616,6 +676,29 @@
   color: var(--office-muted);
   font-size: 10px;
   padding: 0 3px 10px;
+}
+/* Where the coworker works: the open project, or a way to open one. */
+.composer-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--office-muted);
+  font-size: 10px;
+}
+.office-container button.composer-folder {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--office-blue);
+}
+.office-container button.composer-folder:hover {
+  background: var(--office-soft);
 }
 .composer-input-wrapper {
   border: 1px solid var(--office-border);
@@ -893,9 +976,9 @@ sized for the side panel. */
 }
 
 /* Composer: model chip, the hint that always shows, and the no-model call to action. */
-.composer-actions-row .model-chip {
+.composer-actions-row .model-picker-trigger {
   flex: 0 1 auto;
-  max-width: 50%;
+  max-width: 55%;
 }
 .composer-actions-row .composer-hint {
   margin-left: auto;
@@ -1341,6 +1424,17 @@ sized for the side panel. */
 }
 .office-overlay-panel.wide {
   width: min(960px, 100%);
+}
+/* Settings: one height whichever section is open, so the sheet never jumps. */
+.office-overlay-panel.flush {
+  height: min(700px, calc(100vh - 64px));
+  overflow: hidden;
+}
+.office-overlay-body.flush {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0 0 22px 22px;
 }
 .office-overlay-header {
   display: flex;
@@ -2122,4 +2216,12 @@ sized for the side panel. */
   background: #fff4e0;
   color: #92400e;
   font-size: 11px;
+}
+
+/* Your picture in the corner controls; opens Settings → Accounts. */
+.office-view-controls .office-account-button img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
 }

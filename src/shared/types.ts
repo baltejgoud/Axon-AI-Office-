@@ -60,6 +60,37 @@ export interface ToolCall {
   arguments: string;
   result?: string;
   error?: string;
+  /** What a file write changed. Kept with the call; never sent to the model. */
+  change?: FileChange;
+  /** A running command's output so far. Sent to the window while it runs; never saved. */
+  progress?: string;
+  /** The background process a start_process call began. */
+  process?: { id: string };
+}
+
+/** A command left running in the background (a development server, a watcher). */
+export interface ProcessInfo {
+  id: string;
+  conversationId: string;
+  command: string;
+  cwd: string;
+  /** The page it serves on this machine, once it says so. */
+  url?: string;
+  running: boolean;
+  exitCode?: number | null;
+  /** The end of what it has printed. */
+  output: string;
+  startedAt: number;
+}
+
+/** Lines a file write added and removed, and the changed lines with a little context around them. */
+export interface FileChange {
+  added: number;
+  removed: number;
+  /** The file did not exist before. */
+  created: boolean;
+  /** Unified-diff hunks (`@@ -a,b +c,d @@` and ` `/`+`/`-` lines); left out for new or very large files. */
+  hunks?: string;
 }
 
 export interface Message {
@@ -79,6 +110,8 @@ export interface Message {
   usage?: ChatUsage;
   /** True while assistant tokens are still streaming. */
   streaming?: boolean;
+  /** A note about the run itself, e.g. connectors left out for too many tools. */
+  notice?: string;
 }
 
 export interface Conversation {
@@ -206,10 +239,32 @@ export interface Settings {
 
 /* ------------------------------------ MCP ------------------------------------- */
 
+/** What a server says about a tool. Hints only: believed from catalog servers, or when you say so. */
+export interface McpToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+/** Your choice for one tool: run it without asking, ask each time, or never offer it. */
+export type McpToolPolicy = 'allow' | 'ask' | 'off';
+export type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'needs-sign-in' | 'error';
+/** A tool a connected server offers, as the window shows it. */
+export interface McpToolInfo {
+  /** The server's own name for it; policies are kept by this name. */
+  name: string;
+  /** The name the model sees: `mcp_<server>_<tool>`. */
+  axonName: string;
+  description?: string;
+  annotations?: McpToolAnnotations;
+}
+
 export interface MCPServerConfig {
   id: ID;
   name: string;
-  transport: 'stdio' | 'sse';
+  /** stdio: a local command; sse: the 2024-11-05 HTTP+SSE transport; http: Streamable HTTP. */
+  transport: 'stdio' | 'sse' | 'http';
   command?: string;
   args?: string[];
   env?: Record<string, string>;
@@ -220,6 +275,20 @@ export interface MCPServerConfig {
   /** True when an API key is stored for this server. */
   hasApiKey?: boolean;
   enabled: boolean;
+  /** The catalog entry it was connected from; custom connectors have none. */
+  catalogId?: string;
+  /** Who may use it: coworker ids, `group:<department>`, `not:<coworker id>` and `chats`. */
+  coworkers?: string[];
+  /** Your override per tool, by the server's own tool name. */
+  toolPolicy?: Record<string, McpToolPolicy>;
+  /** Custom connectors: believe the server's read-only marks (catalog connectors always do). */
+  trustAnnotations?: boolean;
+  /** Snapshot only: the live connection. */
+  status?: McpStatus;
+  error?: string;
+  tools?: McpToolInfo[];
+  /** Snapshot only: a browser sign-in is saved for it. */
+  signedIn?: boolean;
 }
 
 /* ------------------------------ Provider runtime ------------------------------ */
@@ -366,6 +435,23 @@ export type StreamEvent =
       /** A notification or the tray asks the office to show someone. */
       channel: 'focus';
     } & FocusTarget)
+  | {
+      /** A line of clone, pull or push progress from git. */
+      channel: 'git';
+      line: string;
+    }
+  | {
+      /** A background process started, printed something, found its page, or ended. */
+      channel: 'process';
+      process: ProcessInfo;
+    }
+  | {
+      /** A connector's connection changed: connecting, connected, lost its sign-in, failed. */
+      channel: 'connectors';
+      serverId: ID;
+      name: string;
+      status: McpStatus;
+    }
   | {
       channel: 'agent';
       agentId: ID;

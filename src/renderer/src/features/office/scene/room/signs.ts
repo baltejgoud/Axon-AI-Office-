@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { signOpacity, signScale, type SignKind, type SignSpec, type SignTier } from '../../campus/signs';
+import { UI_FONT, uiFontReady } from '../../../../fonts';
 
 /**
  * Draws every sign in the office from one shared text atlas: a mesh of quads per kind (two draw
@@ -19,7 +20,7 @@ const ATLAS_WIDTH = 2048;
 const QUADS = 2;
 const RIM = 0.03;
 const HOVER_GROWTH = 1.06;
-const FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
+const FONT = UI_FONT;
 
 interface Slot {
   x: number;
@@ -58,6 +59,11 @@ export class SignLayer {
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.anisotropy = 4;
+    // Canvas text does not wait for the web font: draw again once Inter is in.
+    void uiFontReady().then(() => {
+      this.draw();
+      this.texture.needsUpdate = true;
+    });
     for (const kind of KINDS) {
       const own = signs.filter((sign) => sign.kind === kind);
       if (!own.length) continue;

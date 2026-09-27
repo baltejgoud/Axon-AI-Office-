@@ -26,6 +26,39 @@ export function cleanApiKey(raw: string): string {
   return key;
 }
 
+/**
+ * One service's addresses in other regions. A key belongs to the region its console is in (a
+ * platform.moonshot.cn key fails at api.moonshot.ai; an Alibaba Singapore key fails in Beijing), so
+ * set-up tries these in turn. Only the same company's own addresses are ever listed here.
+ */
+const SERVICE_REGIONS: readonly (readonly string[])[] = [
+  ['api.moonshot.ai', 'api.moonshot.cn'],
+  ['dashscope-intl.aliyuncs.com', 'dashscope-us.aliyuncs.com', 'dashscope.aliyuncs.com', 'cn-hongkong.dashscope.aliyuncs.com']
+];
+
+/** The same endpoint at the service's other regions, in order; empty for single-region services. */
+export function otherRegions(baseUrl: string): string[] {
+  let url: URL;
+  try { url = new URL(baseUrl); } catch { return []; }
+  const group = SERVICE_REGIONS.find(hosts => hosts.includes(url.hostname));
+  if (!group) return [];
+  return group.filter(host => host !== url.hostname).map(host => {
+    const other = new URL(url.href);
+    other.hostname = host;
+    return other.href.replace(/\/$/, '');
+  });
+}
+
+/** Models that think before they answer, their thinking counted in the output limit. */
+const THINKS = [/kimi-k(2\.[5-9]|[3-9])/i, /thinking/i, /reasoner/i, /deepseek-r1/i, /(^|\/)qwq/i, /(^|\/)o[1-9](-|$)/i, /(^|\/)gpt-5/i, /(^|\/)gpt-oss/i];
+/** Room for a thinking model to think and still answer: Kimi asks for 16,000 or more. */
+export const THINKING_MIN_TOKENS = 16384;
+
+/** The output limit to send: the setting, raised for a model that thinks first. */
+export function outputLimit(model: string, configured: number): number {
+  return THINKS.some(pattern => pattern.test(model)) ? Math.max(configured, THINKING_MIN_TOKENS) : configured;
+}
+
 /** Incremental SSE decoder; supports CRLF, split UTF-8, comments and multiline data. */
 export async function* sse(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = body.getReader();
@@ -343,7 +376,13 @@ export async function listModels(provider: ProviderConfig, key: string | null, s
     headers['x-goog-api-key'] = key || '';
     url += '?pageSize=1000';
   } else if (key) headers.Authorization = `Bearer ${key}`;
-  const response = await fetch(url, { method: 'GET', headers, signal, redirect: 'error' });
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'GET', headers, signal, redirect: 'error' });
+  } catch (error) {
+    if (error instanceof TypeError && !signal?.aborted) throw unreachable(url);
+    throw error;
+  }
   if (!response.ok) throw await providerError(response, key);
   let body: { data?: unknown; models?: unknown } | unknown[] | null = null;
   try { body = JSON.parse(await readCapped(response, 8_000_000)); } catch { /* Not a list. */ }
@@ -545,6 +584,14 @@ function replayOf(provider: ProviderConfig, blocks: Map<number, Record<string, u
   return reasoning ? { kind: 'openai-compatible', content: [{ reasoning_content: reasoning }] } : undefined;
 }
 
+/** A network failure said plainly: which address could not be reached, and what to check. */
+function unreachable(url: string): Error {
+  const { host, hostname } = new URL(url);
+  return new Error(['localhost', '127.0.0.1', '[::1]'].includes(hostname)
+    ? `Could not reach ${host}. Is the server running on this computer?`
+    : `Could not reach ${host}. Check your internet connection and the endpoint.`);
+}
+
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> => new Promise((resolve, reject) => {
   if (signal?.aborted) return reject(new Error('Generation stopped.'));
   const timer = setTimeout(() => { signal?.removeEventListener('abort', stop); resolve(); }, ms);
@@ -570,7 +617,8 @@ async function post(url: string, headers: Record<string, string>, payload: Recor
     } catch (error) {
       if (userSignal?.aborted) throw error;
       if (waiting.signal.aborted) throw new Error(`The provider did not answer within ${Math.round(timeouts.headersMs / 1000)} seconds.`);
-      if (attempt >= ATTEMPTS || !(error instanceof TypeError)) throw error;
+      if (!(error instanceof TypeError)) throw error;
+      if (attempt >= ATTEMPTS) throw unreachable(url);
       await sleep(500 * 2 ** (attempt - 1), userSignal);
     } finally {
       clearTimeout(timer);

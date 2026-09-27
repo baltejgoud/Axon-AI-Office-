@@ -1,10 +1,10 @@
 import { useState, type KeyboardEvent } from 'react';
-import { ArrowUp, FileText, Paperclip, X } from 'lucide-react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
-import { Icon } from '../../../ui';
-import { ModelSelect } from '../../../chat/ModelSelect';
+import { IconPaperclip, IconSend, IconClose, IconFileText, IconFolder } from '../../../ui';
+import { baseName } from '../workspace/work';
+import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
@@ -29,6 +29,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const isBusy = sending || runtime?.status === 'working';
   const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
   const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
+  // Where they work: their conversation's own folder, else the project open in the app.
+  const folder = conversation?.projectRoot ?? data?.projectRoot ?? null;
   const needsModel = !conversation && !model;
   // The receptionist keeps the planner with tools; a model marked as having none can't.
   const chosen = conversation ? `${conversation.providerId}::${conversation.modelId}` : model;
@@ -149,6 +151,23 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       <div className="composer-recipient">
         <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
         Message {agent?.name}
+        {agentId !== RECEPTIONIST_ID &&
+          (folder ? (
+            <span className="composer-folder" title={`They can read and change files in ${folder}`}>
+              <IconFolder size={12} />
+              in {baseName(folder)}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="composer-folder is-none"
+              title="Open a folder in the Files room"
+              onClick={() => useOfficeStore.getState().flyToAgent('files-agent')}
+            >
+              <IconFolder size={12} />
+              Open a project for them to work in
+            </button>
+          ))}
       </div>
       {noTools && (
         <p className="composer-notice" role="note">
@@ -159,10 +178,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <div className="composer-attachments-preview composer-handed" aria-label="Files handed over">
           {handed.map((file) => (
             <span key={file.path} className="composer-attachment-tag handed" title={file.path}>
-              <FileText size={13} />
+              <IconFileText size={13} />
               <span>{file.path.split('/').pop()}</span>
               <button aria-label={`Remove ${file.path}`} onClick={() => removeFile(agentId, file.path)}>
-                <X size={13} />
+                <IconClose size={12} />
               </button>
             </span>
           ))}
@@ -172,7 +191,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         <div className="composer-attachments-preview">
           {attachments.map((att) => (
             <span key={att.id} className="composer-attachment-tag">
-              <Icon icon={Paperclip} size="sm" />
+              <IconPaperclip size={13} />
               <span>{att.name}</span>
               <button
                 type="button"
@@ -180,7 +199,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                 aria-label="Remove attachment"
                 onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
               >
-                <Icon icon={X} size="sm" />
+                <IconClose size={12} />
               </button>
             </span>
           ))}
@@ -208,18 +227,17 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             onClick={handleAttach}
             disabled={isBusy}
           >
-            <Icon icon={Paperclip} size="sm" />
+            <IconPaperclip size={15} />
           </button>
 
-          <ModelSelect
-            compact
-            size="sm"
+          <ModelPicker
             value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
             disabled={Boolean(conversation) || isBusy}
             title={
               conversation ? 'Start a new conversation to change the model' : 'Model for this conversation'
             }
             onChange={(value) => patch({ model: value })}
+            onManage={() => useOfficeStore.getState().openOverlay('settings')}
           />
 
           <span className="composer-hint">Shift+Enter for a new line</span>
@@ -241,7 +259,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
               disabled={!input.trim() || isBusy}
               onClick={() => void handleSend()}
             >
-              <Icon icon={ArrowUp} size="sm" />
+              <IconSend size={15} />
             </button>
           )}
         </div>

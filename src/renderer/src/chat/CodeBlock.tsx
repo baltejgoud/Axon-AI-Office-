@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Check, Copy } from 'lucide-react';
 import { useApp } from '../state';
-import { Icon } from '../ui';
+import { IconCheck, IconCopy } from '../ui';
 
 /** Flattens the highlighted element tree back into the raw source for copying. */
 function textOf(node: ReactNode): string {
@@ -34,7 +33,7 @@ export function CodeBlock({ children }: { children?: ReactNode }) {
             );
           }}
         >
-          <Icon icon={copied ? Check : Copy} size="sm" />
+          {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>

@@ -1,8 +1,21 @@
 import { exec, execFile } from 'node:child_process';
 import { resolve, relative, isAbsolute } from 'node:path';
-import type { ToolDefinition } from '../../shared/types';
+import type { FileChange, ToolDefinition } from '../../shared/types';
 import type { Project } from '../project';
-import { createUnifiedDiff } from './diff';
+import { createUnifiedDiff, fileChange } from './diff';
+import type { ProcessManager } from './processes';
+
+/** A command's working folder: the project, or a folder inside it; null for anywhere else. */
+function workingFolder(root: string, cwd: unknown): string | null {
+  if (!cwd) return root;
+  const resolved = resolve(root, String(cwd));
+  const rel = relative(root, resolved);
+  return rel.startsWith('..') || isAbsolute(rel) ? null : resolved;
+}
+
+/** How often a running command's output goes to the window, and how much of its tail. */
+const OUTPUT_EVERY_MS = 120;
+const OUTPUT_TAIL = 64_000;
 
 /** The files a commit names; anything that isn't a plain string is left out. */
 const gitFiles = (value: unknown): string[] =>
@@ -14,11 +27,20 @@ export interface ToolContext {
   project: Project;
   allowShell: boolean;
   subagentRunner?: (role: string, task: string) => Promise<string>;
+  /** A running command's output so far, a few times a second, for the window. */
+  onOutput?: (soFar: string) => void;
+  /** Commands left running in the background, and the conversation asking. */
+  processes?: ProcessManager;
+  conversationId?: string;
 }
 
 export interface ToolHandlerResult {
   content: string;
   isError?: boolean;
+  /** A file write's change, kept with the call for the window. */
+  change?: FileChange;
+  /** The background process a call started. */
+  process?: { id: string };
   preview?: {
     type: 'diff' | 'command' | 'generic';
     content: string;
@@ -190,8 +212,17 @@ export class ToolRegistry {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
           const filePath = String(args.path);
           const content = String(args.content);
+          let before: string | null = null;
+          try {
+            before = await ctx.project.read(filePath);
+          } catch {
+            before = null; // A new file
+          }
           await ctx.project.write(filePath, content);
-          return { content: `Successfully wrote ${content.length} characters to ${filePath}.` };
+          return {
+            content: `Successfully wrote ${content.length} characters to ${filePath}.`,
+            change: fileChange(before, content)
+          };
         } catch (err: any) {
           return { content: `Error writing file: ${err.message}`, isError: true };
         }
@@ -228,18 +259,23 @@ export class ToolRegistry {
         }
 
         const cmd = String(args.command).trim();
-        let targetCwd = ctx.project.root;
-        if (args.cwd) {
-          const resolved = resolve(ctx.project.root, String(args.cwd));
-          const rel = relative(ctx.project.root, resolved);
-          if (rel.startsWith('..') || isAbsolute(rel)) {
-            return { content: 'Working directory outside project root is not permitted.', isError: true };
-          }
-          targetCwd = resolved;
-        }
+        const targetCwd = workingFolder(ctx.project.root, args.cwd);
+        if (!targetCwd) return { content: 'Working directory outside project root is not permitted.', isError: true };
 
         return new Promise<ToolHandlerResult>((resolvePromise) => {
-          exec(
+          // The window sees the output as it comes; the model gets it whole, as before.
+          let soFar = '';
+          let finished = false;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const send = () => {
+            timer = undefined;
+            if (!finished) ctx.onOutput?.(soFar);
+          };
+          const heard = (chunk: string | Buffer) => {
+            soFar = (soFar + String(chunk)).slice(-OUTPUT_TAIL);
+            if (!timer && !finished) timer = setTimeout(send, OUTPUT_EVERY_MS);
+          };
+          const child = exec(
             cmd,
             {
               cwd: targetCwd,
@@ -248,6 +284,8 @@ export class ToolRegistry {
               env: { ...process.env, CI: '1' }
             },
             (error, stdout, stderr) => {
+              finished = true;
+              if (timer) clearTimeout(timer);
               const combined = [
                 stdout ? stdout.trim() : '',
                 stderr ? `[stderr]\n${stderr.trim()}` : ''
@@ -265,7 +303,89 @@ export class ToolRegistry {
               }
             }
           );
+          if (ctx.onOutput) {
+            child.stdout?.on('data', heard);
+            child.stderr?.on('data', heard);
+          }
         });
+      }
+    });
+
+    // 5b. Background processes: development servers and watchers that outlive the call
+    this.register({
+      definition: {
+        name: 'start_process',
+        description:
+          'Start a long-running command in the background in the project folder, such as a development server (npm run dev) or a file watcher. Returns its first output and the local address it serves, which the user sees in a live Preview. Use run_command for commands that finish.',
+        parameters: {
+          type: 'object',
+          properties: {
+            command: { type: 'string', description: 'The shell command line to start' },
+            cwd: { type: 'string', description: 'Optional working directory relative to project root' }
+          },
+          required: ['command']
+        }
+      },
+      preparePreview: async (args) => ({
+        type: 'command',
+        content: String(args.command),
+        path: args.cwd ? String(args.cwd) : undefined
+      }),
+      execute: async (args, ctx) => {
+        if (!ctx.allowShell) return { content: 'Shell execution is disabled in settings.', isError: true };
+        if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
+        if (!ctx.processes || !ctx.conversationId) return { content: 'Background processes are not available here.', isError: true };
+        const cmd = String(args.command).trim();
+        const cwd = workingFolder(ctx.project.root, args.cwd);
+        if (!cwd) return { content: 'Working directory outside project root is not permitted.', isError: true };
+        try {
+          const info = await ctx.processes.start(ctx.conversationId, cmd, cwd);
+          const state = info.running
+            ? info.url ? `It serves ${info.url}; the user sees that page in the Preview.` : 'It is running.'
+            : `It ended with exit code ${info.exitCode ?? 'unknown'}.`;
+          return {
+            content: `Started \`${cmd}\` as ${info.id}. ${state}\n\nOutput so far:\n${info.output.slice(-4000) || '(nothing yet)'}`,
+            isError: !info.running && info.exitCode !== 0,
+            process: { id: info.id }
+          };
+        } catch (err: any) {
+          return { content: err.message, isError: true };
+        }
+      }
+    });
+    this.register({
+      definition: {
+        name: 'read_process',
+        description: 'Read the latest output of a background process started with start_process, and whether it is still running.',
+        parameters: {
+          type: 'object',
+          properties: { id: { type: 'string', description: 'The process id start_process gave, such as p1' } },
+          required: ['id']
+        }
+      },
+      execute: async (args, ctx) => {
+        const info = ctx.processes?.read(String(args.id));
+        if (!info || info.conversationId !== ctx.conversationId)
+          return { content: `No background process ${String(args.id)} in this conversation.`, isError: true };
+        const state = info.running ? 'is running' : `ended with exit code ${info.exitCode ?? 'unknown'}`;
+        return { content: `${info.id} (\`${info.command}\`) ${state}.${info.url ? ` It serves ${info.url}.` : ''}\n\n${info.output.slice(-8000) || '(no output)'}` };
+      }
+    });
+    this.register({
+      definition: {
+        name: 'stop_process',
+        description: 'Stop a background process started with start_process.',
+        parameters: {
+          type: 'object',
+          properties: { id: { type: 'string', description: 'The process id start_process gave, such as p1' } },
+          required: ['id']
+        }
+      },
+      execute: async (args, ctx) => {
+        const info = ctx.processes?.read(String(args.id));
+        if (!info || info.conversationId !== ctx.conversationId)
+          return { content: `No background process ${String(args.id)} in this conversation.`, isError: true };
+        return { content: ctx.processes!.stop(info.id) ? `Stopped ${info.id}.` : `${info.id} is not running.` };
       }
     });
 

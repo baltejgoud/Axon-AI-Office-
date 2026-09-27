@@ -488,106 +488,6 @@
   color: var(--text-primary);
   background: var(--surface-hover);
 }
-.model-select-pill-container {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-.model-select-dot {
-  position: absolute;
-  left: 10px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-}
-.model-select-dot.dot-deepseek {
-  background: #4f46e5;
-  box-shadow: 0 0 6px rgba(79, 70, 229, 0.4);
-}
-.model-select-dot.dot-accent {
-  background: var(--accent);
-  box-shadow: 0 0 6px rgba(16, 163, 127, 0.4);
-}
-.model-select-pill {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 28px 0 24px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-.model-select-pill:hover {
-  border-color: var(--border-strong);
-}
-.model-select-pill:focus-visible {
-  outline: none;
-  border-color: var(--ring);
-}
-.model-select-arrow {
-  position: absolute;
-  right: 8px;
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
-/* A compact model chip: a short name over an invisible native select, so the list and keyboard stay native. */
-.model-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  transition: border-color var(--duration-fast) var(--ease-out);
-}
-.model-chip:hover {
-  border-color: var(--border-strong);
-}
-.model-chip:focus-within {
-  border-color: var(--ring);
-}
-.model-chip .model-select-dot {
-  position: static;
-  flex: none;
-}
-.model-chip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.model-chip-arrow {
-  flex: none;
-  color: var(--text-tertiary);
-}
-.model-chip-select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-.model-chip.is-locked .model-chip-arrow {
-  opacity: 0.4;
-}
-.model-chip-select:disabled {
-  cursor: default;
-}
 .rename-bar {
   padding: var(--space-3) var(--space-6);
   border-bottom: 1px solid var(--border-subtle);
@@ -716,7 +616,9 @@
   margin-top: auto;
   align-self: flex-end;
   color: var(--text-tertiary);
-  transition: transform var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .starter-card:hover .starter-card-arrow {
   color: var(--accent);
@@ -733,7 +635,9 @@
   border: 1.5px dashed var(--border-default);
   border-radius: var(--radius-lg);
   background: var(--surface-panel);
-  transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 .dropzone-card:hover {
   border-color: var(--accent);
@@ -984,6 +888,11 @@
   color: var(--danger-text);
   font-size: var(--text-sm);
 }
+.message-notice {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
 .message-actions {
   display: flex;
   gap: var(--space-1);
@@ -1055,7 +964,6 @@
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: pre-wrap;
-  font-family: var(--font-mono);
   line-height: var(--leading-base);
 }
 .tool-calls {
@@ -1222,12 +1130,18 @@
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.02);
-  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  box-shadow:
+    0 4px 20px rgb(0 0 0 / 0.04),
+    0 1px 3px rgb(0 0 0 / 0.02);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 .composer:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 0.06), 0 0 0 2px var(--accent-soft);
+  box-shadow:
+    0 4px 20px rgb(0 0 0 / 0.06),
+    0 0 0 2px var(--accent-soft);
 }
 .composer textarea {
   width: 100%;

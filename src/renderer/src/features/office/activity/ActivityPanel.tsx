@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { FilesPanel } from './FilesPanel';
-import { Activity, BookOpen, FileText, MessageSquarePlus, MoreHorizontal, Sparkles } from 'lucide-react';
+import {
+  IconBook,
+  IconCompose,
+  IconDotsHorizontal,
+  IconFileText,
+  IconHistory,
+  IconSparkle
+} from '../../../ui';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { useApp } from '../../../state';
@@ -15,6 +22,7 @@ import { useEscape } from '../../../ui/escape';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 import { Planner } from './Planner';
 import { Briefing } from './Briefing';
+import { ConnectorRow } from './ConnectorRow';
 
 const FEED_PREVIEW = 3;
 
@@ -69,7 +77,7 @@ export function ActivityPanel() {
     <aside className="office-activity-panel" aria-label="Selected coworker activity">
       <header className="activity-header">
         <div className="activity-title-icon">
-          <Activity size={23} />
+          <IconHistory size={20} />
         </div>
         <div>
           <h2>Activity</h2>
@@ -90,6 +98,7 @@ export function ActivityPanel() {
             <span className="status-dot-sm" />
             {status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1)}
           </span>
+          <ConnectorRow key={agent.id} agent={agent} />
         </div>
         <ConversationMenu
           open={menuOpen}
@@ -98,7 +107,7 @@ export function ActivityPanel() {
             {
               key: 'new',
               label: 'New conversation',
-              icon: <MessageSquarePlus size={15} />,
+              icon: <IconCompose size={15} />,
               disabled: !conversation,
               onSelect: () => startFresh(agent.id)
             },
@@ -107,7 +116,7 @@ export function ActivityPanel() {
                   {
                     key: 'library',
                     label: 'Manage library',
-                    icon: <BookOpen size={15} />,
+                    icon: <IconBook size={15} />,
                     onSelect: () => openOverlay('knowledge')
                   }
                 ]
@@ -129,7 +138,7 @@ export function ActivityPanel() {
         {!conversation && !(reception && briefing) && (
           <section className="current-task-card">
             <div className="activity-section-heading">
-              <FileText size={15} />
+              <IconFileText size={15} />
               <h4>{runtime?.fresh ? 'New conversation' : 'Let’s make progress'}</h4>
             </div>
             <p className="activity-intro">{agent.description}</p>
@@ -143,7 +152,7 @@ export function ActivityPanel() {
         {activities.length > 0 && (
           <section className="activity-feed-section">
             <div className="activity-section-heading">
-              <Activity size={15} />
+              <IconHistory size={15} />
               <h4>Recent updates</h4>
               <span className="activity-session-label">This session</span>
             </div>
@@ -170,12 +179,13 @@ export function ActivityPanel() {
         <Conversation
           agentName={agent.name}
           conversation={conversation}
-          pendingTask={streaming ? runtime?.currentTask : undefined}
+          pendingTask={streaming || status === 'waiting' ? runtime?.currentTask : undefined}
+          working={streaming || status === 'waiting'}
         />
         {!conversation && !activities.length && !(reception && briefing) && (
           <div className="activity-empty">
             <span>
-              <Sparkles size={20} />
+              <IconSparkle size={20} />
             </span>
             <strong>A clear desk. A fresh start.</strong>
             <p>
@@ -248,7 +258,7 @@ function ConversationMenu({
         aria-expanded={open}
         onClick={() => onToggle(!open)}
       >
-        <MoreHorizontal size={18} />
+        <IconDotsHorizontal size={16} />
       </button>
       {open && (
         <div className="activity-menu" role="menu">
