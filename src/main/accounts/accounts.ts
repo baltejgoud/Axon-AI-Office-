@@ -1,14 +1,12 @@
-import { createServer, type Server } from 'node:http';
-import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AccountProfile, DeviceCode } from '../../shared/scm';
 import { avatarData, me } from '../git/githubApi';
+import { loopbackAuthorize, pkcePair, randomState } from './loopback';
 
+export { SIGN_IN_TIMEOUT_MS } from './loopback';
 /** Where the GitHub token lives in the vault. */
 export const GITHUB_TOKEN = 'account:github';
-/** How long a browser sign-in may take before Axon stops waiting. */
-export const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 
 export interface AccountsDeps {
   dir: string;
@@ -22,7 +20,6 @@ export interface AccountsDeps {
 type Saved = { github?: AccountProfile; google?: AccountProfile };
 
 const form = (fields: Record<string, string>) => new URLSearchParams(fields).toString();
-const base64url = (bytes: Buffer) => bytes.toString('base64url');
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   const timer = setTimeout(resolve, ms);
   signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('Sign-in cancelled.')); }, { once: true });
@@ -127,36 +124,26 @@ export class Accounts {
     this.google?.abort.abort();
     const abort = new AbortController();
     this.google = { abort };
-    const verifier = base64url(randomBytes(32));
-    const state = base64url(randomBytes(16));
-    let server: Server | null = null;
+    const { verifier, challenge } = pkcePair();
+    const state = randomState();
     try {
-      const { code, redirectUri } = await new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
-        const fail = (error: Error) => reject(error);
-        abort.signal.addEventListener('abort', () => fail(new Error('Sign-in cancelled.')), { once: true });
-        const timer = setTimeout(() => fail(new Error('Google sign-in timed out. Try again.')), SIGN_IN_TIMEOUT_MS);
-        abort.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
-        let redirectUri = '';
-        server = createServer((request, response) => {
-          const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-          if (url.pathname !== '/callback') { response.writeHead(404).end(); return; }
-          const ok = url.searchParams.get('state') === state && !!url.searchParams.get('code');
-          response.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' }).end(page(ok));
-          clearTimeout(timer);
-          if (ok) resolve({ code: url.searchParams.get('code')!, redirectUri });
-          else fail(new Error(url.searchParams.get('error') === 'access_denied' ? 'Google sign-in was declined.' : 'Google sign-in did not complete. Try again.'));
-        });
-        server.on('error', fail);
-        server.listen(0, '127.0.0.1', () => {
-          const port = (server!.address() as { port: number }).port;
-          redirectUri = `http://127.0.0.1:${port}/callback`;
+      const { code, redirectUri } = await loopbackAuthorize({
+        state,
+        signal: abort.signal,
+        openExternal: (url) => this.deps.openExternal(url),
+        messages: {
+          declined: 'Google sign-in was declined.',
+          failed: 'Google sign-in did not complete. Try again.',
+          timedOut: 'Google sign-in timed out. Try again.'
+        },
+        authorizationUrl: (redirectUri) => {
           const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
           auth.search = form({
             client_id: this.deps.google.clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email profile',
-            code_challenge: base64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256', state, prompt: 'select_account'
+            code_challenge: challenge, code_challenge_method: 'S256', state, prompt: 'select_account'
           });
-          Promise.resolve(this.deps.openExternal(auth.toString())).catch(fail);
-        });
+          return auth.toString();
+        }
       });
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
@@ -175,7 +162,6 @@ export class Accounts {
       this.persist();
       return profile;
     } finally {
-      (server as Server | null)?.close();
       if (this.google?.abort === abort) this.google = null;
     }
   }
@@ -197,7 +183,3 @@ export function idTokenClaims(idToken: string, clientId: string, now = Date.now(
     throw new Error('Google sent a sign-in meant for another app.');
   return { email: claims.email, name: typeof claims.name === 'string' ? claims.name : '', picture: typeof claims.picture === 'string' ? claims.picture : '' };
 }
-
-const page = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>Axon</title>
-<body style="font:16px system-ui;display:grid;place-items:center;height:90vh;color:#222">
-<p>${ok ? 'Signed in. You can close this tab and go back to Axon.' : 'Sign-in did not complete. Go back to Axon and try again.'}</p></body>`;
