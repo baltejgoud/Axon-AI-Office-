@@ -29,7 +29,10 @@ import { Reminders, TICK_MS, type Notice } from './reminders';
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from '../shared/scm';
 import { Accounts } from './accounts/accounts';
-import { GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './accounts/clients';
+import { GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, clientFromEnv } from './accounts/clients';
+import { CONNECTORS, connectorById, defaultAssignees, isSecureMcpUrl, type ConnectorEntry } from '../shared/connectors';
+import { signIn, TokenKeeper, type McpTokens, type OAuthClient } from './mcp/oauth';
+import type { BearerSource } from './mcp/client-manager';
 import { SourceControl } from './git/sourceControl';
 import { SignedOutError, listRepos } from './git/githubApi';
 import { parseRepoInput } from './git/parse';
@@ -50,6 +53,11 @@ export interface ShellPort {
 export const PROVIDER_TEST = { timeoutMs: 30_000, maxModels: 10 };
 /** Where an MCP server's API key lives in the vault, apart from provider keys. */
 const mcpSecret = (id: string) => `mcp:${id}`;
+/** A connector's browser sign-in, in the vault. */
+const oauthSecret = (id: string) => `mcp-oauth:${id}`;
+/** Your own OAuth app for a catalog connector, in the vault. */
+const appSecret = (catalogId: string) => `mcp-client:${catalogId}`;
+const POLICIES = new Set(['allow', 'ask', 'off']);
 /** Shown when an answer stops at the max-token limit. */
 export const TRUNCATED = 'The answer reached the max-token limit and was cut off. Raise Max tokens in Settings to get longer answers.';
 /** Shown when a thinking model (Kimi, Qwen or DeepSeek reasoning) spends the whole limit before it answers. */
@@ -95,6 +103,9 @@ export class Service {
   readonly accounts: Accounts;
   /** The Files room's Git: status, commit, sync, clone and publish. */
   readonly scm: SourceControl;
+  /** Connectors' browser sign-in; tests replace it. */
+  readonly connectorAuth = { signIn, openExternal: (url: string) => shell.openExternal(url) };
+  private connectorAbort: AbortController | null = null;
 
   constructor(readonly repo: Repository, private vault: Vault, private dataPath: string,
     private emit: (event: StreamEvent) => void, parserPath: string) {
@@ -107,7 +118,11 @@ export class Service {
       progress: line => this.emit({ channel: 'git', line })
     });
     this.parsers = new ParsePool(parserPath);
-    this.mcp = new MCPClientManager(this.tools);
+    this.mcp = new MCPClientManager(this.tools, {
+      bearerFor: (config) => this.bearerFor(config),
+      onChange: (serverId, status) =>
+        this.emit({ channel: 'connectors', serverId, status, name: this.state.mcpServers?.find((s) => s.id === serverId)?.name ?? '' })
+    });
     this.tasks = new TaskStore(this.state, () => this.repo.id(), (tasks) => {
       this.emit({ channel: 'tasks', tasks });
       this.reminders?.changed();
@@ -146,7 +161,18 @@ export class Service {
       skills: bundled.skills,
       skillSources: bundled.sources,
       roles: roles(),
-      mcpServers: (this.state.mcpServers || []).map(({ apiKey: _secret, ...server }) => ({ ...server, hasApiKey: this.vault.has(mcpSecret(server.id)) })),
+      mcpServers: (this.state.mcpServers || []).map(({ apiKey: _secret, ...server }) => {
+        const live = server.enabled ? this.mcp.info(server.id) : undefined;
+        return {
+          ...server,
+          hasApiKey: this.vault.has(mcpSecret(server.id)),
+          signedIn: this.vault.has(oauthSecret(server.id)),
+          status: live?.status ?? 'disconnected',
+          ...(live?.error ? { error: live.error } : {}),
+          tools: live?.tools ?? []
+        };
+      }),
+      connectorApps: CONNECTORS.filter((entry) => clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv) || this.vault.has(appSecret(entry.id))).map((entry) => entry.id),
       projectRoot: this.project.root,
       pendingApprovals: this.permissions.pending(),
       processes: this.processes.list(),
@@ -392,9 +418,12 @@ export class Service {
     text(server.id, 100);
     text(server.name, 100);
     if (!server.name.trim()) throw new Error('Server name is required.');
-    if (server.transport !== 'stdio' && server.transport !== 'sse') throw new Error('Invalid transport.');
+    if (!['stdio', 'sse', 'http'].includes(server.transport)) throw new Error('Invalid transport.');
     if (server.transport === 'stdio' && !server.command?.trim()) throw new Error('Command is required for stdio transport.');
-    if (server.transport === 'sse' && !server.url?.trim()) throw new Error('URL is required for SSE transport.');
+    if (server.transport !== 'stdio') {
+      if (!server.url?.trim()) throw new Error('URL is required for a remote server.');
+      if (!isSecureMcpUrl(server.url.trim())) throw new Error('A remote server needs an HTTPS address (plain HTTP only on this computer).');
+    }
 
     const strings = (value: unknown): Record<string, string> =>
       value && typeof value === 'object'
@@ -404,6 +433,8 @@ export class Service {
     if (typeof server.apiKey === 'string') this.vault.set(mcpSecret(server.id), text(server.apiKey.trim(), 16000));
 
     this.state.mcpServers = this.state.mcpServers || [];
+    const previous = this.state.mcpServers.find(s => s.id === server.id);
+    const catalogId = server.catalogId ?? previous?.catalogId;
     const clean: MCPServerConfig = {
       id: server.id,
       name: server.name.trim(),
@@ -413,25 +444,130 @@ export class Service {
       env: strings(server.env),
       url: server.url?.trim(),
       headers: strings(server.headers),
-      enabled: Boolean(server.enabled)
+      enabled: Boolean(server.enabled),
+      ...(connectorById(catalogId) ? { catalogId } : {}),
+      coworkers: Array.isArray(server.coworkers)
+        ? [...new Set(server.coworkers.filter((a): a is string => typeof a === 'string' && a.length <= 120))].slice(0, 400)
+        : previous?.coworkers ?? ['chats'],
+      toolPolicy: Object.fromEntries(
+        Object.entries(server.toolPolicy ?? {}).filter(([k, v]) => k.length <= 200 && POLICIES.has(v as string)).slice(0, 500)
+      ) as MCPServerConfig['toolPolicy'],
+      ...(server.trustAnnotations ? { trustAnnotations: true } : {})
     };
-    this.state.mcpServers = [...this.state.mcpServers.filter(s => s.id !== server.id), clean];
+    // Edited in place: the list's order is the order connectors were added, which the tool budget follows.
+    this.state.mcpServers = previous
+      ? this.state.mcpServers.map(s => (s.id === server.id ? clean : s))
+      : [...this.state.mcpServers, clean];
     await this.repo.save();
     await this.mcp.syncServers(this.mcpConnections());
   }
   async mcpServerDelete(id: string): Promise<void> {
     this.state.mcpServers = (this.state.mcpServers || []).filter(s => s.id !== id);
     this.vault.remove(mcpSecret(id));
+    this.vault.remove(oauthSecret(id));
     await this.repo.save();
     await this.mcp.syncServers(this.mcpConnections());
   }
   /** The saved servers with their keys from the vault, for connecting only. */
   private mcpConnections(): MCPServerConfig[] {
-    return (this.state.mcpServers || []).map(server => {
-      let apiKey: string | undefined;
-      try { apiKey = this.vault.get(mcpSecret(server.id)) ?? undefined; } catch { /* No OS key store: connect without the key. */ }
-      return apiKey ? { ...server, apiKey } : server;
-    });
+    return (this.state.mcpServers || []).map(server => this.connection(server));
+  }
+  /** A saved server with its API key from the vault, for connecting only. */
+  private connection(server: MCPServerConfig): MCPServerConfig {
+    let apiKey: string | undefined;
+    try { apiKey = this.vault.get(mcpSecret(server.id)) ?? undefined; } catch { /* No OS key store: connect without the key. */ }
+    return apiKey ? { ...server, apiKey } : server;
+  }
+
+  /** Adds a catalog connector, signing in first when it needs to; resolves once it has tried to connect. */
+  async connectorAdd(catalogId: string): Promise<void> {
+    const entry = connectorById(text(catalogId, 100));
+    if (!entry) throw new Error('Unknown connector.');
+    this.state.mcpServers ??= [];
+    const existing = this.state.mcpServers.find(s => s.catalogId === entry.id);
+    const server: MCPServerConfig = existing ?? {
+      id: this.repo.id(), name: entry.name, transport: entry.url ? 'http' : 'stdio', url: entry.url, command: entry.command,
+      args: entry.args ?? [], env: {}, headers: {}, enabled: true, catalogId: entry.id, coworkers: defaultAssignees(entry), toolPolicy: {}
+    };
+    await this.connectorSignInIfNeeded(server, entry);
+    server.enabled = true;
+    if (!existing) this.state.mcpServers.push(server);
+    await this.repo.save();
+    await this.mcp.reconnect(this.connection(server));
+  }
+  /** Tries a connector again; one that lost its sign-in (or a custom server asking for one) signs in first. */
+  async connectorReconnect(id: string): Promise<void> {
+    const server = this.state.mcpServers?.find(s => s.id === id);
+    if (!server) throw new Error('Unknown connector.');
+    if (server.transport === 'http' && this.mcp.info(id)?.status === 'needs-sign-in') {
+      const entry = connectorById(server.catalogId);
+      if (entry) await this.connectorSignInIfNeeded(server, entry);
+      else await this.connectorBrowserSignIn(server);
+    }
+    await this.mcp.reconnect(this.connection(server));
+  }
+  connectorSignInCancel(): void {
+    this.connectorAbort?.abort();
+    this.connectorAbort = null;
+  }
+  /** Forgets a connector's sign-in; its tools go until it signs in again. */
+  async connectorSignOut(id: string): Promise<void> {
+    const server = this.state.mcpServers?.find(s => s.id === id);
+    if (!server) throw new Error('Unknown connector.');
+    this.vault.remove(oauthSecret(id));
+    await this.mcp.reconnect(this.connection(server));
+  }
+  /** Your own OAuth app for a connector this build has none for; an empty client id forgets it. */
+  async connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void> {
+    const entry = connectorById(text(catalogId, 100));
+    if (!entry || (entry.auth !== 'oauth-app' && entry.auth !== 'github-account')) throw new Error('This connector does not take an app of your own.');
+    const id = text(clientId, 500).trim();
+    const secret = typeof clientSecret === 'string' ? text(clientSecret, 2000).trim() : '';
+    if (!id) return this.vault.remove(appSecret(entry.id));
+    this.vault.set(appSecret(entry.id), JSON.stringify(secret ? { clientId: id, clientSecret: secret } : { clientId: id }));
+  }
+  /** The OAuth app a connector signs in with: this build's, else your own. */
+  private connectorClient(entry: ConnectorEntry): OAuthClient | undefined {
+    const built = clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv);
+    if (built) return built;
+    try {
+      const own = this.vault.get(appSecret(entry.id));
+      return own ? JSON.parse(own) as OAuthClient : undefined;
+    } catch { return undefined; }
+  }
+  private async connectorSignInIfNeeded(server: MCPServerConfig, entry: ConnectorEntry): Promise<void> {
+    if (entry.auth === 'none' || server.transport !== 'http') return;
+    const client = this.connectorClient(entry);
+    if (entry.auth === 'github-account' && !client) {
+      if (!this.accounts.githubToken()) throw new Error('Sign in to GitHub in Settings → Accounts first, or use your own GitHub app.');
+      return;
+    }
+    if (entry.auth === 'oauth-app' && !client) throw new Error(`${entry.name} isn't set up in this build of Axon. Use your own app to connect it.`);
+    await this.connectorBrowserSignIn(server, client);
+  }
+  private async connectorBrowserSignIn(server: MCPServerConfig, client?: OAuthClient): Promise<void> {
+    this.connectorAbort?.abort();
+    const abort = new AbortController();
+    this.connectorAbort = abort;
+    try {
+      const tokens = await this.connectorAuth.signIn({ serverUrl: server.url!, client, openExternal: this.connectorAuth.openExternal, signal: abort.signal });
+      this.vault.set(oauthSecret(server.id), JSON.stringify(tokens));
+    } finally {
+      if (this.connectorAbort === abort) this.connectorAbort = null;
+    }
+  }
+  /** How an HTTP connector signs its requests: its saved sign-in, else your Axon GitHub sign-in for GitHub. */
+  private bearerFor(config: MCPServerConfig): BearerSource | undefined {
+    if (config.transport !== 'http') return undefined;
+    const key = oauthSecret(config.id);
+    if (this.vault.has(key))
+      return new TokenKeeper(
+        () => { try { const saved = this.vault.get(key); return saved ? JSON.parse(saved) as McpTokens : null; } catch { return null; } },
+        (tokens) => this.vault.set(key, JSON.stringify(tokens))
+      );
+    if (connectorById(config.catalogId)?.auth === 'github-account')
+      return { token: async () => this.accounts.githubToken(), refresh: async () => null };
+    return undefined;
   }
   async toolApprove(decision: ToolApprovalDecision): Promise<void> {
     this.permissions.resolveApproval(decision);
@@ -946,6 +1082,7 @@ export class Service {
     this.mcp.stopAll();
     this.accounts.githubCancel();
     this.accounts.googleCancel();
+    this.connectorSignInCancel();
     this.stopTicking();
   }
   async attach(): Promise<{ id: string; name: string }[]> {

@@ -23,6 +23,8 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   skillSources: SkillSourceInfo[];
   roles: Role[];
   mcpServers: MCPServerConfig[];
+  /** Catalog connectors that have an OAuth app to sign in with: this build's, or your own. */
+  connectorApps: string[];
   projectRoot?: string | null;
   /** Tool calls waiting for the user, so a reopened window can still answer them. */
   pendingApprovals: ToolApprovalRequest[];
@@ -78,6 +80,15 @@ export interface PlatformAPI {
   settingsSave(settings: Settings): Promise<void>;
   mcpServerSave(server: MCPServerConfig): Promise<void>;
   mcpServerDelete(id: string): Promise<void>;
+  /** Adds a catalog connector, signing in first in the browser when it needs to. */
+  connectorAdd(catalogId: string): Promise<void>;
+  /** Tries a connector again, signing in first if it lost its sign-in. */
+  connectorReconnect(id: string): Promise<void>;
+  connectorSignInCancel(): Promise<void>;
+  /** Forgets a connector's sign-in. */
+  connectorSignOut(id: string): Promise<void>;
+  /** Your own OAuth app for a connector this build has none for. */
+  connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void>;
   chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null, systemPrompt?: string): Promise<Conversation>;
   chatRename(id: string, title: string): Promise<void>;
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;

@@ -9,3 +9,11 @@
 export const GITHUB_CLIENT_ID = process.env.AXON_GITHUB_CLIENT_ID || '';
 export const GOOGLE_CLIENT_ID = process.env.AXON_GOOGLE_CLIENT_ID || '';
 export const GOOGLE_CLIENT_SECRET = process.env.AXON_GOOGLE_CLIENT_SECRET || '';
+
+/** A connector's OAuth app from the environment (`AXON_SLACK_CLIENT_ID` and so on), when this build has one. */
+export function clientFromEnv(idVar?: string, secretVar?: string, env: NodeJS.ProcessEnv = process.env): { clientId: string; clientSecret?: string } | undefined {
+  const clientId = idVar ? env[idVar]?.trim() : '';
+  if (!clientId) return undefined;
+  const clientSecret = secretVar ? env[secretVar]?.trim() : '';
+  return clientSecret ? { clientId, clientSecret } : { clientId };
+}

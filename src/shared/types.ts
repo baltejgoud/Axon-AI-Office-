@@ -444,6 +444,13 @@ export type StreamEvent =
       process: ProcessInfo;
     }
   | {
+      /** A connector's connection changed: connecting, connected, lost its sign-in, failed. */
+      channel: 'connectors';
+      serverId: ID;
+      name: string;
+      status: McpStatus;
+    }
+  | {
       channel: 'agent';
       agentId: ID;
       runId: ID;
