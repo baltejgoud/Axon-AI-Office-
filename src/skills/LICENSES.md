@@ -306,10 +306,69 @@ SOFTWARE.
 
 - Repository: https://github.com/ComposioHQ/awesome-claude-skills
 - Commit: be2a406907dbc61b73e6827ded415c96139d13a2
-- Author / Maintainer: ComposioHQ & Contributors
-- Classification: Informational Instruction Prompts & MCP Tool Declarations
+- License: see LICENSES.md
 
-### Attribution & Distribution Notice
-The 864 skill definitions ingested from `ComposioHQ/awesome-claude-skills` consist of prompt directives, markdown usage instructions, and functional JSON tool requirements (such as `requires: ["mcp:rube"]`). No proprietary binary code or compiled executables are bundled.
+_No LICENSE file present at the recorded commit._
 
-These instruction definitions are distributed for public AI agent interoperability in accordance with upstream attribution guidelines. All copyright, trademarks, and service names referenced within individual skill metadata remain the property of their respective holders. If upstream provides a formal software license file in subsequent releases, this notice will be updated to reflect that license.
+## ecc
+
+- Repository: https://github.com/affaan-m/ECC
+- Commit: d3b8a3e908904e242ed2dbe66af62cca71131419
+- License: MIT
+
+```
+MIT License
+
+Copyright (c) 2026 Affaan Mustafa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## axon
+
+- Folder: skills/axon
+- Commit: 63cdfb25dee835a025490baf502c6fa3dd8647e8
+- License: MIT (adapted from mattpocock/skills, see skills/axon/LICENSE)
+
+```
+Skills in this folder are adapted for Axon from mattpocock/skills
+(https://github.com/mattpocock/skills, commit c55ee46073ed923f86ce59a5eb3b6d895095d1b7).
+
+MIT License
+
+Copyright (c) 2026 Matt Pocock
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

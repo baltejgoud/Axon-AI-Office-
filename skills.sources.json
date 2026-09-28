@@ -1,7 +1,9 @@
 [
-  { "slug": "ui-ux-pro-max", "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill", "license": "MIT" },
-  { "slug": "design-md", "url": "https://github.com/google-labs-code/design.md", "license": "Apache-2.0" },
-  { "slug": "ponytail", "url": "https://github.com/DietrichGebert/ponytail", "license": "MIT" },
-  { "slug": "superpowers", "url": "https://github.com/obra/superpowers", "license": "MIT" },
-  { "slug": "awesome-claude-skills", "url": "https://github.com/ComposioHQ/awesome-claude-skills", "license": "see LICENSES.md" }
+  { "slug": "ui-ux-pro-max", "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill", "commit": "15de38fb70bc80ae9276fa7703b48ae861a672e6", "license": "MIT" },
+  { "slug": "design-md", "url": "https://github.com/google-labs-code/design.md", "commit": "9bf8eae67128b6cc55ad9bf86665767deb4c11cd", "license": "Apache-2.0" },
+  { "slug": "ponytail", "url": "https://github.com/DietrichGebert/ponytail", "commit": "e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156", "license": "MIT" },
+  { "slug": "superpowers", "url": "https://github.com/obra/superpowers", "commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797", "license": "MIT" },
+  { "slug": "awesome-claude-skills", "url": "https://github.com/ComposioHQ/awesome-claude-skills", "commit": "be2a406907dbc61b73e6827ded415c96139d13a2", "license": "see LICENSES.md" },
+  { "slug": "ecc", "url": "https://github.com/affaan-m/ECC", "commit": "d3b8a3e908904e242ed2dbe66af62cca71131419", "license": "MIT" },
+  { "slug": "axon", "path": "skills/axon", "license": "MIT (adapted from mattpocock/skills, see skills/axon/LICENSE)" }
 ]
