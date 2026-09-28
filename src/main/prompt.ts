@@ -15,6 +15,25 @@ export function rolesBlock(roles: Role[]): string {
   ].join('\n\n').replace('<roles>\n\n', '<roles>\n');
 }
 
+/** How much of a skill's description the index shows; the whole skill is one load_skill away. */
+const INDEX_DESCRIPTION = 200;
+
+/**
+ * The skills that come with a coworker's role, by id and description only: listing them costs little
+ * on every turn, and the coworker reads a skill with load_skill when a task needs it.
+ */
+export function skillIndexBlock(skills: { id: string; description: string }[]): string {
+  if (!skills.length) return '';
+  const line = ({ id, description }: { id: string; description: string }) =>
+    `- ${id}: ${description.length > INDEX_DESCRIPTION ? `${description.slice(0, INDEX_DESCRIPTION - 1)}…` : description}`;
+  return [
+    '<available_skills>',
+    'These skills come with your role. When a task matches one, call load_skill with its id first and follow it. Load only what the task needs.',
+    ...skills.map(line),
+    '</available_skills>'
+  ].join('\n');
+}
+
 export function skillsBlock(skills: { name: string; source: string; body: string }[]): string {
   if (!skills.length) return '';
   const block = [

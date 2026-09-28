@@ -66,7 +66,7 @@ test('colleagues resolve by name, id or specialty, and ambiguity is explained', 
 test('toolsFor: coworkers can always ask a colleague; file tools still need a folder', () => {
   const registry = [{ name: 'read_file' }, { name: 'dispatch_subagent' }, { name: 'write_file' }];
   const names = (tools) => tools.map((tool) => tool.name).sort();
-  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), ['ask_colleague']);
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), ['ask_colleague', 'load_skill']);
   assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), []);
   assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: true, registry })), [
     'dispatch_subagent',
@@ -75,6 +75,7 @@ test('toolsFor: coworkers can always ask a colleague; file tools still need a fo
   ]);
   assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: true, registry })), [
     'ask_colleague',
+    'load_skill',
     'read_file',
     'write_file'
   ]);
@@ -103,7 +104,9 @@ test('a consult speaks as the colleague and cannot ask further', async () => {
   assert.equal(answer, '409 Conflict.');
   assert.match(seen.system, /Backend Developer/);
   assert.match(seen.system, /Frontend Developer is asking you a question/);
-  assert.match(seen.system, /<roles>/, 'the colleague brings their role profile');  assert.equal(seen.tools, undefined);
+  assert.match(seen.system, /Owns: server-side application logic/, 'the colleague brings their role profile');
+  assert.equal(seen.system.split('Owns:').length - 1, 1, 'and brings it once');
+  assert.equal(seen.tools, undefined);
   assert.equal(seen.messages[0].content, 'Which status code for a conflict?');
 });
 

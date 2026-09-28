@@ -70,7 +70,8 @@ export function resolveColleague(name: string, askerId: string): { coworker: Cow
 export function consultSystemPrompt(colleague: Coworker, askerName: string): string {
   return [
     colleague.systemPrompt,
-    rolesBlock(roleProfiles(colleague.roleIds)),
+    // A specialist's prompt already carries their own profile.
+    rolesBlock(roleProfiles(colleague.roleIds).filter((role) => !colleague.systemPrompt.includes(role.profile))),
     `${askerName} is asking you a question while working on a task for the user. Answer from your expertise, concisely. You cannot ask other colleagues.`
   ]
     .filter(Boolean)

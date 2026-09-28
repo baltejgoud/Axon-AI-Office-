@@ -1,4 +1,4 @@
-import type { Skill, SkillSourceInfo } from '../shared/types';
+import type { Skill, SkillSourceInfo, ToolDefinition } from '../shared/types';
 import catalogJson from '../skills/catalog.json';
 import bodiesJson from '../skills/bodies.json';
 
@@ -20,4 +20,38 @@ export function skillBodies(ids: string[]): { id: string; name: string; source: 
     const skill = byId.get(id);
     return skill && bodies[id] !== undefined ? [{ id, name: skill.name, source: skill.source, body: bodies[id] }] : [];
   });
+}
+/** What a coworker's skill index lists: known ids, in the order given. */
+export function skillIndex(ids: readonly string[]): { id: string; name: string; description: string }[] {
+  return ids.flatMap((id) => {
+    const skill = byId.get(id);
+    return skill ? [{ id, name: skill.name, description: skill.description }] : [];
+  });
+}
+
+export const LOAD_SKILL: ToolDefinition = {
+  name: 'load_skill',
+  description:
+    'Read one of your skills before a task it covers, then follow it. Only the ids listed under <available_skills> in your instructions can be loaded.',
+  parameters: {
+    type: 'object',
+    properties: { id: { type: 'string', description: 'The skill id, e.g. "ecc/api-design"' } },
+    required: ['id']
+  }
+};
+
+/** A skill's instructions for the coworker who has it; any other id is refused with the ones they do have. */
+export function loadSkill(args: Record<string, unknown>, allowed: readonly string[]): { content: string; isError?: true } {
+  const id = typeof args.id === 'string' ? args.id.trim() : '';
+  if (!id || !allowed.includes(id) || bodies[id] === undefined)
+    return { content: `"${id}" isn't one of your skills. Yours: ${allowed.join(', ')}.`, isError: true };
+  return {
+    content: [
+      `<skill id="${id}">`,
+      'Scripts, tool servers and files this skill mentions are not available here: do the equivalent with your own tools, or say what you can\'t do.',
+      '',
+      bodies[id],
+      '</skill>'
+    ].join('\n')
+  };
 }

@@ -1,4 +1,5 @@
 import rolesJson from '../roles/roles.json';
+import roleSkillsJson from '../roles/role-skills.json';
 import type { Role } from './types';
 
 /**
@@ -22,10 +23,12 @@ export interface Coworker {
   systemPrompt: string;
   /** Bundled role profiles added to their conversations. */
   roleIds: string[];
+  /** Bundled skills that come with the job: listed in their prompt, read with load_skill when a task needs one. */
+  skillIds: string[];
   core: boolean;
 }
 
-const CORE: Coworker[] = [
+const CORE: Omit<Coworker, 'skillIds'>[] = [
   {
     id: RECEPTIONIST_ID,
     name: 'Receptionist',
@@ -150,7 +153,7 @@ export const SPECIALIST_ROLES: readonly Role[] = [
 
 export const SPECIALIST_GROUPS: readonly string[] = [...new Set(SPECIALIST_ROLES.map((role) => role.group))];
 
-const specialists: Coworker[] = SPECIALIST_ROLES.map((role) => ({
+const specialists: Omit<Coworker, 'skillIds'>[] = SPECIALIST_ROLES.map((role) => ({
   id: role.id,
   name: role.name,
   role: role.group,
@@ -163,7 +166,18 @@ const specialists: Coworker[] = SPECIALIST_ROLES.map((role) => ({
   core: false
 }));
 
-export const COWORKERS: readonly Coworker[] = [...CORE, ...specialists];
+/** Skills chosen for each title, and a baseline for each specialist department. */
+const ROLE_SKILLS = roleSkillsJson as { groups: Record<string, string[]>; roles: Record<string, string[]> };
+
+/** Their own skills first, then their department's. */
+const withSkills = (coworker: Omit<Coworker, 'skillIds'>): Coworker => ({
+  ...coworker,
+  skillIds: [
+    ...new Set([...(ROLE_SKILLS.roles[coworker.id] ?? []), ...(coworker.core ? [] : ROLE_SKILLS.groups[coworker.department] ?? [])])
+  ]
+});
+
+export const COWORKERS: readonly Coworker[] = [...CORE, ...specialists].map(withSkills);
 
 const byId = new Map(COWORKERS.map((coworker) => [coworker.id, coworker]));
 

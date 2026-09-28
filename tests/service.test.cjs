@@ -377,7 +377,11 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
     return { toolCalls: [] };
   });
   await service.chatSend(chat.id, 'Build the settings page', []);
-  assert.deepEqual(offered, ['ask_colleague', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'], 'no folder: colleague and scoped memory retrieval');
+  assert.deepEqual(
+    offered,
+    ['ask_colleague', 'load_skill', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
+    'no folder: a colleague, their skills, and scoped memory retrieval'
+  );
   assert.equal(consults, 3);
   const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
   assert.equal(results.length, 4);
@@ -412,6 +416,37 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
     [true, true, true, false]
   );
   assert.match(asking.toolCalls[3].error, /asked three colleagues already/);
+});
+
+test('a coworker sees their skills listed and reads one before using it', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const { coworkerById } = require('../src/shared/coworkers.ts');
+  const [skill] = coworkerById('frontend-developer').skillIds;
+  const chat = await coworkerChat(service, 'frontend-developer');
+  let calls = 0;
+  let firstSystem;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (++calls === 1) {
+      firstSystem = req.system;
+      return { toolCalls: [{ id: 's', name: 'load_skill', arguments: JSON.stringify({ id: skill }) }] };
+    }
+    onChunk('Following the skill.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Build the settings page', []);
+  assert.match(firstSystem, /<available_skills>/);
+  assert.ok(firstSystem.includes(`- ${skill}: `));
+  const [result] = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
+  assert.ok(result.content.startsWith(`<skill id="${skill}">`));
+  assert.ok(!result.error);
+  // Plain chats have no role skills to list.
+  const plain = await service.chatCreate('p1', 'm1', null);
+  let plainSystem;
+  mockModel(t, async (_p, _k, req, onChunk) => { plainSystem = req.system; onChunk('Hi.'); return { toolCalls: [] }; });
+  await service.chatSend(plain.id, 'Hello', []);
+  assert.doesNotMatch(plainSystem, /<available_skills>/);
 });
 
 test('a colleague who cannot be reached ends their help with the reason', async (t) => {

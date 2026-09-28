@@ -343,7 +343,7 @@ SOFTWARE.
 ## axon
 
 - Folder: skills/axon
-- Commit: 63cdfb25dee835a025490baf502c6fa3dd8647e8
+- Commit: 0fa60a0001cbbb0a7cdefcab32895d429d765166
 - License: MIT (adapted from mattpocock/skills, see skills/axon/LICENSE)
 
 ```

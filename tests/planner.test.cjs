@@ -167,7 +167,8 @@ test('only the receptionist gets the planner tools, and they need no approval', 
     const { PermissionManager } = require('../src/main/security/permissions.ts');
     const names = (agentId) => toolsFor({ agentId, hasFolder: false, registry: [] }).map((tool) => tool.name);
     assert.deepEqual(names('receptionist'), ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task']);
-    assert.deepEqual(names('designer'), ['ask_colleague']);
+    assert.deepEqual(names('designer'), ['ask_colleague', 'load_skill']);
+    assert.deepEqual(names('writer'), ['ask_colleague', 'load_skill']);
     // The Chief of Staff leads teams, but keeps no planner.
     assert.deepEqual(names('chief-of-staff'), ['ask_colleague', 'find_people', 'call_team_meeting']);
     const permissions = new PermissionManager([], false);
