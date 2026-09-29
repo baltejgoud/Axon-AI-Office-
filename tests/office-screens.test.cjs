@@ -63,7 +63,7 @@ test('each role sees its own work', () => {
   assert.deepEqual(pair('strategy-manager'), ['slides', 'spreadsheet']);
   assert.deepEqual(pair('chief-executive-officer'), ['slides', 'video']);
   assert.deepEqual(pair('receptionist'), ['calendar', null]);
-  assert.deepEqual(pair('writer'), ['document', 'browser']);
+  assert.deepEqual(pair('chief-of-staff'), ['slides', 'email']);
   assert.deepEqual(pair('designer'), ['design', 'moodboard']);
 });
 

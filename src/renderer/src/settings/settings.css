@@ -641,8 +641,7 @@
   color: var(--text-tertiary);
 }
 .model-search:focus-within {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--border-strong);
 }
 .model-search input {
   flex: 1;

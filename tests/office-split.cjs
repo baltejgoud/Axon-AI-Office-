@@ -252,7 +252,7 @@ app.on('web-contents-created', (_, contents) => {
 
       // With no project open, a coworker without a folder of their own offers to open one.
       await choosePerson('Full-Stack Developer');
-      check('with no project open, the composer offers to open one', (await text('.composer-folder')) === 'Open a project for them to work in', await text('.composer-folder'));
+      check('with no project open, the composer offers to open one', (await text('.composer-folder')) === 'Open a project', await text('.composer-folder'));
       await choosePerson('Frontend Developer');
 
       // Older work waits: the frontend developer's last run is over, so the office keeps the height.
@@ -452,7 +452,7 @@ app.on('web-contents-created', (_, contents) => {
 
       // A coworker with no conversation yet works in the project open in the app.
       await choosePerson('Full-Stack Developer');
-      check('the composer says where they work', (await text('.composer-folder')) === 'in axon-platform', await text('.composer-folder'));
+      check('the composer says where they work', (await text('.composer-folder')) === 'axon-platform', await text('.composer-folder'));
       await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please read the notes.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
       await pause(100);
       await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);

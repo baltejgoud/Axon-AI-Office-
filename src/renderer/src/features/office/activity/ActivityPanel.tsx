@@ -1,15 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FilesPanel } from './FilesPanel';
-import {
-  IconBook,
-  IconCompose,
-  IconDotsHorizontal,
-  IconFileText,
-  IconHistory,
-  IconSparkle
-} from '../../../ui';
-import { useOfficeStore } from '../store/officeStore';
-import { OFFICE_AGENTS } from '../data/officeAgents';
+import { IconBook, IconCompose, IconDotsHorizontal, IconSparkle } from '../../../ui';
+import { defaultTab, useOfficeStore, type AgentActivity, type PanelTab } from '../store/officeStore';
+import { OFFICE_AGENTS, type OfficeAgent } from '../data/officeAgents';
 import { useApp } from '../../../state';
 import { timeAgo } from '../../../format';
 import { AgentComposer } from './AgentComposer';
@@ -20,16 +13,28 @@ import { activeThread, agentThreads } from './thread';
 import { LIBRARY_RESIDENTS } from '../library';
 import { useEscape } from '../../../ui/escape';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
-import { Planner } from './Planner';
+import { Planner, PlannerCount } from './Planner';
 import { Briefing } from './Briefing';
 import { ConnectorRow } from './ConnectorRow';
-import { ContextMeter } from '../../../chat/ContextMeter';
 
-const FEED_PREVIEW = 3;
+/** Specialists' descriptions continue a phrase ("the browser-facing code…"); shown alone, they start a sentence. */
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
+const TAB_LABEL: Record<PanelTab, string> = {
+  chat: 'Chat',
+  planner: 'Planner',
+  files: 'Files',
+  updates: 'Updates'
+};
+
+/**
+ * The selected coworker's side of the office: who they are and how they're doing in one line, then
+ * the conversation, which gets most of the height. Their tools (the receptionist's planner, the
+ * Files room, this session's updates) are tabs beside it.
+ */
 export function ActivityPanel() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [feedOpen, setFeedOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const data = useApp((s) => s.data);
   const {
     selectedAgentId,
@@ -38,7 +43,9 @@ export function ActivityPanel() {
     setAgentConversation,
     openOverlay,
     teamBoard,
-    briefing
+    briefing,
+    panelTab,
+    setPanelTab
   } = useOfficeStore();
   const agent = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
   const runtime = agentRuntime[agent.id];
@@ -57,13 +64,23 @@ export function ActivityPanel() {
       : (runtime?.status ?? 'idle');
   const streaming = status === 'working';
   const activities = runtime?.activities ?? [];
-  const shownActivities = feedOpen ? activities : activities.slice(0, FEED_PREVIEW);
   const libraryResident = LIBRARY_RESIDENTS.includes(agent.id);
   const reception = agent.id === RECEPTIONIST_ID;
+  const filesRoom = agent.id === 'files-agent';
+
+  const tabs: { id: PanelTab; count?: ReactNode }[] = [
+    ...(filesRoom ? [{ id: 'files' as const }] : []),
+    { id: 'chat' },
+    ...(reception ? [{ id: 'planner' as const, count: <PlannerCount /> }] : []),
+    ...(activities.length
+      ? [{ id: 'updates' as const, count: <span className="activity-tab-count">{activities.length}</span> }]
+      : [])
+  ];
+  const tab = tabs.some((t) => t.id === panelTab) ? panelTab : defaultTab(agent.id);
 
   useEffect(() => {
     setMenuOpen(false);
-    setFeedOpen(false);
+    setProfileOpen(false);
   }, [agent.id]);
 
   // A board was clicked: the panel shows that team's tasks until you pick someone or go back.
@@ -74,132 +91,220 @@ export function ActivityPanel() {
       </aside>
     );
 
+  const statusLabel = status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1);
   return (
     <aside className="office-activity-panel" aria-label="Selected coworker activity">
-      <header className="activity-header">
-        <div className="activity-title-icon">
-          <IconHistory size={20} />
-        </div>
-        <div>
-          <h2>Activity</h2>
-          <p>See what your team is working on.</p>
-        </div>
-        <span className={`live-badge ${streaming ? 'is-live' : ''}`}>
-          <span />
-          {streaming ? 'Live' : 'Ready'}
-        </span>
-      </header>
-      <div className="activity-agent-hero">
-        <AgentPortrait agent={agent} className="activity-portrait" urgent />
+      <header className="activity-agent-hero">
+        <button
+          type="button"
+          className={`activity-portrait-button status-${status}`}
+          aria-label={`About the ${agent.name.toLowerCase()}`}
+          aria-expanded={profileOpen}
+          onClick={() => setProfileOpen(!profileOpen)}
+        >
+          <AgentPortrait agent={agent} className="activity-portrait" urgent />
+        </button>
         <div className="activity-agent-meta">
-          <span className="activity-selected-tag">Selected coworker</span>
-          <h3>{agent.name}</h3>
-          <p>{agent.role}</p>
-          <span className={`status-badge ${status}`} role="status">
-            <span className="status-dot-sm" />
-            {status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1)}
-          </span>
-          <ConnectorRow key={agent.id} agent={agent} />
+          <h3>
+            <button type="button" title="About them" onClick={() => setProfileOpen(!profileOpen)}>
+              {agent.name}
+            </button>
+          </h3>
+          <p>
+            <span className="activity-role">{agent.role}</span>
+            <span className={`status-badge ${status}`} role="status">
+              <span className="status-dot-sm" />
+              {statusLabel}
+            </span>
+          </p>
         </div>
-        <ConversationMenu
-          open={menuOpen}
-          onToggle={setMenuOpen}
-          items={[
-            {
-              key: 'new',
-              label: 'New conversation',
-              icon: <IconCompose size={15} />,
-              disabled: !conversation,
-              onSelect: () => startFresh(agent.id)
-            },
-            ...(libraryResident
-              ? [
-                  {
-                    key: 'library',
-                    label: 'Manage library',
-                    icon: <IconBook size={15} />,
-                    onSelect: () => openOverlay('knowledge')
-                  }
-                ]
-              : []),
-            ...threads.slice(0, 8).map((thread) => ({
-              key: thread.id,
-              label: thread.title,
-              detail: timeAgo(thread.updatedAt),
-              current: thread.id === conversation?.id,
-              onSelect: () => setAgentConversation(agent.id, thread.id)
-            }))
-          ]}
-        />
-      </div>
-      {reception && <Planner />}
-      {conversation && <ContextMeter key={conversation.id} conversation={conversation} />}
-      <div className="activity-body">
-        {agent.id === 'files-agent' && <FilesPanel />}
+        <div className="activity-hero-actions">
+          <ConnectorRow key={agent.id} agent={agent} />
+          <ConversationMenu
+            open={menuOpen}
+            onToggle={setMenuOpen}
+            items={[
+              {
+                key: 'new',
+                label: 'New conversation',
+                icon: <IconCompose size={15} />,
+                disabled: !conversation,
+                onSelect: () => startFresh(agent.id)
+              },
+              ...(libraryResident
+                ? [
+                    {
+                      key: 'library',
+                      label: 'Manage library',
+                      icon: <IconBook size={15} />,
+                      onSelect: () => openOverlay('knowledge')
+                    }
+                  ]
+                : []),
+              ...threads.slice(0, 8).map((thread) => ({
+                key: thread.id,
+                label: thread.title,
+                detail: timeAgo(thread.updatedAt),
+                current: thread.id === conversation?.id,
+                onSelect: () => setAgentConversation(agent.id, thread.id)
+              }))
+            ]}
+          />
+        </div>
+        {profileOpen && <Profile agent={agent} onClose={() => setProfileOpen(false)} />}
+      </header>
+      {tabs.length > 1 && (
+        <div className="activity-tabs" role="tablist" aria-label={`${agent.name}’s panel`}>
+          {tabs.map(({ id, count }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`activity-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`activity-panel-${id}`}
+              className={tab === id ? 'active' : ''}
+              onClick={() => setPanelTab(id)}
+            >
+              {TAB_LABEL[id]}
+              {count}
+            </button>
+          ))}
+        </div>
+      )}
+      {filesRoom && (
+        <TabPanel id="files" hidden={tab !== 'files'}>
+          <FilesPanel />
+        </TabPanel>
+      )}
+      {/* The chat stays mounted behind other tabs, so its scroll and streaming carry on. */}
+      <TabPanel id="chat" hidden={tab !== 'chat'} labelled={tabs.length > 1}>
         {reception && briefing && <Briefing briefing={briefing} />}
         {!conversation && !(reception && briefing) && (
-          <section className="current-task-card">
-            <div className="activity-section-heading">
-              <IconFileText size={15} />
-              <h4>{runtime?.fresh ? 'New conversation' : 'Let’s make progress'}</h4>
-            </div>
-            <p className="activity-intro">{agent.description}</p>
+          <div className="activity-empty">
+            <span>
+              <IconSparkle size={20} />
+            </span>
+            <strong>{runtime?.fresh ? 'A new conversation' : 'A clear desk. A fresh start.'}</strong>
+            <p>{sentence(agent.description)}</p>
             <div className="activity-capabilities">
               {agent.capabilities.slice(0, 3).map((cap) => (
                 <span key={cap}>{cap}</span>
               ))}
             </div>
-          </section>
-        )}
-        {activities.length > 0 && (
-          <section className="activity-feed-section">
-            <div className="activity-section-heading">
-              <IconHistory size={15} />
-              <h4>Recent updates</h4>
-              <span className="activity-session-label">This session</span>
-            </div>
-            <ol className="activity-feed-list">
-              {shownActivities.map((event) => (
-                <li key={event.id} className={`activity-item type-${event.type}`}>
-                  <time>
-                    {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </time>
-                  <div>
-                    <strong>{event.title}</strong>
-                    {event.detail && <p>{event.detail}</p>}
-                  </div>
-                </li>
-              ))}
-            </ol>
-            {activities.length > FEED_PREVIEW && (
-              <button className="activity-feed-more" onClick={() => setFeedOpen(!feedOpen)}>
-                {feedOpen ? 'Show fewer' : `Show all (${activities.length})`}
-              </button>
-            )}
-          </section>
+          </div>
         )}
         <Conversation
           agentName={agent.name}
           conversation={conversation}
           pendingTask={streaming || status === 'waiting' ? runtime?.currentTask : undefined}
           working={streaming || status === 'waiting'}
+          shown={tab === 'chat'}
         />
-        {!conversation && !activities.length && !(reception && briefing) && (
-          <div className="activity-empty">
-            <span>
-              <IconSparkle size={20} />
-            </span>
-            <strong>A clear desk. A fresh start.</strong>
-            <p>
-              Give {shortName(agent.name)} a task.
-              <br />
-              Your conversation will appear here.
-            </p>
-          </div>
-        )}
-      </div>
+      </TabPanel>
+      {tab === 'planner' && (
+        <TabPanel id="planner">
+          <Planner />
+        </TabPanel>
+      )}
+      {tab === 'updates' && (
+        <TabPanel id="updates">
+          <Updates activities={activities} />
+        </TabPanel>
+      )}
       <AgentComposer key={agent.id} agentId={agent.id} />
     </aside>
+  );
+}
+
+function TabPanel({
+  id,
+  hidden = false,
+  labelled = true,
+  children
+}: {
+  id: PanelTab;
+  hidden?: boolean;
+  /** Only when there are tabs to be labelled by. */
+  labelled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`activity-body activity-tabpanel-${id}`}
+      id={`activity-panel-${id}`}
+      role={labelled ? 'tabpanel' : undefined}
+      aria-labelledby={labelled ? `activity-tab-${id}` : undefined}
+      hidden={hidden}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** What happened with this coworker this session, newest first. */
+function Updates({ activities }: { activities: AgentActivity[] }) {
+  return (
+    <section className="activity-feed-section" aria-label="This session’s updates">
+      <ol className="activity-feed-list">
+        {activities.map((event) => (
+          <li key={event.id} className={`activity-item type-${event.type}`}>
+            <time>
+              {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </time>
+            <div>
+              <strong>{event.title}</strong>
+              {event.detail && <p>{event.detail}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Who they are, from their portrait or name: what they do and what they're good at. */
+function Profile({ agent, onClose }: { agent: OfficeAgent; onClose: () => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  useEscape(onClose);
+  useEffect(() => {
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Element;
+      // The portrait and name toggle it themselves.
+      if (
+        !root.current?.contains(target) &&
+        !target.closest?.('.activity-portrait-button, .activity-agent-meta h3')
+      )
+        onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [onClose]);
+  return (
+    <div
+      className="activity-profile"
+      role="dialog"
+      aria-label={`About the ${agent.name.toLowerCase()}`}
+      ref={root}
+    >
+      <div className="activity-profile-head">
+        <AgentPortrait agent={agent} className="activity-profile-portrait" />
+        <div>
+          <strong>{agent.name}</strong>
+          <small>
+            {agent.role === agent.department ? agent.role : `${agent.role} · ${agent.department}`}
+          </small>
+        </div>
+      </div>
+      <p>{sentence(agent.description)}</p>
+      {agent.capabilities.length > 0 && (
+        <div className="activity-capabilities">
+          {agent.capabilities.map((cap) => (
+            <span key={cap}>{cap}</span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -256,6 +361,7 @@ function ConversationMenu({
       <button
         className="activity-menu-trigger"
         aria-label="Conversation options"
+        title="Conversations and more"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => onToggle(!open)}
@@ -271,8 +377,4 @@ function ConversationMenu({
       )}
     </div>
   );
-}
-
-function shortName(name: string) {
-  return name === 'Research Analyst' ? 'your analyst' : `the ${name.toLowerCase()}`;
 }

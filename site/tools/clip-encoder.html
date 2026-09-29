@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>clip encoder</title></head>
+<body>
+<script>
+// Frame sequences -> H.264 MP4 (video only, faststart), muxed by hand. Mirrors brag-output/work/encoder.html.
+const { ipcRenderer } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const log = (m) => ipcRenderer.send('log', String(m));
+const toBytes = (source) =>
+  source instanceof ArrayBuffer ? new Uint8Array(source.slice(0)) : new Uint8Array(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength));
+
+const range = (a, b) => {
+  const r = [];
+  if (a <= b) for (let i = a; i <= b; i++) r.push(i);
+  else for (let i = a; i >= b; i--) r.push(i);
+  return r;
+};
+/** b, b-1 ... a, a+1 ... b-1: loops back onto b without a seam, and starts where a forward clip ends. */
+const loopFromEnd = (a, b) => [...range(b, a), ...range(a + 1, b - 1)];
+
+const CLIPS = [
+  { name: 'overview', shot: 'outro', frames: range(0, 124), w: 1920, h: 1080, bitrate: 6e6, key: 30 },
+  { name: 'overview-loop', shot: 'outro', frames: loopFromEnd(0, 124), w: 1600, h: 900, bitrate: 3.5e6, key: 60 },
+  { name: 'campus', shot: 'campus', frames: range(0, 189), w: 1920, h: 1080, bitrate: 7e6, key: 30 },
+  { name: 'desks-loop', shot: 'campus', frames: loopFromEnd(150, 189), w: 1600, h: 900, bitrate: 3.5e6, key: 60 },
+  { name: 'work', shot: 'work', frames: range(0, 246), w: 2560, h: 1440, bitrate: 14e6, key: 6, cursor: true },
+  { name: 'lounge', shot: 'lounge', frames: range(0, 99), w: 1920, h: 1080, bitrate: 6e6, key: 30 },
+  { name: 'lounge-loop', shot: 'lounge', frames: loopFromEnd(0, 99), w: 1600, h: 900, bitrate: 3.5e6, key: 60 },
+  // Feature clips (brag-output/work/record-features.cjs): the real app, played through as short loops.
+  { name: 'feat-parallel', shot: 'parallel', frames: range(0, 259), w: 1920, h: 1080, bitrate: 8e6, key: 30, cursor: true },
+  { name: 'feat-models', shot: 'models', frames: range(0, 278), w: 1920, h: 1080, bitrate: 8e6, key: 30, cursor: true },
+  { name: 'feat-connect', shot: 'connect', frames: range(34, 186), w: 1920, h: 1080, bitrate: 7e6, key: 30, cursor: true }
+];
+const POSTERS = [
+  { name: 'overview', shot: 'outro', frame: 124 },
+  { name: 'overview-start', shot: 'outro', frame: 0 },
+  { name: 'campus', shot: 'campus', frame: 0 },
+  { name: 'desks', shot: 'campus', frame: 189 },
+  { name: 'work', shot: 'work', frame: 0, cursor: true },
+  { name: 'review', shot: 'work', frame: 246, cursor: true },
+  { name: 'lounge', shot: 'lounge', frame: 99 },
+  { name: 'lounge-start', shot: 'lounge', frame: 0 },
+  { name: 'feat-parallel', shot: 'parallel', frame: 190, cursor: true },
+  { name: 'feat-models', shot: 'models', frame: 240, cursor: true },
+  { name: 'feat-connect', shot: 'connect', frame: 100, cursor: true },
+  { name: 'feat-skills', shot: 'connect', frame: 186, cursor: true }
+];
+const FPS = 30;
+const APP = { w: 1600, h: 900 }; // the app's CSS size; cursor.json is in these units
+
+// ------------------------------------------------------------------ drawing
+let footage = '';
+const cursorLogs = {};
+async function bitmap(shot, index) {
+  const file = path.join(footage, shot, `f${String(index).padStart(4, '0')}.jpg`);
+  return createImageBitmap(new Blob([fs.readFileSync(file)], { type: 'image/jpeg' }));
+}
+const ARROW = new Path2D('M4 2.5 L4 24.5 L9.6 19.4 L13.4 27.6 L17.2 25.9 L13.5 17.9 L21 17.6 Z');
+function drawCursor(ctx, shot, index, w) {
+  const logEntries = cursorLogs[shot] || (cursorLogs[shot] = JSON.parse(fs.readFileSync(path.join(footage, shot, 'cursor.json'), 'utf8')));
+  const k = w / APP.w;
+  const c = logEntries[Math.min(index, logEntries.length - 1)];
+  // A ring where the last press was, for 12 frames.
+  for (let j = index; j >= 0 && j > index - 13; j--) {
+    const e = logEntries[j];
+    if (e.down && (j === 0 || !logEntries[j - 1].down)) {
+      const p = (index - j) / 12;
+      const eased = 1 - Math.pow(1 - p, 3);
+      ctx.save();
+      ctx.strokeStyle = `rgba(56,103,246,${(0.6 * (1 - p)).toFixed(3)})`;
+      ctx.lineWidth = 2.4 * k;
+      ctx.beginPath();
+      ctx.arc(e.x * k, e.y * k, (6 + 26 * eased) * k, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      break;
+    }
+  }
+  if (!c.shown) return;
+  const s = 0.8 * k * (c.down ? 0.86 : 1);
+  ctx.save();
+  ctx.translate(c.x * k - 4 * s, c.y * k - 2.5 * s);
+  ctx.scale(s, s);
+  ctx.shadowColor = 'rgba(22,35,59,0.3)';
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#fff';
+  ctx.fill(ARROW);
+  ctx.shadowColor = 'transparent';
+  ctx.lineWidth = 1.7;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#16233b';
+  ctx.stroke(ARROW);
+  ctx.restore();
+}
+async function paint(canvas, ctx, shot, index, withCursor) {
+  const image = await bitmap(shot, index);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  image.close();
+  if (withCursor) drawCursor(ctx, shot, index, canvas.width);
+}
+
+// ------------------------------------------------------------------ MP4 boxes (video only)
+const u8 = (v) => Buffer.from([v & 255]);
+const u16 = (v) => { const b = Buffer.alloc(2); b.writeUInt16BE(v & 0xffff); return b; };
+const u32 = (v) => { const b = Buffer.alloc(4); b.writeUInt32BE(v >>> 0); return b; };
+const i32 = (v) => { const b = Buffer.alloc(4); b.writeInt32BE(v | 0); return b; };
+const zeros = (n) => Buffer.alloc(n);
+const str = (s) => Buffer.from(s, 'latin1');
+const box = (type, ...parts) => {
+  const body = Buffer.concat(parts);
+  return Buffer.concat([u32(8 + body.length), str(type), body]);
+};
+const full = (type, version, flags, ...parts) => box(type, u32(((version & 255) << 24) | (flags & 0xffffff)), ...parts);
+const MATRIX = Buffer.concat([0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].map(u32));
+const runs = (values) => {
+  const out = [];
+  for (const v of values) {
+    if (out.length && out[out.length - 1][1] === v) out[out.length - 1][0]++;
+    else out.push([1, v]);
+  }
+  return out;
+};
+
+function mux(samples, description, w, h, output) {
+  const scale = FPS * 1000;
+  const delta = 1000;
+  const pts = samples.map((c) => Math.round((c.timestamp * FPS) / 1e6) * delta);
+  const dts = samples.map((_, i) => i * delta);
+  let shift = 0;
+  pts.forEach((p, i) => (shift = Math.max(shift, dts[i] - p)));
+  const offsets = pts.map((p, i) => p + shift - dts[i]);
+  const duration = samples.length * delta;
+  const movieScale = 1000;
+  const movieDuration = Math.round((duration / scale) * movieScale);
+  const avc1 = box('avc1', zeros(6), u16(1), u16(0), u16(0), zeros(12), u16(w), u16(h),
+    u32(0x00480000), u32(0x00480000), u32(0), u16(1), zeros(32), u16(0x18), u16(0xffff),
+    box('avcC', Buffer.from(description)), box('pasp', u32(1), u32(1)));
+  const build = (chunkOffsets) => {
+    const mvhd = full('mvhd', 0, 0, u32(0), u32(0), u32(movieScale), u32(movieDuration), u32(0x00010000), u16(0x0100), zeros(10), MATRIX, zeros(24), u32(2));
+    const tkhd = full('tkhd', 0, 3, u32(0), u32(0), u32(1), u32(0), u32(movieDuration), zeros(8), u16(0), u16(0), u16(0), u16(0), MATRIX, u32(w << 16), u32(h << 16));
+    const mdhd = full('mdhd', 0, 0, u32(0), u32(0), u32(scale), u32(duration + shift), u16(0x55c4), u16(0));
+    const hdlr = full('hdlr', 0, 0, u32(0), str('vide'), zeros(12), str('VideoHandler\0'));
+    const dinf = box('dinf', full('dref', 0, 0, u32(1), full('url ', 0, 1)));
+    const stts = runs(dts.map(() => delta));
+    const parts = [
+      full('stsd', 0, 0, u32(1), avc1),
+      full('stts', 0, 0, u32(stts.length), ...stts.flatMap(([c, d]) => [u32(c), u32(d)]))
+    ];
+    if (offsets.some((o) => o !== 0)) {
+      const ctts = runs(offsets);
+      parts.push(full('ctts', 1, 0, u32(ctts.length), ...ctts.flatMap(([c, o]) => [u32(c), i32(o)])));
+    }
+    const syncs = samples.map((c, i) => (c.key ? i + 1 : 0)).filter(Boolean);
+    parts.push(
+      full('stss', 0, 0, u32(syncs.length), ...syncs.map(u32)),
+      full('stsc', 0, 0, u32(1), u32(1), u32(1), u32(1)),
+      full('stsz', 0, 0, u32(0), u32(samples.length), ...samples.map((c) => u32(c.data.length))),
+      full('stco', 0, 0, u32(chunkOffsets.length), ...chunkOffsets.map(u32))
+    );
+    const trak = box('trak', tkhd, box('mdia', mdhd, hdlr, box('minf', full('vmhd', 0, 1, zeros(8)), dinf, box('stbl', ...parts))));
+    return box('moov', mvhd, trak);
+  };
+  const ftyp = box('ftyp', str('isom'), u32(512), str('isom'), str('iso2'), str('avc1'), str('mp41'));
+  const placeholder = build(samples.map(() => 0));
+  let position = ftyp.length + placeholder.length + 8;
+  const chunkOffsets = samples.map((c) => {
+    const at = position;
+    position += c.data.length;
+    return at;
+  });
+  const moov = build(chunkOffsets);
+  if (moov.length !== placeholder.length) throw new Error('moov size changed');
+  const fd = fs.openSync(output, 'w');
+  fs.writeSync(fd, ftyp);
+  fs.writeSync(fd, moov);
+  fs.writeSync(fd, Buffer.concat([u32(position - ftyp.length - moov.length), str('mdat')]));
+  for (const c of samples) fs.writeSync(fd, c.data);
+  fs.closeSync(fd);
+  return { bytes: position, frames: samples.length, keyframes: samples.filter((c) => c.key).length, bFrameShift: shift };
+}
+
+async function encodeClip(clip, out) {
+  const canvas = new OffscreenCanvas(clip.w, clip.h);
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.imageSmoothingQuality = 'high';
+  const samples = [];
+  let description = null;
+  let failure = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      samples.push({ data, timestamp: chunk.timestamp, key: chunk.type === 'key' });
+      if (meta && meta.decoderConfig && meta.decoderConfig.description) description = toBytes(meta.decoderConfig.description);
+    },
+    error: (e) => (failure = e)
+  });
+  const config = {
+    codec: clip.w * clip.h > 1920 * 1088 ? 'avc1.640033' : 'avc1.640028',
+    width: clip.w,
+    height: clip.h,
+    bitrate: clip.bitrate,
+    bitrateMode: 'variable',
+    framerate: FPS,
+    latencyMode: 'quality',
+    avc: { format: 'avc' }
+  };
+  const support = await VideoEncoder.isConfigSupported(config);
+  if (!support.supported) throw new Error(`${clip.name}: H.264 config not supported`);
+  encoder.configure(config);
+  const t0 = performance.now();
+  for (let i = 0; i < clip.frames.length; i++) {
+    if (failure) throw failure;
+    await paint(canvas, ctx, clip.shot, clip.frames[i], clip.cursor);
+    const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
+    encoder.encode(frame, { keyFrame: i % clip.key === 0 });
+    frame.close();
+    while (encoder.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 2));
+  }
+  await encoder.flush();
+  encoder.close();
+  if (failure) throw failure;
+  if (!description) throw new Error(`${clip.name}: no avcC description`);
+  const result = mux(samples, description, clip.w, clip.h, path.join(out, `${clip.name}.mp4`));
+  log(`${clip.name}.mp4  ${(result.bytes / 1048576).toFixed(2)} MB  ${result.frames} frames  ${result.keyframes} keys  ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+}
+
+async function writePoster(poster, out) {
+  const canvas = new OffscreenCanvas(1920, 1080);
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.imageSmoothingQuality = 'high';
+  await paint(canvas, ctx, poster.shot, poster.frame, poster.cursor);
+  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.84 });
+  const file = path.join(out, `${poster.name}.jpg`);
+  fs.writeFileSync(file, Buffer.from(await blob.arrayBuffer()));
+  log(`${poster.name}.jpg  ${(blob.size / 1024).toFixed(0)} KB`);
+}
+
+ipcRenderer.on('run', async (_, { footage: dir, out, only }) => {
+  try {
+    footage = dir;
+    fs.mkdirSync(out, { recursive: true });
+    const pick = (list) => (only.length ? list.filter((x) => only.includes(x.name)) : list);
+    for (const poster of pick(POSTERS)) await writePoster(poster, out);
+    for (const clip of pick(CLIPS)) await encodeClip(clip, out);
+    ipcRenderer.send('done', null);
+  } catch (e) {
+    ipcRenderer.send('done', e.stack || String(e));
+  }
+});
+</script>
+</body>
+</html>

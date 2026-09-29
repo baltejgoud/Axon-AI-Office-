@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Conversation } from '../../../shared/types';
 import { meterTone } from '../../../shared/context-usage';
 import { conversationCost, formatTokens, formatUsd, hasPrice, modelOf } from '../../../shared/cost';
 import { useApp } from '../state';
+import { useEscape } from '../ui/escape';
 import './contextMeter.css';
 
 const replies = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'reply' : 'replies'}`;
 
 /**
- * The conversation's header: how full its context is and what it has cost, always in view, so a
- * full context is never a surprise. Opens to the numbers behind both, and says which are estimates.
+ * A chip beside the message box: how full the conversation's context is and what it has cost,
+ * always in view, so a full context is never a surprise. Opens to the numbers behind both, and
+ * says which are estimates.
  */
 export function ContextMeter({ conversation }: { conversation: Conversation }) {
   const usage = useApp((s) => s.contextUsage[conversation.id]);
@@ -17,6 +19,16 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
   const providers = useApp((s) => s.data?.providers);
   const estimates = useApp((s) => s.estimates);
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEscape(() => setOpen(false), open);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
   // Filled in as the conversation opens, before anything is sent; its runs keep it current after that.
   useEffect(() => {
@@ -57,10 +69,11 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
   const detailsId = `context-meter-${conversation.id}`;
 
   return (
-    <div className={`context-meter tone-${meterTone(pct)}`}>
+    <div className={`context-meter tone-${meterTone(pct)}`} ref={root}>
       <button
         type="button"
         className="context-meter-summary"
+        title="Context and cost"
         aria-expanded={open}
         aria-controls={detailsId}
         onClick={() => setOpen(!open)}
@@ -76,13 +89,11 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
           <span style={{ width: `${percent}%` }} />
         </span>
         <span className="context-meter-pct">
-          {!usage ? 'Measuring context…' : trimming ? 'Full · older turns left out' : `${percent}% context`}
+          {!usage ? 'Measuring' : trimming ? 'Full' : `${percent}%`}
+          <span className="context-meter-word"> context</span>
         </span>
         {summaryCost && (
-          <span className="context-meter-cost">
-            {summaryCost}
-            {live && cost.priced && <span className="context-meter-live"> · estimating…</span>}
-          </span>
+          <span className={`context-meter-cost${live && cost.priced ? ' is-live' : ''}`}>{summaryCost}</span>
         )}
       </button>
       {open && (

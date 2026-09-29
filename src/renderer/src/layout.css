@@ -191,7 +191,7 @@
   color: var(--text-tertiary);
 }
 .sidebar-search:focus-within {
-  border-color: var(--ring);
+  border-color: var(--border-strong);
 }
 .sidebar-search input {
   flex: 1;
@@ -1133,10 +1133,7 @@
     box-shadow var(--duration-fast) var(--ease-out);
 }
 .composer:focus-within {
-  border-color: var(--accent);
-  box-shadow:
-    0 4px 20px rgb(0 0 0 / 0.06),
-    0 0 0 2px var(--accent-soft);
+  border-color: var(--border-strong);
 }
 .composer textarea {
   width: 100%;

@@ -28,13 +28,13 @@ test('the catalog: unique ids, safe addresses, known categories and real coworke
 });
 
 test('who a connector serves: by id, by department, not someone, or your own chats', () => {
-  const list = ['writer', 'group:Design', 'not:product-designer', 'chats'];
-  assert.ok(c.servesRun(list, { coworkerId: 'writer', department: 'Library' }));
+  const list = ['chief-of-staff', 'group:Design', 'not:product-designer', 'chats'];
+  assert.ok(c.servesRun(list, { coworkerId: 'chief-of-staff', department: 'Library' }));
   assert.ok(c.servesRun(list, { coworkerId: 'ui-ux-designer', department: 'Design' }));
   assert.equal(c.servesRun(list, { coworkerId: 'product-designer', department: 'Design' }), false);
   assert.ok(c.servesRun(list, {}));
-  assert.equal(c.servesRun(['writer'], {}), false);
-  assert.equal(c.servesRun(undefined, { coworkerId: 'writer' }), false);
+  assert.equal(c.servesRun(['chief-of-staff'], {}), false);
+  assert.equal(c.servesRun(undefined, { coworkerId: 'chief-of-staff' }), false);
 });
 
 test('switching one person on or off respects their department', () => {
@@ -43,8 +43,8 @@ test('switching one person on or off respects their department', () => {
   assert.deepEqual(c.assign(['group:Design', 'not:product-designer'], designer, true), ['group:Design']);
   assert.deepEqual(c.assign([], designer, true), ['product-designer']);
   assert.deepEqual(c.assign(['product-designer'], designer, false), []);
-  assert.deepEqual(c.assignGroup(['product-designer', 'not:ui-ux-designer', 'writer'], 'Design', ['product-designer', 'ui-ux-designer'], true), ['writer', 'group:Design']);
-  assert.deepEqual(c.assignGroup(['group:Design', 'not:ui-ux-designer', 'writer'], 'Design', ['product-designer', 'ui-ux-designer'], false), ['writer']);
+  assert.deepEqual(c.assignGroup(['product-designer', 'not:ui-ux-designer', 'chief-of-staff'], 'Design', ['product-designer', 'ui-ux-designer'], true), ['chief-of-staff', 'group:Design']);
+  assert.deepEqual(c.assignGroup(['group:Design', 'not:ui-ux-designer', 'chief-of-staff'], 'Design', ['product-designer', 'ui-ux-designer'], false), ['chief-of-staff']);
 });
 
 test('a tool runs on its own only when a trusted server marks it read-only, unless you say otherwise', () => {
@@ -70,7 +70,7 @@ test('the tool budget leaves out whole connectors from the end', () => {
 
 test('everyone: every core coworker, every department and your chats', () => {
   const all = c.everyone();
-  assert.ok(all.includes('writer') && all.includes('receptionist') && all.includes('chats'));
+  assert.ok(all.includes('chief-of-staff') && all.includes('receptionist') && all.includes('chats'));
   for (const g of SPECIALIST_GROUPS) assert.ok(all.includes(`group:${g}`));
 });
 

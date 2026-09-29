@@ -119,7 +119,7 @@
     "site": "https://www.notion.com",
     "url": "https://mcp.notion.com/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management"]
   },
   {
@@ -130,7 +130,7 @@
     "site": "https://www.atlassian.com",
     "url": "https://mcp.atlassian.com/v1/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management", "Engineering Management"]
   },
   {
@@ -143,7 +143,7 @@
     "auth": "oauth-app",
     "clientIdEnv": "AXON_ASANA_CLIENT_ID",
     "clientSecretEnv": "AXON_ASANA_CLIENT_SECRET",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management"]
   },
   {
@@ -154,7 +154,7 @@
     "site": "https://monday.com",
     "url": "https://mcp.monday.com/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management"]
   },
   {
@@ -165,7 +165,7 @@
     "site": "https://clickup.com",
     "url": "https://mcp.clickup.com/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management"]
   },
   {
@@ -187,7 +187,7 @@
     "site": "https://airtable.com",
     "url": "https://mcp.airtable.com/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "writer", "business-analyst"],
+    "defaultCoworkers": ["product-coach", "ops-coordinator", "knowledge-librarian", "chief-of-staff", "business-analyst"],
     "defaultGroups": ["Product Management", "Project Management", "Operations Management"]
   },
   {
@@ -200,7 +200,7 @@
     "auth": "oauth-app",
     "clientIdEnv": "AXON_BOX_CLIENT_ID",
     "clientSecretEnv": "AXON_BOX_CLIENT_SECRET",
-    "defaultCoworkers": ["knowledge-librarian", "research-analyst", "writer"],
+    "defaultCoworkers": ["knowledge-librarian", "research-analyst", "chief-of-staff"],
     "defaultGroups": []
   },
   {
@@ -246,7 +246,7 @@
     "auth": "oauth-app",
     "clientIdEnv": "AXON_SLACK_CLIENT_ID",
     "clientSecretEnv": "AXON_SLACK_CLIENT_SECRET",
-    "defaultCoworkers": ["ops-coordinator", "marketing-strategist"],
+    "defaultCoworkers": ["ops-coordinator", "marketing-strategist", "chief-of-staff"],
     "defaultGroups": ["Sales Management", "Marketing Management", "Customer Success"]
   },
   {
@@ -259,7 +259,7 @@
     "auth": "oauth-app",
     "preview": true,
     "accountApp": "google",
-    "defaultCoworkers": ["receptionist"],
+    "defaultCoworkers": ["receptionist", "chief-of-staff"],
     "defaultGroups": []
   },
   {
@@ -272,7 +272,7 @@
     "auth": "oauth-app",
     "preview": true,
     "accountApp": "google",
-    "defaultCoworkers": ["receptionist"],
+    "defaultCoworkers": ["receptionist", "chief-of-staff"],
     "defaultGroups": []
   },
   {
@@ -285,7 +285,7 @@
     "auth": "oauth-app",
     "preview": true,
     "accountApp": "google",
-    "defaultCoworkers": ["knowledge-librarian", "research-analyst", "writer"],
+    "defaultCoworkers": ["knowledge-librarian", "research-analyst", "chief-of-staff"],
     "defaultGroups": []
   },
   {

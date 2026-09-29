@@ -91,7 +91,7 @@ test('no records for the receptionist or for chats without a coworker', () => {
 
 test('interrupted runs need attention; help records open and close', () => {
   const { state, tracker } = setup();
-  tracker.runStarted({ id: 'c1', agentId: 'writer' }, 'Draft');
+  tracker.runStarted({ id: 'c1', agentId: 'chief-of-staff' }, 'Draft');
   tracker.interrupted();
   assert.equal(state.tasks[0].status, 'attention');
   assert.equal(state.tasks[0].note, 'Interrupted');

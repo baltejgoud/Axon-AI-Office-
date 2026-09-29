@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -9,6 +9,10 @@ import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
+import { ContextMeter } from '../../../chat/ContextMeter';
+
+/** The tallest the message box grows as you type before it scrolls. */
+const MAX_BOX = 160;
 
 interface AgentComposerProps {
   agentId: string;
@@ -23,6 +27,15 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<{ id: string; name: string }[]>([]);
   const [sending, setSending] = useState(false);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  // The box starts at one line and grows with what you type.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_BOX)}px`;
+  }, [input]);
 
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
   const runtime = agentRuntime[agentId];
@@ -61,6 +74,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     if (!textToSend || isBusy || !agent) return;
 
     setSending(true);
+    // The answer arrives in the chat, so that is where the panel goes.
+    useOfficeStore.getState().setPanelTab('chat');
     useOfficeStore.getState().setLastResponse(agentId, '');
     setAgentTask(agentId, textToSend);
     setAgentStatus(agentId, 'working');
@@ -148,27 +163,6 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
   return (
     <div className="activity-composer">
-      <div className="composer-recipient">
-        <span className={`status-dot-sm ${isBusy ? 'working' : ''}`} />
-        Message {agent?.name}
-        {agentId !== RECEPTIONIST_ID &&
-          (folder ? (
-            <span className="composer-folder" title={`They can read and change files in ${folder}`}>
-              <IconFolder size={12} />
-              in {baseName(folder)}
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="composer-folder is-none"
-              title="Open a folder in the Files room"
-              onClick={() => useOfficeStore.getState().flyToAgent('files-agent')}
-            >
-              <IconFolder size={12} />
-              Open a project for them to work in
-            </button>
-          ))}
-      </div>
       {noTools && (
         <p className="composer-notice" role="note">
           This model can’t use tools, so I can’t keep your planner. Pick another model.
@@ -208,9 +202,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
       <div className="composer-input-wrapper">
         <textarea
+          ref={box}
           aria-label={`Give ${agent?.name ?? 'this agent'} a task`}
           className="composer-textarea"
-          rows={2}
+          rows={1}
           placeholder={`Give ${agent?.name || 'this agent'} a task...`}
           value={input}
           disabled={isBusy}
@@ -240,28 +235,53 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             onManage={() => useOfficeStore.getState().openOverlay('settings')}
           />
 
-          <span className="composer-hint">Shift+Enter for a new line</span>
+          {agentId !== RECEPTIONIST_ID &&
+            (folder ? (
+              <span className="composer-folder" title={`They can read and change files in ${folder}`}>
+                <IconFolder size={12} />
+                <span>{baseName(folder)}</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="composer-folder is-none"
+                title="Open a folder in the Files room for them to work in"
+                onClick={() => {
+                  useOfficeStore.getState().flyToAgent('files-agent');
+                  useOfficeStore.getState().setPanelTab('files');
+                }}
+              >
+                <IconFolder size={12} />
+                <span>Open a project</span>
+              </button>
+            ))}
 
-          {needsModel ? (
-            <button
-              type="button"
-              className="composer-connect"
-              onClick={() => useOfficeStore.getState().openOverlay('settings')}
-            >
-              Connect a model
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="composer-btn-send"
-              title="Send task (Enter)"
-              aria-label="Send task"
-              disabled={!input.trim() || isBusy}
-              onClick={() => void handleSend()}
-            >
-              <IconSend size={15} />
-            </button>
-          )}
+          {conversation && <ContextMeter key={conversation.id} conversation={conversation} />}
+
+          <span className="composer-end">
+            <span className="composer-hint">Shift+Enter for a new line</span>
+
+            {needsModel ? (
+              <button
+                type="button"
+                className="composer-connect"
+                onClick={() => useOfficeStore.getState().openOverlay('settings')}
+              >
+                Connect a model
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="composer-btn-send"
+                title="Send task (Enter)"
+                aria-label="Send task"
+                disabled={!input.trim() || isBusy}
+                onClick={() => void handleSend()}
+              >
+                <IconSend size={15} />
+              </button>
+            )}
+          </span>
         </div>
       </div>
     </div>

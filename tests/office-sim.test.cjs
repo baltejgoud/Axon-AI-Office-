@@ -299,12 +299,12 @@ test('a task from the lounge: she stands up first, then walks to her desk', () =
 });
 
 test('the office opens mid-task at the desk, and does not replay a finished task', () => {
-  const office = new OfficeSimulation({ agentIds: ['writer', 'designer'], seed: 1 });
-  office.setTaskStatus('writer', 'working');
+  const office = new OfficeSimulation({ agentIds: ['chief-of-staff', 'designer'], seed: 1 });
+  office.setTaskStatus('chief-of-staff', 'working');
   office.setTaskStatus('designer', 'completed');
   office.step(1 / 60);
-  assert.equal(office.view('writer').poiId, 'desk-writer');
-  assert.equal(office.screenState('desk-writer'), 'active');
+  assert.equal(office.view('chief-of-staff').poiId, 'desk-chief');
+  assert.equal(office.screenState('desk-chief'), 'active');
   assert.notEqual(office.view('designer').behavior, 'celebrating');
 });
 
@@ -431,9 +431,9 @@ test('reduced motion keeps everyone at their desks; work still starts', () => {
     for (const view of o.views())
       assert.notEqual(view.behavior, 'walking', `${view.id} walked under reduced motion`);
   });
-  office.setTaskStatus('writer', 'working');
+  office.setTaskStatus('chief-of-staff', 'working');
   office.step(1 / 10);
-  assert.equal(office.screenState('desk-writer'), 'active');
+  assert.equal(office.screenState('desk-chief'), 'active');
 });
 
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
@@ -586,9 +586,9 @@ test('gaming break: a coworker takes a bean bag with a controller, and a friend 
   settle(office, ALL);
   for (const id of ALL) office.requestActivity(id, 'desk');
   run(office, 20, 0.1);
-  assert.ok(office.requestActivity('writer', 'gaming'));
-  runUntil(office, (o) => o.view('writer').behavior === 'gaming', 120, 0.05);
-  const writer = office.view('writer');
+  assert.ok(office.requestActivity('chief-of-staff', 'gaming'));
+  runUntil(office, (o) => o.view('chief-of-staff').behavior === 'gaming', 120, 0.05);
+  const writer = office.view('chief-of-staff');
   assert.equal(writer.behavior, 'gaming');
   assert.ok(GAME_SEATS.includes(writer.poiId));
   assert.equal(writer.sit, 1);
@@ -603,7 +603,7 @@ test('gaming break: a coworker takes a bean bag with a controller, and a friend 
 test('gaming break: only when a seat is free, never during a task, and everyone goes back to their desk', () => {
   const office = new OfficeSimulation({ agentIds: ALL, seed: 4 });
   settle(office, ALL);
-  assert.ok(office.requestActivity('writer', 'gaming'));
+  assert.ok(office.requestActivity('chief-of-staff', 'gaming'));
   assert.ok(office.requestActivity('designer', 'gaming') || office.views().filter((v) => v.poiId && GAME_SEATS.includes(v.poiId)).length <= 2);
   runUntil(office, (o) => GAME_SEATS.every((seat) => o.occupantsOf(seat).length === 1), 150, 0.05);
   const taken = GAME_SEATS.map((seat) => office.occupantsOf(seat)[0]);

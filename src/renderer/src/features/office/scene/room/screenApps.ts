@@ -88,7 +88,7 @@ const DEPARTMENT_APPS: Readonly<Record<string, ScreenPair>> = {
 const CORE_APPS: Readonly<Record<string, ScreenPair>> = {
   receptionist: { main: 'calendar', second: null },
   'research-analyst': { main: 'document', second: 'browser' },
-  writer: { main: 'document', second: 'browser' },
+  'chief-of-staff': { main: 'slides', second: 'email' },
   'knowledge-librarian': { main: 'document', second: 'browser' },
   designer: { main: 'design', second: 'moodboard' },
   'product-coach': { main: 'kanban', second: 'roadmap' },

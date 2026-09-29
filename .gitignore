@@ -20,3 +20,7 @@ design-system/**/pages/
 # OS
 .DS_Store
 Thumbs.db
+
+# Google OAuth client files (contain a client secret)
+client_secret_*.json
+brag-output/

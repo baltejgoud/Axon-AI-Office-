@@ -1,9 +1,11 @@
-/* The conversation's header strip: context meter and cost, above the scrolling thread. */
+/*
+ * A chip beside the message box: context meter and cost. Its details open above the message box,
+ * which positions them, so they never run off a narrow panel.
+ */
 .context-meter {
   --meter-fill: var(--office-blue);
   flex: none;
-  border-bottom: 1px solid var(--office-border);
-  background: var(--office-paper);
+  min-width: 0;
 }
 /* The fill carries how full it is; the track is a lighter step of the same hue, so the state reads across the bar. */
 .context-meter.tone-high {
@@ -15,31 +17,34 @@
 .context-meter-summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 18px;
-  border: 0;
-  background: none;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--office-border);
+  border-radius: 999px;
+  background: var(--office-paper);
   color: var(--office-muted);
   font: inherit;
-  font-size: 12px;
-  text-align: left;
+  font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
 }
-.context-meter-summary:hover {
-  background: var(--office-soft);
+.context-meter-summary:hover,
+.context-meter-summary[aria-expanded='true'] {
+  border-color: var(--office-muted);
+  color: var(--office-ink);
 }
 .context-meter-summary:focus-visible {
   outline: 2px solid var(--office-blue);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 .context-meter-bar {
   flex: none;
-  width: 88px;
-  height: 6px;
+  width: 26px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--meter-fill) 16%, transparent);
+  background: color-mix(in srgb, var(--meter-fill) 18%, transparent);
 }
 .context-meter-bar > span {
   display: block;
@@ -48,34 +53,54 @@
   background: var(--meter-fill);
   transition: width 0.3s ease;
 }
-/* Numbers that tick while a reply streams keep their width, so the strip doesn't jitter. */
+/* Numbers that tick while a reply streams keep their width, so the chip doesn't jitter. */
 .context-meter-pct,
 .context-meter-cost {
   color: var(--office-ink);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 .context-meter-pct {
   font-weight: 600;
 }
+.context-meter-word {
+  font-weight: 400;
+  color: var(--office-muted);
+}
 .context-meter.tone-full .context-meter-pct {
   color: var(--danger-text);
 }
-.context-meter-cost {
-  margin-left: auto;
+.context-meter-cost::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--office-muted);
 }
-.context-meter-live,
+.context-meter-cost.is-live {
+  animation: office-pulse 1.5s infinite;
+}
 .context-meter-note {
   color: var(--office-muted);
 }
 .context-meter-details {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 8px);
+  left: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 2px 18px 12px;
+  width: 100%;
+  max-width: 380px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: var(--office-paper);
+  box-shadow: 0 18px 40px #1b2c4a24;
   font-size: 12px;
   line-height: 1.5;
+  white-space: normal;
   color: var(--office-ink);
+  animation: office-pop 0.14s ease-out;
 }
 .context-meter-details h5 {
   margin: 0 0 2px;

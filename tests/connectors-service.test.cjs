@@ -105,9 +105,9 @@ test('saving keeps a server in its place, accepts HTTP, and refuses plain HTTP e
   const base = { transport: 'http', enabled: true, args: [], env: {}, headers: {} };
   await service.mcpServerSave({ ...base, id: 'a', name: 'A', url: 'https://a.example/mcp' });
   await service.mcpServerSave({ ...base, id: 'b', name: 'B', url: 'https://b.example/mcp' });
-  await service.mcpServerSave({ ...base, id: 'a', name: 'A2', url: 'https://a.example/mcp', coworkers: ['writer'], toolPolicy: { x: 'off', y: 'bogus' }, trustAnnotations: true });
+  await service.mcpServerSave({ ...base, id: 'a', name: 'A2', url: 'https://a.example/mcp', coworkers: ['chief-of-staff'], toolPolicy: { x: 'off', y: 'bogus' }, trustAnnotations: true });
   assert.deepEqual(repo.state.mcpServers.map((s) => s.name), ['A2', 'B']);
-  assert.deepEqual(repo.state.mcpServers[0].coworkers, ['writer']);
+  assert.deepEqual(repo.state.mcpServers[0].coworkers, ['chief-of-staff']);
   assert.deepEqual(repo.state.mcpServers[0].toolPolicy, { x: 'off' });
   assert.equal(repo.state.mcpServers[0].trustAnnotations, true);
   assert.deepEqual(repo.state.mcpServers[1].coworkers, ['chats']);
@@ -124,7 +124,7 @@ test('servers saved by older builds keep their reach: everyone', (t) => {
   fs.writeFileSync(path.join(dir, 'db', 'platform-v1.json'), JSON.stringify(state));
   const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
   const coworkers = repo.state.mcpServers[0].coworkers;
-  assert.ok(coworkers.includes('chats') && coworkers.includes('writer') && coworkers.includes('group:Design'));
+  assert.ok(coworkers.includes('chats') && coworkers.includes('chief-of-staff') && coworkers.includes('group:Design'));
 });
 
 const providers = require('../src/main/providers.ts');
@@ -160,14 +160,14 @@ test('the permission rule: off denies (even after always-allow), allow and ask p
 });
 
 test('toolsFor adds connector tools without a folder', () => {
-  const names = toolsFor({ agentId: 'writer', hasFolder: false, registry: [{ name: 'read_file' }], connectorTools: [{ name: 'mcp_notes_search' }] }).map((t) => t.name);
+  const names = toolsFor({ agentId: 'chief-of-staff', hasFolder: false, registry: [{ name: 'read_file' }], connectorTools: [{ name: 'mcp_notes_search' }] }).map((t) => t.name);
   assert.deepEqual(names, ['ask_colleague', 'mcp_notes_search']);
 });
 
 test("a coworker gets their own connectors: reads run, changes ask, and others' tools are refused", async (t) => {
   const { repo, service, events } = makeService(t);
   addProvider(repo);
-  const calls = connect(service, repo, { id: 's1', name: 'Notes', catalogId: 'notion', coworkers: ['writer'] }, notesTools);
+  const calls = connect(service, repo, { id: 's1', name: 'Notes', catalogId: 'notion', coworkers: ['chief-of-staff'] }, notesTools);
   const seen = [];
   let step = 0;
   mockModel(t, async (_p, _k, req, onChunk) => {
@@ -178,7 +178,7 @@ test("a coworker gets their own connectors: reads run, changes ask, and others' 
     onChunk('done');
     return { toolCalls: [] };
   });
-  const chat = await service.chatCreate('p1', 'm1', null, 'writer', { skillIds: [], roleIds: [] }, null, 'You are the Writer.');
+  const chat = await service.chatCreate('p1', 'm1', null, 'chief-of-staff', { skillIds: [], roleIds: [] }, null, 'You are the Writer.');
   const run = service.chatSend(chat.id, 'Find it and write it up', []);
   // The write asks: approve it when the card appears.
   for (let i = 0; i < 200 && !events.some((e) => e.approvalRequired); i++) await new Promise((r) => setTimeout(r, 10));

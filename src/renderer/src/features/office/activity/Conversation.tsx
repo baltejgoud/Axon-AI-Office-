@@ -28,7 +28,8 @@ export function Conversation({
   agentName,
   conversation,
   pendingTask,
-  working
+  working,
+  shown: visible = true
 }: {
   agentName: string;
   conversation: Thread | undefined;
@@ -36,6 +37,8 @@ export function Conversation({
   pendingTask?: string;
   /** The coworker is working on this thread now. */
   working: boolean;
+  /** The chat tab is showing; coming back to it picks up at the newest message again. */
+  shown?: boolean;
 }) {
   const allMessages = useApp((s) => s.data?.messages);
   const approvals = useApp((s) => s.pendingApprovals);
@@ -89,8 +92,8 @@ export function Conversation({
 
   const progress = shown.map((m) => m.content.length + (m.toolCalls?.length ?? 0)).join(',');
   useEffect(() => {
-    if (follow.current) end.current?.scrollIntoView({ block: 'end' });
-  }, [progress, pending]);
+    if (visible && follow.current) end.current?.scrollIntoView({ block: 'end' });
+  }, [progress, pending, visible]);
 
   useEffect(() => {
     const scroller = end.current?.closest<HTMLElement>('.activity-body');

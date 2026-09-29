@@ -18,7 +18,7 @@ const temp = (t) => {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 };
-const writer = { kind: 'coworker', id: 'writer', name: 'Writer' };
+const writer = { kind: 'coworker', id: 'chief-of-staff', name: 'Chief of Staff' };
 const call = (extra = {}) => ({ actor: writer, tool: 'read_file', subject: 'a.txt', decision: 'allowed', result: 'ok', ...extra });
 
 test('entries come back newest first, and survive a restart', async (t) => {

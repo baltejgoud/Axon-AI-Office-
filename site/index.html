@@ -1,0 +1,1887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Axon — Your AI has an office now</title>
+<meta name="description" content="Axon is a desktop app where your AI isn't a chat box but an office of coworkers: they work side by side in your project, on the models you choose, with the tools you connect, and ask before anything is saved.">
+<meta name="theme-color" content="#07080a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:'Inter';src:url(fonts/inter-latin-wght-normal.woff2) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+:root{
+  --bg:#07080a;--bg-2:#0c0e12;--line:rgba(255,255,255,.1);--line-2:rgba(255,255,255,.18);
+  --text:#f3f5fa;--muted:rgba(226,232,244,.64);--faint:rgba(226,232,244,.4);
+  --blue:#3867f6;--blue-soft:#8ba5ff;--green:#22c55e;--amber:#fbbf24;
+  --ink:#16233b;--ink-muted:#67758e;--paper-line:#dfe6f1;
+  --gutter:clamp(18px,1.95vw,28px);--gutter-y:clamp(18px,3.1vh,28px);--pad:clamp(18px,5vw,72px);
+  --display:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+  --ease:cubic-bezier(.22,1,.36,1);--ease-out:cubic-bezier(.16,1,.3,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body.is-locked{overflow:hidden}
+a{color:inherit}
+button{font:inherit;color:inherit}
+img,video,canvas{display:block}
+::selection{background:var(--blue);color:#fff}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+:focus-visible{outline:2px solid var(--blue-soft);outline-offset:3px}
+
+/* ---------------------------------------------------------------- chrome shared by the whole page */
+.progress{position:fixed;z-index:40;left:0;top:0;width:100%;height:2px;transform-origin:0 50%;transform:scaleX(var(--p,0));background:linear-gradient(90deg,var(--blue),var(--blue-soft));pointer-events:none}
+.header-bar{position:fixed;z-index:28;inset:0 0 auto;height:96px;background:linear-gradient(to bottom,rgba(7,8,10,.92),rgba(7,8,10,.6) 55%,rgba(7,8,10,0));opacity:0;transition:opacity .5s ease;pointer-events:none}
+body.is-scrolled .header-bar{opacity:1}
+.brand{position:fixed;z-index:33;left:var(--gutter);top:var(--gutter-y);height:42px;display:flex;align-items:center;font-size:26px;font-weight:750;letter-spacing:-.045em;color:#fff;text-decoration:none;transform-origin:50% 50%;transition:transform 2s var(--ease-out)}
+.brand .dot{color:var(--blue)}
+.brand.is-centered{transform:translate(var(--dx,0),var(--dy,0)) scale(var(--s,1));transition:none}
+body:not(.preload-complete) .brand{pointer-events:none}
+.header{position:fixed;z-index:32;top:var(--gutter-y);right:var(--gutter);display:flex;align-items:center;gap:10px}
+.nav{display:flex;align-items:center;height:42px;padding:4px 5px;border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-radius:999px}
+.nav a{padding:9px 17px;border-radius:999px;color:#fff;text-decoration:none;font-size:14px;line-height:1;transition:background .35s var(--ease),color .35s var(--ease)}
+.nav a:hover{background:rgba(255,255,255,.12)}
+.nav a.active{background:#fff;color:#000}
+.cta{display:inline-flex;align-items:center;gap:9px;height:42px;padding:0 20px 0 16px;border:0;border-radius:999px;background:#fff;color:#000;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
+.cta svg{width:18px;height:18px}
+.cta.ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.3);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cta.big{height:54px;padding:0 26px 0 20px;font-size:16px}
+[data-magnetic]{transition:transform .5s var(--ease)}
+[data-magnetic].is-pulling{transition:transform .12s linear}
+
+/* ---------------------------------------------------------------- hero */
+.hero{position:relative;height:100vh;height:100svh;min-height:560px;overflow:hidden;background:#050506;isolation:isolate}
+.backgrounds,.background,.dim,.preloader,.preloader video,.portal-canvas{position:absolute;inset:0;width:100%;height:100%}
+.background{object-fit:cover;opacity:0;transition:opacity .8s ease}
+.background.is-visible{opacity:1}
+.hero.is-committing .background{transition:none}
+.preloader{z-index:20;background:#000;transition:opacity .6s ease,visibility 0s linear .6s}
+.preloader video{object-fit:cover;opacity:0;transition:opacity 1.1s ease}
+.preloader.is-playing video,.preloader.is-background video{opacity:1}
+.preloader::after{content:'';position:absolute;inset:0;background:rgba(5,6,8,.48);transition:opacity 1.4s ease}
+.preloader-shade{position:absolute;z-index:1;inset:auto 0 0;height:35%;background:linear-gradient(to bottom,transparent,#000);transition:opacity .8s ease}
+.preloader.is-background{z-index:0}
+.preloader.is-background .preloader-shade,.preloader.is-background::after{opacity:0}
+.brand.is-centered{text-shadow:0 8px 40px rgba(0,0,0,.45)}
+.preloader.is-gone{opacity:0;visibility:hidden}
+.dim{z-index:1;pointer-events:none;background:
+  radial-gradient(ellipse 360px 190px at 0 0,rgba(5,6,8,.9),rgba(5,6,8,0)),
+  linear-gradient(to bottom,rgba(5,6,8,.62) 0%,rgba(5,6,8,0) 24%),
+  linear-gradient(to bottom,rgba(5,6,8,0) 46%,rgba(5,6,8,.93) 100%),
+  rgba(7,8,11,.6);transition:opacity 1.4s ease}
+body:not(.preload-complete) .dim{opacity:0}
+.hero.is-lit .dim{opacity:0;transition:none}
+.portal-canvas{z-index:3;pointer-events:none}
+.top-shade{position:absolute;z-index:5;inset:0 0 auto;height:150px;background:linear-gradient(to bottom,rgba(5,6,8,.72),rgba(5,6,8,0));opacity:0;transition:opacity .6s ease;pointer-events:none}
+.hero.is-transitioning .top-shade{opacity:1}
+.chrome{position:absolute;z-index:4;transition:opacity .45s ease,filter .45s ease}
+.hero.is-transitioning .chrome{opacity:0;filter:blur(8px);pointer-events:none}
+
+.preloader-count{position:fixed;z-index:34;left:50%;bottom:clamp(22px,3.1vh,28px);display:flex;align-items:flex-end;gap:4px;transform:translateX(-50%);line-height:1;pointer-events:none}
+.preloader-count>span:first-child{font-size:64px;font-weight:150;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.preloader-count .percent{font-size:24px;padding-bottom:5px}
+.preloader-count.is-leaving{animation:preload-count-out .75s var(--ease) both}
+@keyframes preload-count-out{to{opacity:0;filter:blur(7px);transform:translate(-50%,-34px)}}
+
+.stop-list{left:var(--gutter);top:50%;transform:translateY(-43%);display:flex;flex-direction:column;gap:9px;font-size:15px}
+.stop-item{display:flex;align-items:center;gap:10px;min-height:22px;color:rgba(255,255,255,.62)}
+.stop-num{font-size:11px;letter-spacing:.08em;font-variant-numeric:tabular-nums;opacity:.7;width:16px}
+.stop-item.active{color:#fff;font-size:17px;font-weight:700}
+.stop-item.active .stop-num{display:none}
+.stop-item.active::before{content:'';width:14px;height:14px;margin-right:2px;border-radius:50%;background:#fff;box-shadow:0 0 0 5px rgba(56,103,246,.38)}
+
+.scroll-cue{right:var(--gutter);top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:14px;color:rgba(255,255,255,.66);text-decoration:none;font-size:11px;letter-spacing:.24em;text-transform:uppercase}
+.scroll-cue span{writing-mode:vertical-rl}
+.scroll-cue::after{content:'';width:1px;height:64px;background:linear-gradient(to bottom,rgba(255,255,255,.8),rgba(255,255,255,0));transform-origin:top;animation:cue 2.4s var(--ease) infinite}
+@keyframes cue{0%{transform:scaleY(0);opacity:1}60%{transform:scaleY(1);opacity:1}100%{transform:scaleY(1);opacity:0}}
+
+.portal-wrap{left:50%;top:50%;width:min(320px,31vw);transform:translate(-50%,-54%)}
+.portal-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:15px;opacity:0}
+.portal-heading strong{font-size:18px;margin-left:6px}
+.portal{position:relative;display:block;width:100%;aspect-ratio:320/350;padding:0;border:0;border-radius:90px;background:transparent;cursor:pointer}
+.portal:focus-visible{outline:2px solid #fff;outline-offset:8px}
+.portal-hint{display:none;margin-top:12px;text-align:center;font-size:13px;color:rgba(255,255,255,.7);opacity:0}
+
+.hero-content{left:clamp(28px,4vw,58px);right:clamp(28px,3vw,44px);bottom:clamp(24px,3vh,30px);display:flex;justify-content:space-between;align-items:flex-end;gap:40px}
+.hero-heading{min-width:0}
+.hero-kicker{margin:0 0 12px 4px;font-size:clamp(15px,1.2vw,18px);font-weight:500;color:rgba(255,255,255,.86);opacity:0}
+.hero-content h1{margin:0 0 -.07em;font-family:var(--display);font-weight:400;font-size:min(clamp(128px,21.8vw,314px),30vh);line-height:.8;letter-spacing:.005em;white-space:nowrap;opacity:0}
+.hero-content dl{width:min(447px,34vw);margin:0;font-size:15.5px;flex:none}
+.fact{display:grid;grid-template-columns:128px 1fr;gap:18px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.34);opacity:0}
+.fact:last-child{border-bottom:0}
+.fact dt{font-weight:700}
+.fact dd{margin:0;color:rgba(255,255,255,.86);line-height:1.4}
+
+.travel-caption{position:absolute;z-index:6;left:50%;bottom:clamp(28px,7vh,64px);max-width:calc(100% - 36px);padding:11px 20px;border-radius:999px;background:rgba(8,10,14,.5);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);font-size:16px;font-weight:550;letter-spacing:-.01em;white-space:nowrap;opacity:0;transform:translate(-50%,12px);filter:blur(6px);transition:opacity .35s ease,transform .5s var(--ease),filter .35s ease;pointer-events:none}
+.travel-caption.is-on{opacity:1;transform:translate(-50%,0);filter:blur(0)}
+.loading{position:absolute;z-index:12;left:50%;bottom:30px;transform:translateX(-50%);opacity:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;transition:opacity .2s;pointer-events:none}
+.hero.is-loading .loading{opacity:.8}
+
+body:not(.intro-ready) .header,body:not(.intro-ready) .stop-list,body:not(.intro-ready) .scroll-cue{opacity:0}
+.intro-ready .header{animation:reveal-down .9s var(--ease) .1s both}
+.intro-ready .stop-list{animation:reveal-side .9s var(--ease) .65s both}
+.intro-ready .scroll-cue{animation:reveal-fade 1.2s var(--ease) 1.2s both}
+.hero.content-revealing .hero-kicker{animation:fact-rise .8s var(--ease) .15s both}
+.hero.content-revealing h1{animation:title-rise 1.05s var(--ease-out) both}
+.hero.content-revealing .fact{animation:fact-rise .72s var(--ease) both}
+.hero.content-revealing .fact:nth-child(1){animation-delay:.52s}
+.hero.content-revealing .fact:nth-child(2){animation-delay:.68s}
+.hero.content-revealing .fact:nth-child(3){animation-delay:.84s}
+.hero.content-revealing .fact:nth-child(4){animation-delay:1s}
+.hero.mask-revealing .portal-heading,.hero.mask-revealing .portal-hint{animation:portal-caption .85s var(--ease) both}
+.stop-list.is-switching .stop-item{animation:menu-row .58s var(--ease) both}
+.stop-list.is-switching .stop-item:nth-child(2){animation-delay:.05s}
+.stop-list.is-switching .stop-item:nth-child(3){animation-delay:.08s}
+.stop-list.is-switching .stop-item:nth-child(4){animation-delay:.11s}
+.stop-list.is-switching .stop-item.active::before{animation:active-dot .55s var(--ease) .18s both}
+@keyframes reveal-down{from{opacity:0;filter:blur(8px);transform:translateY(-18px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+@keyframes reveal-side{from{opacity:0;filter:blur(8px);transform:translate(-20px,-43%)}to{opacity:1;filter:blur(0);transform:translate(0,-43%)}}
+@keyframes reveal-fade{from{opacity:0}to{opacity:1}}
+@keyframes title-rise{from{opacity:0;filter:blur(12px);transform:translateY(42px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+@keyframes fact-rise{from{opacity:0;filter:blur(7px);transform:translateY(18px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+@keyframes portal-caption{from{opacity:0;filter:blur(7px);transform:translateY(22px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+@keyframes menu-row{from{opacity:.35;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+@keyframes active-dot{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+
+/* ---------------------------------------------------------------- story, shared */
+.section{position:relative;padding:clamp(96px,15vh,170px) var(--pad)}
+.wrap{max-width:1280px;margin:0 auto}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;margin:0 0 22px;font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.eyebrow::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(56,103,246,.22)}
+.h2{margin:0;font-size:clamp(40px,6vw,92px);font-weight:720;line-height:.98;letter-spacing:-.048em}
+.lead{max-width:560px;margin:24px 0 0;font-size:clamp(16px,1.3vw,19px);line-height:1.55;color:var(--muted)}
+[data-reveal]{opacity:0;filter:blur(10px);transform:translateY(44px);transition:opacity 1s var(--ease),filter 1s var(--ease),transform 1.1s var(--ease);transition-delay:var(--d,0s)}
+[data-reveal].is-in{opacity:1;filter:blur(0);transform:none}
+/* Headings: each word rises with the scroll position (set per word in JS), not once on a timer. */
+.split .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
+.split .w>span{display:inline-block;transform:translateY(var(--wy,108%)) rotate(var(--wr,0deg));transform-origin:0 100%;transition:transform .35s var(--ease-out)}
+
+/* about statement */
+.statement{max-width:1180px;margin:0;font-size:clamp(28px,4.3vw,66px);font-weight:620;line-height:1.1;letter-spacing:-.035em}
+.statement .sw{opacity:.14;transition:opacity .3s ease,color .3s ease}
+.statement .sw.on{opacity:1}
+.statement .sw.hl.on{color:var(--blue-soft)}
+
+/* work scrub */
+.scrub{position:relative;height:420vh}
+.scrub-sticky{position:sticky;top:0;height:100vh;height:100svh;display:grid;grid-template-columns:minmax(280px,.78fr) 2fr;gap:clamp(28px,4vw,64px);align-items:center;max-width:1560px;margin:0 auto;padding:92px var(--pad) 40px}
+.scrub .h2{font-size:clamp(36px,3.7vw,62px)}
+.scrub-media{position:relative;aspect-ratio:16/9;border-radius:22px;overflow:hidden;background:#0d1016;border:1px solid var(--line-2);box-shadow:0 50px 140px -40px rgba(56,103,246,.45),0 30px 60px -30px rgba(0,0,0,.8)}
+.scrub-media video,.scrub-media img{width:100%;height:100%;object-fit:cover}
+.media-chip{position:absolute;left:14px;top:14px;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:rgba(10,14,22,.72);color:#fff;font-size:12px;font-weight:550;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.media-chip::before{content:'';width:7px;height:7px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25);animation:rec 1.6s ease-in-out infinite}
+@keyframes rec{50%{opacity:.35}}
+.scrub-time{position:absolute;right:14px;bottom:14px;padding:6px 10px;border-radius:8px;background:rgba(10,14,22,.72);font-size:12px;font-variant-numeric:tabular-nums;color:#fff}
+.steps{list-style:none;margin:30px 0 0;padding:0;display:grid;gap:4px}
+.step{position:relative;padding:12px 0 12px 24px;opacity:.36;transition:opacity .45s ease}
+.step::before,.step::after{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:rgba(255,255,255,.14)}
+.step::after{background:var(--blue);transform-origin:top;transform:scaleY(var(--p,0))}
+.step.active,.step.done{opacity:1}
+.step.done{opacity:.62}
+.step h3{margin:0;font-size:18px;font-weight:650;letter-spacing:-.015em}
+.step h3 span{margin-right:10px;font-size:12px;font-weight:600;color:var(--faint);font-variant-numeric:tabular-nums}
+.step p{margin:0;max-height:0;overflow:hidden;font-size:15px;line-height:1.5;color:var(--muted);transition:max-height .55s var(--ease),margin .55s var(--ease)}
+.step.active p{max-height:90px;margin-top:6px}
+
+/* approval */
+.approval{display:grid;grid-template-columns:1fr 1.08fr;gap:clamp(36px,5vw,84px);align-items:center}
+.approval>*,.office-grid>*{min-width:0}
+.trust{list-style:none;margin:36px 0 0;padding:0;display:grid;gap:16px}
+.trust li{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;font-size:15.5px;line-height:1.5;color:var(--muted)}
+.trust li b{color:#fff;font-weight:600}
+.trust .ic{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:rgba(56,103,246,.14);border:1px solid rgba(56,103,246,.3);color:var(--blue-soft)}
+.trust .ic svg{width:17px;height:17px}
+.demo{position:relative;padding:20px;border-radius:24px;background:linear-gradient(180deg,#f8fafd,#edf2fa);color:var(--ink);box-shadow:0 60px 140px -50px rgba(56,103,246,.55),0 0 0 1px rgba(255,255,255,.08);overflow:hidden}
+.demo-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.demo-person{display:flex;align-items:center;gap:12px;min-width:0}
+/* The Frontend Developer's own avatar, cropped from the app footage (review.jpg, 1920x1080). */
+.avatar{flex:none;width:42px;height:42px;border-radius:50%;background:#e8eef8 url(media/review.jpg) -640px -95px/1034px auto no-repeat;box-shadow:0 0 0 1px var(--paper-line)}
+.demo-person strong{display:block;font-size:15.5px}
+.demo-person span{font-size:13px;color:var(--ink-muted)}
+.pill{margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;background:#fff7e6;color:#9a5b00;border:1px solid #f6d69b;transition:background .4s,color .4s,border-color .4s}
+.pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.demo[data-state="waiting"] .pill::before{animation:rec 1.2s ease-in-out infinite}
+.demo[data-state="approved"] .pill{background:#e8f8ee;color:#15803d;border-color:#b6e8c8}
+.demo[data-state="rejected"] .pill{background:#fdecec;color:#b42318;border-color:#f5c2c0}
+.demo[data-state="undone"] .pill{background:#eef2f8;color:#475569;border-color:#d5deea}
+.demo-card{padding:16px;border-radius:16px;background:#fff;border:1px solid var(--paper-line);box-shadow:0 1px 2px rgba(22,35,59,.05)}
+.demo-title{display:flex;align-items:center;gap:9px;font-size:14.5px}
+.demo-title svg{width:17px;height:17px;flex:none;color:#d97706}
+.tool{margin-left:auto;padding:3px 8px;border-radius:6px;background:#e8f8ee;color:#15803d;font:600 11.5px ui-monospace,'Cascadia Code',Consolas,monospace}
+.demo-desc{margin:8px 0 12px;font-size:13.5px;line-height:1.5;color:var(--ink-muted)}
+.demo-desc code{font:12.5px ui-monospace,'Cascadia Code',Consolas,monospace;color:var(--ink)}
+.diff{border-radius:12px;background:#0f1729;color:#dbe4f5;padding:10px 0;font:12.5px/1.6 ui-monospace,'Cascadia Code',Consolas,monospace;overflow:hidden}
+.dl{display:grid;grid-template-columns:30px 30px 14px minmax(0,1fr);padding:0 12px 0 4px;white-space:pre;opacity:0;transform:translateY(6px);transition:opacity .4s ease,transform .5s var(--ease);transition-delay:calc(var(--i,0)*70ms)}
+.dl i{font-style:normal;text-align:right;padding-right:8px;color:#5b6b88}
+.dl b{font-weight:400;color:#8190ad}
+.dl span{overflow:hidden;text-overflow:ellipsis}
+.dl.meta,.dl.hunk{display:block;padding-left:16px;color:#7f8db0}
+.dl.hunk{color:#8ba5ff}
+.dl.add{background:rgba(34,197,94,.16)}
+.dl.add b,.dl.add span{color:#86efac}
+.dl.del{background:rgba(239,68,68,.18)}
+.dl.del b,.dl.del span{color:#fca5a5}
+.demo.is-running .dl,.demo[data-state]:not([data-state="idle"]) .dl{opacity:1;transform:none}
+.demo-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px;max-height:60px;transition:max-height .5s var(--ease),opacity .35s ease,margin .5s var(--ease)}
+.demo-actions button{height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--paper-line);background:#fff;color:var(--ink);font-size:13.5px;font-weight:550;cursor:pointer;transition:transform .15s ease,background .2s,box-shadow .2s}
+.demo-actions button:hover{background:#f3f6fb}
+.demo-actions .btn-approve{background:#16a34a;border-color:#16a34a;color:#fff;box-shadow:0 6px 18px -6px rgba(22,163,74,.7)}
+.demo-actions .btn-approve:hover{background:#15803d}
+.demo-actions button.is-pressed{transform:scale(.94)}
+.demo:not([data-state="waiting"]) .demo-actions{max-height:0;opacity:0;margin-top:0;pointer-events:none}
+.demo-result{display:grid;gap:10px;max-height:0;opacity:0;overflow:hidden;transition:max-height .6s var(--ease),opacity .45s ease,margin .6s var(--ease)}
+.demo:is([data-state="approved"],[data-state="rejected"],[data-state="undone"]) .demo-result{max-height:260px;opacity:1;margin-top:12px}
+.result-card{padding:13px 14px;border-radius:14px;background:#fff;border:1px solid var(--paper-line);font-size:13.5px}
+.result-card .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.result-card .file{font-weight:600}
+.result-card .path{color:var(--ink-muted)}
+.plus{color:#15803d;font-weight:600}.minus{color:#b42318;font-weight:600}
+.result-card .undo{margin-left:auto;height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--paper-line);background:#fff;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink)}
+.result-card .undo:hover{background:#f3f6fb}
+.result-title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:650}
+.result-title::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--dotc,#16a34a)}
+.log{display:block;padding:10px 14px;border-radius:12px;background:#0f1729;color:#c9d4ea;font:12px ui-monospace,'Cascadia Code',Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log em{font-style:normal;color:#86efac}
+.demo-cursor{position:absolute;left:0;top:0;z-index:5;width:26px;height:26px;opacity:0;transform:translate(var(--cx,70%),var(--cy,120%));transition:transform 1.15s cubic-bezier(.65,0,.35,1),opacity .3s ease;pointer-events:none;filter:drop-shadow(0 3px 5px rgba(22,35,59,.3))}
+.demo-cursor.is-on{opacity:1}
+.demo-cursor.is-down svg{transform:scale(.86)}
+.demo-cursor svg{width:100%;height:100%;transition:transform .12s ease}
+.demo-ring{position:absolute;z-index:4;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2px solid rgba(56,103,246,.7);opacity:0;pointer-events:none}
+.demo-ring.is-on{animation:ring .6s var(--ease) both}
+@keyframes ring{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(5)}}
+.demo-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;font-size:13.5px;color:var(--muted)}
+.replay{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:transparent;color:#fff;font-size:13px;cursor:pointer}
+.replay svg{width:14px;height:14px}
+
+/* office */
+.office-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:clamp(24px,4vw,56px);align-items:start;margin-top:72px}
+.map-col{position:sticky;top:110px}
+.map{position:relative;aspect-ratio:16/9;border-radius:24px;overflow:hidden;background:#eef2f8;border:1px solid var(--line-2);box-shadow:0 50px 120px -50px rgba(0,0,0,.9)}
+.map-inner{position:absolute;inset:0;transform-origin:0 0;transition:transform 1.1s var(--ease-out)}
+.map img{width:100%;height:100%;object-fit:cover}
+.map-ring{position:absolute;left:var(--x);top:var(--y);width:11%;aspect-ratio:1;border-radius:50%;border:2px solid #fff;background:color-mix(in srgb,var(--c) 22%,transparent);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 55%,transparent),0 0 40px 6px color-mix(in srgb,var(--c) 60%,transparent);transform:translate(-50%,-50%) scale(.4);opacity:0;transition:transform .6s var(--ease),opacity .35s ease;pointer-events:none}
+.map-ring.is-on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.map-caption{display:flex;justify-content:space-between;gap:12px;margin-top:14px;font-size:13.5px;color:var(--muted)}
+.map-caption b{color:#fff;font-weight:600}
+.districts{display:grid;gap:10px}
+.district{--c:#3867f6;padding:15px 17px;border-radius:18px;border:1px solid var(--line);background:rgba(255,255,255,.02);cursor:default;transition:opacity .9s var(--ease) var(--d,0s),filter .9s var(--ease) var(--d,0s),border-color .35s ease,background .35s ease,transform .5s var(--ease)}
+.district:hover,.district.is-active{border-color:color-mix(in srgb,var(--c) 75%,#fff 10%);background:color-mix(in srgb,var(--c) 16%,transparent);transform:translateX(5px)}
+.district-head{display:flex;align-items:center;gap:12px}
+.swatch{width:12px;height:12px;border-radius:4px;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent)}
+.district-name{font-size:17px;font-weight:650;letter-spacing:-.01em}
+.depts{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.dept{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:12.5px;color:rgba(255,255,255,.86);transition:background .25s ease,border-color .25s ease,transform .25s var(--ease)}
+.dept em{font-style:normal;opacity:.6;font-variant-numeric:tabular-nums}
+.dept:hover{background:var(--c);border-color:var(--c);color:#fff;transform:translateY(-2px)}
+.dept:hover em{opacity:.9}
+
+/* clip frames: real footage that grows and settles as it scrolls in */
+.clip-frame{position:relative;aspect-ratio:16/9;border-radius:var(--rr,22px);overflow:hidden;background:#0d1016;border:1px solid var(--line-2);box-shadow:0 50px 140px -40px rgba(56,103,246,.45),0 30px 60px -30px rgba(0,0,0,.8);transform:translateY(var(--ry,0px)) scale(var(--rs,1));transform-origin:50% 100%;will-change:transform}
+.clip-frame video,.clip-frame img{width:100%;height:100%;object-fit:cover}
+[data-rise]{transform:translateY(var(--ry,0px)) scale(var(--rs,1));transform-origin:50% 100%}
+.clip-figure{margin:0}
+.clip-caption{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:13.5px;color:var(--muted)}
+.clip-caption .rec{flex:none;width:7px;height:7px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25);animation:rec 1.6s ease-in-out infinite}
+/* The marquee rows also slide with the scroll, in opposite directions. */
+.marquee-shift{display:inline-block;margin-left:-180px;transform:translate3d(var(--ms,0px),0,0);will-change:transform}
+
+/* many hands */
+.parallel{position:relative;height:280vh}
+.parallel-sticky{position:sticky;top:0;height:100vh;height:100svh;display:grid;grid-template-columns:minmax(340px,.95fr) 1.6fr;gap:clamp(28px,4vw,64px);align-items:center;max-width:1560px;margin:0 auto;padding:88px var(--pad) 32px}
+.parallel .h2{font-size:clamp(34px,3.2vw,54px)}
+.jobs{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:10px}
+.job{display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:11px 14px 11px 11px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.03);opacity:0;transform:translateX(-28px);filter:blur(6px);transition:opacity .6s var(--ease),transform .7s var(--ease),filter .6s var(--ease),border-color .4s ease}
+.job.on{opacity:1;transform:none;filter:blur(0);border-color:rgba(139,165,255,.35)}
+.job-face{width:40px;height:40px;border-radius:50%;background:#e8eef8 url(media/feat-parallel.jpg) no-repeat;background-size:1600px auto;box-shadow:0 0 0 2px rgba(255,255,255,.12)}
+.job b{display:block;font-size:14.5px;font-weight:650}
+.job span{display:block;margin-top:2px;font-size:13.5px;color:var(--muted)}
+.job em{display:inline-flex;align-items:center;gap:6px;font-style:normal;font-size:12px;font-weight:600;color:#86efac}
+.job em::before{content:'';width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.22);animation:rec 1.4s ease-in-out infinite}
+.presence{display:flex;align-items:center;gap:10px;margin:22px 0 0;font-size:15px;color:var(--muted)}
+.presence b{font-family:var(--display);font-weight:400;font-size:44px;line-height:.8;color:#fff;font-variant-numeric:tabular-nums}
+
+/* models */
+.models{display:grid;grid-template-columns:1fr 1.25fr;gap:clamp(32px,5vw,80px);align-items:center}
+.models>*{min-width:0}
+.how{list-style:none;margin:32px 0 0;padding:0;display:grid;gap:14px;counter-reset:how}
+.how li{position:relative;padding-left:44px;font-size:15.5px;line-height:1.5;color:var(--muted);counter-increment:how}
+.how li::before{content:counter(how);position:absolute;left:0;top:-2px;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:1px solid rgba(139,165,255,.4);color:var(--blue-soft);font-size:13px;font-weight:650}
+.how b{color:#fff;font-weight:600}
+
+/* tools strip: scrolling down moves it sideways */
+.hstrip{position:relative}
+.hstrip-sticky{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(24px,4vh,44px);padding:84px 0 32px}
+.hstrip-head{width:100%;padding:0 var(--pad)}
+.hstrip-head .h2{font-size:clamp(36px,4.4vw,72px)}
+.hstrip-track{display:flex;gap:18px;padding:0 var(--pad);width:max-content;transform:translate3d(var(--tx,0px),0,0);will-change:transform}
+.feat{position:relative;flex:none;width:min(420px,78vw);padding:22px 22px 24px;border-radius:22px;border:1px solid var(--line);background:rgba(255,255,255,.03);transition:border-color .35s ease,transform .5s var(--ease)}
+.feat:hover{border-color:rgba(139,165,255,.4);transform:translateY(-6px)}
+.feat.wide{width:min(560px,86vw)}
+.feat-clip{aspect-ratio:16/10;margin:-8px -8px 18px;border-radius:14px;overflow:hidden;background:#0d1016;border:1px solid var(--line)}
+.feat-clip video,.feat-clip img{width:100%;height:100%;object-fit:cover}
+/* Cards without footage: a tall tile, big icon up top, the words at the bottom. */
+.feat:not(.wide){display:flex;flex-direction:column;width:min(340px,72vw);background:radial-gradient(120% 70% at 0% 0%,rgba(56,103,246,.16),transparent 60%),rgba(255,255,255,.03)}
+.feat .ic{display:grid;place-items:center;width:64px;height:64px;border-radius:18px;background:rgba(56,103,246,.14);border:1px solid rgba(56,103,246,.32);color:var(--blue-soft)}
+.feat .ic svg{width:30px;height:30px}
+.feat:not(.wide) h3{margin-top:auto;padding-top:28px}
+.feat h3{margin:0 0 8px;font-size:20px;font-weight:650;letter-spacing:-.02em}
+.feat p{margin:0;font-size:15px;line-height:1.55;color:var(--muted)}
+.hstrip-progress{width:min(360px,60vw);height:2px;margin:0 var(--pad);border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+.hstrip-progress span{display:block;height:100%;background:var(--blue);transform-origin:0 50%;transform:scaleX(var(--hp,0))}
+
+.district-does{margin:6px 0 0 24px;font-size:14px;line-height:1.45;color:var(--muted)}
+
+/* lounge */
+.lounge{position:relative;height:330vh}
+.lounge-sticky{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:grid;place-items:center}
+.lounge-media{position:absolute;inset:0;clip-path:inset(var(--iy,10%) var(--ix,12%) round var(--r,32px));will-change:clip-path}
+.lounge-media video{width:100%;height:100%;object-fit:cover;transform:scale(var(--vs,1.12))}
+.lounge-media::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,rgba(6,7,10,.35),rgba(6,7,10,.9));opacity:var(--dim,.2)}
+.lounge-words{position:relative;z-index:2;margin:0;padding:0 var(--pad);list-style:none;text-align:center}
+.lw{display:block;font-family:var(--display);font-weight:400;font-size:clamp(56px,8.4vw,140px);line-height:.94;letter-spacing:.01em;opacity:0;filter:blur(12px);transform:translateY(40px) scale(.96);transition:opacity .7s var(--ease),filter .7s var(--ease),transform .8s var(--ease-out)}
+.lw.on{opacity:1;filter:blur(0);transform:none}
+.lw.dog{color:var(--blue-soft)}
+.lounge-top{position:absolute;z-index:3;left:var(--pad);top:clamp(92px,13vh,120px);padding:8px 14px 8px 12px;border-radius:999px;background:rgba(8,10,14,.55);color:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.lounge-note{position:absolute;z-index:3;left:50%;bottom:clamp(24px,5vh,48px);width:min(560px,calc(100% - 36px));transform:translateX(-50%);margin:0;text-align:center;font-size:14.5px;line-height:1.55;color:rgba(255,255,255,.78);opacity:0;transition:opacity .8s ease}
+.lounge-note.on{opacity:1}
+
+/* models */
+.marquees{margin-top:64px;display:grid;gap:0}
+.marquee{overflow:hidden;white-space:nowrap;padding:14px 0;border-top:1px solid var(--line);-webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+.marquee:last-child{border-bottom:1px solid var(--line)}
+.marquee-track{display:inline-flex;align-items:center;animation:marquee 42s linear infinite;will-change:transform}
+.marquee.reverse .marquee-track{animation-direction:reverse;animation-duration:48s}
+.marquee:hover .marquee-track{animation-play-state:paused}
+.mq{padding:0 .32em;font-family:var(--display);font-size:clamp(56px,8vw,128px);line-height:1;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.46);transition:color .35s ease,-webkit-text-stroke-color .35s ease}
+.mq.solid{color:#fff;-webkit-text-stroke:0}
+.mq:hover{color:var(--blue-soft);-webkit-text-stroke-color:transparent}
+.mq-dot{width:.3em;height:.3em;flex:none;border-radius:50%;background:var(--blue);font-size:clamp(56px,8vw,128px)}
+@keyframes marquee{to{transform:translateX(-50%)}}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:64px}
+.card{position:relative;overflow:hidden;padding:26px 24px 28px;border-radius:22px;border:1px solid var(--line);background:rgba(255,255,255,.025);transition:opacity .9s var(--ease) var(--d,0s),filter .9s var(--ease) var(--d,0s),border-color .35s ease,transform .6s var(--ease)}
+.card::before{content:'';position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,-200px) var(--my,-200px),rgba(56,103,246,.2),transparent 45%);opacity:0;transition:opacity .35s ease;pointer-events:none}
+.card:hover{border-color:rgba(139,165,255,.4);transform:translateY(-4px)}
+.card:hover::before{opacity:1}
+.card .ic{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:rgba(56,103,246,.14);border:1px solid rgba(56,103,246,.32);color:var(--blue-soft)}
+.card .ic svg{width:21px;height:21px}
+.card h3{margin:22px 0 8px;font-size:19px;font-weight:650;letter-spacing:-.02em}
+.card p{margin:0;font-size:15px;line-height:1.55;color:var(--muted)}
+
+/* outro */
+.outro{position:relative;min-height:100vh;min-height:100svh;display:grid;place-items:center;overflow:hidden;padding:140px var(--pad) 120px;text-align:center}
+.outro-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.outro::before{content:'';position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse at 50% 50%,rgba(7,8,10,.55),rgba(7,8,10,.94) 75%),linear-gradient(to bottom,var(--bg),rgba(7,8,10,0) 25%,rgba(7,8,10,0) 75%,var(--bg))}
+.outro-inner{position:relative;z-index:2}
+.wordmark{margin:0;font-size:clamp(104px,21vw,340px);font-weight:800;line-height:.86;letter-spacing:-.075em;transform:scale(var(--ws,1));filter:blur(var(--wb,0px));opacity:var(--wo,1)}
+.wordmark .dot{color:var(--blue);display:inline-block;animation:dot 2.6s ease-in-out infinite}
+@keyframes dot{50%{text-shadow:0 0 40px rgba(56,103,246,.9)}}
+.outro p{margin:22px auto 0;max-width:620px;font-size:clamp(18px,1.8vw,24px);line-height:1.4;color:rgba(255,255,255,.86)}
+.outro p span{color:var(--muted)}
+.outro-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:40px}
+.footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;padding:28px var(--pad) 36px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)}
+.footer strong{color:#fff;font-weight:700;letter-spacing:-.03em}
+.footer strong .dot{color:var(--blue)}
+.footer nav{display:flex;gap:20px}
+.footer a{text-decoration:none;transition:color .2s}
+.footer a:hover{color:#fff}
+
+/* film */
+.film{width:min(1200px,92vw);max-width:none;padding:0;border:0;border-radius:20px;background:#000;color:#fff;overflow:hidden;box-shadow:0 80px 200px -40px rgba(56,103,246,.5)}
+.film[open]{animation:film-in .55s var(--ease) both}
+.film::backdrop{background:rgba(3,4,6,.82);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.film video{width:100%;aspect-ratio:16/9;background:#000}
+.film-close{position:absolute;z-index:2;top:12px;right:12px;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.5);color:#fff;cursor:pointer}
+.film-close svg{width:18px;height:18px}
+.film,.film *{cursor:auto!important}
+.film button{cursor:pointer!important}
+@keyframes film-in{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+
+/* cursor */
+.has-cursor,.has-cursor body,.has-cursor a,.has-cursor button,.has-cursor .portal{cursor:none!important}
+.custom-cursor{display:none;position:fixed;z-index:100;left:0;top:0;width:1px;height:1px;pointer-events:none;opacity:0;transition:opacity .2s ease;mix-blend-mode:difference}
+.has-cursor .custom-cursor{display:block}
+.custom-cursor.is-visible{opacity:1}
+body:not(.preload-complete) .custom-cursor,body.film-open .custom-cursor{opacity:0!important}
+.cursor-dot-pos,.cursor-orbit-pos{position:absolute;left:0;top:0;will-change:transform}
+.cursor-dot,.cursor-orbit{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%)}
+.cursor-dot{width:10px;height:10px;background:#fff;transition:transform .2s var(--ease)}
+.cursor-orbit{width:36px;height:36px;border:1px solid #fff;background:rgba(255,255,255,.35);transition:transform .35s var(--ease),background .35s ease}
+.custom-cursor.is-hover .cursor-orbit{transform:translate(-50%,-50%) scale(1.45);background:rgba(255,255,255,.12)}
+.custom-cursor.is-enter .cursor-orbit{transform:translate(-50%,-50%) scale(1.16)}
+.custom-cursor.is-down .cursor-dot{transform:translate(-50%,-50%) scale(.6)}
+.cursor-label{position:absolute;top:28px;left:0;transform:translateX(-50%) translateY(-4px);font-size:15px;font-weight:550;white-space:nowrap;opacity:0;transition:opacity .2s ease,transform .3s var(--ease)}
+.custom-cursor.has-label .cursor-label{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width:1100px){
+  .cards{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:900px){
+  .nav{display:none}
+  .portal-wrap{width:min(300px,48vw)}
+  .hero-content h1{font-size:clamp(105px,24vw,190px)}
+  .hero-content dl{width:43vw}
+  .fact{grid-template-columns:104px 1fr;gap:14px}
+  .stop-list{font-size:14px}.stop-item.active{font-size:16px}
+  .scrub-sticky{grid-template-columns:1fr;align-content:center;gap:16px;padding-top:84px}
+  /* Heading, then the footage, then the steps. */
+  .scrub-copy{display:contents}
+  .scrub-copy .eyebrow{order:1;margin:0}
+  .scrub-copy .h2{order:2}
+  .scrub-media{order:3}
+  .steps{order:4;margin-top:0}
+  .scrub-copy .lead{display:none}
+  .approval,.office-grid,.models{grid-template-columns:1fr}
+  .map-col{position:relative;top:0}
+  .parallel-sticky{grid-template-columns:1fr;align-content:center;gap:14px;padding-top:84px}
+  .parallel-copy{display:contents}
+  .parallel-copy .eyebrow{order:1;margin:0}
+  .parallel-copy .h2{order:2}
+  .parallel .clip-frame{order:3}
+  .jobs{order:4;margin-top:4px}
+  .presence{order:5;margin-top:4px}
+  .parallel-copy .lead{display:none}
+}
+@media (max-width:640px){
+  .hero{min-height:600px}
+  .stop-list,.scroll-cue{display:none}
+  .portal-wrap{top:40%;width:min(250px,62vw)}
+  .portal{border-radius:70px}
+  .portal-heading{font-size:14px}.portal-heading strong{font-size:16px}
+  .portal-hint{display:block}
+  .hero-content{left:18px;right:18px;bottom:18px;display:block}
+  .hero-kicker{margin-bottom:8px}
+  .hero-content h1{font-size:clamp(92px,28vw,150px);margin-bottom:14px}
+  .hero-content dl{width:100%;font-size:13px}
+  .fact{grid-template-columns:92px 1fr;gap:12px;padding:5px 0}
+  .fact:nth-child(n+3){display:none}
+  .fact:nth-child(2){border-bottom:0}
+  .cta{height:38px;padding:0 16px 0 12px;font-size:13px}
+  .cta .long{display:none}
+  .cta.big{height:50px}
+  .step{padding-left:18px}
+  .step:not(.active) p{display:none}
+  .jobs{gap:6px}
+  .job{grid-template-columns:32px 1fr auto;gap:10px;padding:7px 10px 7px 7px;border-radius:13px}
+  .job-face{transform:scale(.8);transform-origin:0 0}
+  .job b{font-size:13px}.job span{font-size:12px}
+  .presence b{font-size:34px}
+  .cards{grid-template-columns:1fr}
+  .demo{padding:14px}
+  .demo-head{flex-wrap:wrap}
+  .demo-person{flex:1 1 100%}
+  .pill{margin-left:54px}
+  /* Phones scroll the diff sideways rather than cutting the changed lines short. */
+  .diff{font-size:11px;overflow-x:auto}
+  .dl{grid-template-columns:22px 22px 12px auto;width:max-content;min-width:100%}
+  .dl span{overflow:visible}
+  .media-chip{left:10px;top:10px;padding:5px 9px;font-size:11px}
+  .demo-actions{flex-wrap:wrap}
+  .btn-always{display:none}
+  .map-caption span:last-child{display:none}
+  .travel-caption{font-size:14px;white-space:normal;text-align:center;border-radius:18px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
+  .marquee-track{animation:none}
+}
+</style>
+</head>
+<body class="is-locked">
+
+<div class="progress" aria-hidden="true"></div>
+<div class="header-bar" aria-hidden="true"></div>
+<a class="brand is-centered" id="brand" href="#top" aria-label="Axon, back to top">Axon<span class="dot">.</span></a>
+<header class="header">
+  <nav class="nav" aria-label="Primary">
+    <a href="#work" data-nav="work">Work</a>
+    <a href="#parallel" data-nav="parallel">Parallel</a>
+    <a href="#models" data-nav="models">Models</a>
+    <a href="#tools" data-nav="tools">Tools</a>
+    <a href="#office" data-nav="office">Office</a>
+  </nav>
+  <button class="cta" type="button" data-film data-magnetic data-cursor="Play">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+    <span>Watch <span class="long">the film</span></span>
+  </button>
+</header>
+
+<div class="preloader-count" id="preloader-count" aria-live="polite"><span id="preloader-value">0</span><span class="percent">%</span></div>
+
+<!-- ================================================================ HERO -->
+<section class="hero" id="top" data-stop="campus" aria-label="Axon">
+  <div class="backgrounds" aria-hidden="true">
+    <img class="background is-visible" id="bg-campus" src="media/overview.jpg" alt="">
+    <video class="background" id="bg-desks" src="media/desks-loop.mp4" muted playsinline loop preload="auto"></video>
+    <img class="background" id="bg-review" src="media/review.jpg" alt="">
+    <video class="background" id="bg-lounge" src="media/lounge-loop.mp4" muted playsinline loop preload="auto"></video>
+  </div>
+  <div class="preloader" id="preloader" aria-hidden="true">
+    <video id="preloader-video" src="media/overview.mp4" muted playsinline preload="auto"></video>
+    <div class="preloader-shade"></div>
+  </div>
+  <div class="dim" aria-hidden="true"></div>
+  <canvas class="portal-canvas" id="portal-canvas" aria-hidden="true"></canvas>
+  <div class="top-shade" aria-hidden="true"></div>
+
+  <!-- The portal's media: never shown directly, only painted through the window. -->
+  <div hidden>
+    <video id="clip-campus" src="media/campus.mp4" muted playsinline preload="auto"></video>
+    <video id="clip-work" src="media/work.mp4" muted playsinline preload="auto"></video>
+    <video id="clip-lounge" src="media/lounge.mp4" muted playsinline preload="auto"></video>
+    <video id="clip-overview" src="media/overview.mp4" muted playsinline preload="auto"></video>
+  </div>
+
+  <aside class="stop-list chrome" id="stop-list" aria-label="Stops in the office"></aside>
+
+  <div class="portal-wrap chrome">
+    <div class="portal-heading">
+      <span>Next:</span>
+      <span><span id="next-number">[02]</span><strong id="next-name">Desks</strong></span>
+    </div>
+    <button class="portal" id="portal" type="button" aria-label="Go to Desks" data-cursor="Enter"></button>
+    <div class="portal-hint">Tap the window</div>
+  </div>
+
+  <a class="scroll-cue chrome" href="#about"><span>Scroll</span></a>
+
+  <div class="hero-content chrome" aria-live="polite">
+    <div class="hero-heading">
+      <p class="hero-kicker" id="stop-kicker">Your AI has an office now.</p>
+      <h1 id="stop-title">AXON.</h1>
+    </div>
+    <dl id="facts"></dl>
+  </div>
+
+  <div class="travel-caption" id="travel-caption" aria-hidden="true"></div>
+  <div class="loading" aria-hidden="true">Opening the door…</div>
+</section>
+
+<main>
+<!-- ================================================================ ABOUT -->
+<section class="section" id="about">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>What Axon is</p>
+    <p class="statement" id="statement">Most AI lives in a chat box. Axon gives yours <em>an office:</em> a team of coworkers who work side by side in your project, on the models you choose, with the tools you connect, and ask before anything is saved.</p>
+  </div>
+</section>
+
+<!-- ================================================================ WORK -->
+<section class="scrub" id="work" aria-label="How it works">
+  <div class="scrub-sticky">
+    <div class="scrub-copy">
+      <p class="eyebrow">01 · How it works</p>
+      <h2 class="h2 split" data-split>Click anyone.<br>Give them a task.</h2>
+      <p class="lead">Every coworker has a desk, a specialty and a screen that shows their work. Pick one, say what you need, and watch it happen in your project.</p>
+      <ol class="steps" id="steps">
+        <li class="step"><h3><span>01</span>Pick a coworker</h3><p>Click anyone in the office. Here, the Frontend Developer from Web &amp; Frontend.</p></li>
+        <li class="step"><h3><span>02</span>Give them a task</h3><p>“Sort the task list by due date.” Typed into the real composer.</p></li>
+        <li class="step"><h3><span>03</span>They propose a change</h3><p>The work surface opens on the diff, waiting for your OK.</p></li>
+        <li class="step"><h3><span>04</span>You approve. It saves.</h3><p>Press Approve and the file is written. The reply sums up what changed.</p></li>
+      </ol>
+    </div>
+    <div class="scrub-media">
+      <video id="scrub-video" src="media/work.mp4" poster="media/work.jpg" muted playsinline preload="auto" aria-label="Screen recording of Axon: picking the Frontend Developer, giving a task, reviewing the diff and approving it"></video>
+      <span class="media-chip">Real footage · Axon desktop app</span>
+      <span class="scrub-time" id="scrub-time" aria-hidden="true">0:00</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ MANY HANDS (pinned) -->
+<section class="parallel" id="parallel" aria-label="Many coworkers at once">
+  <div class="parallel-sticky">
+    <div class="parallel-copy">
+      <p class="eyebrow">02 · Many hands</p>
+      <h2 class="h2 split" data-split>Three tasks.<br>Three coworkers.<br>All at once.</h2>
+      <p class="lead">Hand out work the way you would to a team. Each coworker gets their own conversation and starts straight away; check in on anyone while the others keep going.</p>
+      <ol class="jobs" id="jobs">
+        <li class="job"><span class="job-face" style="background-size:1010px auto;background-position:-626px -98px"></span><div><b>Frontend Developer</b><span>Sort the task list by due date.</span></div><em>Working</em></li>
+        <li class="job"><span class="job-face" style="background-size:1745px auto;background-position:-565px -856px"></span><div><b>UX Engineer</b><span>Rewrite the empty state copy.</span></div><em>Working</em></li>
+        <li class="job"><span class="job-face" style="background-size:1745px auto;background-position:-663px -856px"></span><div><b>Full-Stack Developer</b><span>Add a due-date filter to the API.</span></div><em>Working</em></li>
+      </ol>
+      <p class="presence"><b id="presence-count">0</b> working right now</p>
+    </div>
+    <div class="clip-frame">
+      <video src="media/feat-parallel.mp4" poster="media/feat-parallel.jpg" muted playsinline loop preload="metadata" data-inview aria-label="Screen recording of Axon: three coworkers given three tasks, all working at the same time"></video>
+      <span class="media-chip">Real footage · Axon desktop app</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ APPROVAL -->
+<section class="section" id="approval">
+  <div class="wrap approval">
+    <div>
+      <p class="eyebrow" data-reveal>03 · Approval</p>
+      <h2 class="h2 split" data-split>Nothing saves<br>without your OK.</h2>
+      <p class="lead" data-reveal style="--d:.15s">Reading your project is automatic. Writing to it is not. Every change arrives as a diff, and waits for you.</p>
+      <ul class="trust">
+        <li data-reveal style="--d:.1s"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg></span><span><b>Writes, commands, commits and sub-agents each ask first.</b> Running commands stays off until you turn it on.</span></li>
+        <li data-reveal style="--d:.18s"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span><b>Undo any saved change.</b> Axon keeps the version each write replaced, and warns you if the file changed since.</span></li>
+        <li data-reveal style="--d:.26s"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><span><b>An activity log of every tool call</b>, with what was decided and by whom. Never with file contents.</span></li>
+        <li data-reveal style="--d:.34s"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span><span><b>Restore points</b> snapshot all your saved data. Restoring backs up the current state first.</span></li>
+      </ul>
+    </div>
+    <div data-reveal style="--d:.1s">
+      <div class="demo" id="demo" data-state="idle">
+        <div class="demo-head">
+          <div class="demo-person"><span class="avatar" aria-hidden="true"></span><div><strong>Frontend Developer</strong><span>Web &amp; Frontend</span></div></div>
+          <span class="pill" id="demo-pill">Waiting for your OK</span>
+        </div>
+        <div class="demo-card">
+          <div class="demo-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="M12 9v4M12 16.5h.01"/></svg>
+            <strong>Tool execution approval required</strong><code class="tool">write_file</code>
+          </div>
+          <p class="demo-desc">The assistant is requesting permission to execute <code>write_file</code> on file <code>src/components/TaskList.tsx</code>.</p>
+          <div class="diff" role="img" aria-label="Proposed change to TaskList.tsx: imports byDueDate and sorts the tasks by due date before listing them. 2 lines added, 1 removed.">
+            <div class="dl meta" style="--i:0">--- a/src/components/TaskList.tsx</div>
+            <div class="dl meta" style="--i:1">+++ b/src/components/TaskList.tsx</div>
+            <div class="dl hunk" style="--i:2">@@ -1,12 +1,13 @@</div>
+            <div class="dl" style="--i:3"><i>1</i><i>1</i><b> </b><span>import type { Task } from '../types/task';</span></div>
+            <div class="dl" style="--i:4"><i>2</i><i>2</i><b> </b><span>import { TaskRow } from './TaskRow';</span></div>
+            <div class="dl add" style="--i:5"><i></i><i>3</i><b>+</b><span>import { byDueDate } from '../lib/sort';</span></div>
+            <div class="dl" style="--i:6"><i>3</i><i>4</i><b> </b><span></span></div>
+            <div class="dl" style="--i:7"><i>4</i><i>5</i><b> </b><span>export function TaskList({ tasks }: { tasks: Task[] }) {</span></div>
+            <div class="dl" style="--i:8"><i>5</i><i>6</i><b> </b><span>  if (!tasks.length) return &lt;p className="empty"&gt;Nothing due. Enjoy it.&lt;/p&gt;;</span></div>
+            <div class="dl" style="--i:9"><i>6</i><i>7</i><b> </b><span>  return (</span></div>
+            <div class="dl" style="--i:10"><i>7</i><i>8</i><b> </b><span>    &lt;ul className="task-list"&gt;</span></div>
+            <div class="dl del" style="--i:11"><i>8</i><i></i><b>-</b><span>      {tasks.map((task) =&gt; (</span></div>
+            <div class="dl add" style="--i:12"><i></i><i>9</i><b>+</b><span>      {[...tasks].sort(byDueDate).map((task) =&gt; (</span></div>
+            <div class="dl" style="--i:13"><i>9</i><i>10</i><b> </b><span>        &lt;TaskRow key={task.id} task={task} /&gt;</span></div>
+          </div>
+          <div class="demo-actions">
+            <button type="button" class="btn-reject" data-act="reject">Reject</button>
+            <button type="button" class="btn-always" data-act="always">Always allow this session</button>
+            <button type="button" class="btn-approve" data-act="approve">Approve</button>
+          </div>
+        </div>
+        <div class="demo-result" id="demo-result" aria-live="polite"></div>
+        <span class="demo-ring" id="demo-ring" aria-hidden="true"></span>
+        <span class="demo-cursor" id="demo-cursor" aria-hidden="true"><svg viewBox="0 0 30 30"><path d="M4 2.5 L4 24.5 L9.6 19.4 L13.4 27.6 L17.2 25.9 L13.5 17.9 L21 17.6 Z" fill="#fff" stroke="#16233b" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="demo-foot">
+        <span>Try it: Approve, Reject, then Undo.</span>
+        <button type="button" class="replay" id="demo-replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Replay</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ MODELS -->
+<section class="section" id="models">
+  <div class="wrap models">
+    <div>
+      <p class="eyebrow" data-reveal>04 · Models</p>
+      <h2 class="h2 split" data-split>Any model.<br>Your keys.</h2>
+      <p class="lead" data-reveal style="--d:.1s">Use Claude where it matters, and cheaper models like DeepSeek, Qwen or Kimi for the everyday work. Or run models free on your own machine with Ollama.</p>
+      <ol class="how">
+        <li data-reveal style="--d:.12s"><b>Pick a service.</b> OpenAI, Anthropic, Gemini, DeepSeek, Kimi, Qwen, Groq, Cerebras, OpenRouter, Ollama, or any compatible endpoint.</li>
+        <li data-reveal style="--d:.2s"><b>Paste your key.</b> Axon checks it and picks the models. The key goes into your system’s key store.</li>
+        <li data-reveal style="--d:.28s"><b>Choose per conversation.</b> Each coworker’s conversation can run on a different model.</li>
+      </ol>
+    </div>
+    <figure class="clip-figure">
+      <div class="clip-frame" data-rise>
+        <video src="media/feat-models.mp4" poster="media/feat-models.jpg" muted playsinline loop preload="metadata" data-inview aria-label="Screen recording of Axon: adding DeepSeek with an API key in Settings, then choosing deepseek-chat for a coworker"></video>
+      </div>
+      <figcaption class="clip-caption"><span class="rec"></span>Real footage: adding DeepSeek with a key, then giving a coworker deepseek-chat.</figcaption>
+    </figure>
+  </div>
+  <div class="marquees" id="marquees" data-reveal>
+    <div class="marquee"><div class="marquee-shift"><div class="marquee-track">
+      <span class="mq solid">Claude</span><span class="mq-dot"></span><span class="mq">DeepSeek</span><span class="mq-dot"></span><span class="mq solid">Qwen</span><span class="mq-dot"></span><span class="mq">Kimi</span><span class="mq-dot"></span><span class="mq solid">Gemini</span><span class="mq-dot"></span><span class="mq">OpenAI</span><span class="mq-dot"></span>
+      <span class="mq solid" aria-hidden="true">Claude</span><span class="mq-dot"></span><span class="mq" aria-hidden="true">DeepSeek</span><span class="mq-dot"></span><span class="mq solid" aria-hidden="true">Qwen</span><span class="mq-dot"></span><span class="mq" aria-hidden="true">Kimi</span><span class="mq-dot"></span><span class="mq solid" aria-hidden="true">Gemini</span><span class="mq-dot"></span><span class="mq" aria-hidden="true">OpenAI</span><span class="mq-dot"></span>
+    </div></div></div>
+    <div class="marquee reverse"><div class="marquee-shift"><div class="marquee-track">
+      <span class="mq">Groq</span><span class="mq-dot"></span><span class="mq solid">Cerebras</span><span class="mq-dot"></span><span class="mq">OpenRouter</span><span class="mq-dot"></span><span class="mq solid">Ollama</span><span class="mq-dot"></span><span class="mq">Your own endpoint</span><span class="mq-dot"></span>
+      <span class="mq" aria-hidden="true">Groq</span><span class="mq-dot"></span><span class="mq solid" aria-hidden="true">Cerebras</span><span class="mq-dot"></span><span class="mq" aria-hidden="true">OpenRouter</span><span class="mq-dot"></span><span class="mq solid" aria-hidden="true">Ollama</span><span class="mq-dot"></span><span class="mq" aria-hidden="true">Your own endpoint</span><span class="mq-dot"></span>
+    </div></div></div>
+  </div>
+  <div class="wrap">
+    <div class="cards">
+      <article class="card" data-reveal>
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M17 6l2.5 2.5M14.5 8.5 17 11"/></svg></span>
+        <h3>Keys in the OS vault</h3>
+        <p>Sealed with Windows DPAPI or your system keyring, and never handed back to the interface.</p>
+      </article>
+      <article class="card" data-reveal style="--d:.08s">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10M7 12h6M4 4h16v12H8l-4 4V4Z"/></svg></span>
+        <h3>A model per conversation</h3>
+        <p>Claude for the hard problem, a cheaper model for the routine one. Switch from the composer at any time.</p>
+      </article>
+      <article class="card" data-reveal style="--d:.16s">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+        <h3>Free on your machine</h3>
+        <p>Models running through Ollama need no key at all, and your conversations stay on this computer.</p>
+      </article>
+      <article class="card" data-reveal style="--d:.24s">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+        <h3>Usage you can read</h3>
+        <p>Tokens by day, provider, model and conversation. Dollars too, for the prices you set.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ TOOLS (scrolls sideways) -->
+<section class="hstrip" id="tools" aria-label="Tools and know-how">
+  <div class="hstrip-sticky">
+    <div class="hstrip-head">
+      <p class="eyebrow">05 · Tools and know-how</p>
+      <h2 class="h2 split" data-split>Plug in your tools.<br>Hand them know-how.</h2>
+    </div>
+    <div class="hstrip-track" id="hstrip-track">
+      <article class="feat wide">
+        <div class="feat-clip"><video src="media/feat-connect.mp4" poster="media/feat-connect.jpg" muted playsinline loop preload="metadata" data-inview aria-label="Screen recording of Axon: the connector catalog in Settings, then Skills & roles"></video></div>
+        <h3>39 connectors</h3>
+        <p>GitHub, Linear, Notion, Figma, Slack, Stripe and more. Looking things up runs on its own; anything that changes something asks you first.</p>
+      </article>
+      <article class="feat wide">
+        <div class="feat-clip"><img src="media/feat-skills.jpg" alt="Axon's Skills & roles settings: 895 skills in 7 categories and 198 roles in 22 groups" loading="lazy"></div>
+        <h3>895 skills, 198 roles</h3>
+        <p>Know-how bundled with Axon. Attach skills and roles to a workspace or a conversation; they run on the model you choose.</p>
+      </article>
+      <article class="feat">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 11a4 4 0 1 0-8 0M3 20a6 6 0 0 1 12 0M16 4a4 4 0 0 1 0 8M21 20a6 6 0 0 0-4-5.7"/></svg></span>
+        <h3>Colleagues they can ask</h3>
+        <p>Mid-task, a coworker can put a question to a colleague, like the Backend Developer or the Security Engineer, and carry on with the answer.</p>
+      </article>
+      <article class="feat">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Zm0 0a2 2 0 0 0 2 2h13"/><path d="M9 7h6M9 11h4"/></svg></span>
+        <h3>A library for your documents</h3>
+        <p>Import PDFs, Word, Excel, Markdown and code. The Library’s coworkers search it and answer with passages labelled by source.</p>
+      </article>
+      <article class="feat">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5c0 4-6 3-10 5.5"/></svg></span>
+        <h3>Git, built in</h3>
+        <p>Stage, commit, branch and sync from the office. Sign in with GitHub to clone and publish.</p>
+      </article>
+      <article class="feat">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span>
+        <h3>A receptionist</h3>
+        <p>Keeps your to-dos, reminders and schedule, and knows what everyone is working on.</p>
+      </article>
+    </div>
+    <div class="hstrip-progress" aria-hidden="true"><span></span></div>
+  </div>
+</section>
+
+<!-- ================================================================ OFFICE -->
+<section class="section" id="office">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>06 · The office</p>
+    <h2 class="h2 split" data-split>A specialist<br>for every job.</h2>
+    <p class="lead" data-reveal style="--d:.15s">Seven districts around a Commons, each with its own specialists, floor and kit. Engineers get dual monitors. Leadership gets walnut floors.</p>
+    <div class="office-grid">
+      <div class="map-col" data-rise>
+        <div class="map" id="map">
+          <div class="map-inner" id="map-inner">
+            <img src="media/overview.jpg" alt="The Axon campus from above: Engineering, Product, Design, Leadership, the Commons, AI & Data, Business and People & Ops" loading="lazy">
+          </div>
+        </div>
+        <div class="map-caption"><span><span id="map-hint">Hover a district to fly there.</span> <b id="map-label">The whole campus</b></span><span>Rendered live in the app</span></div>
+      </div>
+      <div class="districts" id="districts"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ LOUNGE -->
+<section class="lounge" id="lounge" aria-label="Office life">
+  <div class="lounge-sticky">
+    <div class="lounge-media" id="lounge-media">
+      <video id="lounge-video" src="media/lounge-loop.mp4" poster="media/lounge.jpg" muted playsinline loop preload="metadata" data-inview aria-hidden="true"></video>
+    </div>
+    <p class="eyebrow lounge-top">07 · Office life</p>
+    <ul class="lounge-words" id="lounge-words">
+      <li class="lw">Standups.</li>
+      <li class="lw">Coffee chats.</li>
+      <li class="lw">Lunch.</li>
+      <li class="lw">A PS5.</li>
+      <li class="lw dog">And a dog.</li>
+    </ul>
+    <p class="lounge-note" id="lounge-note">Between tasks they keep a day of their own. Nothing runs on a schedule, though: they only work when you ask.</p>
+  </div>
+</section>
+
+<!-- ================================================================ OUTRO -->
+<section class="outro" id="end">
+  <video class="outro-bg" src="media/overview-loop.mp4" poster="media/overview.jpg" muted playsinline loop preload="metadata" data-inview aria-hidden="true"></video>
+  <div class="outro-inner">
+    <h2 class="wordmark" id="wordmark">Axon<span class="dot">.</span></h2>
+    <p>Your AI office for what’s next.<br><span>Any model. One desktop app.</span></p>
+    <div class="outro-actions">
+      <button class="cta big" type="button" data-film data-magnetic data-cursor="Play">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+        Watch the film
+      </button>
+      <a class="cta big ghost" href="https://github.com/baltejgoud/Axon-AI-Office-" target="_blank" rel="noopener" data-magnetic>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <span><strong>Axon<span class="dot">.</span></strong> Desktop beta. Your AI has an office now.</span>
+  <nav aria-label="Footer">
+    <a href="https://github.com/baltejgoud/Axon-AI-Office-" target="_blank" rel="noopener">GitHub</a>
+    <a href="#top">Back to top</a>
+  </nav>
+</footer>
+
+<dialog class="film" id="film" aria-label="The Axon film">
+  <button class="film-close" type="button" id="film-close" aria-label="Close the film"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <video id="film-video" src="media/axon-film.mp4" poster="media/axon-film.jpg" controls playsinline preload="none"></video>
+</dialog>
+
+<div class="custom-cursor" id="cursor" aria-hidden="true"><span class="cursor-orbit-pos"><span class="cursor-orbit"></span><span class="cursor-label" id="cursor-label"></span></span><span class="cursor-dot-pos"><span class="cursor-dot"></span></span></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function animateValue(set, duration) {
+    return new Promise((resolve) => {
+      if (reduced) { set(1); resolve(); return; }
+      const start = performance.now();
+      const step = (now) => {
+        const t = clamp((now - start) / duration, 0, 1);
+        set(easeInOut(t));
+        if (t < 1) requestAnimationFrame(step); else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  function retrigger(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+  /** Resolves on the first of `events`, or after `timeout` ms. */
+  function once(target, events, timeout) {
+    return new Promise((resolve) => {
+      let timer = 0;
+      const done = () => {
+        events.forEach((e) => target.removeEventListener(e, done));
+        clearTimeout(timer);
+        resolve();
+      };
+      events.forEach((e) => target.addEventListener(e, done));
+      if (timeout) timer = setTimeout(done, timeout);
+    });
+  }
+  function mediaReady(el, timeout = 1600) {
+    if (el.tagName === 'IMG') return el.complete ? Promise.resolve() : once(el, ['load', 'error'], timeout);
+    if (el.readyState >= 3 && !el.seeking) return Promise.resolve();
+    return once(el, ['canplaythrough', 'canplay', 'seeked', 'error'], timeout);
+  }
+  const mediaSize = (m) => [m.videoWidth || m.naturalWidth || 0, m.videoHeight || m.naturalHeight || 0];
+
+  // ================================================================ hero: data
+  const STOPS = {
+    campus: {
+      name: 'Campus', number: '[01]', title: 'AXON.', kicker: 'Your AI has an office now.',
+      next: 'desks', background: 'bg-campus', clip: 'campus', rate: 1.35,
+      captions: [[0, 'Seven districts around a Commons.'], [2.6, 'Into Engineering.']],
+      facts: [
+        ['Parallel', 'Several coworkers on different tasks at once.'],
+        ['Models', 'Claude, or cheaper ones like DeepSeek. Your keys.'],
+        ['Connectors', 'GitHub, Linear, Notion, Slack and more.'],
+        ['Runs on', 'Your computer, as one desktop app.']
+      ]
+    },
+    desks: {
+      name: 'Desks', number: '[02]', title: 'DESKS', kicker: 'The Engineering floor',
+      next: 'review', background: 'bg-desks', clip: 'work', start: 0.6, rate: 1.55, focus: [0.7, 0.24, 1],
+      captions: [[0, 'Click anyone.'], [1.43, 'Give them a task.'], [3.27, 'They propose a change.'], [5.17, 'You approve. It saves.']],
+      facts: [
+        ['Who', 'Frontend, Backend, Mobile, Security, QA and more.'],
+        ['Screens', 'Their monitors show the work they’re doing.'],
+        ['To start', 'Click anyone and give them a task.'],
+        ['At once', 'Hand out three tasks; all three get going.']
+      ]
+    },
+    review: {
+      name: 'Review', number: '[03]', title: 'REVIEW', kicker: 'Waiting for your OK',
+      next: 'lounge', background: 'bg-review', clip: 'lounge', rate: 1, focus: [0.47, 0.27, 0.86],
+      captions: [[0, 'Meanwhile, in the lounge.']],
+      facts: [
+        ['Proposed', 'A real diff: TaskList.tsx, +2 −1.'],
+        ['Saved', 'Only after you press Approve.'],
+        ['Undo', 'Take back any saved change later.'],
+        ['Logged', 'Every tool call, and who said yes.']
+      ]
+    },
+    lounge: {
+      name: 'Lounge', number: '[04]', title: 'LOUNGE', kicker: 'Break time',
+      next: 'campus', background: 'bg-lounge', clip: 'overview', rate: 1.15,
+      captions: [[0, 'The whole office, on your desktop.']],
+      facts: [
+        ['Daily', 'Standups, coffee chats and lunch.'],
+        ['Café', 'Complete with a bakery.'],
+        ['Lounge', 'A PS5, a racing game and beanbags.'],
+        ['Also', 'A dog.']
+      ]
+    }
+  };
+  const ORDER = ['campus', 'desks', 'review', 'lounge'];
+  const POSTERS = { campus: 'media/campus.jpg', work: 'media/work.jpg', lounge: 'media/lounge-start.jpg', overview: 'media/overview-start.jpg' };
+
+  const hero = $('.hero');
+  const canvas = $('#portal-canvas');
+  const ctx = canvas.getContext('2d');
+  const portal = $('#portal');
+  const title = $('#stop-title');
+  const kicker = $('#stop-kicker');
+  const facts = $('#facts');
+  const stopList = $('#stop-list');
+  const heroContent = $('.hero-content');
+  const caption = $('#travel-caption');
+  const clips = {
+    campus: $('#clip-campus'), work: $('#clip-work'), lounge: $('#clip-lounge'), overview: $('#clip-overview')
+  };
+  const posters = Object.fromEntries(Object.entries(POSTERS).map(([key, src]) => {
+    const image = new Image();
+    image.src = src;
+    return [key, image];
+  }));
+
+  let current = 'campus';
+  let busy = false;
+  let introDone = false;
+  let heroVisible = true;
+  let W = 0, H = 0, portalRadius = 90;
+  let rotX = 0, rotY = 0, targetX = 0, targetY = 0;
+  let expansion = 0, maskScale = 0, transitionActive = false, activeClip = null, activeFocus = null;
+
+  // ================================================================ hero: render
+  function fitTitle() {
+    title.style.fontSize = '';
+    const stacked = innerWidth <= 640;
+    const available = heroContent.clientWidth - (stacked ? 0 : facts.offsetWidth + 40);
+    const width = title.scrollWidth;
+    if (width > available && available > 0) {
+      const size = parseFloat(getComputedStyle(title).fontSize);
+      title.style.fontSize = `${Math.floor(size * (available / width) * 0.98)}px`;
+    }
+  }
+
+  function render(first) {
+    const stop = STOPS[current];
+    const next = STOPS[stop.next];
+    hero.dataset.stop = current;
+    title.textContent = stop.title;
+    kicker.textContent = stop.kicker;
+    $('#next-number').textContent = next.number;
+    $('#next-name').textContent = next.name;
+    portal.setAttribute('aria-label', `Go to ${next.name}`);
+    facts.innerHTML = stop.facts.map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    stopList.innerHTML = ORDER.map((id) =>
+      `<span class="stop-item${id === current ? ' active' : ''}"${id === current ? ' aria-current="step"' : ''}><span class="stop-num">${STOPS[id].number.slice(1, 3)}</span>${STOPS[id].name}</span>`
+    ).join('');
+    if (!first) retrigger(stopList, 'is-switching');
+    for (const id of ORDER) {
+      const bg = $('#' + STOPS[id].background);
+      bg.classList.toggle('is-visible', id === current);
+    }
+    syncBackgroundPlayback();
+    fitTitle();
+  }
+
+  function syncBackgroundPlayback() {
+    for (const id of ORDER) {
+      const bg = $('#' + STOPS[id].background);
+      if (bg.tagName !== 'VIDEO') continue;
+      if (id === current && heroVisible && !reduced && !transitionActive) bg.play().catch(() => {});
+      else bg.pause();
+    }
+  }
+
+  // ================================================================ hero: portal canvas
+  function resizeCanvas() {
+    const d = Math.min(devicePixelRatio || 1, 2);
+    W = hero.clientWidth;
+    H = hero.clientHeight;
+    canvas.width = Math.round(W * d);
+    canvas.height = Math.round(H * d);
+    canvas.style.width = `${W}px`;
+    canvas.style.height = `${H}px`;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    portalRadius = parseFloat(getComputedStyle(portal).borderTopLeftRadius) || 90;
+  }
+
+  /** Screen-locked "cover" draw: matches the backgrounds' object-fit: cover exactly. */
+  function drawCover(media) {
+    const [mw, mh] = mediaSize(media);
+    if (!mw || !mh) return false;
+    const scale = Math.max(W / mw, H / mh);
+    const w = mw * scale, h = mh * scale;
+    ctx.drawImage(media, (W - w) / 2, (H - h) / 2, w, h);
+    return true;
+  }
+
+  function roundedRect(w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    const corners = [
+      [w / 2 - r, -h / 2 + r, -Math.PI / 2, 0],
+      [w / 2 - r, h / 2 - r, 0, Math.PI / 2],
+      [-w / 2 + r, h / 2 - r, Math.PI / 2, Math.PI],
+      [-w / 2 + r, -h / 2 + r, Math.PI, Math.PI * 1.5]
+    ];
+    const points = [];
+    for (const [cx, cy, a0, a1] of corners) {
+      for (let i = 0; i <= 10; i++) {
+        const a = a0 + ((a1 - a0) * i) / 10;
+        points.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+      }
+    }
+    return points;
+  }
+
+  function projectPath(points, cx, cy, rx, ry) {
+    const ax = (rx * Math.PI) / 180, ay = (ry * Math.PI) / 180;
+    const cax = Math.cos(ax), sax = Math.sin(ax), cay = Math.cos(ay), say = Math.sin(ay);
+    ctx.beginPath();
+    points.forEach(([x, y], i) => {
+      const z = x * say - y * sax;
+      const p = 850 / (850 + z);
+      const sx = cx + x * cay * p, sy = cy + y * cax * p;
+      if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy);
+    });
+    ctx.closePath();
+  }
+
+  /**
+   * Paints the window's media. Unfocused it is screen-locked cover (the Campus "lens"). A stop's
+   * `focus` [x, y, zoom] instead aims the resting window at part of the frame, then slides to plain
+   * cover as the window expands, so the last frame still lines up with the next background.
+   */
+  function drawWindow(media, focus, e, cx, cy, restW, restH) {
+    const [mw, mh] = mediaSize(media);
+    if (!mw || !mh) return;
+    if (!focus) { drawCover(media); return; }
+    const [fx, fy, zoom] = focus;
+    const base = Math.max(W / mw, H / mh);
+    const scale = base * (zoom + (1 - zoom) * e);
+    const dw = mw * scale, dh = mh * scale;
+    // Keep the image under the whole resting window, with room for the tilt's perspective.
+    const hw = Math.min(restW * 0.62, dw / 2), hh = Math.min(restH * 0.62, dh / 2);
+    const x = clamp(cx - fx * dw, cx + hw - dw, cx - hw);
+    const y = clamp(cy - fy * dh, cy + hh - dh, cy - hh);
+    ctx.drawImage(media, x + ((W - dw) / 2 - x) * e, y + ((H - dh) / 2 - y) * e, dw, dh);
+  }
+
+  function windowMedia() {
+    const key = transitionActive && activeClip ? activeClip.dataset.key : STOPS[current].clip;
+    const clip = clips[key];
+    return clip.readyState >= 2 ? clip : posters[key];
+  }
+
+  let last = performance.now();
+  let drawing = false;
+  function draw(now) {
+    if (!heroVisible) { drawing = false; return; }
+    const dt = Math.min(40, now - last);
+    last = now;
+    rotX += (targetX - rotX) * Math.min(1, dt * 0.009);
+    rotY += (targetY - rotY) * Math.min(1, dt * 0.009);
+    ctx.clearRect(0, 0, W, H);
+
+    const heroRect = hero.getBoundingClientRect();
+    const rect = portal.getBoundingClientRect();
+    const rcx = rect.left - heroRect.left + rect.width / 2;
+    const rcy = rect.top - heroRect.top + rect.height / 2;
+    const e = expansion;
+    const cx = rcx + (W / 2 - rcx) * e;
+    const cy = rcy + (H / 2 - rcy) * e;
+    const s = e ? 1 : maskScale;
+    const w = (rect.width + (W - rect.width) * e) * s;
+    const h = (rect.height + (H - rect.height) * e) * s;
+    if (w > 1 && h > 1) {
+      const points = roundedRect(w, h, portalRadius * (1 - e) * s);
+      const rx = rotX * (1 - e), ry = rotY * (1 - e);
+      projectPath(points, cx, cy, rx, ry);
+      // A soft blue glow behind the window, gone before it swallows the screen.
+      if (e < 0.6) {
+        ctx.save();
+        ctx.shadowColor = `rgba(56,103,246,${(0.45 * (1 - e / 0.6) * s).toFixed(3)})`;
+        ctx.shadowBlur = 90;
+        ctx.fillStyle = '#050506';
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = '#050506';
+      ctx.fillRect(0, 0, W, H);
+      const focus = transitionActive ? activeFocus : STOPS[current].focus;
+      drawWindow(windowMedia(), focus, e, cx, cy, rect.width, rect.height);
+      ctx.restore();
+      if (e < 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.5 * (1 - e) * s;
+        ctx.strokeStyle = 'rgba(255,255,255,.7)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    if (transitionActive) updateCaption();
+    requestAnimationFrame(draw);
+  }
+  function startDrawing() {
+    if (drawing) return;
+    drawing = true;
+    last = performance.now();
+    requestAnimationFrame(draw);
+  }
+
+  function revealMask() {
+    retrigger(hero, 'mask-revealing');
+    maskScale = 0;
+    return animateValue((v) => (maskScale = v), 1050);
+  }
+  function revealContent() {
+    retrigger(hero, 'content-revealing');
+  }
+
+  // ================================================================ hero: captions during travel
+  let captions = null;
+  let captionText = '';
+  let captionToken = 0;
+  function setCaption(text) {
+    if (text === captionText) return;
+    captionText = text;
+    const token = ++captionToken;
+    caption.classList.remove('is-on');
+    setTimeout(() => {
+      if (token !== captionToken) return;
+      caption.textContent = text;
+      if (text) caption.classList.add('is-on');
+    }, caption.textContent ? 260 : 0);
+  }
+  function updateCaption() {
+    if (!captions || !activeClip) return;
+    const t = activeClip.currentTime;
+    let text = '';
+    for (const [at, line] of captions) if (t >= at) text = line;
+    setCaption(text);
+  }
+
+  // ================================================================ hero: travel
+  async function travel() {
+    if (busy || !introDone) return;
+    busy = true;
+    targetX = targetY = 0;
+    const from = STOPS[current];
+    const nextId = from.next;
+    const next = STOPS[nextId];
+    const clip = clips[from.clip];
+    const bg = $('#' + next.background);
+    try {
+      if (reduced) {
+        current = nextId;
+        render();
+        revealContent();
+        return;
+      }
+      hero.classList.add('is-loading');
+      await mediaReady(clip, 2500);
+      if (bg.tagName === 'VIDEO') {
+        bg.pause();
+        bg.currentTime = 0;
+      }
+      hero.classList.remove('is-loading');
+      hero.classList.add('is-transitioning');
+      clip.currentTime = from.start || 0;
+      clip.playbackRate = from.rate;
+      activeClip = clip;
+      activeFocus = from.focus || null;
+      captions = from.captions;
+      transitionActive = true;
+      const remaining = ((clip.duration || 8) - clip.currentTime) / from.rate;
+      const ended = once(clip, ['ended', 'error'], remaining * 1000 + 2500);
+      await clip.play().catch(() => {});
+      await animateValue((v) => (expansion = v), 1100);
+      await ended;
+      captions = null;
+      setCaption('');
+      await mediaReady(bg, 1500);
+      // The clip's last frame is the next background's first: switch under full brightness, then dim.
+      hero.classList.add('is-lit', 'is-committing');
+      hero.classList.remove('content-revealing', 'mask-revealing');
+      current = nextId;
+      render();
+      await frame();
+      await frame();
+      transitionActive = false;
+      activeClip = null;
+      activeFocus = null;
+      expansion = 0;
+      maskScale = 0;
+      hero.classList.remove('is-transitioning', 'is-committing');
+      syncBackgroundPlayback();
+      clip.pause();
+      clip.currentTime = from.start || 0;
+      await frame();
+      hero.classList.remove('is-lit');
+      const opening = revealMask();
+      setTimeout(revealContent, 100);
+      await opening;
+    } catch (error) {
+      console.error(error);
+      transitionActive = false;
+      activeClip = null;
+      activeFocus = null;
+      captions = null;
+      expansion = 0;
+      maskScale = 1;
+      hero.classList.remove('is-loading', 'is-transitioning', 'is-committing', 'is-lit');
+      setCaption('');
+    } finally {
+      busy = false;
+    }
+  }
+
+  // ================================================================ hero: preloader and intro
+  const brand = $('#brand');
+  function centreBrand() {
+    if (!brand.classList.contains('is-centered')) return;
+    brand.style.transform = 'none';
+    const r = brand.getBoundingClientRect();
+    brand.style.transform = '';
+    const s = innerWidth <= 640 ? 2 : 2.6;
+    brand.style.setProperty('--dx', `${innerWidth / 2 - (r.left + r.width / 2)}px`);
+    brand.style.setProperty('--dy', `${innerHeight / 2 - (r.top + r.height / 2)}px`);
+    brand.style.setProperty('--s', s);
+  }
+
+  async function startExperience() {
+    await mediaReady(clips[STOPS[current].clip], 1600);
+    const opening = revealMask();
+    setTimeout(() => document.body.classList.add('intro-ready'), 450);
+    await opening;
+    await wait(reduced ? 0 : 250);
+    revealContent();
+    introDone = true;
+  }
+
+  function runPreloader() {
+    const video = $('#preloader-video');
+    const value = $('#preloader-value');
+    const count = $('#preloader-count');
+    const preloader = $('#preloader');
+    let finished = false;
+    let ticking = true;
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      ticking = false;
+      value.textContent = '100';
+      count.classList.add('is-leaving');
+      brand.classList.remove('is-centered');
+      preloader.classList.add('is-background');
+      document.body.classList.add('preload-complete');
+      document.body.classList.remove('is-locked');
+      startExperience();
+      setTimeout(() => count.remove(), 750);
+      setTimeout(() => preloader.classList.add('is-gone'), 1600);
+    };
+
+    const skip = reduced || location.hash.length > 1;
+    if (skip) {
+      value.textContent = '100';
+      finish();
+      return;
+    }
+    const tick = () => {
+      if (!ticking) return;
+      if (video.duration) value.textContent = String(Math.round((video.currentTime / video.duration) * 100));
+      requestAnimationFrame(tick);
+    };
+    const start = () => {
+      video.playbackRate = Math.max(0.25, video.duration / 3);
+      video.play().then(() => {
+        preloader.classList.add('is-playing');
+        tick();
+      }).catch(finish);
+    };
+    video.addEventListener('ended', finish, { once: true });
+    video.addEventListener('error', finish, { once: true });
+    if (video.readyState >= 1) start(); else video.addEventListener('loadedmetadata', start, { once: true });
+    setTimeout(finish, 9000);
+  }
+
+  // ================================================================ hero: input
+  portal.addEventListener('click', travel);
+  hero.addEventListener('pointermove', (e) => {
+    if (busy || reduced || e.pointerType !== 'mouse') return;
+    const r = hero.getBoundingClientRect();
+    targetY = ((e.clientX - r.left) / r.width - 0.5) * 37.4;
+    targetX = ((e.clientY - r.top) / r.height - 0.5) * -33;
+  });
+  hero.addEventListener('pointerleave', () => { targetX = targetY = 0; });
+
+  new IntersectionObserver(([entry]) => {
+    heroVisible = entry.isIntersecting;
+    if (heroVisible) startDrawing();
+    syncBackgroundPlayback();
+  }).observe(hero);
+
+  // ================================================================ story: scroll-driven pieces
+  const progressBar = $('.progress');
+  const sectionProgress = (el) => {
+    const r = el.getBoundingClientRect();
+    const total = el.offsetHeight - innerHeight;
+    return total > 0 ? clamp(-r.top / total, 0, 1) : 0;
+  };
+
+  // The statement lights up word by word.
+  const statement = $('#statement');
+  (() => {
+    const words = [];
+    const walk = (node, highlight) => {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === 3) {
+          const fragment = document.createDocumentFragment();
+          child.textContent.split(/(\s+)/).forEach((part) => {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { fragment.append(part); return; }
+            const span = document.createElement('span');
+            span.className = highlight ? 'sw hl' : 'sw';
+            span.textContent = part;
+            words.push(span);
+            fragment.append(span);
+          });
+          child.replaceWith(fragment);
+        } else if (child.nodeType === 1) {
+          walk(child, highlight || child.tagName === 'EM');
+          if (child.tagName === 'EM') child.style.fontStyle = 'normal';
+        }
+      }
+    };
+    walk(statement, false);
+    statement.words = words;
+  })();
+  function updateStatement() {
+    const r = statement.getBoundingClientRect();
+    const start = innerHeight * 0.85, end = innerHeight * 0.35;
+    const p = reduced ? 1 : clamp((start - r.top) / (start - end + r.height * 0.6), 0, 1);
+    const lit = Math.round(p * statement.words.length);
+    statement.words.forEach((w, i) => w.classList.toggle('on', i < lit));
+  }
+
+  // Scrubbed screen recording with steps.
+  const scrub = $('#work');
+  const scrubVideo = $('#scrub-video');
+  const scrubTime = $('#scrub-time');
+  const steps = $$('#steps .step');
+  const STEP_AT = [0, 1.43, 3.27, 5.17];
+  let scrubTarget = 0, scrubSmooth = 0, scrubActive = false;
+  function updateScrub() {
+    const p = sectionProgress(scrub);
+    const duration = scrubVideo.duration || 8.23;
+    scrubTarget = clamp((p - 0.03) / 0.9, 0, 1) * (duration - 0.04);
+    const r = scrub.getBoundingClientRect();
+    const active = r.top < innerHeight && r.bottom > 0;
+    if (active && !scrubActive) { scrubActive = true; requestAnimationFrame(scrubLoop); }
+    scrubActive = active;
+  }
+  function scrubLoop() {
+    if (!scrubActive) return;
+    scrubSmooth += (scrubTarget - scrubSmooth) * (reduced ? 1 : 0.2);
+    if (scrubVideo.readyState >= 1 && !scrubVideo.seeking && Math.abs(scrubSmooth - scrubVideo.currentTime) > 0.012) {
+      scrubVideo.currentTime = scrubSmooth;
+    }
+    const t = scrubSmooth;
+    let index = 0;
+    STEP_AT.forEach((at, i) => { if (t >= at) index = i; });
+    steps.forEach((step, i) => {
+      const end = STEP_AT[i + 1] ?? (scrubVideo.duration || 8.23);
+      step.classList.toggle('active', i === index);
+      step.classList.toggle('done', i < index);
+      step.style.setProperty('--p', clamp((t - STEP_AT[i]) / (end - STEP_AT[i]), 0, 1).toFixed(3));
+    });
+    scrubTime.textContent = `0:${String(Math.floor(t)).padStart(2, '0')}`;
+    requestAnimationFrame(scrubLoop);
+  }
+
+  // Lounge: the frame opens to full bleed, then the phrases land one by one.
+  const lounge = $('#lounge');
+  const loungeMedia = $('#lounge-media');
+  const loungeWords = $$('#lounge-words .lw');
+  const loungeNote = $('#lounge-note');
+  function updateLounge() {
+    const r = lounge.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return;
+    const p = reduced ? 1 : sectionProgress(lounge);
+    const open = easeOut(clamp(p / 0.3, 0, 1));
+    loungeMedia.style.setProperty('--ix', `${(12 * (1 - open)).toFixed(2)}%`);
+    loungeMedia.style.setProperty('--iy', `${(10 * (1 - open)).toFixed(2)}%`);
+    loungeMedia.style.setProperty('--r', `${(32 * (1 - open)).toFixed(1)}px`);
+    loungeMedia.style.setProperty('--vs', (1.12 - 0.12 * open).toFixed(4));
+    loungeMedia.style.setProperty('--dim', (0.15 + 0.75 * clamp((p - 0.22) / 0.2, 0, 1)).toFixed(3));
+    loungeWords.forEach((w, i) => w.classList.toggle('on', p > 0.3 + i * 0.11));
+    loungeNote.classList.toggle('on', p > 0.86);
+  }
+
+  // Outro: the wordmark settles into focus.
+  const outro = $('#end');
+  const wordmark = $('#wordmark');
+  function updateOutro() {
+    const r = outro.getBoundingClientRect();
+    if (r.top > innerHeight) return;
+    const e = reduced ? 1 : easeOut(clamp((innerHeight - r.top) / (innerHeight * 0.85), 0, 1));
+    wordmark.style.setProperty('--ws', (0.84 + 0.16 * e).toFixed(4));
+    wordmark.style.setProperty('--wb', `${(12 * (1 - e)).toFixed(2)}px`);
+    wordmark.style.setProperty('--wo', (0.2 + 0.8 * e).toFixed(3));
+  }
+
+  // Headings: each word rises as its heading comes up the screen, and sinks again on the way back.
+  const splits = $$('[data-split]');
+  function updateSplits() {
+    for (const el of splits) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom < -40 || r.top > innerHeight + 40) continue;
+      const p = reduced ? 1 : clamp((innerHeight * 0.96 - r.top) / (innerHeight * 0.42), 0, 1);
+      const words = el.words || (el.words = $$('.w > span', el));
+      words.forEach((w, i) => {
+        const q = easeOut(clamp(p * (1 + words.length * 0.14) - i * 0.14, 0, 1));
+        w.style.setProperty('--wy', `${((1 - q) * 108).toFixed(1)}%`);
+        w.style.setProperty('--wr', `${((1 - q) * 6).toFixed(2)}deg`);
+      });
+    }
+  }
+
+  // Footage frames grow, lift and square up as they scroll in. Measured on the parent, which doesn't move.
+  const risers = $$('[data-rise]');
+  function updateRise() {
+    for (const el of risers) {
+      const r = el.parentElement.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) continue;
+      const e = reduced ? 1 : easeOut(clamp((innerHeight - r.top) / (innerHeight * 0.75), 0, 1));
+      el.style.setProperty('--ry', `${((1 - e) * 90).toFixed(1)}px`);
+      el.style.setProperty('--rs', (0.84 + 0.16 * e).toFixed(4));
+      el.style.setProperty('--rr', `${(22 + (1 - e) * 26).toFixed(1)}px`);
+    }
+  }
+
+  // Many hands: the three tasks go out one by one as you scroll, and the count goes up with them.
+  const parallel = $('#parallel');
+  const jobs = $$('#jobs .job');
+  const presenceCount = $('#presence-count');
+  function updateParallel() {
+    const r = parallel.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return;
+    const p = reduced ? 1 : sectionProgress(parallel);
+    let working = 0;
+    jobs.forEach((job, i) => {
+      const on = p > 0.08 + i * 0.2;
+      job.classList.toggle('on', on);
+      if (on) working++;
+    });
+    presenceCount.textContent = working;
+  }
+
+  // Tools: the section is as tall as the strip is wide, so scrolling down moves it sideways.
+  const strip = $('#tools');
+  const track = $('#hstrip-track');
+  const stripBar = $('.hstrip-progress');
+  let stripTravel = 0;
+  let stripHold = 0;
+  function sizeStrip() {
+    stripTravel = Math.max(0, track.scrollWidth - document.documentElement.clientWidth);
+    stripHold = innerHeight * 0.15;
+    strip.style.height = `${innerHeight + stripTravel + stripHold * 2}px`;
+  }
+  function updateStrip() {
+    const r = strip.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return;
+    const moved = clamp(-r.top - stripHold, 0, stripTravel);
+    track.style.setProperty('--tx', `${(-moved).toFixed(1)}px`);
+    stripBar.style.setProperty('--hp', stripTravel ? (moved / stripTravel).toFixed(4) : 1);
+  }
+
+  // The provider rows slide against each other with the scroll, on top of their own drift.
+  const marquees = $('#marquees');
+  const shifts = $$('.marquee-shift', marquees);
+  function updateMarquees() {
+    const r = marquees.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return;
+    const d = reduced ? 0 : ((innerHeight - r.top) / (innerHeight + r.height) - 0.5) * 260;
+    shifts[0].style.setProperty('--ms', `${(-d).toFixed(1)}px`);
+    shifts[1].style.setProperty('--ms', `${d.toFixed(1)}px`);
+  }
+
+  let scrollQueued = false;
+  function onScroll() {
+    scrollQueued = false;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progressBar.style.setProperty('--p', max > 0 ? (scrollY / max).toFixed(4) : 0);
+    document.body.classList.toggle('is-scrolled', scrollY > innerHeight * 0.6);
+    updateStatement();
+    updateSplits();
+    updateRise();
+    updateScrub();
+    updateParallel();
+    updateStrip();
+    updateMarquees();
+    updateLounge();
+    updateOutro();
+  }
+  addEventListener('scroll', () => {
+    if (scrollQueued) return;
+    scrollQueued = true;
+    requestAnimationFrame(onScroll);
+  }, { passive: true });
+
+  // ================================================================ story: reveals, counters, nav
+  $$('[data-split]').forEach((el) => {
+    const lines = el.innerHTML.split(/<br\s*\/?>/i).map((line) => line.replace(/<[^>]+>/g, '').trim());
+    let i = 0;
+    el.setAttribute('aria-label', lines.join(' '));
+    el.innerHTML = lines.map((line) =>
+      line.split(/\s+/).map((w) => `<span class="w" aria-hidden="true"><span style="--i:${i++}">${w}</span></span>`).join(' ')
+    ).join('<br>');
+  });
+  const revealObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add('is-in');
+      revealObserver.unobserve(entry.target);
+    }
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+  $$('[data-reveal]').forEach((el) => revealObserver.observe(el));
+
+  const navLinks = $$('.nav a');
+  /** The nav item each section belongs to (none for the statement and the outro). */
+  const NAV_OF = { work: 'work', parallel: 'parallel', approval: 'work', models: 'models', tools: 'tools', office: 'office', lounge: 'office' };
+  const navObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const id = NAV_OF[entry.target.id] ?? null;
+      navLinks.forEach((a) => a.classList.toggle('active', a.dataset.nav === id));
+    }
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  ['about', 'work', 'parallel', 'approval', 'models', 'tools', 'office', 'lounge', 'end'].forEach((id) => navObserver.observe($('#' + id)));
+  new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting) navLinks.forEach((a) => a.classList.remove('active'));
+  }, { rootMargin: '-45% 0px -50% 0px' }).observe(hero);
+
+  // Videos below the fold play only while on screen.
+  const inviewObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting && !reduced) entry.target.play().catch(() => {});
+      else entry.target.pause();
+    }
+  }, { threshold: 0.05 });
+  $$('video[data-inview]').forEach((v) => inviewObserver.observe(v));
+
+  // ================================================================ office: districts and map
+  // What each district does, and its departments (for the Commons, its core team).
+  const DISTRICTS = [
+    { id: 'commons', name: 'Commons', color: '#9a6414', x: 60.3, y: 58.1,
+      does: 'The core team: reception, research, writing, planning and your files.',
+      departments: ['Receptionist', 'Research Analyst', 'Chief of Staff', 'Designer', 'Product Coach', 'Knowledge Librarian', 'Files Agent', 'Marketing Strategist', 'Ops Coordinator'] },
+    { id: 'engineering', name: 'Engineering', color: '#2f5bd3', x: 15.5, y: 54.6,
+      does: 'Builds, tests, secures and ships your software.',
+      departments: ['Web & Frontend', 'Backend & APIs', 'Mobile', 'Cloud & Infrastructure', 'Security', 'Architecture & General Engineering', 'QA & Release', 'Platforms & Enterprise', 'Emerging Tech'] },
+    { id: 'product', name: 'Product & Delivery', color: '#7c3aed', x: 54.5, y: 34.1,
+      does: 'Turns ideas into requirements, roadmaps and delivery plans.',
+      departments: ['Product Management', 'Project Management', 'Engineering Management'] },
+    { id: 'design', name: 'Design Studio', color: '#c0267a', x: 72.5, y: 41.9,
+      does: 'Interfaces, user flows and design systems.', departments: ['Design'] },
+    { id: 'leadership', name: 'Leadership Suite', color: '#0f5e57', x: 84.6, y: 48.1,
+      does: 'Strategy, priorities and the big decisions.', departments: ['Executive Leadership'] },
+    { id: 'ai-data', name: 'AI & Data Lab', color: '#0e7490', x: 73.4, y: 65,
+      does: 'Models, data pipelines and analysis.', departments: ['AI, ML & Data'] },
+    { id: 'business', name: 'Business', color: '#b4461b', x: 40, y: 71.3,
+      does: 'Sales, marketing, customers and strategy.',
+      departments: ['Sales Management', 'Marketing Management', 'Customer Success', 'Strategy & Innovation'] },
+    { id: 'people-ops', name: 'People & Ops', color: '#3f7a3a', x: 65.8, y: 84.4,
+      does: 'Operations, hiring and people.',
+      departments: ['Operations Management', 'HR & People', 'General Management'] }
+  ];
+  const mapInner = $('#map-inner');
+  const mapLabel = $('#map-label');
+  if (!finePointer) $('#map-hint').textContent = 'Tap a district to fly there.';
+  const districtList = $('#districts');
+  const esc = (s) => s.replace(/&/g, '&amp;');
+  DISTRICTS.forEach((d, i) => {
+    const ring = document.createElement('span');
+    ring.className = 'map-ring';
+    ring.style.cssText = `--x:${d.x}%;--y:${d.y}%;--c:${d.color}`;
+    mapInner.append(ring);
+    d.ring = ring;
+    const item = document.createElement('div');
+    item.className = 'district';
+    item.tabIndex = 0;
+    item.dataset.reveal = '';
+    item.style.cssText = `--c:${d.color};--d:${(i * 0.05).toFixed(2)}s`;
+    item.innerHTML =
+      `<div class="district-head"><span class="swatch"></span><span class="district-name">${esc(d.name)}</span></div>` +
+      `<p class="district-does">${esc(d.does)}</p>` +
+      `<div class="depts">${d.departments.map((n) => `<span class="dept">${esc(n)}</span>`).join('')}</div>`;
+    districtList.append(item);
+    revealObserver.observe(item);
+    const on = () => focusDistrict(d, item);
+    item.addEventListener('pointerenter', on);
+    item.addEventListener('focus', on);
+    item.addEventListener('click', on);
+  });
+  const map = $('#map');
+  /** Centres a point of the map (0..1) at zoom `z`, never showing past the image's edges. */
+  function zoomMap(x, y, z) {
+    const w = map.clientWidth, h = map.clientHeight;
+    const tx = clamp(w / 2 - x * w * z, w - w * z, 0);
+    const ty = clamp(h / 2 - y * h * z, h - h * z, 0);
+    mapInner.style.transform = `translate(${tx.toFixed(1)}px,${ty.toFixed(1)}px) scale(${z})`;
+  }
+  let activeDistrict = null;
+  function focusDistrict(d, item) {
+    activeDistrict = d;
+    $$('.district', districtList).forEach((el) => el.classList.toggle('is-active', el === item));
+    DISTRICTS.forEach((x) => x.ring.classList.toggle('is-on', x === d));
+    zoomMap(d.x / 100, d.y / 100, reduced ? 1 : d.id === 'engineering' ? 1.5 : 1.8);
+    mapLabel.textContent = d.name;
+  }
+  districtList.addEventListener('pointerleave', () => {
+    if (!activeDistrict) return;
+    activeDistrict = null;
+    $$('.district', districtList).forEach((el) => el.classList.remove('is-active'));
+    DISTRICTS.forEach((x) => x.ring.classList.remove('is-on'));
+    zoomMap(0.5, 0.5, 1);
+    mapLabel.textContent = 'The whole campus';
+  });
+
+  // ================================================================ approval demo
+  const demo = $('#demo');
+  const demoPill = $('#demo-pill');
+  const demoResult = $('#demo-result');
+  const demoCursor = $('#demo-cursor');
+  const demoRing = $('#demo-ring');
+  const approveButton = $('.btn-approve', demo);
+  let demoTimers = [];
+  let userTookOver = false;
+  const later = (fn, ms) => demoTimers.push(setTimeout(fn, ms));
+  const FILE_ROW = '<div class="row"><span class="file">TaskList.tsx</span><span class="path">src/components</span><span class="plus">+2</span><span class="minus">−1</span>';
+
+  function setDemo(state, note) {
+    demo.dataset.state = state;
+    if (state === 'waiting') {
+      demoPill.textContent = 'Waiting for your OK';
+      demoResult.innerHTML = '';
+    } else if (state === 'approved') {
+      demoPill.textContent = 'Saved TaskList.tsx';
+      demoResult.innerHTML =
+        `<div class="result-card"><div class="result-title">Changed 1 file</div>${FILE_ROW}<span class="path">Saved</span>` +
+        `<button type="button" class="undo" data-act="undo">Undo</button></div>` +
+        `${note ? `<div class="path" style="margin-top:8px">${note}</div>` : ''}</div>` +
+        `<div class="log">now · Frontend Developer · write_file · TaskList.tsx · <em>approved by you</em></div>`;
+    } else if (state === 'rejected') {
+      demoPill.textContent = 'Rejected';
+      demoResult.innerHTML =
+        '<div class="result-card" style="--dotc:#b42318"><div class="result-title" style="--dotc:#b42318">Nothing was written</div>' +
+        '<div class="path">TaskList.tsx is exactly as it was. The Frontend Developer hears no and carries on.</div></div>' +
+        '<div class="log">now · Frontend Developer · write_file · TaskList.tsx · <em style="color:#fca5a5">rejected by you</em></div>';
+    } else if (state === 'undone') {
+      demoPill.textContent = 'Undone';
+      demoResult.innerHTML =
+        '<div class="result-card"><div class="result-title" style="--dotc:#64748b">Undone</div>' +
+        '<div class="path">TaskList.tsx is back to the version this change replaced.</div></div>' +
+        '<div class="log">now · You · undo · TaskList.tsx · <em>restored</em></div>';
+    }
+  }
+  function pointCursorAt(el) {
+    const d = demo.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const x = r.left - d.left + r.width * 0.55;
+    const y = r.top - d.top + r.height * 0.55;
+    demoCursor.style.setProperty('--cx', `${x}px`);
+    demoCursor.style.setProperty('--cy', `${y}px`);
+    return [x, y];
+  }
+  function ringAt(x, y) {
+    demoRing.style.left = `${x}px`;
+    demoRing.style.top = `${y}px`;
+    retrigger(demoRing, 'is-on');
+  }
+  function clearDemo() {
+    demoTimers.forEach(clearTimeout);
+    demoTimers = [];
+  }
+  function runDemo() {
+    clearDemo();
+    userTookOver = false;
+    demo.classList.remove('is-running');
+    demoCursor.classList.remove('is-on', 'is-down');
+    demoCursor.style.setProperty('--cx', `${demo.clientWidth * 0.78}px`);
+    demoCursor.style.setProperty('--cy', `${demo.clientHeight + 30}px`);
+    setDemo('waiting');
+    void demo.offsetWidth;
+    demo.classList.add('is-running');
+    if (reduced) return;
+    later(() => {
+      if (userTookOver) return;
+      demoCursor.classList.add('is-on');
+      pointCursorAt(approveButton);
+    }, 1400);
+    later(() => {
+      if (userTookOver || demo.dataset.state !== 'waiting') return;
+      const [x, y] = pointCursorAt(approveButton);
+      demoCursor.classList.add('is-down');
+      approveButton.classList.add('is-pressed');
+      ringAt(x, y);
+      later(() => {
+        demoCursor.classList.remove('is-down');
+        approveButton.classList.remove('is-pressed');
+        setDemo('approved');
+      }, 220);
+      later(() => demoCursor.classList.remove('is-on'), 1400);
+    }, 4200);
+  }
+  demo.addEventListener('pointerenter', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    userTookOver = true;
+    demoCursor.classList.remove('is-on');
+  });
+  demo.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-act]');
+    if (!button) return;
+    userTookOver = true;
+    clearDemo();
+    demoCursor.classList.remove('is-on');
+    const act = button.dataset.act;
+    button.classList.add('is-pressed');
+    setTimeout(() => button.classList.remove('is-pressed'), 160);
+    const r = button.getBoundingClientRect();
+    const d = demo.getBoundingClientRect();
+    // A keyboard press has no pointer position: ring the button's centre instead.
+    const fromKeyboard = e.detail === 0;
+    ringAt(fromKeyboard ? r.left - d.left + r.width / 2 : e.clientX - d.left, fromKeyboard ? r.top - d.top + r.height / 2 : e.clientY - d.top);
+    setTimeout(() => {
+      if (act === 'approve') setDemo('approved');
+      else if (act === 'always') setDemo('approved', 'Allowed for this session: until Axon restarts.');
+      else if (act === 'reject') setDemo('rejected');
+      else if (act === 'undo') setDemo('undone');
+    }, 180);
+  });
+  $('#demo-replay').addEventListener('click', runDemo);
+  new IntersectionObserver(([entry], observer) => {
+    if (!entry.isIntersecting) return;
+    observer.disconnect();
+    runDemo();
+  }, { threshold: 0.45 }).observe(demo);
+
+  // ================================================================ film
+  const film = $('#film');
+  const filmVideo = $('#film-video');
+  $$('[data-film]').forEach((b) => b.addEventListener('click', () => {
+    film.showModal();
+    document.body.classList.add('film-open');
+    filmVideo.currentTime = 0;
+    filmVideo.play().catch(() => {});
+  }));
+  $('#film-close').addEventListener('click', () => film.close());
+  film.addEventListener('click', (e) => { if (e.target === film) film.close(); });
+  film.addEventListener('close', () => {
+    filmVideo.pause();
+    document.body.classList.remove('film-open');
+  });
+
+  // ================================================================ cursor, magnets, spotlights
+  const cursor = $('#cursor');
+  const cursorLabel = $('#cursor-label');
+  if (finePointer) {
+    document.documentElement.classList.add('has-cursor');
+    const dotPos = $('.cursor-dot-pos', cursor);
+    const orbitPos = $('.cursor-orbit-pos', cursor);
+    let px = innerWidth / 2, py = innerHeight / 2, ox = px, oy = py;
+    addEventListener('pointermove', (e) => {
+      px = e.clientX;
+      py = e.clientY;
+      cursor.classList.add('is-visible');
+    }, { passive: true });
+    document.addEventListener('mouseleave', () => cursor.classList.remove('is-visible'));
+    addEventListener('pointerdown', () => cursor.classList.add('is-down'));
+    addEventListener('pointerup', () => cursor.classList.remove('is-down'));
+    document.addEventListener('pointerover', (e) => {
+      const target = e.target.closest('[data-cursor], a, button, .district, .dept, .mq');
+      const label = target?.dataset.cursor || '';
+      cursorLabel.textContent = label;
+      cursor.classList.toggle('has-label', Boolean(label));
+      cursor.classList.toggle('is-enter', target === portal);
+      cursor.classList.toggle('is-hover', Boolean(target) && target !== portal);
+    });
+    const loop = () => {
+      const k = reduced ? 1 : 0.2;
+      ox += (px - ox) * k;
+      oy += (py - oy) * k;
+      dotPos.style.transform = `translate3d(${px}px,${py}px,0)`;
+      orbitPos.style.transform = `translate3d(${ox.toFixed(2)}px,${oy.toFixed(2)}px,0)`;
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+
+    $$('[data-magnetic]').forEach((el) => {
+      el.addEventListener('pointermove', (e) => {
+        if (reduced) return;
+        const r = el.getBoundingClientRect();
+        const dx = e.clientX - (r.left + r.width / 2);
+        const dy = e.clientY - (r.top + r.height / 2);
+        el.classList.add('is-pulling');
+        el.style.transform = `translate(${dx * 0.22}px,${dy * 0.32}px)`;
+      });
+      el.addEventListener('pointerleave', () => {
+        el.classList.remove('is-pulling');
+        el.style.transform = '';
+      });
+    });
+    $$('.card').forEach((card) => card.addEventListener('pointermove', (e) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    }));
+  }
+
+  // ================================================================ boot
+  history.scrollRestoration = 'manual';
+  if (!location.hash) scrollTo(0, 0);
+  const primeWork = () => { clips.work.currentTime = STOPS.desks.start; };
+  if (clips.work.readyState >= 1) primeWork(); else clips.work.addEventListener('loadedmetadata', primeWork, { once: true });
+  Object.entries(clips).forEach(([key, clip]) => { clip.dataset.key = key; });
+  $$('.background').forEach((bg) => { if (bg.tagName === 'VIDEO') bg.pause(); });
+  resizeCanvas();
+  render(true);
+  centreBrand();
+  document.fonts?.ready.then(() => { fitTitle(); centreBrand(); sizeStrip(); onScroll(); });
+  addEventListener('resize', () => { resizeCanvas(); fitTitle(); centreBrand(); sizeStrip(); onScroll(); });
+  startDrawing();
+  sizeStrip();
+  onScroll();
+  runPreloader();
+})();
+</script>
+</body>
+</html>

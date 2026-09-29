@@ -86,14 +86,14 @@ export const APPEARANCES: Readonly<Record<string, Appearance>> = {
     accent: '#2563eb',
     glasses: false
   }),
-  writer: core({
+  'chief-of-staff': core({
     height: 1.78,
     build: 1.04,
     skin: '#c89574',
     hair: '#2a211d',
     hairStyle: 'side-part',
-    shirt: '#7a5ac8',
-    jacket: null,
+    shirt: '#f4f2fb',
+    jacket: '#4c3a8f',
     trousers: '#34363d',
     shoes: '#5a3d2b',
     accent: '#8b5cf6',

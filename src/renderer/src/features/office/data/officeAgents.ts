@@ -25,7 +25,7 @@ export interface OfficeAgent {
 const CORE_ACCENTS: Readonly<Record<string, [color: string, soft: string]>> = {
   receptionist: ['#e11d48', 'rgba(225, 29, 72, 0.15)'],
   'research-analyst': ['#2563eb', 'rgba(37, 99, 235, 0.15)'],
-  writer: ['#8b5cf6', 'rgba(139, 92, 246, 0.15)'],
+  'chief-of-staff': ['#8b5cf6', 'rgba(139, 92, 246, 0.15)'],
   designer: ['#ec4899', 'rgba(236, 72, 153, 0.15)'],
   'product-coach': ['#f97316', 'rgba(249, 115, 22, 0.15)'],
   'knowledge-librarian': ['#0d9488', 'rgba(13, 148, 136, 0.15)'],

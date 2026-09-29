@@ -130,7 +130,9 @@ export class Repository {
       if (agent.schedule?.kind === 'interval') agent.schedule = { ...agent.schedule, kind: 'manual' };
     state.mcpServers = Array.isArray(state.mcpServers) ? state.mcpServers : [];
     // Connectors are given to people (2026-09): servers from older builds keep the reach they had, for everyone.
-    for (const server of state.mcpServers) server.coworkers ??= everyone();
+    // The Chief of Staff took the Writer's place (2026-09), and the Writer's connectors with it.
+    for (const server of state.mcpServers)
+      server.coworkers = (server.coworkers ?? everyone()).map((a) => (a === 'writer' ? 'chief-of-staff' : a === 'not:writer' ? 'not:chief-of-staff' : a));
     // Task records arrived with the office's task boards (2026-09).
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
     // The receptionist and the tray arrived with the planner (2026-09).

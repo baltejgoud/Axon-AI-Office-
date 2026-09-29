@@ -34,8 +34,8 @@
   --amber-400: #fbbf24;
   --amber-600: #d97706;
 
-  /* Inter is bundled (see fonts.ts), so every platform draws the same letters. */
-  --font-sans: 'Inter Variable', Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Google Sans Flex is bundled (see main.tsx), so every platform draws the same letters. */
+  --font-sans: 'Google Sans Flex Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;
 
   --text-xs: 12px;

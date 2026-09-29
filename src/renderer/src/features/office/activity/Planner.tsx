@@ -30,19 +30,25 @@ const readable = (error: unknown) =>
     .replace(/^Error invoking remote method '[^']+': Error: /, '')
     .replace('; ask the user.', '.');
 
+/** The Planner tab's count: to-dos today, else this week; nothing when the week is clear. */
+export function PlannerCount() {
+  const tasks = useApp((s) => s.data?.tasks ?? EMPTY);
+  const groups = groupPlanner(tasks, useMinute());
+  const today = groups.today.filter((task) => task.kind === 'todo').length;
+  const label = today ? `${today} today` : groups.week.length ? `${groups.week.length} this week` : '';
+  return label ? <span className="activity-tab-count">{label}</span> : null;
+}
+
 /**
- * The receptionist's planner, above her conversation: your to-dos by day, and what the team is
- * working on today. Tick, rename, reschedule or delete a to-do right here, or ask her.
+ * The receptionist's planner, a tab beside her conversation: your to-dos by day, and what the team
+ * is working on today. Tick, rename, reschedule or delete a to-do right here, or ask her.
  */
 export function Planner() {
   const tasks = useApp((s) => s.data?.tasks ?? EMPTY);
-  const open = useOfficeStore((s) => s.plannerOpen);
-  const setOpen = useOfficeStore((s) => s.setPlannerOpen);
   const [doneOpen, setDoneOpen] = useState(false);
   const [error, setError] = useState('');
   const now = useMinute();
   const groups = groupPlanner(tasks, now);
-  const todayCount = groups.today.filter((task) => task.kind === 'todo').length;
 
   /** Runs a planner change; the new list arrives by itself from the main process. */
   const run = async (change: () => Promise<unknown>): Promise<boolean> => {
@@ -58,52 +64,43 @@ export function Planner() {
 
   const empty = !groups.today.length && !groups.week.length && !groups.later.length && !groups.done.length;
   return (
-    <section className={`planner${open ? ' open' : ''}`} aria-label="Planner">
-      <button className="planner-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <IconCalendar size={15} />
-        <h4>Planner</h4>
-        <span className="planner-count">
-          {todayCount
-            ? `${todayCount} today`
-            : groups.week.length
-              ? `${groups.week.length} this week`
-              : 'Nothing today'}
-        </span>
-        <IconCaretDown size={15} className="planner-chevron" />
-      </button>
-      {open && (
-        <div className="planner-body">
-          <AddRow onAdd={(input) => run(() => window.axon.taskAdd(input))} />
-          {error && (
-            <p className="planner-error" role="alert">
-              {error}
-            </p>
-          )}
-          {empty && <p className="planner-empty">Nothing planned. Add a to-do, or ask the receptionist.</p>}
-          <Group title="Today" tasks={groups.today} now={now} run={run} />
-          <Group title="This week" tasks={groups.week} now={now} run={run} />
-          <Group title="Later" tasks={groups.later} now={now} run={run} />
-          {groups.done.length > 0 && (
-            <section className="planner-group">
-              <button
-                className="planner-group-toggle"
-                aria-expanded={doneOpen}
-                onClick={() => setDoneOpen(!doneOpen)}
-              >
-                Done <span>{groups.done.length}</span>
-                <IconCaretDown size={13} className="planner-chevron" />
-              </button>
-              {doneOpen && (
-                <ul>
-                  {groups.done.map((task) => (
-                    <Row key={task.id} task={task} now={now} run={run} />
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
-        </div>
-      )}
+    <section className="planner" aria-label="Planner">
+      <div className="planner-body">
+        <AddRow onAdd={(input) => run(() => window.axon.taskAdd(input))} />
+        {error && (
+          <p className="planner-error" role="alert">
+            {error}
+          </p>
+        )}
+        {empty && (
+          <p className="planner-empty">
+            <IconCalendar size={18} />
+            Nothing planned. Add a to-do, or ask the receptionist.
+          </p>
+        )}
+        <Group title="Today" tasks={groups.today} now={now} run={run} />
+        <Group title="This week" tasks={groups.week} now={now} run={run} />
+        <Group title="Later" tasks={groups.later} now={now} run={run} />
+        {groups.done.length > 0 && (
+          <section className="planner-group">
+            <button
+              className="planner-group-toggle"
+              aria-expanded={doneOpen}
+              onClick={() => setDoneOpen(!doneOpen)}
+            >
+              Done <span>{groups.done.length}</span>
+              <IconCaretDown size={13} className="planner-chevron" />
+            </button>
+            {doneOpen && (
+              <ul>
+                {groups.done.map((task) => (
+                  <Row key={task.id} task={task} now={now} run={run} />
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
     </section>
   );
 }

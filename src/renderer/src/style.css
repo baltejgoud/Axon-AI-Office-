@@ -236,8 +236,7 @@ svg {
 .select:focus-visible,
 .textarea:focus-visible {
   outline: none;
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--border-strong);
 }
 .input:disabled,
 .select:disabled,

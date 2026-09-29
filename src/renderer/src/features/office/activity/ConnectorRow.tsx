@@ -4,6 +4,10 @@ import { useApp, perform } from '../../../state';
 import { ConnectorMark } from '../../../settings/ConnectorsSection';
 import { useEscape } from '../../../ui/escape';
 import { useOfficeStore } from '../store/officeStore';
+import { IconPlug } from '../../../ui';
+
+/** Marks shown in the header before the rest are counted. */
+const SHOWN = 3;
 
 /** A coworker's connectors: their icons, and a popover to switch each connected one for them. */
 export function ConnectorRow({ agent }: { agent: { id: string; name: string; department: string } }) {
@@ -19,18 +23,18 @@ export function ConnectorRow({ agent }: { agent: { id: string; name: string; dep
         className="activity-connectors-row"
         aria-expanded={open}
         aria-label={`${agent.name}'s connectors`}
-        title="Connectors"
+        title={mine.length ? `Connectors: ${mine.map((s) => s.name).join(', ')}` : 'No connectors yet'}
         onClick={() => setOpen(!open)}
       >
         {mine.length ? (
           <>
-            {mine.slice(0, 6).map((s) => (
-              <ConnectorMark key={s.id} name={s.name} catalogId={s.catalogId} size={11} />
+            {mine.slice(0, SHOWN).map((s) => (
+              <ConnectorMark key={s.id} name={s.name} catalogId={s.catalogId} size={12} />
             ))}
-            {mine.length > 6 && <span className="activity-connectors-more">+{mine.length - 6}</span>}
+            {mine.length > SHOWN && <span className="activity-connectors-more">+{mine.length - SHOWN}</span>}
           </>
         ) : (
-          <span className="activity-connectors-empty">No connectors</span>
+          <IconPlug size={15} />
         )}
       </button>
       {open && (

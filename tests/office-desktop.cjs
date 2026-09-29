@@ -302,7 +302,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(1500);
       assert.equal((await evaluate('window.__axonOffice.staff()')).length, 3);
       assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => s.visible), 'staff drawn close up');
-      for (const id of ['writer', 'designer', 'research-analyst', 'product-coach'])
+      for (const id of ['chief-of-staff', 'designer', 'research-analyst', 'product-coach'])
         if (await evaluate(`window.__axonOffice.request('${id}', 'coffee')`)) break;
       let brewed = false;
       for (let i = 0; i < 400 && !brewed; i++) {
@@ -329,7 +329,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(1800);
       await snap('p3-kitchen.png');
       // Low-poly Part 4: a game on the Lounge TV, with a controller in hand.
-      for (const id of ['marketing-strategist', 'writer', 'designer', 'research-analyst', 'product-coach'])
+      for (const id of ['marketing-strategist', 'chief-of-staff', 'designer', 'research-analyst', 'product-coach'])
         if (await evaluate(`window.__axonOffice.request('${id}', 'gaming')`)) break;
       await evaluate('window.__axonOffice.focus(-15.5, -11.6, 10)');
       let playing = false;
@@ -374,7 +374,7 @@ app.on('web-contents-created', (_, contents) => {
       assert.equal(await evaluate('document.querySelectorAll(".roster-district").length'), 8);
       await evaluate('document.querySelectorAll(".roster-card")[2].click()');
       await pause(50);
-      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Writer');
+      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Chief of Staff');
       await evaluate(`document.querySelector('button[aria-label="Office view"]').click()`);
       await waitFor('window.__axonOffice && !document.querySelector(".office-loading")', 'return to scene');
       await pause(300);
@@ -761,8 +761,11 @@ app.on('web-contents-created', (_, contents) => {
       );
       await pause(70);
       await evaluate('document.querySelector(".composer-btn-send").click()');
+      // Sending goes to the chat tab, where her answer arrives; the Planner tab has the to-do.
       await waitFor('document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")', 'planner card');
+      assert.equal(await evaluate('document.querySelector(".activity-tabs [aria-selected=true]").textContent'), 'Chat');
       assert.match(await evaluate('document.querySelector(".planner-card").textContent'), /due Tomorrow/);
+      await evaluate(`[...document.querySelectorAll('.activity-tabs [role=tab]')].find((t) => t.textContent.startsWith('Planner')).click()`);
       await waitFor(`(${plannerGroup('This week')}).includes('Book the venue')`, 'her to-do in the planner');
       // She has no task record to say her run ended, so the stream frees her for the next message.
       await waitFor('document.querySelector(".status-badge.completed")', 'the receptionist shows completed');

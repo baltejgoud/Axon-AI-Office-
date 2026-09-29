@@ -21,7 +21,7 @@ export function Knowledge() {
     <div className="knowledge-library stack">
       <div className="knowledge-library-intro">
         <p>
-          The Knowledge Librarian, Research Analyst and Writer search these documents and cite the passages
+          The Knowledge Librarian and Research Analyst search these documents and cite the passages
           they use. PDF, DOCX, TXT, Markdown, Excel, CSV and text-based code files · 15 MB per file · no OCR.
           Import only files you trust.
         </p>

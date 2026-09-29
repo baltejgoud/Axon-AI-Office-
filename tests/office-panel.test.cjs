@@ -23,28 +23,28 @@ const windowState = require('../src/main/windowState.ts');
 const conv = (id, agentId, updatedAt) => ({ id, agentId, updatedAt, title: id });
 
 test('agentThreads lists only that coworker, newest first', () => {
-  const list = [conv('a', 'writer', 1), conv('b', 'designer', 5), conv('c', 'writer', 9)];
+  const list = [conv('a', 'chief-of-staff', 1), conv('b', 'designer', 5), conv('c', 'chief-of-staff', 9)];
   assert.deepEqual(
-    thread.agentThreads(list, 'writer').map((c) => c.id),
+    thread.agentThreads(list, 'chief-of-staff').map((c) => c.id),
     ['c', 'a']
   );
 });
 
 test('activeThread prefers the runtime conversation, then the newest thread', () => {
-  const list = [conv('a', 'writer', 1), conv('c', 'writer', 9)];
-  assert.equal(thread.activeThread(list, 'writer', { conversationId: 'a' }).id, 'a');
-  assert.equal(thread.activeThread(list, 'writer', {}).id, 'c');
-  assert.equal(thread.activeThread(list, 'writer', undefined).id, 'c');
+  const list = [conv('a', 'chief-of-staff', 1), conv('c', 'chief-of-staff', 9)];
+  assert.equal(thread.activeThread(list, 'chief-of-staff', { conversationId: 'a' }).id, 'a');
+  assert.equal(thread.activeThread(list, 'chief-of-staff', {}).id, 'c');
+  assert.equal(thread.activeThread(list, 'chief-of-staff', undefined).id, 'c');
 });
 
 test('activeThread returns nothing when a fresh thread was requested', () => {
-  const list = [conv('a', 'writer', 1)];
-  assert.equal(thread.activeThread(list, 'writer', { fresh: true }), undefined);
+  const list = [conv('a', 'chief-of-staff', 1)];
+  assert.equal(thread.activeThread(list, 'chief-of-staff', { fresh: true }), undefined);
 });
 
 test('activeThread ignores a runtime conversation that was deleted', () => {
-  const list = [conv('a', 'writer', 1)];
-  assert.equal(thread.activeThread(list, 'writer', { conversationId: 'gone' }).id, 'a');
+  const list = [conv('a', 'chief-of-staff', 1)];
+  assert.equal(thread.activeThread(list, 'chief-of-staff', { conversationId: 'gone' }).id, 'a');
 });
 
 test('officeLibraryWorkspace creates the library with every document', () => {
@@ -68,12 +68,8 @@ test('officeLibraryWorkspace updates the documents and keeps createdAt', () => {
   assert.equal(next.updatedAt, 200);
 });
 
-test('library residents are the three Library coworkers', () => {
-  assert.deepEqual([...library.LIBRARY_RESIDENTS].sort(), [
-    'knowledge-librarian',
-    'research-analyst',
-    'writer'
-  ]);
+test('library residents are the two Library coworkers', () => {
+  assert.deepEqual([...library.LIBRARY_RESIDENTS].sort(), ['knowledge-librarian', 'research-analyst']);
 });
 
 const display = { x: 0, y: 0, width: 1920, height: 1040 };

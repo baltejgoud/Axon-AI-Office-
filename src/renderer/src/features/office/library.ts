@@ -3,7 +3,7 @@ import { useApp } from '../../state';
 
 export const OFFICE_LIBRARY_ID = 'office-library';
 /** The coworkers who work in the Library and can search imported documents. */
-export const LIBRARY_RESIDENTS: readonly string[] = ['knowledge-librarian', 'research-analyst', 'writer'];
+export const LIBRARY_RESIDENTS: readonly string[] = ['knowledge-librarian', 'research-analyst'];
 
 /**
  * The workspace through which the Library's coworkers reach every imported document. Knowledge

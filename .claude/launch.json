@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "axon-site",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["site/tools/serve.cjs", "4173"],
+      "port": 4173
+    }
+  ]
+}

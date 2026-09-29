@@ -22,7 +22,7 @@ export type Team = string;
 
 const CORE_TEAMS: Readonly<Record<string, Team>> = {
   'research-analyst': 'Library',
-  writer: 'Library',
+  'chief-of-staff': 'Planning',
   'knowledge-librarian': 'Library',
   'product-coach': 'Planning',
   designer: 'Planning',

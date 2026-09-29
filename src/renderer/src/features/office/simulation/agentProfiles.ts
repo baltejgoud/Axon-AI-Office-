@@ -56,12 +56,13 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
     pace: 1,
     initial: { kind: 'desk' }
   },
-  writer: {
-    id: 'writer',
-    weights: { desk: 58, coffee: 14, lounge: 10, bookshelf: 6, idle: 7, visit: 5, gaming: 5 },
-    meetingAffinity: 0.8,
+  // Checks in on people more than anyone.
+  'chief-of-staff': {
+    id: 'chief-of-staff',
+    weights: { desk: 52, visit: 16, coffee: 10, whiteboard: 6, lounge: 6, idle: 6, gaming: 4 },
+    meetingAffinity: 1.5,
     prop: 'tablet',
-    pace: 0.94,
+    pace: 1.06,
     initial: { kind: 'coffee', poiId: 'cafe-counter-1' }
   },
   designer: {

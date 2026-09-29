@@ -10,7 +10,7 @@ const RECEPTIONIST = OFFICE_AGENTS.find((agent) => agent.id === 'receptionist')!
 export function Briefing({ briefing }: { briefing: Brief }) {
   const dismiss = () => {
     useOfficeStore.getState().setBriefing(null);
-    useOfficeStore.getState().setPlannerOpen(true);
+    useOfficeStore.getState().setPanelTab('planner');
   };
   return (
     <section className="briefing-card" aria-label="Today’s briefing">

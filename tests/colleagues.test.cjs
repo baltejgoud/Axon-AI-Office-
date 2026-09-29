@@ -103,8 +103,7 @@ test('a consult speaks as the colleague and cannot ask further', async () => {
   assert.equal(answer, '409 Conflict.');
   assert.match(seen.system, /Backend Developer/);
   assert.match(seen.system, /Frontend Developer is asking you a question/);
-  assert.match(seen.system, /<roles>/, 'the colleague brings their role profile');
-  assert.equal(seen.tools, undefined);
+  assert.match(seen.system, /<roles>/, 'the colleague brings their role profile');  assert.equal(seen.tools, undefined);
   assert.equal(seen.messages[0].content, 'Which status code for a conflict?');
 });
 
@@ -112,7 +111,7 @@ test('a consult may read files when given read-only tools, and nothing else', as
   const backend = shared.coworkerById('backend-developer');
   let step = 0;
   const ran = [];
-  const answer = await colleagues.consult({ id: 'p', kind: 'openai-compatible' }, null, 'm', backend, 'Writer', 'Check the schema', {
+  const answer = await colleagues.consult({ id: 'p', kind: 'openai-compatible' }, null, 'm', backend, 'Chief of Staff', 'Check the schema', {
     stream: async (_p, _k, req, onChunk) => {
       step++;
       if (step === 1)
@@ -144,5 +143,5 @@ test('runRoots: office coworkers work in the open project; chats and the recepti
   assert.deepEqual(run({ agentId: undefined }), [], 'a plain chat needs its own folder');
   assert.deepEqual(run({ agentId: 'frontend-developer', conversationRoot: '/own' }), ['/own'], 'its own folder comes first');
   assert.deepEqual(run({ agentId: undefined, workspaceRoots: ['/w', '/p'] }), ['/w', '/p'], 'a workspace adds the project once');
-  assert.deepEqual(run({ agentId: 'writer', workspaceRoots: [] }), ['/p']);
+  assert.deepEqual(run({ agentId: 'chief-of-staff', workspaceRoots: [] }), ['/p']);
 });

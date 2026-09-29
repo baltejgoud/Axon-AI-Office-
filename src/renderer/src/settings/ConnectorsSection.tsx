@@ -82,7 +82,7 @@ const statusTone = (server: MCPServerConfig) =>
           ? 'badge-warning'
           : '';
 
-/** "Designer, Writer +12": who a connector serves. */
+/** "Designer, Chief of Staff +12": who a connector serves. */
 export function usedBy(assignees: readonly string[] = []): string {
   const names = assignees
     .filter((a) => !a.startsWith('not:'))

@@ -16,7 +16,7 @@ const ROOM_FRONT_Z = -6;
 export const CORE_HOME_DESKS: Readonly<Record<string, string>> = {
   receptionist: 'desk-reception',
   'research-analyst': 'desk-analyst',
-  writer: 'desk-writer',
+  'chief-of-staff': 'desk-chief',
   designer: 'desk-designer',
   'product-coach': 'desk-product',
   'knowledge-librarian': 'desk-librarian',
@@ -259,7 +259,7 @@ function buildCollaboration(b: LayoutBuilder): void {
 function buildPods(b: LayoutBuilder): void {
   b.rug('rug-pods', -0.6, -0.3, 10.4, 5.0);
   const pods = [
-    { id: 'pod-a', x: -3.2, seats: ['desk-analyst', 'desk-pod-a-ne', 'desk-pod-a-sw', 'desk-writer'] },
+    { id: 'pod-a', x: -3.2, seats: ['desk-analyst', 'desk-pod-a-ne', 'desk-pod-a-sw', 'desk-chief'] },
     { id: 'pod-b', x: 2.0, seats: ['desk-pod-b-nw', 'desk-ops', 'desk-designer', 'desk-pod-b-se'] }
   ];
   const z = -0.3;
@@ -273,7 +273,7 @@ function buildPods(b: LayoutBuilder): void {
   }
   // A standing spot beside each core desk, facing its occupant, for coworkers who drop by.
   b.visit('desk-analyst', -3.2, -2.05);
-  b.visit('desk-writer', -3.2, 1.45);
+  b.visit('desk-chief', -3.2, 1.45);
   b.visit('desk-designer', 2.0, 1.45);
   b.visit('desk-ops', 2.0, -2.05);
 }
@@ -385,9 +385,9 @@ function setUpDesks(b: LayoutBuilder): void {
     { poiId: 'desk-pod-a-ne', equipment: 'monitor', props: ['notebook'] },
     { poiId: 'desk-pod-a-sw', equipment: 'laptop', props: ['books'] },
     {
-      poiId: 'desk-writer',
-      equipment: 'laptop',
-      props: ['notebook', 'pen-cup', 'mug'],
+      poiId: 'desk-chief',
+      equipment: 'laptop-monitor',
+      props: ['folder', 'notebook', 'mug'],
       flavor: 'document',
       accent: '#8b5cf6'
     },

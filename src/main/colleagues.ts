@@ -18,7 +18,7 @@ export const ASK_COLLEAGUE: ToolDefinition = {
   description:
     'Ask a colleague at Axon a question while you work on this task; they answer from their own expertise. ' +
     'Name them by role, e.g. "Backend Developer" or "Security Engineer". Departments: ' +
-    `${SPECIALIST_GROUPS.join(', ')}; plus the core team (Research Analyst, Writer, Designer, Product Coach, ` +
+    `${SPECIALIST_GROUPS.join(', ')}; plus the core team (Research Analyst, Chief of Staff, Designer, Product Coach, ` +
     'Knowledge Librarian, Files Agent, Marketing Strategist, Ops Coordinator). At most three questions per task.',
   parameters: {
     type: 'object',

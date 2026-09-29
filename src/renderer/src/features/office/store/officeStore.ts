@@ -27,6 +27,11 @@ export interface AgentRuntime {
 
 export type Overlay = 'settings' | 'knowledge';
 
+/** What the coworker's panel shows under their name: the conversation, or one of their tools. */
+export type PanelTab = 'chat' | 'planner' | 'files' | 'updates';
+/** The Files Agent opens on the folder wall; everyone else on the conversation. */
+export const defaultTab = (agentId: string): PanelTab => (agentId === 'files-agent' ? 'files' : 'chat');
+
 interface OfficeStoreState {
   /** A department picked from "Go to department…"; the team strip shows it until another choice. */
   focusDepartment: string | null;
@@ -63,9 +68,9 @@ interface OfficeStoreState {
   /** The morning briefing, at the top of the receptionist's thread until dismissed. */
   briefing: Briefing | null;
   setBriefing: (briefing: Briefing | null) => void;
-  /** The receptionist's planner, open above her conversation. */
-  plannerOpen: boolean;
-  setPlannerOpen: (open: boolean) => void;
+  /** The panel's tab. Picking someone else goes back to their first tab. */
+  panelTab: PanelTab;
+  setPanelTab: (tab: PanelTab) => void;
   /** Goes where a notification, the tray or the Today board points: someone, their thread, the planner. */
   focusOn: (target: FocusTarget) => void;
   /**
@@ -110,12 +115,12 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   openTeamBoard: (team) => set({ teamBoard: team }),
   briefing: null,
   setBriefing: (briefing) => set({ briefing }),
-  plannerOpen: true,
-  setPlannerOpen: (open) => set({ plannerOpen: open }),
+  panelTab: 'chat',
+  setPanelTab: (tab) => set({ panelTab: tab }),
   focusOn: (target) => {
     get().flyToAgent(target.agentId);
     if (target.conversationId) get().setAgentConversation(target.agentId, target.conversationId);
-    if (target.planner) set({ plannerOpen: true });
+    if (target.planner) set({ panelTab: 'planner' });
   },
   workSplit: DEFAULT_WORK_SPLIT,
   setWorkSplit: (share) => set({ workSplit: clampWorkSplit(share) }),
@@ -130,7 +135,11 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
-    set({ selectedAgentId: id, teamBoard: null });
+    set({
+      selectedAgentId: id,
+      teamBoard: null,
+      ...(id !== get().selectedAgentId && { panelTab: defaultTab(id) })
+    });
   },
 
   setAgentStatus: (agentId: string, status: AgentStatus) => {
@@ -227,7 +236,12 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     }),
   clearFiles: (agentId) => set({ pendingFiles: { ...get().pendingFiles, [agentId]: [] } }),
   flyToAgent: (agentId) =>
-    set({ selectedAgentId: agentId, flyTo: { agentId, at: Date.now() }, teamBoard: null }),
+    set({
+      selectedAgentId: agentId,
+      flyTo: { agentId, at: Date.now() },
+      teamBoard: null,
+      ...(agentId !== get().selectedAgentId && { panelTab: defaultTab(agentId) })
+    }),
 
   startFresh: (agentId: string) => {
     const current = get().agentRuntime[agentId];

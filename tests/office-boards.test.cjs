@@ -22,7 +22,7 @@ const layout = require('../src/renderer/src/features/office/simulation/layout.ts
 const task = (over) => ({ kind: 'work', title: over.id, status: 'done', createdAt: 0, updatedAt: 0, ...over });
 
 test('teams: the core team by room, specialists by department', () => {
-  assert.equal(t.teamOf('writer'), 'Library');
+  assert.equal(t.teamOf('chief-of-staff'), 'Planning');
   assert.equal(t.teamOf('research-analyst'), 'Library');
   assert.equal(t.teamOf('ops-coordinator'), 'Planning');
   assert.equal(t.teamOf('files-agent'), 'Files room');
@@ -67,15 +67,15 @@ test('board cards: attention first, then newest, four at most, help included', (
 
 test('statuses come from each coworker’s newest work record', () => {
   const statuses = t.statusesFromTasks([
-    task({ id: '1', coworkerId: 'writer', status: 'done', updatedAt: 1 }),
-    task({ id: '2', coworkerId: 'writer', status: 'working', updatedAt: 2 }),
+    task({ id: '1', coworkerId: 'chief-of-staff', status: 'done', updatedAt: 1 }),
+    task({ id: '2', coworkerId: 'chief-of-staff', status: 'working', updatedAt: 2 }),
     task({ id: '3', coworkerId: 'designer', status: 'attention', note: 'Waiting for your approval', updatedAt: 1 }),
     task({ id: '4', coworkerId: 'research-analyst', status: 'attention', note: 'Rate limited', updatedAt: 1 }),
     task({ id: '5', coworkerId: 'product-coach', status: 'done', updatedAt: 1 }),
     task({ id: '6', kind: 'help', coworkerId: 'files-agent', status: 'working', updatedAt: 9 })
   ]);
   assert.deepEqual(statuses, {
-    writer: 'working',
+    'chief-of-staff': 'working',
     designer: 'waiting',
     'research-analyst': 'error',
     'product-coach': 'completed'

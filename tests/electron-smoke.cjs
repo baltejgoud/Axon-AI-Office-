@@ -205,14 +205,14 @@ app.on('web-contents-created', (_, contents) => {
       result.meter = await contents.executeJavaScript(`(async () => {
         const wait = (ms = 400) => new Promise(resolve => setTimeout(resolve, ms));
         const { providerId } = window.__smoke;
-        const chat = await window.axon.chatCreate(providerId, 'mock-model', null, 'writer', { skillIds: [], roleIds: [] }, null, "You are Axon's writer.");
+        const chat = await window.axon.chatCreate(providerId, 'mock-model', null, 'chief-of-staff', { skillIds: [], roleIds: [] }, null, "You are Axon's chief of staff.");
         await window.axon.chatSend(chat.id, 'Say hello', []);
         const find = document.querySelector('input[aria-label="Find a coworker"]');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(find, 'writer');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(find, 'chief of staff');
         find.dispatchEvent(new Event('input', { bubbles: true }));
         await wait();
-        const pick = [...document.querySelectorAll('.office-search-results button')].find(b => b.querySelector('strong')?.textContent === 'Writer');
-        if (!pick) throw new Error('Writer not in the directory: ' + document.querySelector('.office-search-results')?.textContent);
+        const pick = [...document.querySelectorAll('.office-search-results button')].find(b => b.querySelector('strong')?.textContent === 'Chief of Staff');
+        if (!pick) throw new Error('Chief of Staff not in the directory: ' + document.querySelector('.office-search-results')?.textContent);
         pick.click();
         await wait(1200);
         const meter = document.querySelector('.context-meter');

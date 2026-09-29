@@ -18,11 +18,11 @@ export function App() {
       .officeStart()
       .then(({ briefing, focus }) => {
         const office = useOfficeStore.getState();
-        // The briefing leads; the planner opens once it is dismissed.
+        // The briefing leads, in her chat; the planner opens once it is dismissed.
         if (briefing) {
           office.setBriefing(briefing);
           office.focusOn({ agentId: RECEPTIONIST_ID });
-          office.setPlannerOpen(false);
+          office.setPanelTab('chat');
         }
         if (focus) office.focusOn(focus);
       })
