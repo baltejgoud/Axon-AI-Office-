@@ -48,7 +48,7 @@ import { parseRepoInput } from './git/parse';
 import type { Team, TeamAssignment } from '../shared/types';
 import { TeamRunner, type WorkOutcome } from './team/runner';
 import { OPEN_TEAM, interruptTeams } from './team/plan';
-import { FIND_PEOPLE, TEAM_LEADS, TEAM_TOOL_NAMES, findPeople, resolveAttendees } from './team/tools';
+import { FIND_PEOPLE, GOAL_LIMIT, TEAM_LEADS, TEAM_TOOL_NAMES, findPeople, resolveAttendees } from './team/tools';
 import { MEETING_ASK, draftPlan, meetingSystemPrompt, taskBrief, teammateContext, teamsBlock, writeReport, type ModelCall } from './team/meeting';
 
 /** How long a team's changes wait to be saved together. */
@@ -1425,6 +1425,9 @@ export class Service {
     if (name === FIND_PEOPLE.name) return { content: findPeople(String(args.need ?? ''), chat.agentId ?? '') };
     const goal = String(args.goal ?? '').trim();
     if (!goal) return { content: 'Say what the team is to achieve.', isError: true };
+    // Too long goes back to the lead to shorten: a throw here would end the turn with the call unanswered.
+    if (goal.length > GOAL_LIMIT)
+      return { content: `The goal is ${goal.length.toLocaleString('en-US')} characters; keep it under ${GOAL_LIMIT.toLocaleString('en-US')} characters and call again with the same people. The detail can go in the plan's briefs after the meeting.`, isError: true };
     const open = this.state.teams.find((t) => t.conversationId === chat.id && OPEN_TEAM.has(t.status));
     if (open) return { content: `A team is already ${open.status} on "${open.goal}". Wait for it, or ask the user to stop it.`, isError: true };
     const people = resolveAttendees(args.attendees, chat.agentId ?? '');
@@ -1432,7 +1435,7 @@ export class Service {
     const team = this.teams.create({
       leadId: chat.agentId!,
       conversationId: chat.id,
-      goal: text(goal, 4000),
+      goal,
       attendees: people.ids,
       providerId: chat.providerId,
       modelId: chat.modelId

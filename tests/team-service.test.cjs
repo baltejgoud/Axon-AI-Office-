@@ -131,6 +131,49 @@ test('a coworker who is not a lead has no team tools; vague attendees start noth
   assert.match(repo.state.messages.find((m) => m.role === 'tool' && m.conversationId === chat.id).content, /engineer/);
 });
 
+const MARKETING = ['Marketing Strategist', 'Sales Operations Manager', 'Territory Manager', 'Digital Marketing Manager', 'Growth Marketing Manager', 'Content Marketing Manager'];
+
+test('a long brief still gathers the whole team, and the call is answered', async (t) => {
+  const { service, repo } = await setup(t);
+  const chat = await lead(service);
+  // The real call that failed: six people and a 5,393-character brief.
+  const goal = 'Plan the Q4 regional launch. '.repeat(186);
+  mockModel(t, async (n, _req, onChunk) => {
+    if (n === 1) return { toolCalls: [{ id: 'big', name: 'call_team_meeting', arguments: JSON.stringify({ goal, attendees: MARKETING }) }] };
+    onChunk('ok');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Gather marketing', []);
+  const answer = repo.state.messages.find((m) => m.role === 'tool' && m.toolCallId === 'big');
+  assert.ok(answer, 'the call has a result');
+  assert.equal(JSON.parse(answer.content).attendees.length, 6);
+  assert.equal(repo.state.teams.length, 1);
+  assert.equal(repo.state.teams[0].goal, goal.trim());
+  const replies = repo.state.messages.filter((m) => m.role === 'assistant' && m.conversationId === chat.id);
+  assert.equal(replies.find((m) => m.error)?.error, undefined, 'the turn did not fail');
+});
+
+test('a brief past the limit goes back to the lead to shorten; the turn carries on', async (t) => {
+  const { service, repo } = await setup(t);
+  const chat = await lead(service);
+  const { GOAL_LIMIT } = require('../src/main/team/tools.ts');
+  let after = '';
+  mockModel(t, async (n, req, onChunk) => {
+    if (n === 1) return { toolCalls: [{ id: 'huge', name: 'call_team_meeting', arguments: JSON.stringify({ goal: 'x'.repeat(GOAL_LIMIT + 1), attendees: MARKETING }) }] };
+    after = req.messages.at(-1).content;
+    onChunk('I will shorten it.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Gather marketing', []);
+  assert.equal(repo.state.teams.length, 0);
+  const answer = repo.state.messages.find((m) => m.role === 'tool' && m.toolCallId === 'huge');
+  assert.ok(answer?.error, 'the call is answered as an error');
+  assert.match(after, /12,000 characters/, 'the lead is told the limit');
+  const replies = repo.state.messages.filter((m) => m.role === 'assistant' && m.conversationId === chat.id);
+  assert.equal(replies.at(-1).content, 'I will shorten it.');
+  assert.equal(replies.find((m) => m.error)?.error, undefined, 'the turn did not fail');
+});
+
 test('find_people answers a lead with who fits', async (t) => {
   const { service, repo } = await setup(t);
   const chat = await lead(service, 'ops-coordinator');
