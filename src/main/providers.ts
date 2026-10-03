@@ -167,7 +167,7 @@ function describe(value: unknown): string {
   return '';
 }
 
-async function providerError(response: Response, key: string | null): Promise<ProviderError> {
+export async function providerError(response: Response, key: string | null): Promise<ProviderError> {
   return new ProviderError(response.status, clean(errorDetail(await readCapped(response, 16_000)), key));
 }
 
@@ -591,7 +591,7 @@ function replayOf(provider: ProviderConfig, blocks: Map<number, Record<string, u
 }
 
 /** A network failure said plainly: which address could not be reached, and what to check. */
-function unreachable(url: string): Error {
+export function unreachable(url: string): Error {
   const { host, hostname } = new URL(url);
   return new Error(['localhost', '127.0.0.1', '[::1]'].includes(hostname)
     ? `Could not reach ${host}. Is the server running on this computer?`

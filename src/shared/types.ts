@@ -5,6 +5,7 @@
  */
 import type { ContextUsage } from './context-usage';
 import type { RunEstimate } from './cost';
+import type { VoiceSettings } from './speech';
 
 export type ID = string;
 
@@ -248,6 +249,8 @@ export interface Settings {
   keepInTray: boolean;
   /** Start in the tray when Windows starts (installed app only). */
   startWithWindows: boolean;
+  /** Voice typing in the composer; absent until you change it. */
+  voice?: VoiceSettings;
 }
 
 /* ------------------------------------ MCP ------------------------------------- */

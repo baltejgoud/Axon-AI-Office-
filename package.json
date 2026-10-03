@@ -72,7 +72,10 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Axon uses the microphone for voice typing in the chat box."
+      }
     },
     "linux": {
       "target": [

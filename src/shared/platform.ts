@@ -161,6 +161,8 @@ export interface PlatformAPI {
   revertChange(toolCallId: string): Promise<void>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
+  /** Voice typing: a composer recording as text, by the engine Settings → Voice picks. `prompt` names what you're likely to say. */
+  speechTranscribe(audio: ArrayBuffer, mime: string, prompt: string): Promise<string>;
   chatModelSet(id: string, providerId: string, modelId: string): Promise<void>;
   knowledgeImport(): Promise<void>;
   knowledgeImportFolder(): Promise<{ imported: number; skipped: number; truncated: boolean } | null>;

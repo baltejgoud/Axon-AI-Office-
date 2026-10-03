@@ -12,6 +12,7 @@ import {
   IconCopy,
   IconHistory,
   IconKey,
+  IconMic,
   IconMonitor,
   IconPalette,
   IconPlug,
@@ -47,12 +48,23 @@ import { UsageSection } from './settings/UsageSection';
 import { ActivitySection } from './settings/ActivitySection';
 import { RestorePoints } from './settings/RestorePoints';
 import { useOfficeStore } from './features/office/store/officeStore';
+import { DEFAULT_VOICE, SPEECH_LANGUAGES, chosenEngine, speechEngines } from '../../shared/speech';
 
 type Section =
-  'accounts' | 'models' | 'usage' | 'activity' | 'tools' | 'appearance' | 'system' | 'skills' | 'privacy';
+  | 'accounts'
+  | 'models'
+  | 'voice'
+  | 'usage'
+  | 'activity'
+  | 'tools'
+  | 'appearance'
+  | 'system'
+  | 'skills'
+  | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
   { id: 'accounts', label: 'Accounts', icon: IconUser },
   { id: 'models', label: 'Models', icon: IconSparkle },
+  { id: 'voice', label: 'Voice typing', icon: IconMic },
   { id: 'usage', label: 'Usage', icon: IconChartBar },
   { id: 'activity', label: 'Activity log', icon: IconHistory },
   { id: 'tools', label: 'Connectors', icon: IconPlug },
@@ -130,6 +142,7 @@ export function SettingsPanel() {
       >
         {section === 'accounts' && <AccountsSection />}
         {section === 'models' && <ModelsSection onEdit={setProvider} />}
+        {section === 'voice' && <VoiceSection onModels={() => setSection('models')} />}
         {section === 'usage' && <UsageSection />}
         {section === 'activity' && <ActivitySection />}
         {section === 'tools' && (
@@ -297,6 +310,96 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
           />
         </SettingRow>
       </SettingsGroup>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Voice typing
+
+function VoiceSection({ onModels }: { onModels: () => void }) {
+  const providers = useApp((s) => s.data!.providers);
+  const [settings, save] = useSettings();
+  const voice = { ...DEFAULT_VOICE, ...settings.voice };
+  const engines = speechEngines(providers);
+  const engine = chosenEngine(providers, settings.voice);
+  return (
+    <div className="settings-page">
+      <SectionHeader
+        title="Voice typing"
+        description="Speak in any chat box and your words are typed out for you to check before sending. Click the microphone or press Ctrl+M; press Enter when you're done."
+      />
+      {engine ? (
+        <SettingsGroup title="Transcription">
+          <SettingRow
+            label="Engine"
+            id="setting-voice-engine"
+            hint="The service that turns your speech into text, with a key you added in Models. The first choice for each service is its most accurate."
+          >
+            <select
+              id="setting-voice-engine"
+              className="select"
+              value={`${engine.providerId}::${engine.model.id}`}
+              onChange={(e) => {
+                const [providerId, ...model] = e.target.value.split('::');
+                save({ voice: { ...voice, providerId, model: model.join('::') } });
+              }}
+            >
+              {engines.map((e) => (
+                <option key={`${e.providerId}::${e.model.id}`} value={`${e.providerId}::${e.model.id}`}>
+                  {e.providerName} · {e.model.label}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+          <SettingRow
+            label="Language"
+            id="setting-voice-language"
+            hint="The language you speak. Naming it is more accurate than detecting it, especially for short messages."
+          >
+            <select
+              id="setting-voice-language"
+              className="select"
+              value={voice.language}
+              onChange={(e) => save({ voice: { ...voice, language: e.target.value } })}
+            >
+              {SPEECH_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+        </SettingsGroup>
+      ) : (
+        <div className="settings-card settings-empty">
+          <EmptyState
+            icon={IconMic}
+            title="Voice typing needs a transcription key"
+            description="Add a Groq key (Whisper large v3) or an OpenAI key (GPT-4o Transcribe) in Models. Groq is fast and costs about 11 cents an hour of speech."
+            action={
+              <Button variant="primary" icon={IconSparkle} onClick={onModels}>
+                Open Models
+              </Button>
+            }
+          />
+        </div>
+      )}
+      <SettingsGroup title="Keys">
+        <SettingRow label="Start, or finish and type it out">
+          <Kbd keys="Ctrl M" />
+        </SettingRow>
+        <SettingRow label="Finish and type it out">
+          <Kbd keys="Enter" />
+        </SettingRow>
+        <SettingRow label="Cancel the recording">
+          <Kbd keys="Esc" />
+        </SettingRow>
+      </SettingsGroup>
+      <p className="settings-footnote">
+        Each recording goes to {engine ? engine.providerName : 'the service you choose'} to be transcribed,
+        along with a short list of names and terms from the conversation so they are spelled right. Axon does
+        not keep the recording.
+      </p>
     </div>
   );
 }

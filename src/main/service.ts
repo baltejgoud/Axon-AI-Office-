@@ -47,6 +47,8 @@ import { SignedOutError, listRepos } from './git/githubApi';
 import { parseRepoInput } from './git/parse';
 import type { Team, TeamAssignment } from '../shared/types';
 import { TeamRunner, type WorkOutcome } from './team/runner';
+import { AUDIO_MAX_BYTES, SPEECH_TIMEOUT_MS, cleanVoice, transcribe } from './speech';
+import { PROMPT_MAX, chosenEngine } from '../shared/speech';
 import { OPEN_TEAM, interruptTeams } from './team/plan';
 import { FIND_PEOPLE, TEAM_LEADS, TEAM_TOOL_NAMES, findPeople, resolveAttendees } from './team/tools';
 import { MEETING_ASK, draftPlan, meetingSystemPrompt, taskBrief, teammateContext, teamsBlock, writeReport, type ModelCall } from './team/meeting';
@@ -444,7 +446,7 @@ export class Service {
   async settingsSave(s: Parameters<PlatformAPI['settingsSave']>[0]): Promise<void> {
     if (!['dark', 'light', 'system'].includes(s.theme) || !Number.isInteger(s.defaultMaxTokens) || s.defaultMaxTokens < 256 || s.defaultMaxTokens > MAX_OUTPUT_TOKENS) throw new Error('Invalid settings.');
     this.state.settings = { ...s, allowShellExecution: Boolean(s.allowShellExecution), shellAllowlist: s.shellAllowlist || [], sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
-      keepInTray: s.keepInTray !== false, startWithWindows: Boolean(s.startWithWindows) };
+      keepInTray: s.keepInTray !== false, startWithWindows: Boolean(s.startWithWindows), voice: cleanVoice(s.voice) };
     await this.repo.save();
     this.shell?.applySettings(this.state.settings);
   }
@@ -1585,6 +1587,25 @@ export class Service {
     this.accounts.googleCancel();
     this.connectorSignInCancel();
     this.stopTicking();
+  }
+  /**
+   * Voice typing: a recording from the composer, as text. The engine is the one Settings → Voice
+   * picks among providers with a transcription endpoint; its key never leaves this process.
+   */
+  async speechTranscribe(audio: ArrayBuffer | Uint8Array, mime: string, prompt: string): Promise<string> {
+    const bytes = ArrayBuffer.isView(audio)
+      ? new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength)
+      : Object.prototype.toString.call(audio) === '[object ArrayBuffer]' ? new Uint8Array(audio) : null;
+    if (!bytes || !bytes.byteLength) throw new Error('The recording is empty.');
+    if (bytes.byteLength > AUDIO_MAX_BYTES) throw new Error('That recording is too long to transcribe in one go. Record it in shorter parts.');
+    const providers = this.state.providers.map(p => ({ ...p, hasApiKey: this.vault.has(p.id) }));
+    const engine = chosenEngine(providers, this.state.settings.voice);
+    if (!engine) throw new Error('Voice typing needs a Groq or OpenAI key. Add one in Settings → Models.');
+    const provider = providers.find(p => p.id === engine.providerId)!;
+    return transcribe(provider, this.providerKey(provider.id), {
+      audio: bytes, mime: text(mime, 100), model: engine.model, language: cleanVoice(this.state.settings.voice).language,
+      prompt: text(prompt, 20000).slice(-PROMPT_MAX), signal: AbortSignal.timeout(SPEECH_TIMEOUT_MS)
+    });
   }
   async attach(): Promise<{ id: string; name: string }[]> {
     const files = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });
