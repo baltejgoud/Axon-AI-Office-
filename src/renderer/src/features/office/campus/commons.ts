@@ -1,3 +1,4 @@
+import { roomName, type MeetingRoomId } from '../../../../../shared/rooms';
 import type { Vec2, ZoneId } from '../simulation/types';
 import type { LayoutBuilder } from './builder';
 
@@ -50,9 +51,9 @@ function glassFront(b: LayoutBuilder, id: string, fromX: number, toX: number, do
 }
 
 /**
- * The Commons, 40 x 32 m at the centre of the campus. Along the back wall: the Lounge, two
- * Planning rooms, the Library and the Files room. In the middle: the boardroom, the core
- * team's pods and the café. At the front: the lobby and reception.
+ * The Commons, 40 x 32 m at the centre of the campus. Along the back wall: the Lounge, meeting
+ * Rooms 1 and 2, the Library and the Files room. In the middle: the boardroom with Rooms 3 and 4
+ * in front of it, the core team's pods and the café. At the front: the lobby and reception.
  */
 export function buildCommons(b: LayoutBuilder): void {
   // Its back wall carries the rooms' screens, shelves and cabinets, and hides only the corridor behind.
@@ -72,6 +73,7 @@ export function buildCommons(b: LayoutBuilder): void {
   buildLibrary(b);
   buildFilesRoom(b);
   buildBoardroom(b);
+  buildFrontRooms(b);
   buildPods(b);
   buildCafe(b);
   buildLobby(b);
@@ -113,83 +115,93 @@ function buildLounge(b: LayoutBuilder): void {
   }
 }
 
-/** Two glass meeting rooms. The Product Coach runs the first from the head of its table. */
-function buildPlanning(b: LayoutBuilder): void {
-  // Planning A
-  b.rug('rug-meeting', -7.8, -10.5, 5.6, 7.0);
-  b.item('meeting-table', 'meeting-table', -7.8, -10.9, 2.8, 1.3);
-  b.item('meeting-screen', 'wall-screen', -7.6, -14.88, 2.2, 0.05, { blocks: false });
-  b.item('meeting-whiteboard', 'whiteboard', -9.9, -14.45, 1.6, 0.1);
-  b.plant('plant-meeting', -5.1, -14.45, true);
-  for (const [index, x] of [-8.75, -7.8, -6.85].entries()) {
+export type { MeetingRoomId };
+
+export interface MeetingRoom {
+  id: MeetingRoomId;
+  name: string;
+  /** Its chairs in the order a team fills them, the lead's first. */
+  seats: readonly string[];
+  /** The board that shows its team's goal and progress. */
+  boardItemId: string;
+  /** Where the camera looks to show it. */
+  focus: Vec2;
+}
+
+/** A six-seat room's chairs: three a side of the table, nearest the viewer's middle first. */
+const sixSeats = (id: string): string[] => [`${id}-n2`, `${id}-s2`, `${id}-n1`, `${id}-s1`, `${id}-n3`, `${id}-s3`];
+
+/** Rooms 3 and 4: in front of the boardroom, sharing its front glass as their back wall. */
+const FRONT_ROOMS = { back: 4.2, front: 8.8, table: 6.5, xs: [-16.2, -10.2] } as const;
+
+/**
+ * A glass room for six: three chairs a side of a table, a screen on the back wall and a whiteboard,
+ * its door in the middle of the front glass.
+ */
+function buildSixSeater(
+  b: LayoutBuilder,
+  id: string,
+  room: MeetingRoomId,
+  x: number,
+  table: number,
+  ids: { table: string; screen: string; board: string; screenZ: number; boardAt: [number, number, number] }
+): void {
+  b.rug(`rug-${id}`, x, table, 4.6, 3.8);
+  b.item(ids.table, 'meeting-table', x, table, 2.6, 1.2);
+  b.item(ids.screen, 'wall-screen', x, ids.screenZ, 2.0, 0.05, { blocks: false });
+  const [bx, bz, rotation] = ids.boardAt;
+  b.item(ids.board, 'whiteboard', bx, bz, 1.4, 0.1, { rotation });
+  for (const [index, offset] of [-0.8, 0, 0.8].entries()) {
     const n = index + 1;
-    b.seat(
-      `meeting-n${n}`,
-      'meeting',
-      'workspaces',
-      x,
-      -11.95,
-      FACE_FRONT,
-      { x, z: -12.55 },
-      'meeting-chair',
-      'meeting-room'
-    );
-    b.seat(
-      `meeting-s${n}`,
-      'meeting',
-      'workspaces',
-      x,
-      -9.85,
-      FACE_BACK,
-      { x, z: -9.25 },
-      'meeting-chair',
-      'meeting-room'
-    );
+    const cx = x + offset;
+    b.seat(`${id}-n${n}`, 'meeting', 'workspaces', cx, table - 1.05, FACE_FRONT, { x: cx, z: table - 1.65 }, 'meeting-chair', room);
+    b.seat(`${id}-s${n}`, 'meeting', 'workspaces', cx, table + 1.05, FACE_BACK, { x: cx, z: table + 1.65 }, 'meeting-chair', room);
   }
-  b.seat(
-    'meeting-w',
-    'meeting',
-    'workspaces',
-    -9.6,
-    -10.9,
-    FACE_RIGHT,
-    { x: -10.25, z: -10.9 },
-    'meeting-chair',
-    'meeting-room'
-  );
-  b.deskSeat('desk-product', 'workspaces', -6.0, -10.9, FACE_LEFT, 'meeting-chair');
+}
+
+/** Rooms 1 and 2, along the back wall between the Lounge and the Library. */
+function buildPlanning(b: LayoutBuilder): void {
+  buildSixSeater(b, 'room-1', 'room-1', -7.8, -10.9, {
+    table: 'meeting-table',
+    screen: 'meeting-screen',
+    board: 'meeting-whiteboard',
+    screenZ: -14.88,
+    boardAt: [-9.9, -14.45, 0]
+  });
+  b.plant('plant-meeting', -5.1, -14.45, true);
   b.spot('meeting-wb', 'whiteboard', 'workspaces', -9.9, -13.85, FACE_BACK);
 
-  // Planning B
-  b.rug('rug-planning', -1.6, -10.5, 5.2, 7.0);
-  b.item('planning-table', 'meeting-table', -1.6, -10.9, 2.6, 1.2);
-  b.item('planning-screen', 'wall-screen', -1.8, -14.88, 2.0, 0.05, { blocks: false });
-  b.item('planning-whiteboard', 'whiteboard', 0.4, -14.45, 1.0, 0.1);
+  buildSixSeater(b, 'room-2', 'room-2', -1.6, -10.9, {
+    table: 'planning-table',
+    screen: 'planning-screen',
+    board: 'planning-whiteboard',
+    screenZ: -14.88,
+    boardAt: [0.4, -14.45, 0]
+  });
   b.plant('plant-planning', -4.1, -14.45);
-  for (const [index, x] of [-2.4, -1.6, -0.8].entries()) {
-    const n = index + 1;
-    b.seat(
-      `planning-n${n}`,
-      'meeting',
-      'workspaces',
-      x,
-      -11.95,
-      FACE_FRONT,
-      { x, z: -12.55 },
-      'meeting-chair',
-      'planning-room'
-    );
-    b.seat(
-      `planning-s${n}`,
-      'meeting',
-      'workspaces',
-      x,
-      -9.85,
-      FACE_BACK,
-      { x, z: -9.25 },
-      'meeting-chair',
-      'planning-room'
-    );
+}
+
+/**
+ * Rooms 3 and 4, in the open floor between the boardroom and the lobby: glass on three sides, the
+ * boardroom's glass behind, doors toward the lobby, each whiteboard on its west wall facing in.
+ */
+function buildFrontRooms(b: LayoutBuilder): void {
+  const { back, front, table, xs } = FRONT_ROOMS;
+  const walls = [BOARDROOM.west, (BOARDROOM.west + BOARDROOM.east) / 2, BOARDROOM.east];
+  for (const [index, x] of walls.entries()) b.wall(`glass-front-rooms-${index}`, 'glass', x, back, x, front);
+  for (const [index, cx] of xs.entries()) {
+    const n = index + 3;
+    const [west, east] = [walls[index], walls[index + 1]];
+    b.wall(`glass-room-${n}-s1`, 'glass', west, front, cx - 0.8, front);
+    b.wall(`glass-room-${n}-s2`, 'glass', cx + 0.8, front, east, front);
+    buildSixSeater(b, `room-${n}`, `room-${n}` as MeetingRoomId, cx, table, {
+      table: `room-${n}-table`,
+      screen: `room-${n}-screen`,
+      board: `room-${n}-whiteboard`,
+      screenZ: back + 0.06,
+      boardAt: [west + 0.15, table, FACE_RIGHT]
+    });
+    b.plant(`plant-room-${n}`, east - 0.4, back + 0.4);
   }
 }
 
@@ -247,6 +259,20 @@ export const BOARDROOM_SEATS: readonly string[] = [
   ...BOARDROOM_XS.flatMap((_, i) => [`boardroom-n${i + 1}`, `boardroom-s${i + 1}`])
 ];
 
+/** Every meeting room, the boardroom first: twelve and the lead there, six in each of the others. */
+export const MEETING_ROOMS: readonly MeetingRoom[] = (
+  [
+    { id: 'boardroom', seats: BOARDROOM_SEATS, boardItemId: 'boardroom-whiteboard', focus: { x: -13.2, z: 0.1 } },
+    { id: 'room-1', seats: sixSeats('room-1'), boardItemId: 'meeting-whiteboard', focus: { x: -7.8, z: -10.5 } },
+    { id: 'room-2', seats: sixSeats('room-2'), boardItemId: 'planning-whiteboard', focus: { x: -1.6, z: -10.5 } },
+    { id: 'room-3', seats: sixSeats('room-3'), boardItemId: 'room-3-whiteboard', focus: { x: -16.2, z: 6.5 } },
+    { id: 'room-4', seats: sixSeats('room-4'), boardItemId: 'room-4-whiteboard', focus: { x: -10.2, z: 6.5 } }
+  ] as const
+).map((room) => ({ ...room, name: roomName(room.id) }));
+
+export const meetingRoom = (id: MeetingRoomId): MeetingRoom =>
+  MEETING_ROOMS.find((room) => room.id === id) ?? MEETING_ROOMS[0];
+
 /**
  * The boardroom, where the Chief of Staff gathers a team: a glass room with one long table for twelve
  * and the lead's chair at its head, the plan on the screen on its back wall, and a whiteboard. When no
@@ -278,7 +304,7 @@ function buildBoardroom(b: LayoutBuilder): void {
 function buildPods(b: LayoutBuilder): void {
   b.rug('rug-pods', -0.6, -0.3, 10.4, 5.0);
   const pods = [
-    { id: 'pod-a', x: -3.2, seats: ['desk-analyst', 'desk-pod-a-ne', 'desk-pod-a-sw', 'desk-chief'] },
+    { id: 'pod-a', x: -3.2, seats: ['desk-analyst', 'desk-product', 'desk-pod-a-sw', 'desk-chief'] },
     { id: 'pod-b', x: 2.0, seats: ['desk-pod-b-nw', 'desk-ops', 'desk-designer', 'desk-pod-b-se'] }
   ];
   const z = -0.3;
@@ -292,6 +318,7 @@ function buildPods(b: LayoutBuilder): void {
   }
   // A standing spot beside each core desk, facing its occupant, for coworkers who drop by.
   b.visit('desk-analyst', -3.2, -2.05);
+  b.visit('desk-product', -1.5, -2.05);
   b.visit('desk-chief', -3.2, 1.45);
   b.visit('desk-designer', 2.0, 1.45);
   b.visit('desk-ops', 2.0, -2.05);
@@ -364,11 +391,13 @@ function buildLobby(b: LayoutBuilder): void {
   for (const side of [-1, 1]) {
     const x = side * 10;
     const key = side < 0 ? 'west' : 'east';
-    b.rug(`rug-waiting-${key}`, x, 11.0, 4.2, 2.6);
-    b.item(`waiting-chair-${key}-1`, 'armchair', x - 1.2, 11.0, 0.85, 0.85, { rotation: FACE_RIGHT });
-    b.item(`waiting-chair-${key}-2`, 'armchair', x + 1.2, 11.0, 0.85, 0.85, { rotation: FACE_LEFT });
-    b.item(`waiting-table-${key}`, 'coffee-table', x, 11.0, 0.9, 0.9, { round: true });
-    b.item(`lobby-tree-${key}`, 'tree', side * 17.5, 9.0, 1.0, 1.0, { round: true });
+    // The west corner sits further forward, leaving an aisle in front of Rooms 3 and 4.
+    const z = side < 0 ? 12.2 : 11.0;
+    b.rug(`rug-waiting-${key}`, x, z, 4.2, 2.6);
+    b.item(`waiting-chair-${key}-1`, 'armchair', x - 1.2, z, 0.85, 0.85, { rotation: FACE_RIGHT });
+    b.item(`waiting-chair-${key}-2`, 'armchair', x + 1.2, z, 0.85, 0.85, { rotation: FACE_LEFT });
+    b.item(`waiting-table-${key}`, 'coffee-table', x, z, 0.9, 0.9, { round: true });
+    b.item(`lobby-tree-${key}`, 'tree', side * 17.5, side < 0 ? 12.4 : 9.0, 1.0, 1.0, { round: true });
     b.item(`lobby-planter-${key}`, 'planter', side * 13.2, 16.5, 2.0, 0.5);
   }
   b.deskSeat('desk-reception', 'reception', 0, 12.5, FACE_FRONT);
@@ -390,7 +419,6 @@ function setUpDesks(b: LayoutBuilder): void {
   b.visit('desk-librarian', 10.0, -9.45);
   b.visit('desk-marketing', -13.1, -12.9);
   b.visit('desk-files', 17.2, -8.05);
-  b.visit('desk-product', -5.4, -9.4);
 
   // What sits on each desk. Varied on purpose so the pods look lived in.
   const setups = [
@@ -401,7 +429,13 @@ function setUpDesks(b: LayoutBuilder): void {
       flavor: 'data',
       accent: '#2563eb'
     },
-    { poiId: 'desk-pod-a-ne', equipment: 'monitor', props: ['notebook'] },
+    {
+      poiId: 'desk-product',
+      equipment: 'laptop-monitor',
+      props: ['notebook', 'sticky-notes'],
+      flavor: 'document',
+      accent: '#f97316'
+    },
     { poiId: 'desk-pod-a-sw', equipment: 'laptop', props: ['books'] },
     {
       poiId: 'desk-chief',
@@ -433,7 +467,6 @@ function setUpDesks(b: LayoutBuilder): void {
       flavor: 'design',
       accent: '#eab308'
     },
-    { poiId: 'desk-product', equipment: 'laptop', props: ['notebook'], flavor: 'document' },
     {
       poiId: 'desk-librarian',
       equipment: 'laptop-monitor',

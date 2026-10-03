@@ -48,7 +48,7 @@ test('bundled catalogs load and resolve ids', () => {
   assert.equal(b.name, 'brainstorming');
   assert.ok(b.body.length > 100);
   assert.equal(skillBodies(['nope/missing']).length, 0);
-  assert.equal(roles().length, 198);
+  assert.equal(roles().length, 203);
   assert.ok(hasRole('frontend-developer'));
   assert.equal(roleProfiles(['frontend-developer', 'nope'])[0].name, 'Frontend Developer');
 });

@@ -185,6 +185,7 @@ const FLOORS: Record<FloorKind | 'corridor', { texture: () => THREE.Texture; tin
   'carpet-blue': { texture: carpetTexture, tint: '#cdd6e2', tile: 2 },
   'carpet-sage': { texture: carpetTexture, tint: '#d0dbc8', tile: 2 },
   'carpet-grey': { texture: carpetTexture, tint: '#d9dadd', tile: 2 },
+  'carpet-coral': { texture: carpetTexture, tint: '#eed3c8', tile: 2 },
   concrete: { texture: concreteTexture, tint: '#ffffff', tile: 6 },
   terrazzo: { texture: terrazzoTexture, tint: '#ffffff', tile: 3 }
 };

@@ -43,7 +43,7 @@ function runUntil(office, predicate, limit, dt = 1 / 60) {
 }
 
 test('every department works at its own desks, reachable from the café', () => {
-  assert.equal(new Set(catalog.SPECIALIST_ROLES.map((role) => role.id)).size, 199);
+  assert.equal(new Set(catalog.SPECIALIST_ROLES.map((role) => role.id)).size, 204);
   for (const group of catalog.SPECIALIST_GROUPS) {
     const ids = catalog.SPECIALIST_ROLES.filter((role) => role.group === group).map((role) => role.id);
     const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], seed: 17 });
@@ -94,7 +94,7 @@ test('coffee breaks go to the nearest station or the café', () => {
     if (expected === 'cafe') assert.ok(CAFE_PICKUP.includes(pickup), `${person.id} at ${pickup}`);
     else assert.ok(pickup.startsWith(`${expected}-pickup`), `${person.id} at ${pickup}, expected ${expected}`);
   }
-  assert.equal(districtsSeen.size, 7);
+  assert.equal(districtsSeen.size, 8);
 });
 
 test('largest department runs with distinct seats and furniture-safe paths', () => {
@@ -438,7 +438,7 @@ test('reduced motion keeps everyone at their desks; work still starts', () => {
 
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
-test('208 people: at most twelve away from their desks, and a step stays cheap', () => {
+test('213 people: at most twelve away from their desks, and a step stays cheap', () => {
   const ids = agents.OFFICE_AGENTS.map((a) => a.id);
   const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
   for (const id of ids) office.setTaskStatus(id, 'idle');
@@ -533,6 +533,61 @@ test('someone busy when the meeting starts joins it once their task ends', () =>
   office.setTaskStatus('chief-of-staff', 'completed');
   runUntil(office, (o) => o.view('chief-of-staff').poiId === 'boardroom-head' && o.view('chief-of-staff').sit === 1, 240, 0.05);
   assert.equal(office.view('chief-of-staff').poiId, 'boardroom-head');
+});
+
+test('a small team meets in its own room and works from there until it is done', () => {
+  const ids = ['chief-of-staff', 'backend-developer', 'frontend-developer'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 11 });
+  office.step(1 / 60);
+  assert.equal(office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1), 'room-3'), 3);
+  const inRoom3 = (o, id) => o.view(id).sit === 1 && layout.poiById(o.view(id).poiId ?? '')?.group === 'room-3';
+  runUntil(office, (o) => ids.every((id) => inRoom3(o, id)), 240, 0.05);
+  for (const id of ids) assert.ok(inRoom3(office, id), `${id} is seated in Room 3`);
+  assert.equal(office.view('chief-of-staff').poiId, 'room-3-n2', 'the lead takes the first chair');
+  // The plan is approved: the backend task runs, and its owner works at the table, not at their desk.
+  office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1), 'room-3', ['backend-developer']);
+  office.setTaskStatus('backend-developer', 'working');
+  run(office, 20, 0.1);
+  assert.ok(inRoom3(office, 'backend-developer'), 'works from the room');
+  assert.ok(['typing', 'reading', 'thinking'].includes(office.view('backend-developer').behavior), office.view('backend-developer').behavior);
+  // Their task is done; they wait with the team for the rest.
+  office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1), 'room-3', []);
+  office.setTaskStatus('backend-developer', 'completed');
+  run(office, 20, 0.1);
+  for (const id of ids) assert.ok(inRoom3(office, id), `${id} stays until the team is done`);
+  office.endTeamMeeting('team1');
+  const home = (o, id) => o.view(id).poiId === layout.HOME_DESKS[id] && o.view(id).sit === 1;
+  runUntil(office, (o) => ids.every((id) => home(o, id)), 240, 0.05);
+  for (const id of ids) assert.ok(home(office, id), `${id} is back at their desk`);
+});
+
+test('someone on the team’s task when the team forms walks from their desk to its room', () => {
+  const ids = ['ops-coordinator', 'content-creator', 'copywriter'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 13 });
+  office.setTaskStatus('copywriter', 'working');
+  office.step(1 / 60);
+  assert.equal(office.startTeamMeeting('team1', 'ops-coordinator', ids.slice(1), 'room-2', ['copywriter']), 3);
+  runUntil(office, (o) => o.view('copywriter').sit === 1 && layout.poiById(o.view('copywriter').poiId ?? '')?.group === 'room-2', 240, 0.05);
+  assert.equal(layout.poiById(office.view('copywriter').poiId).group, 'room-2');
+  assert.equal(office.view('copywriter').onTask, true);
+});
+
+test('two teams work at once in different rooms; a lead on both stays with the first', () => {
+  const ids = ['chief-of-staff', 'backend-developer', 'frontend-developer', 'content-creator', 'copywriter'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 17 });
+  office.step(1 / 60);
+  office.startTeamMeeting('build', 'chief-of-staff', ['backend-developer', 'frontend-developer'], 'room-1');
+  office.startTeamMeeting('posts', 'chief-of-staff', ['content-creator', 'copywriter'], 'room-4');
+  const roomOf = (o, id) => (o.view(id).sit === 1 ? layout.poiById(o.view(id).poiId ?? '')?.group : null);
+  const expected = { 'chief-of-staff': 'room-1', 'backend-developer': 'room-1', 'frontend-developer': 'room-1', 'content-creator': 'room-4', copywriter: 'room-4' };
+  runUntil(office, (o) => ids.every((id) => roomOf(o, id) === expected[id]), 240, 0.05);
+  for (const id of ids) assert.equal(roomOf(office, id), expected[id], id);
+  run(office, 10, 0.1);
+  assert.equal(roomOf(office, 'chief-of-staff'), 'room-1', 'the lead is not pulled back and forth');
+  // Once the first team is done, the lead joins the second.
+  office.endTeamMeeting('build');
+  runUntil(office, (o) => roomOf(o, 'chief-of-staff') === 'room-4', 240, 0.05);
+  assert.equal(office.view('chief-of-staff').poiId, 'room-4-n2');
 });
 
 test('a colleague walks over to help and stays until released', () => {

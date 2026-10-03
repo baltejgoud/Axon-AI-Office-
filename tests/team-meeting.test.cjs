@@ -57,6 +57,22 @@ test('leads get the team tools, with when to use them', () => {
   assert.match(tools.CALL_TEAM_MEETING.description, /more than one specialty/);
   assert.deepEqual(tools.CALL_TEAM_MEETING.parameters.required, ['goal', 'attendees']);
   assert.deepEqual(tools.TEAM_TOOLS.map((t) => t.name), ['find_people', 'call_team_meeting']);
+  assert.match(tools.CALL_TEAM_MEETING.parameters.properties.room.description, /Boardroom, Room 1, Room 2, Room 3, Room 4/);
+});
+
+test('a team gets a free six-seater, the boardroom when it is bigger, or the room the user named', () => {
+  assert.deepEqual(tools.resolveRoom(undefined, 3, []), { room: 'room-1' });
+  assert.deepEqual(tools.resolveRoom(undefined, 6, ['room-1', 'room-2']), { room: 'room-3' });
+  assert.deepEqual(tools.resolveRoom(undefined, 7, []), { room: 'boardroom' });
+  assert.deepEqual(tools.resolveRoom(undefined, 4, ['room-1', 'room-2', 'room-3', 'room-4']), { room: 'boardroom' });
+  // Every room taken: share the fitting one with the fewest teams.
+  assert.equal(tools.resolveRoom(undefined, 4, ['room-1', 'room-1', 'room-2', 'room-3', 'room-4', 'boardroom']).room, 'room-2');
+  for (const asked of ['Room 3', 'room-3', 'meeting room 3', '3']) assert.deepEqual(tools.resolveRoom(asked, 4, []), { room: 'room-3' }, asked);
+  assert.deepEqual(tools.resolveRoom('the boardroom', 3, []), { room: 'boardroom' });
+  // What was asked for and could not be had is said, with where they meet instead.
+  assert.deepEqual(tools.resolveRoom('Room 2', 8, []), { room: 'boardroom', note: 'Room 2 seats 6, too few for 8, so they meet in the boardroom.' });
+  assert.deepEqual(tools.resolveRoom('Room 2', 3, ['room-2']), { room: 'room-1', note: 'Room 2 has another team in it, so they meet in Room 1.' });
+  assert.match(tools.resolveRoom('the kitchen', 3, []).note, /no room called "the kitchen"[\s\S]*Room 1/);
 });
 
 test('the meeting prompt tells an attendee the goal, who else is there, and not to do the work yet', () => {

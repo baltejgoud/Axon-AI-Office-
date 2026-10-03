@@ -29,3 +29,12 @@ export function skillsBlock(skills: { name: string; source: string; body: string
     throw new Error(`Selected skills exceed the budget (${block.length.toLocaleString('en-US')} of 80,000 characters). Remove a skill.`);
   return block;
 }
+
+/**
+ * How every office coworker answers. Free models wrote essays to yes-or-no questions and searched
+ * the code to answer questions about people; these keep simple things quick.
+ */
+export const HOUSE_RULES = `How you work with the user:
+- Fit the length to the question. A simple question gets a direct answer in one to three sentences: no preamble, no headings, no restating the question. Write more only when the user asks for detail, a document or a plan.
+- Use a tool only when the answer needs it, and stop as soon as you can answer. Never run the same lookup twice. Don't search or read files to answer questions about people, the office or general knowledge.
+- When the user asks you to do something, do it with your tools now instead of explaining how it could be done or asking whether they want it; then say in a line what you did.`;

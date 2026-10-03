@@ -11,7 +11,7 @@ const api: PlatformAPI = {
   connectorAdd: invoke('connectorAdd'), connectorReconnect: invoke('connectorReconnect'), connectorSignInCancel: invoke('connectorSignInCancel'),
   connectorSignOut: invoke('connectorSignOut'), connectorAppSave: invoke('connectorAppSave'), chatCreate: invoke('chatCreate'), chatRename: invoke('chatRename'),
   chatSelectionSet: invoke('chatSelectionSet'),
-  chatDelete: invoke('chatDelete'), chatSend: invoke('chatSend'), chatStop: invoke('chatStop'), toolApprove: invoke('toolApprove'), attach: invoke('attach'),
+  chatDelete: invoke('chatDelete'), chatSend: invoke('chatSend'), chatStop: invoke('chatStop'), toolApprove: invoke('toolApprove'), attach: invoke('attach'), speechTranscribe: invoke('speechTranscribe'),
   getContextUsage: invoke('getContextUsage'), usageReport: invoke('usageReport'), listBackups: invoke('listBackups'), restoreBackup: invoke('restoreBackup'),
   auditList: invoke('auditList'), auditExport: invoke('auditExport'), revertChange: invoke('revertChange'),
   chatModelSet: invoke('chatModelSet'), knowledgeImport: invoke('knowledgeImport'),knowledgeImportFolder: invoke('knowledgeImportFolder'),knowledgeDelete: invoke('knowledgeDelete'), knowledgeSearch: invoke('knowledgeSearch'),

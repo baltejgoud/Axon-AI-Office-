@@ -82,7 +82,7 @@ test('staff stay where coworkers cannot walk, and are not coworkers', () => {
   for (const word of ['chef', 'barista', 'kitchen'])
     for (const found of search.searchCoworkers(word, agents.OFFICE_AGENTS))
       assert.ok(!routines.STAFF_IDS.includes(found.id), `${word} finds ${found.id}`);
-  assert.equal(agents.OFFICE_AGENTS.length, 208);
+  assert.equal(agents.OFFICE_AGENTS.length, 213);
 });
 
 test('with reduced motion the staff hold still', () => {

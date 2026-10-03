@@ -1,0 +1,73 @@
+/* Voice typing: the composer's microphone, its live loudness ring, and the recording clock. */
+.dictation {
+  --mic-level: 0;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.dictation-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--office-muted, var(--text-tertiary));
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    box-shadow 0.08s linear;
+}
+.dictation-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.dictation-btn:focus-visible {
+  outline: 2px solid var(--office-blue, var(--accent));
+  outline-offset: 2px;
+}
+.dictation-btn:disabled {
+  cursor: default;
+}
+/* Recording: red, with a ring that grows as you speak. */
+.dictation-recording .dictation-btn,
+.dictation-recording .dictation-btn:hover:not(:disabled) {
+  background: #d92d20;
+  color: #fff;
+  box-shadow: 0 0 0 calc(2px + var(--mic-level) * 5px) rgb(217 45 32 / 0.22);
+}
+.dictation-transcribing .dictation-btn {
+  background: var(--office-soft, var(--surface-hover));
+}
+.dictation-clock {
+  color: #d92d20;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: dictation-blink 1.6s ease-in-out infinite;
+}
+.dictation-status {
+  color: var(--office-muted, var(--text-tertiary));
+  font-size: 11px;
+}
+.dictation .spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes dictation-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictation-clock,
+  .dictation .spin {
+    animation: none;
+  }
+  .dictation-recording .dictation-btn {
+    box-shadow: 0 0 0 3px rgb(217 45 32 / 0.22);
+  }
+}

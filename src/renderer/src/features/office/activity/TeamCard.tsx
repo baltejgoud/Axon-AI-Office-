@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { roomName, roomOf } from '../../../../../shared/rooms';
 import type { Team, TeamAssignment, ToolCall } from '../../../../../shared/types';
 import { useApp } from '../../../state';
 import { IconUsers } from '../../../ui';
@@ -64,7 +65,7 @@ function TeamBody({ team }: { team: Team }) {
     <div className={`team-card is-${team.status}`}>
       <header>
         <IconUsers size={14} />
-        <strong>Team meeting</strong>
+        <strong>Team meeting · {roomName(roomOf(team))}</strong>
         <span className={`team-chip is-${team.status}`}>{TEAM_WORDS[team.status]}</span>
       </header>
       <p className="team-goal">{team.goal}</p>

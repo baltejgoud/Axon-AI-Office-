@@ -25,7 +25,7 @@ const shared = require('../src/shared/coworkers.ts');
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
 test('the shared directory holds the whole office, core team first', () => {
-  assert.equal(shared.COWORKERS.length, 208);
+  assert.equal(shared.COWORKERS.length, 213);
   assert.deepEqual(
     shared.COWORKERS.slice(0, 9).map((c) => c.core),
     Array(9).fill(true)
@@ -41,7 +41,7 @@ test('the shared directory holds the whole office, core team first', () => {
   assert.match(backend.systemPrompt, /Backend Developer/);
   assert.deepEqual(backend.roleIds, ['backend-developer']);
   assert.equal(shared.coworkerById('nobody'), undefined);
-  assert.equal(shared.SPECIALIST_GROUPS.length, 22);
+  assert.equal(shared.SPECIALIST_GROUPS.length, 23);
   // The office shows exactly what the directory says.
   for (const a of agents.OFFICE_AGENTS) {
     const c = shared.coworkerById(a.id);

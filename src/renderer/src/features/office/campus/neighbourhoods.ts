@@ -143,13 +143,15 @@ function packDepartment(
 
   // The department's task board (Part B): wide enough for four cards.
   b.item(`wb-${key}`, boardKind(district, name), cx, cell.minZ + 0.35, 2.4, 0.1);
-  if (name === 'Sales Management') b.item(`gong-${key}`, 'gong', cx + 1.75, cell.minZ + 0.45, 0.8, 0.4);
+  // Sales' gong and Customer Success's trophies stand right of the board; in a narrow cell they take the corner plant's place.
+  const trophy = name === 'Sales Management' || name === 'Customer Success';
+  if (name === 'Sales Management') b.item(`gong-${key}`, 'gong', cx + 1.7, cell.minZ + 0.45, 0.8, 0.4);
   if (name === 'Customer Success')
-    b.item(`trophies-${key}`, 'trophy-shelf', cx + 1.75, cell.minZ + 0.45, 0.9, 0.35);
+    b.item(`trophies-${key}`, 'trophy-shelf', cx + 1.7, cell.minZ + 0.45, 0.9, 0.35);
   b.spot(`wb-spot-${key}`, 'whiteboard', 'agents', cx, cell.minZ + 1.0, FACE_BACK, tags);
   b.spot(`open-${key}`, 'open-area', 'agents', cell.minX + 1.2, cell.minZ + 1.1, FACE_FRONT, tags);
   b.plant(`plant-${key}-nw`, cell.minX + 0.5, cell.minZ + 0.5, true);
-  b.plant(`plant-${key}-ne`, cell.maxX - 0.5, cell.minZ + 0.5, true);
+  if (!trophy || cell.maxX - cell.minX >= 5.5) b.plant(`plant-${key}-ne`, cell.maxX - 0.5, cell.minZ + 0.5, true);
 
   const region = {
     minX: cell.minX + EDGE,

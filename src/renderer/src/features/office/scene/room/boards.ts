@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { TaskItem, TaskStatus } from '../../../../../../shared/types';
-import type { TaskBoard } from '../../campus/boards';
+import { MEETING_COLOR, type TaskBoard } from '../../campus/boards';
+import type { MeetingRoomId } from '../../campus/commons';
+import { roomName } from '../../../../../../shared/rooms';
 import { OFFICE_AGENTS } from '../../data/officeAgents';
 import { shortName } from '../../shell/framing';
 import type { FurnitureItem } from '../../simulation/layout';
@@ -41,6 +43,8 @@ interface Placed {
   item: FurnitureItem;
   slot: Slot;
   cards: TaskItem[];
+  /** The team in the board's meeting room, which it shows while they are there. */
+  roomCards: TaskItem[];
   /** The Today board's lines, and the day they were drawn for. */
   lines: TodayLine[];
   day: Date;
@@ -48,6 +52,19 @@ interface Placed {
 }
 
 const PEOPLE = new Map(OFFICE_AGENTS.map((agent) => [agent.id, agent]));
+
+/** A meeting room's board shows the team in it; when the room is free, its own cards (if any). */
+const shown = (place: Placed): TaskItem[] => (place.roomCards.length ? place.roomCards : place.cards);
+const cardsSignature = (place: Placed) =>
+  `${place.roomCards.length > 0}|${shown(place)
+    .map((card) => `${card.id}:${card.status}:${card.title}`)
+    .join('|')}`;
+
+/** A point on a board's face, `across` metres to its right and `up` from the floor, in the world. */
+function facePoint(item: FurnitureItem, across: number, up: number): THREE.Vector3 {
+  const [sin, cos] = [Math.sin(item.rotation), Math.cos(item.rotation)];
+  return new THREE.Vector3(item.x + across * cos + FACE_OUT * sin, up, item.z - across * sin + FACE_OUT * cos);
+}
 
 function initials(name: string): string {
   return name
@@ -90,6 +107,7 @@ export class BoardLayer {
         item,
         slot: { x, y, w, h: SLOT_HEIGHT },
         cards: [],
+        roomCards: [],
         lines: [],
         day: new Date(),
         signature: ''
@@ -122,7 +140,7 @@ export class BoardLayer {
     let changed = false;
     for (const place of this.placed) {
       let signature: string;
-      // The boardroom's board follows the teams instead (setMeeting).
+      // A meeting room's board follows the teams instead (setRooms).
       if (place.board.kind === 'meeting') continue;
       if (place.board.kind === 'today') {
         place.lines = todayLines(tasks, now);
@@ -133,7 +151,7 @@ export class BoardLayer {
         ].join('|');
       } else {
         place.cards = boardCards(tasks, place.board.team);
-        signature = place.cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
+        signature = cardsSignature(place);
       }
       if (signature === place.signature) continue;
       place.signature = signature;
@@ -143,14 +161,14 @@ export class BoardLayer {
     if (changed) this.texture.needsUpdate = true;
   }
 
-  /** The open team on the boardroom's board: its goal while it meets, then its tasks. */
-  setMeeting(cards: readonly TaskItem[]): void {
+  /** Each meeting room's open team on that room's board: its goal while it meets, then its tasks. */
+  setRooms(cards: Readonly<Partial<Record<MeetingRoomId, readonly TaskItem[]>>>): void {
     let changed = false;
     for (const place of this.placed) {
-      if (place.board.kind !== 'meeting') continue;
-      const signature = cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
+      if (!place.board.room) continue;
+      place.roomCards = [...(cards[place.board.room] ?? [])];
+      const signature = cardsSignature(place);
       if (signature === place.signature) continue;
-      place.cards = [...cards];
       place.signature = signature;
       this.draw(place);
       changed = true;
@@ -174,12 +192,12 @@ export class BoardLayer {
   ): { x: number; y: number } | null {
     const place = this.placed.find((p) => p.board.team === team);
     if (!place) return null;
-    const p = new THREE.Vector3(place.item.x, FACE_Y, place.item.z + FACE_OUT).project(camera);
+    const p = facePoint(place.item, 0, FACE_Y).project(camera);
     return { x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 };
   }
 
   /** What each board shows, for the debug handle. The Today board's lines read "10:00 — Title". */
-  info(): { team: Team; cards: { title: string; status: TaskStatus }[] }[] {
+  info(): { team: Team; cards: { title: string; status: TaskStatus }[]; title: string }[] {
     return this.placed.map((place) => ({
       team: place.board.team,
       cards:
@@ -188,7 +206,8 @@ export class BoardLayer {
               title: `${line.label} — ${line.title}`,
               status: line.overdue ? ('attention' as const) : ('open' as const)
             }))
-          : place.cards.map((card) => ({ title: this.cardTitle(card), status: card.status }))
+          : shown(place).map((card) => ({ title: this.cardTitle(card), status: card.status })),
+      title: this.titleOf(place)
     }));
   }
 
@@ -203,6 +222,13 @@ export class BoardLayer {
     return `Helping ${shortName(PEOPLE.get(card.forCoworkerId ?? '')?.name ?? 'a colleague')}`;
   }
 
+  /** The header: the room's name while a team is in it, else the board's own (the Today board adds the date). */
+  private titleOf(place: Placed): string {
+    const { board } = place;
+    if (board.kind === 'today') return `${board.title} · ${shortDate(dayKey(place.day), place.day)}`;
+    return place.roomCards.length && board.room ? roomName(board.room) : board.title;
+  }
+
   private geometry(): THREE.BufferGeometry {
     const positions: number[] = [];
     const uvs: number[] = [];
@@ -211,23 +237,16 @@ export class BoardLayer {
     const H = this.canvas.height;
     this.placed.forEach(({ item, slot }, i) => {
       const half = (item.w - 0.1) / 2;
-      const z = item.z + FACE_OUT;
       const bottom = FACE_Y - FACE_HEIGHT / 2;
       const top = FACE_Y + FACE_HEIGHT / 2;
-      positions.push(
-        item.x - half,
-        bottom,
-        z,
-        item.x + half,
-        bottom,
-        z,
-        item.x + half,
-        top,
-        z,
-        item.x - half,
-        top,
-        z
-      );
+      // Left-bottom, right-bottom, right-top, left-top, as seen from in front of the board.
+      for (const [across, up] of [
+        [-half, bottom],
+        [half, bottom],
+        [half, top],
+        [-half, top]
+      ])
+        positions.push(...facePoint(item, across, up).toArray());
       const u0 = (slot.x + 1) / W;
       const u1 = (slot.x + slot.w - 1) / W;
       const v0 = 1 - (slot.y + slot.h - 1) / H;
@@ -244,24 +263,23 @@ export class BoardLayer {
   }
 
   private draw(place: Placed): void {
-    const { board, slot, cards } = place;
+    const { board, slot } = place;
+    const cards = shown(place);
     const ctx = this.canvas.getContext('2d');
     if (!ctx) return;
     const { x, y, w, h } = slot;
     ctx.clearRect(x, y, w, h);
     ctx.fillStyle = '#fbfaf6';
     ctx.fillRect(x, y, w, h);
-    // Header: the team's name on its colour (the Today board adds the date).
+    // Header: the team's or room's name on its colour.
     const header = 34;
-    ctx.fillStyle = board.color;
+    ctx.fillStyle = place.roomCards.length ? MEETING_COLOR : board.color;
     ctx.fillRect(x, y, w, header);
     ctx.fillStyle = '#ffffff';
     ctx.font = `650 19px ${FONT}`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    const title =
-      board.kind === 'today' ? `${board.title} · ${shortDate(dayKey(place.day), place.day)}` : board.title;
-    ctx.fillText(fitted(ctx, title, w - 20), x + 10, y + header / 2 + 1);
+    ctx.fillText(fitted(ctx, this.titleOf(place), w - 20), x + 10, y + header / 2 + 1);
     if (board.kind === 'today') return this.drawToday(ctx, place, header);
     // Four tiles, two by two.
     const pad = 6;

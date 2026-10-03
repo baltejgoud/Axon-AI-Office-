@@ -45,7 +45,7 @@ export const RECEPTION_DESK: Surface = { minX: -0.62, maxX: 0.62, minZ: 0.36, ma
 export function surfaceOf(poiId: string, district?: string): Surface {
   if (poiId === 'desk-reception') return RECEPTION_DESK;
   if (district === 'leadership') return EXEC_DESK;
-  if (['desk-marketing', 'desk-librarian', 'desk-files', 'desk-product'].includes(poiId)) return SINGLE_DESK;
+  if (['desk-marketing', 'desk-librarian', 'desk-files'].includes(poiId)) return SINGLE_DESK;
   return POD_DESK;
 }
 

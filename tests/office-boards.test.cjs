@@ -125,12 +125,16 @@ const agents = require('../src/renderer/src/features/office/data/officeAgents.ts
 test('a board for every department and every core team room, and one for everyone', () => {
   const teams = boards.TASK_BOARDS.map((b) => b.team).sort();
   const departments = districts.DISTRICTS.flatMap((d) => d.departments);
-  // The boardroom's board shows whichever team is meeting.
-  assert.deepEqual(teams, [...departments, 'Boardroom', 'Files room', 'Library', 'Lounge', 'Planning', 'Today'].sort());
+  // Each meeting room's board shows the team in it; Room 1's is Planning's while the room is free.
+  assert.deepEqual(teams, [...departments, 'Boardroom', 'Files room', 'Library', 'Lounge', 'Planning', 'Room 2', 'Room 3', 'Room 4', 'Today'].sort());
+  assert.deepEqual(boards.TASK_BOARDS.filter((b) => b.room).map((b) => [b.room, b.team]), [
+    ['room-1', 'Planning'], ['boardroom', 'Boardroom'], ['room-2', 'Room 2'], ['room-3', 'Room 3'], ['room-4', 'Room 4']
+  ]);
   for (const b of boards.TASK_BOARDS) {
     const item = layout.FURNITURE.find((f) => f.id === b.itemId);
     assert.ok(item, b.itemId);
-    assert.equal(item.rotation, 0, `${b.itemId} faces the viewer`);
+    // Toward the viewer, or (Rooms 3 and 4, on their west walls) toward +x, which the camera also sees.
+    assert.ok(item.rotation === 0 || item.rotation === Math.PI / 2, `${b.itemId} faces the viewer`);
     assert.match(b.color, /^#[0-9a-f]{6}$/i);
   }
   for (const a of agents.OFFICE_AGENTS.filter((x) => x.id !== 'receptionist'))

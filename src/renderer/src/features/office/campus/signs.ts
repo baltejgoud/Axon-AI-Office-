@@ -1,14 +1,16 @@
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { HOME_DESKS, poiById } from '../simulation/layout';
 import { DISTRICTS, districtById } from './districts';
+import { MEETING_ROOMS, type MeetingRoomId } from './commons';
 
 /**
- * Every sign in the office, as data: a pylon at the front of each district and a nameplate on each
- * executive's door. Nothing hangs overhead; departments are named on their task boards. The scene
+ * Every sign in the office, as data: a pylon at the front of each district, a nameplate on each
+ * executive's door and each meeting room's name on its glass. Nothing hangs overhead; departments
+ * are named on their task boards. The scene
  * draws the signs; this module decides where they go, what they say and how big they are at each zoom.
  */
 
-export type SignKind = 'district' | 'nameplate';
+export type SignKind = 'district' | 'nameplate' | 'room';
 export type SignTier = 'far' | 'middle' | 'near';
 
 export interface SignSpec {
@@ -38,7 +40,7 @@ export interface SignSpec {
 /** Vertical foreshortening of an upright panel under the camera's 0.7 rad pitch. */
 const FORESHORTEN = Math.cos(0.7);
 /** Smallest on-screen font size, in pixels, each kind keeps as the camera pulls back. */
-const MIN_PIXELS: Record<SignKind, number> = { district: 16, nameplate: 0 };
+const MIN_PIXELS: Record<SignKind, number> = { district: 16, nameplate: 0, room: 11 };
 
 /** "Chief Executive Officer (CEO)" → "CEO"; a name without an abbreviation stays whole. */
 export function titleAbbreviation(roleName: string): string {
@@ -60,6 +62,8 @@ export function signOpacity(kind: SignKind, tier: SignTier): number {
       return tier === 'near' ? 0.25 : 1;
     case 'nameplate':
       return tier === 'near' ? 1 : 0;
+    case 'room':
+      return tier === 'far' ? 0 : 1;
   }
 }
 
@@ -108,4 +112,32 @@ const nameplates: SignSpec[] = OFFICE_AGENTS.filter((agent) => agent.district ==
   }
 );
 
-export const SIGNS: readonly SignSpec[] = [...districtSigns, ...nameplates];
+/**
+ * Where each meeting room's name goes: on its front glass beside the door, facing the viewer. The
+ * boardroom's door is in its side wall, which the camera sees edge-on, so its sign sticks out from
+ * that wall above head height, like a blade sign over a shop door.
+ */
+const ROOM_PLATES: Readonly<Record<MeetingRoomId, { x: number; y: number; z: number }>> = {
+  boardroom: { x: -6.7, y: 2.05, z: -0.95 },
+  'room-1': { x: -6.2, y: 1.75, z: -5.97 },
+  'room-2': { x: 0.3, y: 1.75, z: -5.97 },
+  'room-3': { x: -14.4, y: 1.75, z: 8.83 },
+  'room-4': { x: -8.4, y: 1.75, z: 8.83 }
+};
+
+const roomSigns: SignSpec[] = MEETING_ROOMS.map((room) => ({
+  id: `room:${room.id}`,
+  kind: 'room',
+  target: room.id,
+  title: room.name,
+  subtitle: room.id === 'boardroom' ? '12 seats' : '6 seats',
+  color: districtById('commons').color,
+  ...ROOM_PLATES[room.id],
+  width: 0.9,
+  height: 0.34,
+  letter: 0.13,
+  faceCamera: false,
+  maxScale: 2.5
+}));
+
+export const SIGNS: readonly SignSpec[] = [...districtSigns, ...nameplates, ...roomSigns];

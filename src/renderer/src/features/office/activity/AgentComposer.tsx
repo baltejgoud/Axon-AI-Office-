@@ -10,6 +10,9 @@ import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 import { ContextMeter } from '../../../chat/ContextMeter';
+import { DictationButton } from '../../../chat/DictationButton';
+import { useDictation } from '../../../chat/useDictation';
+import { chosenEngine, insertDictation, speechPrompt } from '../../../../../shared/speech';
 
 /** The tallest the message box grows as you type before it scrolls. */
 const MAX_BOX = 160;
@@ -28,6 +31,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const [attachments, setAttachments] = useState<{ id: string; name: string }[]>([]);
   const [sending, setSending] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  /** Where the cursor was when you started speaking: the words go there. */
+  const dictateAt = useRef({ start: 0, end: 0 });
 
   // The box starts at one line and grows with what you type.
   useLayoutEffect(() => {
@@ -71,6 +76,72 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     agentId === RECEPTIONIST_ID &&
     data?.providers.find((p) => p.id === chosenProvider)?.models.find((m) => m.id === chosenModel.join('::'))
       ?.supportsTools === false;
+
+  // Voice typing: the words land at the cursor, to read over before sending.
+  const engine = data ? chosenEngine(data.providers, data.settings.voice) : null;
+  const dictation = useDictation({
+    prompt: () => {
+      const recent = conversation
+        ? (data?.messages ?? [])
+            .filter((m) => m.conversationId === conversation.id)
+            .slice(-8)
+            .map((m) => m.content)
+            .join('\n')
+        : '';
+      const folderName = folder?.split(/[\\/]/).filter(Boolean).pop() ?? '';
+      return speechPrompt({
+        names: ['Axon', agent?.name ?? '', folderName],
+        recent,
+        draft: input.slice(0, dictateAt.current.start)
+      });
+    },
+    onText: (spoken) => {
+      const el = box.current;
+      const live = !!el && document.activeElement === el;
+      setInput((current) => {
+        const start = Math.min(live ? el.selectionStart : dictateAt.current.start, current.length);
+        const end = Math.min(live ? el.selectionEnd : dictateAt.current.end, current.length);
+        const next = insertDictation(current, spoken, start, end);
+        dictateAt.current = { start: next.caret, end: next.caret };
+        return next.text;
+      });
+      requestAnimationFrame(() => {
+        const caret = dictateAt.current.start;
+        box.current?.focus();
+        box.current?.setSelectionRange(caret, caret);
+      });
+    },
+    onError: (message) => patch({ error: message })
+  });
+  const dictating = dictation.phase !== 'idle';
+
+  /** The microphone button and Ctrl+M: start speaking, or finish and type it out. */
+  const toggleDictation = () => {
+    if (dictation.phase === 'idle') {
+      if (!engine) {
+        useOfficeStore.getState().openOverlay('settings', 'voice');
+        return;
+      }
+      const el = box.current;
+      dictateAt.current = {
+        start: el?.selectionStart ?? input.length,
+        end: el?.selectionEnd ?? input.length
+      };
+    }
+    dictation.toggle();
+  };
+
+  /** Keys anywhere in the composer: Ctrl+M starts or finishes voice typing; Esc drops it. */
+  const handleDictationKeys = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'm') {
+      e.preventDefault();
+      toggleDictation();
+    } else if (e.key === 'Escape' && dictating) {
+      e.preventDefault();
+      e.stopPropagation();
+      dictation.cancel();
+    }
+  };
 
   const handleAttach = async () => {
     try {
@@ -216,8 +287,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      void handleSend();
-    } else if (e.key === 'Escape' && running && !input) {
+      // While you speak, Enter finishes the recording; nothing is sent until the words are in.
+      if (dictation.phase === 'recording') dictation.finish();
+      else if (!dictating) void handleSend();
+    } else if (e.key === 'Escape' && running && !input && !dictating) {
       e.preventDefault();
       handleStop();
     }
@@ -273,16 +346,20 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         </div>
       )}
 
-      <div className="composer-input-wrapper">
+      <div className="composer-input-wrapper" onKeyDown={handleDictationKeys}>
         <textarea
           ref={box}
           aria-label={`Give ${agent?.name ?? 'this agent'} a task`}
           className="composer-textarea"
           rows={1}
           placeholder={
-            running
-              ? `Add to what ${agent?.name || 'they'} is doing — they read it after this step`
-              : `Give ${agent?.name || 'this agent'} a task...`
+            dictation.phase === 'recording'
+              ? 'Listening… press Enter when you’re done, or Esc to cancel'
+              : dictation.phase === 'transcribing'
+                ? 'Writing down what you said…'
+                : running
+                  ? `Add to what ${agent?.name || 'they'} is doing — they read it after this step`
+                  : `Give ${agent?.name || 'this agent'} a task...`
           }
           value={input}
           disabled={sending && !conversation}
@@ -301,6 +378,13 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           >
             <IconPaperclip size={15} />
           </button>
+
+          <DictationButton
+            phase={dictation.phase}
+            elapsed={dictation.elapsed}
+            meter={dictation.meter}
+            onClick={toggleDictation}
+          />
 
           <ModelPicker
             value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
@@ -323,7 +407,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           {conversation && <ContextMeter key={conversation.id} conversation={conversation} />}
 
           <span className="composer-end">
-            <span className="composer-hint">Shift+Enter for a new line</span>
+            <span className="composer-hint">
+              {dictation.phase === 'recording' ? 'Enter to finish · Esc to cancel' : 'Shift+Enter for a new line'}
+            </span>
 
             {needsModel ? (
               <button
@@ -353,7 +439,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                     className="composer-btn-send"
                     title={running ? 'Send now; they read it after this step (Enter)' : 'Send task (Enter)'}
                     aria-label={running ? 'Send for their next step' : 'Send task'}
-                    disabled={!input.trim() || (sending && !conversation)}
+                    disabled={!input.trim() || (sending && !conversation) || dictating}
                     onClick={() => void handleSend()}
                   >
                     <IconSend size={15} />

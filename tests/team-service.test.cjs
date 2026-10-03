@@ -102,6 +102,8 @@ test('the Chief of Staff calls a meeting; the plan waits; Start runs the tasks i
   assert.ok(asked.some((a) => a.tools.includes('find_people') && a.tools.includes('call_team_meeting')), 'the lead has the team tools');
   const result = JSON.parse(repo.state.messages.find((m) => m.role === 'tool' && m.conversationId === chat.id).content);
   assert.equal(result.team, team.id);
+  assert.equal(team.room, 'room-1', 'three people meet in a six-seater');
+  assert.equal(result.room, 'Room 1');
   await service.teamStart(team.id);
   await waitFor(() => team.status === 'done', 'the team to finish');
   const [api, form] = team.plan.assignments;

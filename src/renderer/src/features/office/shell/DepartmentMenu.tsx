@@ -9,7 +9,7 @@ import { DISTRICT_ORDER } from './framing';
 /** The Commons rooms, reachable from the same menu as the departments. */
 export const COMMONS_ROOMS: { name: string; zone: ZoneId }[] = [
   { name: 'Lounge', zone: 'chat' },
-  { name: 'Planning rooms', zone: 'workspaces' },
+  { name: 'Meeting rooms', zone: 'workspaces' },
   { name: 'Library', zone: 'knowledge' },
   { name: 'Files room', zone: 'files' },
   { name: 'Café', zone: 'cafe' },

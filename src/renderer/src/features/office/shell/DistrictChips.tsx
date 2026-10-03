@@ -9,6 +9,7 @@ import {
   IconHeart,
   IconPalette,
   IconKanban,
+  IconSpeakerphone,
   type AppIconProps
 } from '../../../ui';
 import { districtById, type DistrictId } from '../campus/districts';
@@ -22,6 +23,7 @@ const ICONS: Record<DistrictId, ComponentType<AppIconProps>> = {
   'ai-data': IconBrain,
   design: IconPalette,
   product: IconKanban,
+  marketing: IconSpeakerphone,
   business: IconBriefcase,
   'people-ops': IconHeart,
   leadership: IconCrown

@@ -2,7 +2,15 @@ import type { ScreenFlavor } from '../scene/room/materials';
 import type { DeskEquipment } from './builder';
 
 export type DistrictId =
-  'commons' | 'engineering' | 'product' | 'design' | 'leadership' | 'ai-data' | 'business' | 'people-ops';
+  | 'commons'
+  | 'engineering'
+  | 'product'
+  | 'design'
+  | 'leadership'
+  | 'ai-data'
+  | 'marketing'
+  | 'business'
+  | 'people-ops';
 
 /** Floor rectangle in metres; x runs along the back wall, z toward the viewer. */
 export interface Bounds {
@@ -13,7 +21,7 @@ export interface Bounds {
 }
 
 export type FloorKind =
-  'oak' | 'carpet-blue' | 'carpet-sage' | 'carpet-grey' | 'concrete' | 'terrazzo' | 'walnut';
+  'oak' | 'carpet-blue' | 'carpet-sage' | 'carpet-grey' | 'carpet-coral' | 'concrete' | 'terrazzo' | 'walnut';
 
 export interface District {
   id: DistrictId;
@@ -38,7 +46,7 @@ export interface District {
 }
 
 /**
- * The campus: a 40 x 32 m Commons in the middle and seven districts around it, each at least
+ * The campus: a 40 x 32 m Commons in the middle and eight districts around it, each at least
  * 2.5 m from its neighbours so the main corridors stay open.
  */
 export const DISTRICTS: readonly District[] = [
@@ -131,14 +139,29 @@ export const DISTRICTS: readonly District[] = [
     floor: 'carpet-grey'
   },
   {
+    // Marketing, the people who find and follow up leads and post for the brand, and those who look
+    // after customers: the west of what was all Business, in the same footprint.
+    id: 'marketing',
+    name: 'Marketing & Growth',
+    short: 'Marketing',
+    color: '#c0392b',
+    bounds: { minX: -16, maxX: 2.16, minZ: 19.5, maxZ: 36 },
+    sign: { x: -6.92, z: 36.8 },
+    grid: [3, 1],
+    departments: ['Marketing Management', 'Growth & Outreach', 'Customer Success'],
+    flavor: 'design',
+    equipment: 'laptop-monitor',
+    floor: 'carpet-coral'
+  },
+  {
     id: 'business',
     name: 'Business',
     short: 'Business',
     color: '#b4461b',
-    bounds: { minX: -16, maxX: 16, minZ: 19.5, maxZ: 36 },
-    sign: { x: 0, z: 36.8 },
-    grid: [4, 1],
-    departments: ['Sales Management', 'Marketing Management', 'Customer Success', 'Strategy & Innovation'],
+    bounds: { minX: 4.76, maxX: 16, minZ: 19.5, maxZ: 36 },
+    sign: { x: 10.38, z: 36.8 },
+    grid: [2, 1],
+    departments: ['Sales Management', 'Strategy & Innovation'],
     flavor: 'data',
     equipment: 'laptop',
     floor: 'carpet-blue'

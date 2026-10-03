@@ -22,7 +22,7 @@ const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerConnect', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
   'settingsSave', 'mcpServerSave', 'mcpServerDelete',
-  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatModelSet','chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'auditList', 'auditExport', 'revertChange', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeImportFolder','knowledgeDelete', 'knowledgeSearch',
+  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatModelSet','chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'auditList', 'auditExport', 'revertChange', 'toolApprove', 'attach', 'speechTranscribe', 'knowledgeImport', 'knowledgeImportFolder','knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
   'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart', 'teamStart', 'teamStop', 'teamDiscard', 'teamRetry',
   'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',
@@ -85,10 +85,17 @@ else {
     service = new Service(repo, new Vault(paths.secrets), paths.root, event => {
       if (window && !window.isDestroyed()) window.webContents.send('platform:stream', event);
     }, join(__dirname, 'parse-worker.js'));
-    // Copy buttons need clipboard writes; every other web permission stays denied.
+    // Copy buttons need clipboard writes, and voice typing the microphone (never the camera, and only
+    // for Axon's own window); every other web permission stays denied.
     const allowed = new Set(['clipboard-sanitized-write']);
-    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(allowed.has(permission)));
-    session.defaultSession.setPermissionCheckHandler((_contents, permission) => allowed.has(permission));
+    const ownWindow = (contents: Electron.WebContents | null) => !!window && contents === window.webContents;
+    session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes ?? [] : [];
+      const microphone = permission === 'media' && ownWindow(contents) && mediaTypes.length > 0 && mediaTypes.every(type => type === 'audio');
+      callback(allowed.has(permission) || microphone);
+    });
+    session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
+      allowed.has(permission) || (permission === 'media' && details.mediaType === 'audio' && ownWindow(contents)));
     for (const method of methods) ipcMain.handle(`platform:${method}`, (event, ...args: unknown[]) => {
       const expected = !app.isPackaged && process.env.ELECTRON_RENDERER_URL ? process.env.ELECTRON_RENDERER_URL : pathToFileURL(rendererFile).href;
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url.split('#')[0] !== expected.replace(/\/$/, '') && event.senderFrame.url.split('#')[0] !== `${expected.replace(/\/$/, '')}/`) throw new Error('Untrusted IPC sender.');

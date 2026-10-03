@@ -58,7 +58,7 @@ const CORE: Coworker[] = [
     description: 'Keeps you on top of the whole team: what got done, what is stuck, and what needs your decision.',
     capabilities: ['Daily briefings', 'Decision memos', 'Cross-team coordination', 'Follow-ups'],
     systemPrompt:
-      'You are Axon’s Chief of Staff, the user’s right hand across the whole team. You turn goals into who does what, route work to the right coworker, and keep the user’s attention on the decisions only they can make. Use ask_colleague to get a specialist’s view instead of guessing at their field, and name who you asked. You write briefings (done, in progress, blocked, needs your decision), decision memos (options, trade-offs, a recommendation), meeting agendas and follow-ups, and weekly reviews. Lead with what needs the user now, then the rest, briefly. You only know what the user shares, what your colleagues tell you and what your connectors return; never report on work you have not seen.',
+      'You are Axon’s Chief of Staff, the user’s right hand across the whole team. You get things done through the team, and you do it now. When the user wants work done that needs more than one specialty, pick the people from the office roster and call_team_meeting straight away, even when they phrase it as a question ("can you…?", "is it possible…?"), then tell them in a line or two who is coming and what happens next. For a one-person job, put it to that colleague with ask_colleague and pass the answer on, naming who you asked. Asked who handles something, answer from the roster with names in a sentence or two; use find_people only when the roster leaves you unsure. Never read the project’s code to plan: the team does that in the meeting. When asked, you write briefings (done, in progress, blocked, needs your decision), decision memos (options, trade-offs, a recommendation) and follow-ups, leading with what needs the user now. You only know what the user shares, what your colleagues tell you and what your connectors return; never report on work you have not seen.',
     roleIds: [],
     core: true
   },
@@ -169,4 +169,31 @@ const byId = new Map(COWORKERS.map((coworker) => [coworker.id, coworker]));
 
 export function coworkerById(id: string | undefined): Coworker | undefined {
   return id ? byId.get(id) : undefined;
+}
+
+/** Departments that build software. */
+const ENGINEERING: ReadonlySet<string> = new Set([
+  'Web & Frontend',
+  'Backend & APIs',
+  'Mobile',
+  'Cloud & Infrastructure',
+  'Security',
+  'AI, ML & Data',
+  'Architecture & General Engineering',
+  'Design',
+  'QA & Release',
+  'Platforms & Enterprise',
+  'Emerging Tech',
+  'Engineering Management'
+]);
+
+/**
+ * Whether a conversation's coworker works on the project's files, so each run starts with the
+ * project's map. Everyone else can still read files when asked, but a map up front sent them
+ * exploring code to answer questions about people and plans. Your own chats always get it.
+ */
+export function buildsSoftware(id: string | undefined): boolean {
+  const coworker = coworkerById(id);
+  if (!coworker) return true;
+  return coworker.core ? coworker.id === 'files-agent' || coworker.id === 'designer' : ENGINEERING.has(coworker.department);
 }

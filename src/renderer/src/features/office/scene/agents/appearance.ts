@@ -246,6 +246,13 @@ export const DRESS_CODES: Readonly<Record<DistrictId, DressCode>> = {
     trousers: ['#3b4250', '#c9b79c', '#2d3440'],
     shoes: ['#5a3d2b', '#1f2328', '#8a5a35']
   },
+  marketing: {
+    tops: ['tee', 'shirt', 'cardigan', 'blazer', 'polo'],
+    colours: ['#c0392b', '#f4a261', '#2a9d8f', '#fbfaf6', '#1f2a44', '#e9c46a', '#d1495b', '#6d597a'],
+    shirts: ['#fbfaf6', '#f3ede3'],
+    trousers: ['#1f2a44', '#ece7df', '#3b4250', '#35507a'],
+    shoes: ['#f3f3f3', '#1f1f1f', '#8a5a35']
+  },
   business: {
     tops: ['shirt', 'blazer', 'polo', 'blazer'],
     colours: ['#f8fafc', '#bcd4ee', '#1f2a44', '#3a3f47', '#6e2433', '#2f5bd3', '#c0602f', '#a8502a'],

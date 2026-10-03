@@ -53,7 +53,7 @@ export interface DecorPlan {
 
 /** The whiteboard each department gets: some districts pin up something more their own. */
 export function boardKind(district: District, department: string): FurnitureKind {
-  if (district.id === 'product') return 'kanban-board';
+  if (district.id === 'product' || department === 'Growth & Outreach') return 'kanban-board';
   if (district.id === 'design' || department === 'Marketing Management') return 'mood-board';
   if (department === 'HR & People') return 'pinboard';
   return 'whiteboard';
@@ -91,6 +91,8 @@ function wishes(district: District, index: number): [Arrangement[], Arrangement[
       return [['studio', 'lounge', 'snacks'], ['tree']];
     case 'people-ops':
       return [['wellbeing', 'snacks', 'lounge'], ['tree']];
+    case 'marketing':
+      return [['studio', 'lounge', 'snacks'], ['tree']];
     case 'product':
       return [['snacks'], ['tree']];
     default:

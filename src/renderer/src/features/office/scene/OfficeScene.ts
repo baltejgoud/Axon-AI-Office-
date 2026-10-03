@@ -4,7 +4,7 @@ import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import type { AmbientActivity } from '../simulation/agentProfiles';
 import { FURNITURE, HOME_DESKS, POINTS_OF_INTEREST, ZONE_ANCHORS, poiById } from '../simulation/layout';
 import { OfficeSimulation } from '../simulation/OfficeSimulation';
-import { CAFE_PICKUPS, FILES_HOTSPOT, LIBRARY_HOTSPOT } from '../campus/commons';
+import { CAFE_PICKUPS, FILES_HOTSPOT, LIBRARY_HOTSPOT, type MeetingRoomId } from '../campus/commons';
 import { SIGNS, type SignKind, type SignSpec } from '../campus/signs';
 import { labelTier } from '../shell/framing';
 import { SignLayer } from './room/signs';
@@ -473,18 +473,27 @@ export class OfficeScene {
     this.simulation.endHelp(helperId);
   }
 
-  /** A team gathers in the boardroom, the lead at the head; how many took a seat. */
-  public startTeamMeeting(key: string, leadId: string, attendeeIds: readonly string[]): number {
-    return this.simulation.startTeamMeeting(key, leadId, attendeeIds);
+  /**
+   * A team gathers in its room, the lead at the head, and works from there; asking again updates
+   * whose team task is running. How many took a seat.
+   */
+  public startTeamMeeting(
+    key: string,
+    leadId: string,
+    attendeeIds: readonly string[],
+    room?: MeetingRoomId,
+    working?: readonly string[]
+  ): number {
+    return this.simulation.startTeamMeeting(key, leadId, attendeeIds, room, working);
   }
 
   public endTeamMeeting(key: string): void {
     this.simulation.endTeamMeeting(key);
   }
 
-  /** The open team's goal or tasks, on the boardroom's board. */
-  public setMeeting(cards: readonly TaskItem[]): void {
-    this.boards.setMeeting(cards);
+  /** Each room's open team, its goal or tasks, on that room's board. */
+  public setRoomBoards(cards: Readonly<Record<MeetingRoomId, readonly TaskItem[]>>): void {
+    this.boards.setRooms(cards);
   }
 
   /** Whose desk each desk is, for the screens' status strip. */
