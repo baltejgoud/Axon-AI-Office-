@@ -9,6 +9,8 @@ export const TEAM_LEADS: ReadonlySet<string> = new Set(['chief-of-staff', 'ops-c
 export const MIN_ATTENDEES = 2;
 /** The boardroom's seats, besides the lead's. */
 export const MAX_ATTENDEES = 12;
+/** A goal's length: it goes to every attendee, so it carries the context, but a plan's briefs carry the detail. */
+export const GOAL_LIMIT = 12000;
 
 export const FIND_PEOPLE: ToolDefinition = {
   name: 'find_people',
@@ -30,7 +32,7 @@ export const CALL_TEAM_MEETING: ToolDefinition = {
   parameters: {
     type: 'object',
     properties: {
-      goal: { type: 'string', description: 'What the team is to achieve, with the context they need' },
+      goal: { type: 'string', description: `What the team is to achieve, with the context they need (under ${GOAL_LIMIT.toLocaleString('en-US')} characters)` },
       attendees: {
         type: 'array',
         items: { type: 'string' },
