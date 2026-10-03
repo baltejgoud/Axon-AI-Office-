@@ -1109,11 +1109,26 @@ sized for the side panel. */
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
+/* What you send sits on the right, avatar outside the bubble; coworkers answer on the left. */
+.office-thread .message.user {
+  grid-template-columns: minmax(0, 1fr) 26px;
+}
+.office-thread .message.user .message-avatar {
+  grid-column: 2;
+  grid-row: 1;
+}
 .office-thread .message.user .message-body {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  max-width: 85%;
   background: var(--office-soft);
   border: 1px solid var(--office-border);
-  border-radius: 4px 12px 12px 12px;
+  border-radius: 12px 4px 12px 12px;
   padding: 8px 11px;
+}
+.office-thread .message.user .message-meta {
+  justify-content: flex-end;
 }
 .office-thread .message-meta {
   display: flex;
