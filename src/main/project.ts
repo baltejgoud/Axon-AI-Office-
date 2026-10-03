@@ -13,6 +13,10 @@ function underExcluded(rel: string): boolean {
 /** How many files one listing walks before it stops, and how many matches one search returns. */
 export const LIST_CAP = 5000;
 export const SEARCH_HITS = 150;
+/** Files a search reads at once. */
+const SEARCH_BATCH = 24;
+/** Formats a text search never opens: 3D models, textures, fonts, audio, video, source maps. */
+const UNSEARCHABLE = /\.(glb|gltf|bin|ktx2|basis|hdr|exr|woff2?|ttf|otf|eot|wav|mp3|ogg|oga|webm|mov|m4a|flac|webp|avif|bmp|tiff?|psd|blend|fbx|wasm|map)$/i;
 /** A sample that reaches every top-level folder first, so the map is not 100 lines of whichever one sorts first. */
 function representative(files: string[], limit: number): string {
   const seen = new Set<string>(), first: string[] = [], rest: string[] = [];
@@ -106,14 +110,23 @@ export class Project {
     await this.safe(path, true);
     await writeFile(target, text, 'utf8');
   }
+  /** Matches in file order. Files are read a batch at a time, which took a search of this repo from seconds to well under one. */
   async search(query: string): Promise<{ path: string; line: number; text: string }[]> {
     if (!query.trim()) return [];
+    const needle = query.toLowerCase();
+    const files = (await this.list()).filter(path => !UNSEARCHABLE.test(path));
     const hits: { path: string; line: number; text: string }[] = [];
-    for (const path of await this.list()) {
-      try { (await this.read(path)).split('\n').forEach((text, i) => {
-        if (hits.length < SEARCH_HITS && text.toLowerCase().includes(query.toLowerCase())) hits.push({ path, line: i + 1, text: text.slice(0, 250) });
-      }); } catch { /* Skip unsupported/unreadable files. */ }
-      if (hits.length >= SEARCH_HITS) break;
+    for (let start = 0; start < files.length && hits.length < SEARCH_HITS; start += SEARCH_BATCH) {
+      const batch = await Promise.all(files.slice(start, start + SEARCH_BATCH).map(async path => {
+        try { return { path, text: await this.read(path) }; } catch { return null; } // Skip unsupported/unreadable files.
+      }));
+      for (const file of batch) {
+        if (!file) continue;
+        file.text.split('\n').forEach((text, i) => {
+          if (hits.length < SEARCH_HITS && text.toLowerCase().includes(needle)) hits.push({ path: file.path, line: i + 1, text: text.slice(0, 250) });
+        });
+        if (hits.length >= SEARCH_HITS) break;
+      }
     }
     return hits;
   }

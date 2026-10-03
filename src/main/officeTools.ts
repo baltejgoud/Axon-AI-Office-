@@ -40,8 +40,12 @@ export function toolsFor(input: {
   connectorTools?: ToolDefinition[];
 }): ToolDefinition[] {
   const coworker = coworkerById(input.agentId);
+  // Leads delegate: they read for context, and their team writes and runs things.
+  const lead = !!input.agentId && TEAM_LEADS.has(input.agentId);
   const tools = input.hasFolder
-    ? input.registry.filter((tool) => !(coworker && tool.name === 'dispatch_subagent'))
+    ? input.registry.filter(
+        (tool) => !(coworker && tool.name === 'dispatch_subagent') && (!lead || READ_ONLY_TOOLS.includes(tool.name))
+      )
     : [];
   if (coworker) tools.push(ASK_COLLEAGUE);
   if (input.agentId === RECEPTIONIST_ID) tools.push(...PLANNER_TOOLS);

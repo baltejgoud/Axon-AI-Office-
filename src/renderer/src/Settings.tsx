@@ -276,6 +276,16 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
       )}
       <SettingsGroup title="Answers">
         <SettingRow
+          label="Quick replies"
+          hint="Models skip their thinking where they can, so answers come back in seconds. Some, like Stealth, always think. Turn off for harder work."
+        >
+          <Switch
+            checked={settings.quickReplies !== false}
+            label="Quick replies"
+            onChange={(quickReplies) => save({ quickReplies })}
+          />
+        </SettingRow>
+        <SettingRow
           label="Max tokens"
           id="setting-max-tokens"
           hint="The longest answer a model may write. Models that think first (Kimi, DeepSeek Reasoner) always get at least 16,384."

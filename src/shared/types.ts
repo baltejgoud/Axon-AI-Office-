@@ -251,6 +251,8 @@ export interface Settings {
   startWithWindows: boolean;
   /** Voice typing in the composer; absent until you change it. */
   voice?: VoiceSettings;
+  /** Models skip their thinking where they can, for faster answers. On unless turned off. */
+  quickReplies?: boolean;
 }
 
 /* ------------------------------------ MCP ------------------------------------- */
@@ -345,6 +347,8 @@ export interface ChatRequest {
   maxTokens?: number;
   tools?: ToolDefinition[];
   signal?: AbortSignal;
+  /** Quick replies: ask the model to skip its thinking where the service lets it be turned off. */
+  quick?: boolean;
 }
 
 export interface ChatUsage {

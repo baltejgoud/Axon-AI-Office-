@@ -90,7 +90,7 @@ const ATTEMPTS = 3;
 /** Worth retrying before any output: timeouts, rate limits, overload and gateway errors. */
 const RETRY_STATUSES = [408, 429, 500, 502, 503, 504, 529];
 /** Optional fields some models refuse. A 400 that names one is retried without it. */
-const OPTIONAL_FIELDS = ['temperature', 'stream_options', 'cache_control'];
+const OPTIONAL_FIELDS = ['temperature', 'stream_options', 'cache_control', 'reasoning'];
 /**
  * The two names OpenAI-compatible servers use for the output limit. Kimi and Qwen now prefer the
  * newer one; older and self-hosted servers only know the first. A 400 that names the one sent is
@@ -302,12 +302,17 @@ function buildRequest(provider: ProviderConfig, key: string | null, request: Cha
   }
   if (key) headers.Authorization = `Bearer ${key}`;
   // OpenAI itself wants max_completion_tokens; most compatible servers still read max_tokens.
-  const limit = new URL(base).hostname === 'api.openai.com' ? 'max_completion_tokens' : 'max_tokens';
+  const host = new URL(base).hostname;
+  const limit = host === 'api.openai.com' ? 'max_completion_tokens' : 'max_tokens';
+  // Quick replies: OpenRouter turns a model's thinking off (Nemotron answers in 2 s instead of 20).
+  // A model that must think refuses the field once, and it stays out for that model (see open).
+  const quick = request.quick && /(^|\.)openrouter\.ai$/.test(host) ? { reasoning: { enabled: false } } : {};
   return { url: `${base}/chat/completions`, headers, payload: {
     model: request.model,
     stream: true,
     stream_options: { include_usage: true },
     [limit]: request.maxTokens,
+    ...quick,
     ...temperature,
     messages: openAiMessages(request),
     ...(tools ? { tools: tools.map(t => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.parameters } })) } : {})
