@@ -53,7 +53,7 @@ export function WorkSummary({
       : requests.has(step.id)
         ? { label: 'Waiting for your OK', tone: 'waiting' }
         : step.state === 'running'
-          ? { label: step.name === 'write_file' ? 'Saving…' : 'Running…', tone: 'running' }
+          ? { label: step.name === 'write_file' || step.name === 'edit_file' ? 'Saving…' : 'Running…', tone: 'running' }
           : step.state === 'failed'
             ? { label: failed, tone: 'failed' }
             : { label: done, tone: 'done' };

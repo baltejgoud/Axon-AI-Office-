@@ -5,6 +5,7 @@ import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
 import { PlannerToolCard } from './PlannerToolCard';
+import { TeamCard } from './TeamCard';
 import { isPlannerCall } from '../tasks';
 import { withOutcomes } from './thread';
 import { WorkSummary } from './WorkSummary';
@@ -17,6 +18,10 @@ import { isWorkCall, onlyWork, threadRuns, workOf } from '../workspace/work';
 const officeToolCard = (call: ToolCall, at: number) =>
   call.name === 'ask_colleague' ? (
     <ColleagueCard call={call} />
+  ) : call.name === 'call_team_meeting' ? (
+    <TeamCard call={call} />
+  ) : call.name === 'find_people' ? (
+    false
   ) : isPlannerCall(call) ? (
     <PlannerToolCard call={call} />
   ) : isWorkCall(call, at) ? (

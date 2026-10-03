@@ -63,7 +63,7 @@ export interface PointOfInterest {
   seated: boolean;
   capacity: number;
   /** Meeting venue this seat belongs to. */
-  group?: 'meeting-room' | 'planning-room' | 'collab-table';
+  group?: 'meeting-room' | 'planning-room' | 'boardroom';
   /** For visit spots: the desk whose occupant is being visited. */
   hostDeskId?: string;
   /** Set on spots that belong to a district neighbourhood; untagged spots are in the Commons. */

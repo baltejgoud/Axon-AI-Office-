@@ -1,9 +1,9 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
-import { IconPaperclip, IconSend, IconClose, IconFileText, IconFolder } from '../../../ui';
-import { baseName } from '../workspace/work';
+import { IconPaperclip, IconSend, IconStop, IconClose, IconFileText } from '../../../ui';
+import { FolderPicker } from './FolderPicker';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
@@ -37,10 +37,29 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     el.style.height = `${Math.min(el.scrollHeight, MAX_BOX)}px`;
   }, [input]);
 
+  // A suggestion picked in the empty chat lands in the box, ready to send or to add to.
+  const request = useOfficeStore((s) => s.composeRequest);
+  useEffect(() => {
+    if (!request || request.agentId !== agentId) return;
+    setInput(request.text);
+    useOfficeStore.getState().clearCompose();
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(request.text.length, request.text.length);
+    });
+  }, [request, agentId]);
+
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
   const runtime = agentRuntime[agentId];
-  const isBusy = sending || runtime?.status === 'working';
   const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
+  // A run is going while its reply streams, while it waits on your OK, or while this box's send is out.
+  const running =
+    sending ||
+    runtime?.status === 'working' ||
+    runtime?.status === 'waiting' ||
+    Boolean(conversation && data?.messages.some((m) => m.conversationId === conversation.id && m.streaming));
+  const isBusy = running;
+  const waiting = useOfficeStore((s) => (conversation ? s.queued[conversation.id] : undefined)) ?? [];
   const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
   // Where they work: their conversation's own folder, else the project open in the app.
   const folder = conversation?.projectRoot ?? data?.projectRoot ?? null;
@@ -69,9 +88,47 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     }
   };
 
+  /** Stops the run: the reply so far stays, a waiting approval is withdrawn, and a message you queued goes next. */
+  const handleStop = () => {
+    if (!conversation) return;
+    void window.axon.chatStop(conversation.id).catch((error) =>
+      patch({ error: error instanceof Error ? error.message : 'Could not stop.' })
+    );
+    pushActivity(agentId, { type: 'message', title: 'Stopped', detail: 'You stopped this task' });
+  };
+
+  /** While they work, a message waits for their next step instead of being turned away. */
+  const handleQueue = async (textToSend: string) => {
+    if (!conversation) return;
+    const attachIds = attachments.map((a) => a.id);
+    setInput('');
+    setAttachments([]);
+    try {
+      await window.axon.chatSend(
+        conversation.id,
+        withFileContext(textToSend, useOfficeStore.getState().pendingFiles[agentId] ?? []),
+        attachIds
+      );
+      useOfficeStore.getState().clearFiles(agentId);
+      pushActivity(agentId, {
+        type: 'message',
+        title: 'Message queued',
+        detail: 'They read it after their current step'
+      });
+    } catch (err) {
+      // Nothing is lost: what you wrote goes back in the box.
+      setInput(textToSend);
+      patch({ error: err instanceof Error ? err.message : 'Could not send your message.' });
+    }
+  };
+
   const handleSend = async () => {
     const textToSend = input.trim();
-    if (!textToSend || isBusy || !agent) return;
+    if (!textToSend || !agent) return;
+    if (running) {
+      if (conversation) await handleQueue(textToSend);
+      return;
+    }
 
     setSending(true);
     // The answer arrives in the chat, so that is where the panel goes.
@@ -142,6 +199,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       useOfficeStore.getState().clearFiles(agentId);
       await useApp.getState().refresh();
     } catch (err) {
+      // What you wrote goes back in the box, unless you've started another.
+      setInput((current) => current || textToSend);
       setAgentStatus(agentId, 'error');
       pushActivity(agentId, {
         type: 'error',
@@ -158,6 +217,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void handleSend();
+    } else if (e.key === 'Escape' && running && !input) {
+      e.preventDefault();
+      handleStop();
     }
   };
 
@@ -200,15 +262,30 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         </div>
       )}
 
+      {waiting.length > 0 && (
+        <div className="composer-queued" aria-live="polite">
+          {waiting.map((text, i) => (
+            <p key={i} className="composer-queued-item" title={text}>
+              <span className="composer-queued-label">Waiting for their next step</span>
+              <span className="composer-queued-text">{text}</span>
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="composer-input-wrapper">
         <textarea
           ref={box}
           aria-label={`Give ${agent?.name ?? 'this agent'} a task`}
           className="composer-textarea"
           rows={1}
-          placeholder={`Give ${agent?.name || 'this agent'} a task...`}
+          placeholder={
+            running
+              ? `Add to what ${agent?.name || 'they'} is doing — they read it after this step`
+              : `Give ${agent?.name || 'this agent'} a task...`
+          }
           value={input}
-          disabled={isBusy}
+          disabled={sending && !conversation}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
         />
@@ -227,34 +304,21 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
           <ModelPicker
             value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
-            disabled={Boolean(conversation) || isBusy}
-            title={
-              conversation ? 'Start a new conversation to change the model' : 'Model for this conversation'
-            }
-            onChange={(value) => patch({ model: value })}
+            disabled={isBusy}
+            title={conversation ? 'Change the model for the next message' : 'Model for this conversation'}
+            onChange={(value) => {
+              patch({ model: value });
+              if (!conversation) return;
+              const [providerId, ...modelParts] = value.split('::');
+              void window.axon
+                .chatModelSet(conversation.id, providerId, modelParts.join('::'))
+                .then(() => useApp.getState().refresh())
+                .catch((error) => patch({ error: error instanceof Error ? error.message : 'Could not change the model.' }));
+            }}
             onManage={() => useOfficeStore.getState().openOverlay('settings')}
           />
 
-          {agentId !== RECEPTIONIST_ID &&
-            (folder ? (
-              <span className="composer-folder" title={`They can read and change files in ${folder}`}>
-                <IconFolder size={12} />
-                <span>{baseName(folder)}</span>
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="composer-folder is-none"
-                title="Open a folder in the Files room for them to work in"
-                onClick={() => {
-                  useOfficeStore.getState().flyToAgent('files-agent');
-                  useOfficeStore.getState().setPanelTab('files');
-                }}
-              >
-                <IconFolder size={12} />
-                <span>Open a project</span>
-              </button>
-            ))}
+          {agentId !== RECEPTIONIST_ID && <FolderPicker folder={folder} disabled={isBusy} />}
 
           {conversation && <ContextMeter key={conversation.id} conversation={conversation} />}
 
@@ -270,16 +334,32 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                 Connect a model
               </button>
             ) : (
-              <button
-                type="button"
-                className="composer-btn-send"
-                title="Send task (Enter)"
-                aria-label="Send task"
-                disabled={!input.trim() || isBusy}
-                onClick={() => void handleSend()}
-              >
-                <IconSend size={15} />
-              </button>
+              <>
+                {running && conversation && (
+                  <button
+                    type="button"
+                    className="composer-btn-stop"
+                    title={`Stop ${agent?.name ?? 'them'}`}
+                    aria-label={`Stop ${agent?.name ?? 'this task'}`}
+                    onClick={handleStop}
+                  >
+                    <IconStop size={13} />
+                    <span>Stop</span>
+                  </button>
+                )}
+                {(!running || input.trim()) && (
+                  <button
+                    type="button"
+                    className="composer-btn-send"
+                    title={running ? 'Send now; they read it after this step (Enter)' : 'Send task (Enter)'}
+                    aria-label={running ? 'Send for their next step' : 'Send task'}
+                    disabled={!input.trim() || (sending && !conversation)}
+                    onClick={() => void handleSend()}
+                  >
+                    <IconSend size={15} />
+                  </button>
+                )}
+              </>
             )}
           </span>
         </div>

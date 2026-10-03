@@ -12,6 +12,7 @@ import { Random, hashString } from './random';
 import { rhythmAt, type Rhythm } from './dayRhythm';
 import type { DistrictId } from '../campus/districts';
 import { nearestCoffee, stationSpots } from '../campus/coffee';
+import { BOARDROOM_SEATS } from '../campus/commons';
 import {
   distance,
   yawTowards,
@@ -242,6 +243,10 @@ export class OfficeSimulation {
   private standingAt = new Map<string, string[]>();
   private visitors = new Map<string, AgentState>();
   private meeting: Meeting | null = null;
+  /** Real team meetings in the boardroom, by team: they last until the team's meeting ends. */
+  private teamMeetings = new Map<string, Meeting>();
+  /** Who each team meeting is for, lead first: anyone not there yet joins once free. */
+  private teamInvites = new Map<string, string[]>();
   private meetingCount = 0;
   private nextMeetingCheck: number;
   private readonly clock: () => number | null;
@@ -333,6 +338,7 @@ export class OfficeSimulation {
     this.dayKnown = hour !== null;
     this.rhythm = rhythmAt(hour);
     this.updateMeeting();
+    this.updateTeamMeetings();
     this.updateStandups();
     for (const agent of this.agents.values()) this.advance(agent, slice);
     this.reindex();
@@ -436,6 +442,80 @@ export class OfficeSimulation {
     if (!helper || helper.plan.kind !== 'help') return;
     this.cancelPlan(helper);
     this.setPlan(helper, this.deskPlan(helper, helper.rng.range(20, 60)));
+  }
+
+  /**
+   * A team gathers in the boardroom: the lead at the head of the table, the others round it, until
+   * `endTeamMeeting`. Real work, so not held back by the away budget; refused with reduced motion,
+   * and anyone on a task of their own stays at their desk. Returns how many took a seat.
+   */
+  startTeamMeeting(key: string, leadId: string, attendeeIds: readonly string[]): number {
+    if (this.reducedMotion) return 0;
+    if (!this.teamMeetings.has(key)) {
+      this.teamMeetings.set(key, {
+        id: ++this.meetingCount,
+        seats: new Map(),
+        formedAt: this.time,
+        endsAt: null,
+        speakerId: null,
+        speakerUntil: 0
+      });
+      this.teamInvites.set(key, [leadId, ...attendeeIds.filter((id) => id !== leadId)]);
+    }
+    this.seatInvitees(key);
+    return this.inMeeting(this.teamMeetings.get(key)!).length;
+  }
+
+  /** Who is in a team meeting now. */
+  private inMeeting(meeting: Meeting): string[] {
+    return [...meeting.seats.keys()].filter((id) => this.agents.get(id)?.meetingId === meeting.id);
+  }
+
+  /**
+   * Seats everyone invited who is free and not there yet: the lead at the head, the others round the
+   * table. Someone on a task of their own joins once it ends; checked every step.
+   */
+  private seatInvitees(key: string): void {
+    const meeting = this.teamMeetings.get(key);
+    const invited = this.teamInvites.get(key);
+    if (!meeting || !invited) return;
+    const [leadId] = invited;
+    for (const id of invited) {
+      const agent = this.agents.get(id);
+      if (!agent || agent.onTask || agent.meetingId === meeting.id) continue;
+      const taken = new Set(this.inMeeting(meeting).map((who) => meeting.seats.get(who)));
+      const wanted = id === leadId ? ['boardroom-head'] : [meeting.seats.get(id), ...BOARDROOM_SEATS.slice(1)];
+      const seat = wanted.find((s): s is string => !!s && !taken.has(s) && this.hasRoom(s, agent));
+      if (!seat) continue;
+      this.cancelPlan(agent);
+      agent.meetingId = meeting.id;
+      this.reserve(agent, seat);
+      meeting.seats.set(agent.id, seat);
+      const carry: Step[] = agent.profile.prop ? [{ type: 'hold', item: agent.profile.prop }] : [];
+      this.setPlan(agent, {
+        kind: 'meeting',
+        steps: [{ type: 'leave' }, ...carry, { type: 'goto', poiId: seat }, this.doing('meeting', null), { type: 'leave' }]
+      });
+    }
+  }
+
+  /** The team's meeting is over: everyone still in it goes back to their desk. */
+  endTeamMeeting(key: string): void {
+    const meeting = this.teamMeetings.get(key);
+    if (!meeting) return;
+    this.teamMeetings.delete(key);
+    this.teamInvites.delete(key);
+    for (const id of meeting.seats.keys()) {
+      const agent = this.agents.get(id);
+      if (!agent || agent.meetingId !== meeting.id) continue;
+      this.cancelPlan(agent);
+      this.setPlan(agent, this.deskPlan(agent, agent.rng.range(20, 60)));
+    }
+  }
+
+  /** The teams meeting now, by key. */
+  teamMeetingKeys(): string[] {
+    return [...this.teamMeetings.keys()];
   }
 
   /** Start a specific ambient activity now. Ignored while a real task is running. */
@@ -1027,12 +1107,42 @@ export class OfficeSimulation {
       (seated.length === participants.length || this.time - meeting.formedAt > 35)
     )
       meeting.endsAt = this.time + this.rng.range(...MEETING_DURATION);
+    this.rotateSpeaker(meeting, seated);
+  }
+
+  /** Whoever is seated takes a turn to speak, a few seconds each. */
+  private rotateSpeaker(meeting: Meeting, seated: AgentState[]): void {
     if (
       seated.length &&
       (this.time >= meeting.speakerUntil || !seated.some((a) => a.id === meeting.speakerId))
     ) {
       meeting.speakerId = this.rng.pick(seated).id;
       meeting.speakerUntil = this.time + this.rng.range(4, 8);
+    }
+  }
+
+  /** The meeting someone is in: the office's own, or a team's. */
+  private meetingOf(agent: AgentState): Meeting | null {
+    if (agent.meetingId === null) return null;
+    if (this.meeting?.id === agent.meetingId) return this.meeting;
+    for (const meeting of this.teamMeetings.values()) if (meeting.id === agent.meetingId) return meeting;
+    return null;
+  }
+
+  /** Team meetings have no end of their own: late joiners come once free, and speakers take turns. */
+  private updateTeamMeetings(): void {
+    for (const [key, meeting] of this.teamMeetings) {
+      this.seatInvitees(key);
+      const seated = [...meeting.seats.keys()]
+        .map((id) => this.agents.get(id))
+        .filter(
+          (agent): agent is AgentState =>
+            !!agent &&
+            agent.meetingId === meeting.id &&
+            agent.poiId === meeting.seats.get(agent.id) &&
+            agent.sit > 0.95
+        );
+      this.rotateSpeaker(meeting, seated);
     }
   }
 
@@ -1058,7 +1168,7 @@ export class OfficeSimulation {
     // The Product Coach hosts from the head of the Planning A table; otherwise any meeting space.
     const venue = coachHome
       ? 'meeting-room'
-      : this.rng.weighted({ 'planning-room': 40, 'meeting-room': 30, 'collab-table': 30 });
+      : this.rng.weighted({ 'planning-room': 40, 'meeting-room': 30, boardroom: 30 });
     const free = this.poisOfType((poi) => poi.group === venue && this.hasRoom(poi.id));
     const needed = chosen.filter((agent) => !(venue === 'meeting-room' && agent === coachHome));
     if (free.length < needed.length) return;
@@ -1292,8 +1402,8 @@ export class OfficeSimulation {
     }
     const partner = this.chatPartner(agent);
     if (partner) return { ...partner.position };
-    const meeting = this.meeting;
-    if (meeting && agent.meetingId === meeting.id && agent.sit > 0.9) {
+    const meeting = this.meetingOf(agent);
+    if (meeting && agent.sit > 0.9) {
       const speaker = meeting.speakerId ? this.agents.get(meeting.speakerId) : undefined;
       if (speaker && speaker !== agent) return { ...speaker.position };
       const other = [...meeting.seats.keys()].find((id) => id !== agent.id);
@@ -1549,7 +1659,7 @@ export class OfficeSimulation {
         return agent.deskMode;
       }
       case 'meeting':
-        return this.meeting?.speakerId === agent.id ? 'talking' : 'meeting';
+        return this.meetingOf(agent)?.speakerId === agent.id ? 'talking' : 'meeting';
       case 'standup': {
         const standup = this.standupOf(agent);
         if (!standup) return 'idle';

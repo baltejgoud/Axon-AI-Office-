@@ -122,6 +122,8 @@ export class BoardLayer {
     let changed = false;
     for (const place of this.placed) {
       let signature: string;
+      // The boardroom's board follows the teams instead (setMeeting).
+      if (place.board.kind === 'meeting') continue;
       if (place.board.kind === 'today') {
         place.lines = todayLines(tasks, now);
         place.day = now;
@@ -134,6 +136,21 @@ export class BoardLayer {
         signature = place.cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
       }
       if (signature === place.signature) continue;
+      place.signature = signature;
+      this.draw(place);
+      changed = true;
+    }
+    if (changed) this.texture.needsUpdate = true;
+  }
+
+  /** The open team on the boardroom's board: its goal while it meets, then its tasks. */
+  setMeeting(cards: readonly TaskItem[]): void {
+    let changed = false;
+    for (const place of this.placed) {
+      if (place.board.kind !== 'meeting') continue;
+      const signature = cards.map((card) => `${card.id}:${card.status}:${card.title}`).join('|');
+      if (signature === place.signature) continue;
+      place.cards = [...cards];
       place.signature = signature;
       this.draw(place);
       changed = true;

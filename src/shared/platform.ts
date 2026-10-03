@@ -1,4 +1,4 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo } from './types';
+import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo, Team } from './types';
 import type { Briefing } from './planner';
 import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
 import type { ContextUsage } from './context-usage';
@@ -18,6 +18,8 @@ export interface PlatformState {
   tasks: TaskItem[];
   /** The front desk's memory: the last day briefed, and whether the tray was explained. */
   reception: { briefedOn?: string; trayHintShown?: boolean };
+  /** Teams the Chief of Staff and the Ops Coordinator gathered. */
+  teams: Team[];
 }
 export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   dataPath: string;
@@ -159,7 +161,17 @@ export interface PlatformAPI {
   revertChange(toolCallId: string): Promise<void>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
+  chatModelSet(id: string, providerId: string, modelId: string): Promise<void>;
   knowledgeImport(): Promise<void>;
+  knowledgeImportFolder(): Promise<{ imported: number; skipped: number; truncated: boolean } | null>;
+  /** A plan waiting for you: start the work. */
+  teamStart(id: string): Promise<void>;
+  /** Stops a team's meeting or every owner still working. */
+  teamStop(id: string): Promise<void>;
+  /** Drops a plan you don't want. */
+  teamDiscard(id: string): Promise<void>;
+  /** Carries a failed or stopped team on. */
+  teamRetry(id: string): Promise<void>;
   knowledgeDelete(id: string): Promise<void>;
   knowledgeSearch(query: string): Promise<{ docName: string; text: string; score: number }[]>;
   projectChoose(): Promise<string | null>;

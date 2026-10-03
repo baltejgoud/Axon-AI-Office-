@@ -123,6 +123,8 @@ export interface Message {
   streaming?: boolean;
   /** A note about the run itself, e.g. connectors left out for too many tools. */
   notice?: string;
+  /** Who sent a message on your side when it wasn't you, e.g. a team brief from the Chief of Staff. */
+  from?: string;
 }
 
 export interface Conversation {
@@ -393,6 +395,62 @@ export interface FocusTarget {
   planner?: boolean;
 }
 
+/* ---------------------------------- Teams ----------------------------------- */
+
+export type TeamStatus = 'meeting' | 'planned' | 'working' | 'reporting' | 'done' | 'stopped' | 'failed' | 'discarded';
+export type AssignmentStatus = 'waiting' | 'working' | 'done' | 'failed' | 'stopped' | 'blocked';
+
+/** One task in a team's plan: who does it, what it waits for, the files it owns, and how it went. */
+export interface TeamAssignment {
+  id: string;
+  ownerId: string;
+  title: string;
+  brief: string;
+  dependsOn: string[];
+  files: string[];
+  status: AssignmentStatus;
+  /** The owner's conversation for this task. */
+  conversationId?: ID;
+  /** The owner's final answer: what they hand on. */
+  result?: string;
+  /** Why it failed, stopped or is blocked. */
+  note?: string;
+}
+
+/** What one attendee said in the meeting. */
+export interface TeamMinute {
+  coworkerId: string;
+  text: string;
+  at: number;
+  error?: string;
+}
+
+export interface TeamPlan {
+  summary: string;
+  assignments: TeamAssignment[];
+}
+
+/** A team a lead gathered: the meeting, the plan you approve, the work, and the report. */
+export interface Team {
+  id: ID;
+  leadId: string;
+  /** The lead's conversation the meeting was called from. */
+  conversationId: ID;
+  goal: string;
+  attendees: string[];
+  /** Everyone on the team uses the lead conversation's model. */
+  providerId: ID;
+  modelId: string;
+  status: TeamStatus;
+  minutes: TeamMinute[];
+  plan?: TeamPlan;
+  report?: string;
+  /** Why it failed or stopped. */
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface TaskItem {
   id: ID;
   kind: TaskKind;
@@ -440,11 +498,18 @@ export type StreamEvent =
       contextUsage?: ContextUsage;
       /** Before each call on a priced model: what it should cost. An estimate, until its usage arrives. */
       estimate?: RunEstimate;
+      /** Messages you sent while the run was going, waiting for its next step; empty once it has read them. */
+      queued?: string[];
     }
   | {
       /** Every task record, after any change. */
       channel: 'tasks';
       tasks: TaskItem[];
+    }
+  | {
+      /** Every team, after any change. */
+      channel: 'teams';
+      teams: Team[];
     }
   | ({
       /** A notification or the tray asks the office to show someone. */

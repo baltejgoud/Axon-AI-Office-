@@ -429,3 +429,18 @@ test('play spots: two ends to every foosball table and one spot per arcade, all 
     assert.equal(hood.slug(spot.department), key, spot.id);
   }
 });
+
+test('the boardroom seats twelve round its table and the lead at the head, with a screen and a board', () => {
+  const commons = require('../src/renderer/src/features/office/campus/commons.ts');
+  const seats = layout.POINTS_OF_INTEREST.filter((p) => p.group === 'boardroom');
+  assert.equal(seats.length, 13);
+  assert.equal(commons.BOARDROOM_SEATS.length, 13);
+  assert.equal(commons.BOARDROOM_SEATS[0], 'boardroom-head');
+  assert.deepEqual([...commons.BOARDROOM_SEATS].sort(), seats.map((s) => s.id).sort());
+  for (const seat of seats) assert.equal(seat.type, 'meeting', seat.id);
+  for (const id of ['boardroom-table', 'boardroom-screen', 'boardroom-whiteboard'])
+    assert.ok(layout.FURNITURE.some((f) => f.id === id), id);
+  assert.ok(layout.poiById('boardroom-wb'));
+  // The old collaboration corner made way for it.
+  assert.equal(layout.FURNITURE.some((f) => f.id === 'collab-table'), false);
+});

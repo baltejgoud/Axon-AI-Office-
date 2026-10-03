@@ -77,6 +77,19 @@ export function App() {
         useApp
           .getState()
           .pushToast(`${event.name} needs you to sign in again. Open Settings → Connectors.`, 'error');
+      // Teams arrive whole after every change: swap them in without a full refresh.
+      if (event.channel === 'teams') {
+        const current = useApp.getState().data;
+        if (current) useApp.getState().patch({ data: { ...current, teams: event.teams } });
+        return;
+      }
+      // Messages waiting for a coworker's next step: shown above their message box, nothing else to update.
+      if (event.channel === 'chat' && event.queued) {
+        useOfficeStore.getState().setQueued(event.conversationId, event.queued);
+        // Read by the run: they are in the conversation now.
+        if (!event.queued.length) void useApp.getState().refresh();
+        return;
+      }
       // Sync stream events with office runtime
       if (event.channel === 'chat') {
         const conv = useApp.getState().data?.conversations.find((c) => c.id === event.conversationId);

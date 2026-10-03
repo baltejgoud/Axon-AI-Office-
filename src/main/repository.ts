@@ -19,7 +19,8 @@ export function initialState(): PlatformState {
       keepInTray: true, startWithWindows: false },
     mcpServers: [],
     tasks: [],
-    reception: {}
+    reception: {},
+    teams: []
   };
 }
 
@@ -137,6 +138,8 @@ export class Repository {
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
     // The receptionist and the tray arrived with the planner (2026-09).
     state.reception = state.reception && typeof state.reception === 'object' ? state.reception : {};
+    // Teams arrived with team meetings (2026-10).
+    state.teams = Array.isArray(state.teams) ? state.teams : [];
     if (state.settings) {
       state.settings.keepInTray ??= true;
       state.settings.startWithWindows ??= false;

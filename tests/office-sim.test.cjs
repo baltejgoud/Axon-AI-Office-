@@ -499,6 +499,42 @@ test('specialists only visit people in their own department, and stay in their d
   assert.ok(plays > 0, 'nobody took a play break in twenty minutes');
 });
 
+test('a team meeting seats the lead at the head of the boardroom and the team round the table, then sends them back', () => {
+  const ids = ['chief-of-staff', 'research-analyst', 'designer', 'product-coach'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
+  office.step(1 / 60);
+  assert.equal(office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1)), 4);
+  assert.equal(office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1)), 4, 'asking again changes nothing');
+  const inRoom = (o, id) => o.view(id).sit === 1 && layout.poiById(o.view(id).poiId ?? '')?.group === 'boardroom';
+  runUntil(office, (o) => ids.every((id) => inRoom(o, id)), 240, 0.05);
+  for (const id of ids) assert.ok(inRoom(office, id), `${id} is seated in the boardroom`);
+  assert.equal(office.view('chief-of-staff').poiId, 'boardroom-head');
+  let spoke = false;
+  run(office, 30, 0.1, (o) => { if (ids.some((id) => o.view(id).behavior === 'talking')) spoke = true; });
+  assert.ok(spoke, 'someone speaks');
+  for (const id of ids) assert.ok(inRoom(office, id), `${id} stays for the whole meeting`);
+  office.endTeamMeeting('team1');
+  const home = (o, id) => o.view(id).poiId === layout.HOME_DESKS[id] && o.view(id).sit === 1;
+  runUntil(office, (o) => ids.every((id) => home(o, id)), 240, 0.05);
+  for (const id of ids) assert.ok(home(office, id), `${id} is back at their desk`);
+  // Nobody walks with reduced motion.
+  const calm = new OfficeSimulation({ agentIds: ids, seed: 5, reducedMotion: true });
+  assert.equal(calm.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1)), 0);
+});
+
+test('someone busy when the meeting starts joins it once their task ends', () => {
+  const ids = ['chief-of-staff', 'research-analyst', 'designer'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 7 });
+  office.setTaskStatus('chief-of-staff', 'working');
+  office.step(1 / 60);
+  assert.equal(office.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1)), 2, 'the lead is still on their own task');
+  run(office, 5, 0.05);
+  assert.equal(office.view('chief-of-staff').poiId, layout.HOME_DESKS['chief-of-staff']);
+  office.setTaskStatus('chief-of-staff', 'completed');
+  runUntil(office, (o) => o.view('chief-of-staff').poiId === 'boardroom-head' && o.view('chief-of-staff').sit === 1, 240, 0.05);
+  assert.equal(office.view('chief-of-staff').poiId, 'boardroom-head');
+});
+
 test('a colleague walks over to help and stays until released', () => {
   const office = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3 });
   office.setTaskStatus('frontend-developer', 'working');

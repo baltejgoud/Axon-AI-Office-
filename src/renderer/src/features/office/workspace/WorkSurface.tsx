@@ -193,6 +193,7 @@ function describe(step: WorkStep, waiting: boolean, work: Work, processes: Proce
     case 'read_file':
       return running ? `Opening ${file}` : failed ? `Couldn’t open ${file}` : `Reading ${file}`;
     case 'write_file':
+    case 'edit_file':
       return waiting
         ? `Waiting for your OK to save ${file}`
         : running

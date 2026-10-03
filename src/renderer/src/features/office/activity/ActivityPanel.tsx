@@ -12,7 +12,8 @@ import { Conversation } from './Conversation';
 import { activeThread, agentThreads } from './thread';
 import { LIBRARY_RESIDENTS } from '../library';
 import { useEscape } from '../../../ui/escape';
-import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
+import { RECEPTIONIST_ID, coworkerById } from '../../../../../shared/coworkers';
+import { starters } from './starters';
 import { Planner, PlannerCount } from './Planner';
 import { Briefing } from './Briefing';
 import { ConnectorRow } from './ConnectorRow';
@@ -183,13 +184,21 @@ export function ActivityPanel() {
         {!conversation && !(reception && briefing) && (
           <div className="activity-empty">
             <span>
-              <IconSparkle size={20} />
+              <IconSparkle size={18} />
             </span>
             <strong>{runtime?.fresh ? 'A new conversation' : 'A clear desk. A fresh start.'}</strong>
             <p>{sentence(agent.description)}</p>
-            <div className="activity-capabilities">
-              {agent.capabilities.slice(0, 3).map((cap) => (
-                <span key={cap}>{cap}</span>
+            <div className="activity-starters" role="group" aria-label="Ways to start">
+              <small>Try asking</small>
+              {starters(coworkerById(agent.id) ?? agent).map((starter) => (
+                <button
+                  key={starter.label}
+                  type="button"
+                  title={starter.prompt}
+                  onClick={() => useOfficeStore.getState().compose(agent.id, starter.prompt)}
+                >
+                  {starter.label}
+                </button>
               ))}
             </div>
           </div>

@@ -62,7 +62,7 @@ const REFUSED = new Set<AuditDecision>(['denied', 'rejected', 'timed-out', 'skip
 export function inGroup(entry: AuditEntry, group: AuditGroup = 'all'): boolean {
   if (group === 'asked') return ASKED.has(entry.decision);
   if (group === 'refused') return REFUSED.has(entry.decision);
-  if (group === 'changes') return entry.decision === 'reverted' || (entry.tool === 'write_file' && entry.result === 'ok');
+  if (group === 'changes') return entry.decision === 'reverted' || ((entry.tool === 'write_file' || entry.tool === 'edit_file') && entry.result === 'ok');
   return true;
 }
 
@@ -90,6 +90,7 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
   switch (tool) {
     case 'read_file':
     case 'write_file':
+    case 'edit_file':
       return clip(str(args.path));
     case 'list_files':
       return clip(str(args.directory ?? args.directoryPath ?? args.path) || '.');

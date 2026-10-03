@@ -49,6 +49,15 @@ export function IconSend({ size = 16, strokeWidth = 1.75, className = '', ...pro
   );
 }
 
+/** Stop square (player-stop, filled), from Tabler Icons (MIT) */
+export function IconStop({ size = 16, className = '', ...props }: AppIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" {...props}>
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
 /** Close / remove cross, from Tabler Icons (MIT) */
 export function IconClose({ size = 14, strokeWidth = 1.5, className = '', ...props }: AppIconProps) {
   return (

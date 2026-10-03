@@ -31,7 +31,9 @@ const OFFICE_TOOLS = new Set([
   'complete_task',
   'read_memory',
   'update_memory',
-  'dispatch_subagent'
+  'dispatch_subagent',
+  'find_people',
+  'call_team_meeting'
 ]);
 
 /** Connected tools that drive or read a web page. */
@@ -43,6 +45,7 @@ export function workKind(name: string, args: Record<string, unknown>): WorkKind 
   switch (name) {
     case 'read_file':
     case 'write_file':
+    case 'edit_file':
       return 'code';
     case 'list_files':
     case 'search_code':
@@ -177,6 +180,14 @@ export function workOf(messages: readonly Message[]): Work {
       file.firstLine = 1;
       file.touch = 'written';
       if (step.state === 'done') file.written = step;
+    } else if (step.name === 'edit_file' && step.state !== 'failed') {
+      // Only the edit travels with the call: it is applied to what they read, when that starts at the top.
+      const from = String(step.args.old_string ?? '');
+      const to = String(step.args.new_string ?? '');
+      if (file.firstLine === 1 && from && file.text.includes(from))
+        file.text = step.args.replace_all === true ? file.text.split(from).join(to) : file.text.replace(from, () => to);
+      file.touch = 'written';
+      if (step.state === 'done') file.written = step;
     } else if (step.read) {
       Object.assign(file, step.read);
     }
@@ -287,7 +298,7 @@ export function runSummary(
 ): RunSummary {
   const files = new Map<string, RunFile>();
   for (const step of steps) {
-    if (step.name !== 'write_file') continue;
+    if (step.name !== 'write_file' && step.name !== 'edit_file') continue;
     const path = stepPath(step);
     const change = step.change ?? proposed.get(step.id);
     const file = files.get(path) ?? {

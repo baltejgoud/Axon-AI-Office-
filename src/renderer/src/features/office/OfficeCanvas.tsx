@@ -27,8 +27,10 @@ import { SHORTCUT_KEY } from './workspace/WorkViews';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
+import type { Team } from '../../../../shared/types';
 import { useApp } from '../../state';
 import { activeHelp } from './tasks';
+import { openMeetings, teamBoardCards } from './team';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 
@@ -56,6 +58,17 @@ export function OfficeCanvas({
     for (const [helper, host] of next)
       if (helping.current.get(helper) !== host) world.startHelp(helper, host);
     helping.current = next;
+  }, []);
+  const teams = useApp((s) => s.data?.teams);
+  /** Teams in the boardroom, as last sent to the scene. */
+  const meeting = useRef(new Set<string>());
+  const syncTeams = useCallback((world: OfficeScene, all: readonly Team[]) => {
+    const now = openMeetings(all);
+    const next = new Set(now.map((m) => m.id));
+    for (const key of meeting.current) if (!next.has(key)) world.endTeamMeeting(key);
+    for (const m of now) if (!meeting.current.has(m.id)) world.startTeamMeeting(m.id, m.leadId, m.attendees);
+    meeting.current = next;
+    world.setMeeting(teamBoardCards(all));
   }, []);
   /** The latest sign handler; the scene is created once and calls through this. */
   const signClick = useRef<(sign: SignSpec) => void>(() => {});
@@ -104,10 +117,19 @@ export function OfficeCanvas({
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.onSignClick = (sign) => signClick.current(sign);
       // A team's board opens its task list; the Today board goes to the receptionist's planner.
-      world.onBoardClick = (team) =>
-        TASK_BOARDS.find((board) => board.team === team)?.kind === 'today'
-          ? useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true })
-          : useOfficeStore.getState().openTeamBoard(team);
+      world.onBoardClick = (team) => {
+        const kind = TASK_BOARDS.find((board) => board.team === team)?.kind;
+        if (kind === 'today') return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
+        // The boardroom's board: the lead's conversation with the team on it.
+        if (kind === 'meeting') {
+          const open = [...(useApp.getState().data?.teams ?? [])]
+            .filter((t) => ['meeting', 'planned', 'working', 'reporting'].includes(t.status))
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          if (open) useOfficeStore.getState().focusOn({ agentId: open.leadId, conversationId: open.conversationId });
+          return;
+        }
+        useOfficeStore.getState().openTeamBoard(team);
+      };
       world.setTasks(useApp.getState().data?.tasks ?? []);
       world.setSelectedAgent(useOfficeStore.getState().selectedAgentId);
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
@@ -115,6 +137,8 @@ export function OfficeCanvas({
       );
       helping.current = new Map();
       syncHelp(world, activeHelp(useApp.getState().data?.tasks ?? []));
+      meeting.current = new Set();
+      syncTeams(world, useApp.getState().data?.teams ?? []);
     } catch (error) {
       // The roster stands in for the office; say why, for anyone reading the console.
       console.error('Office graphics could not start:', error);
@@ -129,7 +153,7 @@ export function OfficeCanvas({
       world.destroy();
       scene.current = null;
     };
-  }, [roster, modelsReady, selectAgent, syncHelp]);
+  }, [roster, modelsReady, selectAgent, syncHelp, syncTeams]);
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);
@@ -159,6 +183,11 @@ export function OfficeCanvas({
     scene.current.setTasks(tasks ?? []);
     syncHelp(scene.current, activeHelp(tasks ?? []));
   }, [tasks, syncHelp]);
+
+  // A team meeting gathers its people in the boardroom; its board shows the team's goal, then its tasks.
+  useEffect(() => {
+    if (scene.current) syncTeams(scene.current, teams ?? []);
+  }, [teams, syncTeams]);
 
   // The Today board's day labels move on with the clock.
   useEffect(() => {
@@ -245,34 +274,14 @@ export function OfficeCanvas({
 
   return (
     <section className="office-viewport" aria-label="Interactive AI office">
-      <header className="office-heading">
-        <div>
-          <span className="office-wordmark">
-            Axon<span className="office-wordmark-dot">.</span>
+      <div className="office-topbar">
+        <div className="office-directory">
+          <span className="office-directory-mark" aria-hidden="true">
+            Axon<span>.</span>
           </span>
-          <p>Your AI office for what’s next.</p>
+          <DepartmentMenu current={focusDepartment} onChoose={chooseFromMenu} />
+          <OfficeDirectory onChoose={chooseAgent} />
         </div>
-        <div className="office-presence">
-          <span className="office-presence-dot" />
-          {working.length ? `${working.length} working right now` : 'Your team is ready'}
-          <small>
-            {OFFICE_AGENTS.length} coworkers · {DISTRICTS.reduce((n, d) => n + d.departments.length, 0)}{' '}
-            departments
-          </small>
-        </div>
-      </header>
-
-      <div className="office-directory">
-        {/* Shown only when the office is short and its heading steps aside (workspace.css). */}
-        <span className="office-directory-mark" aria-hidden="true">
-          Axon<span>.</span>
-        </span>
-        <DepartmentMenu current={focusDepartment} onChoose={chooseFromMenu} />
-        <OfficeDirectory onChoose={chooseAgent} />
-      </div>
-
-      <nav className="office-navigation" aria-label="Office districts">
-        <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-view-controls">
           <WaitingPill />
           {work && (
@@ -293,6 +302,7 @@ export function OfficeCanvas({
           <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
             <IconSettings size={16} />
           </button>
+          <span className="office-view-divider" aria-hidden="true" />
           <button
             onClick={() => scene.current?.overview()}
             title="Whole campus"
@@ -322,6 +332,20 @@ export function OfficeCanvas({
           >
             <IconLayoutGrid size={16} />
           </button>
+        </div>
+      </div>
+
+      <nav className="office-navigation" aria-label="Office districts">
+        <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
+        <div className="office-presence">
+          <span className="office-presence-dot" />
+          <span className="office-presence-main">
+            {working.length ? `${working.length} working right now` : 'Your team is ready'}
+          </span>
+          <small>
+            {OFFICE_AGENTS.length} coworkers · {DISTRICTS.reduce((n, d) => n + d.departments.length, 0)}{' '}
+            departments
+          </small>
         </div>
       </nav>
 

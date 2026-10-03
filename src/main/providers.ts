@@ -211,7 +211,10 @@ function anthropicMessages(messages: ChatRequestMessage[]): { role: string; cont
         ...m.toolCalls.map(tc => ({ type: 'tool_use', id: tc.id, name: tc.name, input: parseArgs(tc.arguments) }))
       ] });
     } else {
-      out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
+      const last = out[out.length - 1];
+      // A message you sent mid-run follows the step's results: it joins their turn, after them.
+      if (m.role === 'user' && last?.role === 'user' && Array.isArray(last.content)) last.content.push({ type: 'text', text: m.content });
+      else out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
     }
   }
   return out;
@@ -238,7 +241,10 @@ function geminiContents(messages: ChatRequestMessage[]): { role: string; parts: 
         ...m.toolCalls.map(tc => ({ functionCall: { name: tc.name, args: parseArgs(tc.arguments) } }))
       ] });
     } else {
-      out.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] });
+      const last = out[out.length - 1];
+      // A message you sent mid-run follows the step's answers: it joins their turn, after them.
+      if (m.role === 'user' && last?.role === 'user') last.parts.push({ text: m.content });
+      else out.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] });
     }
   }
   return out;

@@ -51,7 +51,7 @@ function glassFront(b: LayoutBuilder, id: string, fromX: number, toX: number, do
 
 /**
  * The Commons, 40 x 32 m at the centre of the campus. Along the back wall: the Lounge, two
- * Planning rooms, the Library and the Files room. In the middle: the collaboration corner, the core
+ * Planning rooms, the Library and the Files room. In the middle: the boardroom, the core
  * team's pods and the café. At the front: the lobby and reception.
  */
 export function buildCommons(b: LayoutBuilder): void {
@@ -71,7 +71,7 @@ export function buildCommons(b: LayoutBuilder): void {
   buildPlanning(b);
   buildLibrary(b);
   buildFilesRoom(b);
-  buildCollaboration(b);
+  buildBoardroom(b);
   buildPods(b);
   buildCafe(b);
   buildLobby(b);
@@ -236,23 +236,42 @@ function buildFilesRoom(b: LayoutBuilder): void {
   b.item('board-files', 'whiteboard', 13.4, -6.55, 1.4, 0.1);
 }
 
-/** A round table and a whiteboard for quick get-togethers. */
-function buildCollaboration(b: LayoutBuilder): void {
-  b.rug('rug-collab', -15.8, -0.4, 4.6, 4.2);
-  b.item('collab-table', 'round-table', -15.8, -0.4, 1.5, 1.5, { round: true });
-  b.item('collab-whiteboard', 'whiteboard', -16.4, -3.65, 2.2, 0.1);
-  b.item('collab-cabinet', 'low-cabinet', -12.5, 0.0, 0.5, 3.2);
-  b.plant('plant-collab-1', -19.0, -3.5, true);
-  b.plant('plant-collab-2', -19.0, 2.6);
-  const at = (id: string, x: number, z: number, facing: number, approach: Vec2) =>
-    b.seat(id, 'meeting', 'workspaces', x, z, facing, approach, 'meeting-chair', 'collab-table');
-  at('collab-w', -16.9, -0.4, FACE_RIGHT, { x: -17.55, z: -0.4 });
-  at('collab-e', -14.7, -0.4, FACE_LEFT, { x: -14.05, z: -0.4 });
-  at('collab-n', -15.8, -1.5, FACE_FRONT, { x: -15.8, z: -2.15 });
-  at('collab-s', -15.8, 0.7, FACE_BACK, { x: -15.8, z: 1.35 });
-  b.spot('collab-wb-1', 'whiteboard', 'workspaces', -17.0, -3.0, FACE_BACK);
-  b.spot('collab-wb-2', 'whiteboard', 'workspaces', -15.8, -3.0, FACE_BACK);
-  b.spot('open-window', 'open-area', 'workspaces', -19.0, 1.0, FACE_LEFT);
+/** The boardroom's walls: x from its west wall to its door wall, z from its back wall to its front. */
+const BOARDROOM = { west: -19.2, east: -7.2, back: -4.0, front: 4.2, door: 0.1 } as const;
+/** Along the boardroom table: six chairs a side, nearest the head first. */
+const BOARDROOM_XS = [-15.9, -14.7, -13.5, -12.3, -11.1, -9.9];
+
+/** The boardroom's chairs as a team fills them: the lead's at the head, then both sides from the head down. */
+export const BOARDROOM_SEATS: readonly string[] = [
+  'boardroom-head',
+  ...BOARDROOM_XS.flatMap((_, i) => [`boardroom-n${i + 1}`, `boardroom-s${i + 1}`])
+];
+
+/**
+ * The boardroom, where the Chief of Staff gathers a team: a glass room with one long table for twelve
+ * and the lead's chair at its head, the plan on the screen on its back wall, and a whiteboard. When no
+ * team is meeting, the office's own meetings use it too.
+ */
+function buildBoardroom(b: LayoutBuilder): void {
+  const { west, east, back, front, door } = BOARDROOM;
+  b.wall('glass-boardroom-n', 'glass', west, back, east, back);
+  b.wall('glass-boardroom-s', 'glass', west, front, east, front);
+  b.wall('glass-boardroom-w', 'glass', west, back, west, front);
+  b.wall('glass-boardroom-e1', 'glass', east, back, east, door - 0.8);
+  b.wall('glass-boardroom-e2', 'glass', east, door + 0.8, east, front);
+  b.rug('rug-boardroom', -13.0, door, 11.2, 7.4);
+  b.item('boardroom-table', 'meeting-table', -13.0, door, 7.2, 1.6);
+  b.item('boardroom-screen', 'wall-screen', -13.0, back + 0.05, 3.0, 0.05, { blocks: false });
+  b.item('boardroom-whiteboard', 'whiteboard', -9.0, back + 0.15, 1.6, 0.1);
+  b.spot('boardroom-wb', 'whiteboard', 'workspaces', -9.0, back + 0.75, FACE_BACK);
+  b.plant('plant-boardroom-1', west + 0.4, back + 0.4, true);
+  b.plant('plant-boardroom-2', west + 0.4, front - 0.4);
+  b.seat('boardroom-head', 'meeting', 'workspaces', -17.15, door, FACE_RIGHT, { x: -17.8, z: door }, 'meeting-chair', 'boardroom');
+  for (const [index, x] of BOARDROOM_XS.entries()) {
+    const n = index + 1;
+    b.seat(`boardroom-n${n}`, 'meeting', 'workspaces', x, door - 1.05, FACE_FRONT, { x, z: door - 1.65 }, 'meeting-chair', 'boardroom');
+    b.seat(`boardroom-s${n}`, 'meeting', 'workspaces', x, door + 1.05, FACE_BACK, { x, z: door + 1.65 }, 'meeting-chair', 'boardroom');
+  }
 }
 
 /** The core team's two pods of four. */

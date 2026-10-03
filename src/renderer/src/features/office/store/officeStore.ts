@@ -91,6 +91,13 @@ interface OfficeStoreState {
   /** Something asked the work surface to show one step: a file or command in the side panel. */
   workFocus: { conversationId: string; stepId: string; at: number } | null;
   focusWork: (conversationId: string, stepId: string) => void;
+  /** A suggestion was picked in an empty chat: its text for that coworker's message box, until the box takes it. */
+  composeRequest: { agentId: string; text: string } | null;
+  compose: (agentId: string, text: string) => void;
+  clearCompose: () => void;
+  /** Messages sent while a conversation's run was going, by conversation, until the run reads them. */
+  queued: Record<string, string[]>;
+  setQueued: (conversationId: string, messages: string[]) => void;
 }
 
 const initialRuntime: Record<string, AgentRuntime> = {};
@@ -131,6 +138,11 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
     set({ workChoice: { ...get().workChoice, [conversationId]: { open, run } } }),
   workFocus: null,
   focusWork: (conversationId, stepId) => set({ workFocus: { conversationId, stepId, at: Date.now() } }),
+  composeRequest: null,
+  compose: (agentId, text) => set({ composeRequest: { agentId, text } }),
+  clearCompose: () => set({ composeRequest: null }),
+  queued: {},
+  setQueued: (conversationId, messages) => set({ queued: { ...get().queued, [conversationId]: messages } }),
 
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);

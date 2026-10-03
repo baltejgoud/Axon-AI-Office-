@@ -51,21 +51,21 @@ export const PRESETS: readonly Preset[] = [
     name: 'OpenAI',
     kind: 'openai-compatible',
     baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4o', 'gpt-4o-mini'],
+    models: ['gpt-5.4', 'gpt-5.4-mini'],
     tint: 'openai'
   },
   {
     name: 'Anthropic',
     kind: 'anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
-    models: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    models: ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001'],
     tint: 'anthropic'
   },
   {
     name: 'Gemini',
     kind: 'gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'],
     tint: 'gemini'
   },
   {

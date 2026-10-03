@@ -22,9 +22,9 @@ const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerConnect', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
   'settingsSave', 'mcpServerSave', 'mcpServerDelete',
-  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'auditList', 'auditExport', 'revertChange', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeDelete', 'knowledgeSearch',
+  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatModelSet','chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'auditList', 'auditExport', 'revertChange', 'toolApprove', 'attach', 'knowledgeImport', 'knowledgeImportFolder','knowledgeDelete', 'knowledgeSearch',
   'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
-  'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart',
+  'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart', 'teamStart', 'teamStop', 'teamDiscard', 'teamRetry',
   'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',
   'githubRepos', 'gitCheck', 'scmStatus', 'scmDiff', 'scmStage', 'scmUnstage', 'scmCommit', 'scmSync', 'scmBranches', 'scmCheckout', 'scmCreateBranch',
   'scmClone', 'scmPublish', 'openLink', 'processStop', 'processOpen'

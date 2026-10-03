@@ -238,7 +238,7 @@ function FileBar({
   const note = request
     ? 'Proposed change'
     : step.state === 'running'
-      ? step.name === 'write_file'
+      ? step.name === 'write_file' || step.name === 'edit_file'
         ? 'Saving…'
         : 'Opening…'
       : step.state === 'failed'
@@ -291,7 +291,7 @@ function Decision({ request, approve }: { request: ToolApprovalRequest; approve:
   // For a command, "always" covers that exact command; for anything else, the tool itself.
   const always = EXACT_GRANTS.has(request.toolName)
     ? 'Run this exact command without asking again this session'
-    : request.toolName === 'write_file'
+    : request.toolName === 'write_file' || request.toolName === 'edit_file'
       ? 'Save files without asking again this session'
       : `Use ${toolLabel(request.toolName)} without asking again this session`;
   return (

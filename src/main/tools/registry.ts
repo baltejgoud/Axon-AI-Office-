@@ -1,8 +1,10 @@
 import { exec, execFile } from 'node:child_process';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { FileChange, ToolDefinition } from '../../shared/types';
-import type { Project } from '../project';
+import { SEARCH_HITS, type Project } from '../project';
 import { createUnifiedDiff, fileChange } from './diff';
+import { applyUniqueEdit } from './editFile';
+import { assessWrite, preserveTrailingNewline } from './writeGuard';
 import type { ProcessManager } from './processes';
 
 /** A command's working folder: the project, or a folder inside it; null for anywhere else. */
@@ -16,6 +18,44 @@ function workingFolder(root: string, cwd: unknown): string | null {
 /** How often a running command's output goes to the window, and how much of its tail. */
 const OUTPUT_EVERY_MS = 120;
 const OUTPUT_TAIL = 64_000;
+
+/** How many paths one list_files call may return. */
+const LIST_FILES_LIMIT = 1000;
+
+/** Which shell runs a command, for the model: on Windows it is cmd.exe, and models assume bash otherwise. */
+export function shellNote(platform: string): string {
+  return platform === 'win32'
+    ? 'Commands run in Windows cmd.exe, not bash: use dir, type, findstr, where and copy; head, tail, grep, ls, cat and rm may not exist, and single quotes do not quote. Chain with &&.'
+    : 'Commands run in /bin/sh.';
+}
+const SHELL_NOTE = shellNote(process.platform);
+/** What cmd.exe says about a program it can't find. */
+const NOT_A_COMMAND = /is not recognized as an internal or external command/i;
+
+/** Arguments that are text to write, where empty is a real value (an empty file, a deletion). */
+const MAY_BE_EMPTY = new Set(['content', 'new_string', 'old_string']);
+/** Names the required arguments a call left out (or sent blank), so it is refused before anyone is asked; null when complete. */
+export function missingArguments(definition: ToolDefinition, args: Record<string, unknown>): string | null {
+  const required = (definition.parameters as { required?: unknown }).required;
+  if (!Array.isArray(required)) return null;
+  const blank = (name: string) => !MAY_BE_EMPTY.has(name) && typeof args[name] === 'string' && !(args[name] as string).trim();
+  const missing = required.filter((name): name is string =>
+    typeof name === 'string' && (args[name] === undefined || args[name] === null || blank(name)));
+  return missing.length
+    ? `${definition.name} needs ${missing.map(name => `'${name}'`).join(' and ')}, which ${missing.length > 1 ? 'were' : 'was'} missing, so it was not run. Call it again with every required argument.`
+    : null;
+}
+
+/** Whether a file is there, and its text: null for a new file, or one too big (or too binary) to read, which is not a new file. */
+async function readBefore(project: Project, path: string): Promise<{ existed: boolean; before: string | null }> {
+  const existed = await project.exists(path);
+  if (!existed) return { existed, before: null };
+  try {
+    return { existed, before: await project.read(path) };
+  } catch {
+    return { existed, before: null };
+  }
+}
 
 /** The files a commit names; anything that isn't a plain string is left out. */
 const gitFiles = (value: unknown): string[] =>
@@ -43,6 +83,8 @@ export interface ToolHandlerResult {
   process?: { id: string };
   /** A write's previous content, for undo; kept by the service, never sent to the model or the window. */
   previous?: { existed: boolean; content: string | null };
+  /** What a write left in the file, so undo can tell whether it changed since. */
+  written?: string;
   preview?: {
     type: 'diff' | 'command' | 'generic';
     content: string;
@@ -57,6 +99,8 @@ export interface RegisteredTool {
     content: string;
     path?: string;
   } | undefined>;
+  /** Refuses a call that cannot work before anyone is asked to approve it; the reason goes back to the model. */
+  validate?: (args: Record<string, any>, ctx: ToolContext) => Promise<string | null>;
   execute: (args: Record<string, any>, ctx: ToolContext) => Promise<ToolHandlerResult>;
 }
 
@@ -138,14 +182,18 @@ export class ToolRegistry {
       execute: async (args, ctx) => {
         try {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
-          const all = await ctx.project.list();
-          const prefix = String(args.directory || '').trim().replace(/^[\\/]/, '').replace(/[\\/]$/, '');
-          const filtered = prefix
-            ? all.filter(f => f.startsWith(prefix + '/') || f === prefix)
-            : all;
-          return {
-            content: filtered.length > 0 ? filtered.slice(0, 1000).join('\n') : 'No files found.'
-          };
+          const prefix = String(args.directory || '').trim().replace(/^[\\/]+/, '').replace(/[\\/]+$/, '');
+          // Only that folder is walked, so a huge sibling can't use up the cap first.
+          const filtered = await ctx.project.list(prefix || undefined);
+          // A listing cut short says so. It must never look like an empty directory.
+          const note = ctx.project.listTruncated
+            ? `\n\n(listing cut short at a cap: this is what was reached first, not everything. Narrow 'directory', for example 'src'. Never assume a file or folder is missing because it is not here.)`
+            : filtered.length > LIST_FILES_LIMIT
+              ? `\n\n(showing ${LIST_FILES_LIMIT} of ${filtered.length} files; narrow 'directory' to see the rest.)`
+              : '';
+          if (!filtered.length)
+            return { content: ctx.project.listTruncated ? `No files reached.${note}` : prefix ? `No files found in ${prefix}/.` : 'No files found.' };
+          return { content: filtered.slice(0, LIST_FILES_LIMIT).join('\n') + note };
         } catch (err: any) {
           return { content: `Error listing files: ${err.message}`, isError: true };
         }
@@ -169,20 +217,34 @@ export class ToolRegistry {
         try {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
           const hits = await ctx.project.search(String(args.query));
-          if (!hits.length) return { content: 'No matches found.' };
+          // A search that stopped early says so: what it didn't reach was not searched.
+          const note = [
+            hits.length >= SEARCH_HITS ? `(showing the first ${SEARCH_HITS} matches; search for something more specific to see others.)` : '',
+            ctx.project.listTruncated ? '(the project has more files than one search reads, so some were not searched. A missing match is not proof there is none.)' : ''
+          ].filter(Boolean).join('\n');
+          if (!hits.length) return { content: note ? `No matches found.\n\n${note}` : 'No matches found.' };
           const formatted = hits.map(h => `${h.path}:${h.line}  ${h.text}`).join('\n');
-          return { content: formatted };
+          return { content: note ? `${formatted}\n\n${note}` : formatted };
         } catch (err: any) {
           return { content: `Error searching project: ${err.message}`, isError: true };
         }
       }
     });
 
-    // 4. write_file
+    // 4. write_file: new files, and whole-file replacements a guard keeps proportionate
+    /** What a whole-file write would leave: the text sent, with the final newline the file had. */
+    const written = (before: string | null, content: string) => (before === null ? content : preserveTrailingNewline(before, content));
+    /** Why a whole-file write would eat far more of an existing file than it adds; null when it wouldn't. */
+    const guard = (before: string | null, after: string) => {
+      if (before === null) return null;
+      const change = fileChange(before, after);
+      return assessWrite({ created: false, added: change.added, removed: change.removed }).reason ?? null;
+    };
     this.register({
       definition: {
         name: 'write_file',
-        description: 'Create or update a file in the project with the specified content.',
+        description:
+          'Create a new file, or replace a whole file with the complete content you send. To change part of an existing file, use edit_file instead: a whole-file write must repeat every line you are not changing, exactly.',
         parameters: {
           type: 'object',
           properties: {
@@ -192,17 +254,15 @@ export class ToolRegistry {
           required: ['path', 'content']
         }
       },
+      validate: async (args, ctx) => {
+        if (!ctx.project.root) return null;
+        const { before } = await readBefore(ctx.project, String(args.path));
+        return guard(before, written(before, String(args.content)));
+      },
       preparePreview: async (args, ctx) => {
         const filePath = String(args.path);
-        let existingText = '';
-        try {
-          if (ctx.project.root) {
-            existingText = await ctx.project.read(filePath);
-          }
-        } catch {
-          existingText = ''; // New file
-        }
-        const diff = createUnifiedDiff(filePath, existingText, String(args.content));
+        const { before } = ctx.project.root ? await readBefore(ctx.project, filePath) : { before: null };
+        const diff = createUnifiedDiff(filePath, before ?? '', written(before, String(args.content)));
         return {
           type: 'diff',
           content: diff,
@@ -213,27 +273,74 @@ export class ToolRegistry {
         try {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
           const filePath = String(args.path);
-          const content = String(args.content);
-          // Whether it exists is asked first: a file too big (or too binary) to read is not a new file.
-          const existed = await ctx.project.exists(filePath);
-          let before: string | null = null;
-          if (existed) {
-            try {
-              before = await ctx.project.read(filePath);
-            } catch {
-              before = null;
-            }
-          }
+          const { existed, before } = await readBefore(ctx.project, filePath);
+          const content = written(before, String(args.content));
+          const blocked = guard(before, content);
+          if (blocked) return { content: blocked, isError: true };
           await ctx.project.write(filePath, content);
           const change = fileChange(before, content);
           if (existed && before === null) change.created = false;
           return {
             content: `Successfully wrote ${content.length} characters to ${filePath}.`,
             change,
-            previous: { existed, content: before }
+            previous: { existed, content: before },
+            written: content
           };
         } catch (err: any) {
           return { content: `Error writing file: ${err.message}`, isError: true };
+        }
+      }
+    });
+
+    // 4b. edit_file: one targeted change, leaving every other line exactly as it was
+    /** The file after the edit the call names, or why it can't be made. */
+    const edited = async (args: Record<string, any>, project: Project) => {
+      const filePath = String(args.path);
+      const { existed, before } = await readBefore(project, filePath);
+      if (!existed) return { error: `${filePath} does not exist. Use write_file to create a new file.` };
+      if (before === null) return { error: `${filePath} can't be edited: it is over 1 MB or not text.` };
+      const result = applyUniqueEdit(before, String(args.old_string ?? ''), String(args.new_string ?? ''), args.replace_all === true);
+      if (!result.ok) return { error: `${result.reason} in ${filePath}. Read the file again and copy old_string exactly, including indentation.` };
+      return { before, after: result.text, replacements: result.replacements };
+    };
+    this.register({
+      definition: {
+        name: 'edit_file',
+        description:
+          'Change part of an existing file: replaces old_string with new_string and leaves every other line exactly as it is. old_string must match the file exactly (read it first) and only once, unless replace_all is true. Prefer this to write_file for any change to an existing file.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Relative path of the file to edit' },
+            old_string: { type: 'string', description: 'The exact text to replace, with enough surrounding lines to be unique' },
+            new_string: { type: 'string', description: 'The text to put in its place (empty to delete it)' },
+            replace_all: { type: 'boolean', description: 'Replace every occurrence instead of exactly one' }
+          },
+          required: ['path', 'old_string', 'new_string']
+        }
+      },
+      validate: async (args, ctx) => (ctx.project.root ? (await edited(args, ctx.project)).error ?? null : null),
+      preparePreview: async (args, ctx) => {
+        const result = await edited(args, ctx.project);
+        return result.error === undefined
+          ? { type: 'diff', content: createUnifiedDiff(String(args.path), result.before!, result.after!), path: String(args.path) }
+          : { type: 'generic', content: result.error, path: String(args.path) };
+      },
+      execute: async (args, ctx) => {
+        try {
+          if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
+          const filePath = String(args.path);
+          const result = await edited(args, ctx.project);
+          if (result.error !== undefined) return { content: result.error, isError: true };
+          await ctx.project.write(filePath, result.after!);
+          return {
+            content: `Edited ${filePath}: ${result.replacements} ${result.replacements === 1 ? 'replacement' : 'replacements'}.`,
+            change: fileChange(result.before!, result.after!),
+            previous: { existed: true, content: result.before! },
+            written: result.after!
+          };
+        } catch (err: any) {
+          return { content: `Error editing file: ${err.message}`, isError: true };
         }
       }
     });
@@ -242,11 +349,11 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'run_command',
-        description: 'Execute a shell command within the project directory. Streams output.',
+        description: `Execute a shell command within the project directory. Streams output. ${SHELL_NOTE}`,
         parameters: {
           type: 'object',
           properties: {
-            command: { type: 'string', description: 'The shell command line string to run' },
+            command: { type: 'string', description: 'The shell command line to run' },
             cwd: { type: 'string', description: 'Optional working directory relative to project root' }
           },
           required: ['command']
@@ -301,8 +408,9 @@ export class ToolRegistry {
               ].filter(Boolean).join('\n\n');
 
               if (error) {
+                const failed = combined || `Command exited with code ${error.code || 1}: ${error.message}`;
                 resolvePromise({
-                  content: combined || `Command exited with code ${error.code || 1}: ${error.message}`,
+                  content: NOT_A_COMMAND.test(failed) ? `${failed}\n\n${SHELL_NOTE}` : failed,
                   isError: true
                 });
               } else {
@@ -325,7 +433,7 @@ export class ToolRegistry {
       definition: {
         name: 'start_process',
         description:
-          'Start a long-running command in the background in the project folder, such as a development server (npm run dev) or a file watcher. Returns its first output and the local address it serves, which the user sees in a live Preview. Use run_command for commands that finish.',
+          `Start a long-running command in the background in the project folder, such as a development server (npm run dev) or a file watcher. Returns its first output and the local address it serves, which the user sees in a live Preview. Use run_command for commands that finish. ${SHELL_NOTE}`,
         parameters: {
           type: 'object',
           properties: {
@@ -447,7 +555,7 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'read_memory',
-        description: 'Read persistent project knowledge and notes from .axon/MEMORY.md.',
+        description: 'Read persistent project knowledge and notes in .axon/MEMORY.md.',
         parameters: {
           type: 'object',
           properties: {}
@@ -503,7 +611,7 @@ export class ToolRegistry {
           await ctx.project.write('.axon/MEMORY.md', content);
           return { content: 'Successfully updated persistent memory in .axon/MEMORY.md.' };
         } catch (err: any) {
-          return { content: `Error updating memory: ${err.message}`, isError: true };
+          return { content: `Error writing memory: ${err.message}`, isError: true };
         }
       }
     });
@@ -522,12 +630,10 @@ export class ToolRegistry {
           required: ['role', 'task']
         }
       },
-      preparePreview: async (args) => {
-        return {
-          type: 'generic',
-          content: `Subagent [${args.role}]:\n${args.task}`
-        };
-      },
+      preparePreview: async (args) => ({
+        type: 'generic',
+        content: `Subagent [${args.role}]:\n${args.task}`
+      }),
       execute: async (args, ctx) => {
         if (!ctx.subagentRunner) {
           return { content: 'Subagent execution is not available in the current environment.', isError: true };

@@ -71,7 +71,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
     meetingAffinity: 1,
     prop: 'tablet',
     pace: 1.05,
-    initial: { kind: 'whiteboard', poiId: 'collab-wb-1' }
+    initial: { kind: 'whiteboard', poiId: 'boardroom-wb' }
   },
   'product-coach': {
     id: 'product-coach',
@@ -111,7 +111,7 @@ export const AGENT_PROFILES: Readonly<Record<string, AgentProfile>> = {
     meetingAffinity: 1.3,
     prop: 'clipboard',
     pace: 1.08,
-    initial: { kind: 'walking-home', fromPoiId: 'collab-e' }
+    initial: { kind: 'walking-home', fromPoiId: 'boardroom-s1' }
   }
 };
 

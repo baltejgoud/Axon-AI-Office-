@@ -7,11 +7,15 @@
   --office-paper: #fff;
   --office-soft: #f2f6fd;
   --office-shadow: 0 10px 34px #223d7010;
+  /* One rhythm for the whole window: the space between rows, the corner of every card, and the height of a control. */
+  --office-gap: 10px;
+  --office-radius: 18px;
+  --office-control: 38px;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex: 1;
   min-height: 0;
-  padding: 22px 22px 22px 12px;
+  padding: 16px;
   width: 100%;
   overflow: hidden;
   background: radial-gradient(ellipse at 40% 20%, #fff, #edf2fa);
@@ -38,77 +42,91 @@
   flex-direction: column;
   position: relative;
 }
-.office-heading {
+/* Row one: the brand, the two ways to find someone, and the office's tools. */
+.office-topbar {
+  position: relative;
+  z-index: 8;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 2px 18px 18px;
+  gap: 12px;
   flex: none;
+  margin-bottom: var(--office-gap);
 }
-.office-wordmark {
-  font-size: 38px;
-  letter-spacing: -2px;
-  font-weight: 650;
-  line-height: 1;
-}
-.office-wordmark-dot {
-  color: var(--office-blue);
-}
-.office-heading p {
-  color: var(--office-muted);
-  font-size: 13px;
-  margin: 7px 0 0;
-}
-.office-presence {
-  text-align: right;
-  color: var(--office-ink);
-  font-size: 12px;
-}
-.office-presence small {
-  display: block;
-  color: var(--office-muted);
-  margin-top: 6px;
-  font-size: 11px;
-}
-.office-presence-dot {
-  display: inline-block;
-  height: 6px;
-  width: 6px;
-  background: #1ca47d;
-  border-radius: 50%;
-  margin-right: 7px;
-}
+/* Row two: the districts, and who is at work. */
 .office-navigation {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px 8px;
+  gap: 12px;
+  margin-bottom: var(--office-gap);
   z-index: 4;
   flex: none;
 }
+.office-presence {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  color: var(--office-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.office-presence small {
+  color: var(--office-muted);
+  font-size: 11px;
+}
+.office-presence small::before {
+  content: '·';
+  margin-right: 7px;
+}
+.office-presence-dot {
+  display: inline-block;
+  flex: none;
+  height: 6px;
+  width: 6px;
+  background: #1ca47d;
+  border-radius: 50%;
+}
 .office-view-controls {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
 }
 .office-view-controls button {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: var(--office-control);
+  height: var(--office-control);
   background: var(--office-paper);
   border: 1px solid var(--office-border);
   border-radius: 10px;
   color: var(--office-muted);
   flex: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.office-view-controls button:hover:not(:disabled) {
+  background: var(--office-soft);
+  color: var(--office-ink);
+}
+/* Splits the tools for the office itself from the ones that move the camera. */
+.office-view-divider {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 20px;
+  margin: 0 5px;
+  background: var(--office-border);
 }
 .office-stage {
   position: relative;
   flex: 1;
   min-height: 200px;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: var(--office-radius);
   isolation: isolate;
 }
 .office-canvas-container {
@@ -226,37 +244,43 @@
 .office-team-dock {
   flex: none;
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: center;
   border: 1px solid #ffffff;
   background: #ffffffb8;
-  border-radius: 17px;
-  padding: 12px 16px;
-  margin: 10px 8px 0;
+  border-radius: var(--office-radius);
+  padding: 7px 12px 7px 16px;
+  margin-top: var(--office-gap);
   box-shadow: var(--office-shadow);
 }
+/* Who this is: the icon beside the team's name, and how many are in it. */
 .office-team-caption {
   display: grid;
-  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  max-width: 168px;
   font-size: 12px;
   color: var(--office-muted);
   flex: none;
 }
 .office-team-caption svg {
+  grid-row: span 2;
   color: var(--office-blue);
-  margin-bottom: 3px;
 }
 .office-team-caption strong {
+  overflow: hidden;
   color: var(--office-ink);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .office-team-caption span {
-  font-size: 10px;
+  font-size: 11px;
 }
 .office-team-people {
   display: flex;
-  justify-content: space-around;
-  gap: 3px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
 }
@@ -264,16 +288,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
   color: var(--office-muted);
   border: 0;
   background: transparent;
-  padding: 4px;
+  padding: 3px;
   border-radius: 12px;
   min-width: 0;
 }
 .office-team-people button > span:last-child {
-  font-size: 9px;
+  font-size: 11px;
   white-space: nowrap;
 }
 .office-team-people button.selected {
@@ -347,7 +371,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: 22px;
+  border-radius: var(--office-radius);
   border: 1px solid #ffffff;
   background: var(--office-paper);
   box-shadow: 0 12px 50px #37588713;
@@ -705,39 +729,71 @@
   font: inherit;
   cursor: pointer;
 }
-/* An empty chat: who they are and what they're good at, as the invitation to start. */
+/* An empty chat: who they are, and three things to ask, up where the eye starts. */
 .activity-empty {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  margin: auto 0;
-  text-align: center;
-  padding: 20px 18px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 2px 0;
   color: var(--office-muted);
-}
-.activity-empty .activity-capabilities {
-  justify-content: center;
 }
 .activity-empty > span {
   display: grid;
   place-items: center;
-  height: 40px;
-  width: 40px;
+  grid-row: span 2;
+  height: 36px;
+  width: 36px;
   color: #809ce1;
   background: var(--office-soft);
-  border-radius: 14px;
-  margin-bottom: 13px;
+  border-radius: 12px;
 }
 .activity-empty strong {
-  font-size: 13px;
+  align-self: center;
+  font-size: 14px;
   font-weight: 600;
   color: var(--office-ink);
 }
 .activity-empty p {
-  max-width: 400px;
-  font-size: 12px;
-  line-height: 1.65;
-  margin: 7px 0 0;
+  grid-column: 2;
+  max-width: 460px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin: 2px 0 0;
+}
+.activity-starters {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 16px;
+}
+.activity-starters small {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.office-container .activity-starters button {
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 10px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  font-size: 12.5px;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+.office-container .activity-starters button:hover {
+  border-color: #9db5f5;
+  background: var(--office-soft);
+  color: var(--office-blue);
 }
 .activity-feed-list {
   list-style: none;
@@ -820,8 +876,33 @@
   background: transparent;
   color: var(--office-blue);
 }
-.office-container button.composer-folder:hover {
+.office-container button.composer-folder.is-set {
+  border-style: solid;
+  color: var(--office-muted);
+}
+.office-container button.composer-folder:hover:not(:disabled) {
   background: var(--office-soft);
+}
+.office-container button.composer-folder:disabled {
+  opacity: 0.6;
+}
+.composer-folder > svg:last-child {
+  opacity: 0.7;
+}
+/* The folder list reuses the model picker's popover; its rows are buttons. */
+.folder-picker-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+}
+.folder-picker-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.folder-picker-option > svg:first-child {
+  margin-left: 0;
+  color: var(--text-tertiary);
 }
 /* Positions the context chip's details, above the whole box. */
 .composer-input-wrapper {
@@ -1022,6 +1103,7 @@ sized for the side panel. */
   color: var(--office-paper);
 }
 .office-thread .message-body {
+  position: relative;
   min-width: 0;
   font-size: 12.5px;
   line-height: 1.65;
@@ -1074,16 +1156,27 @@ sized for the side panel. */
   overflow: auto;
   font-size: 11px;
 }
+/* Copy and the like float over the message's corner on hover, so they take no room beneath it. */
 .office-thread .message-actions {
+  position: absolute;
+  top: -6px;
+  right: 0;
   display: flex;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--office-border);
+  border-radius: 9px;
+  background: var(--office-paper);
+  box-shadow: var(--office-shadow);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
 }
 .office-thread .message:hover .message-actions,
 .office-thread .message:focus-within .message-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 .office-thread .approval-card {
   margin: 0;
@@ -1126,6 +1219,59 @@ sized for the side panel. */
   opacity: 0.45;
   box-shadow: none;
 }
+/* Stop: the run's own control while it goes, beside Send when you have more to say. */
+.composer-btn-stop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 16px;
+  color: var(--office-ink);
+  background: var(--office-paper);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.composer-btn-stop:hover {
+  border-color: #d92d20;
+  color: #d92d20;
+}
+.composer-btn-stop:focus-visible {
+  outline: 2px solid var(--office-blue);
+  outline-offset: 2px;
+}
+/* Messages sent while they work, until their next step reads them. */
+.composer-queued {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+.composer-queued-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--office-border);
+  border-radius: 8px;
+  background: var(--office-soft);
+  font-size: 11px;
+}
+.composer-queued-label {
+  flex: none;
+  color: var(--office-muted);
+  font-size: 10px;
+}
+.composer-queued-text {
+  overflow: hidden;
+  color: var(--office-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @keyframes office-pop {
   from {
     opacity: 0;
@@ -1161,31 +1307,40 @@ sized for the side panel. */
   background: #172239;
   border-color: var(--office-border);
 }
+/* Name tags on the floor: the light theme's ink is for light chips; here they take the dark theme's. */
+[data-theme='dark'] .office-person-label:not(.selected) {
+  color: var(--office-ink);
+  border-color: var(--office-border);
+}
+[data-theme='dark'] .office-person-label:not(.selected) .person-label-detail small {
+  color: var(--office-muted);
+}
 [data-theme='dark'] .office-activity-panel {
   border-color: var(--office-border);
 }
 @media (max-width: 1250px) {
   .office-container {
-    padding: 16px 14px 16px 6px;
+    padding: 12px;
     gap: 10px;
   }
-  .office-team-caption {
+  .office-team-caption,
+  .office-presence small {
     display: none;
   }
   .office-team-dock {
     gap: 6px;
-    padding: 10px;
-    margin-inline: 0;
+    padding: 6px 8px;
   }
-  .office-team-people .office-portrait {
-    width: 32px;
-    height: 32px;
-  }
-  .office-team-people button > span:last-child {
-    font-size: 8px;
+  .office-team-people {
+    padding: 0 12px;
   }
   .office-team-people button {
+    flex-basis: 64px;
     padding: 2px;
+  }
+  .office-team-people button > span:last-child {
+    width: 64px;
+    font-size: 10px;
   }
   .office-activity-panel {
     min-width: 300px;
@@ -1196,17 +1351,17 @@ sized for the side panel. */
   }
 }
 @media (max-width: 960px) {
-  .office-heading {
-    padding-inline: 8px;
-  }
   .office-presence {
     display: none;
   }
   .office-team-people button > span:last-child {
     display: none;
   }
+  .office-team-people button {
+    flex-basis: 40px;
+  }
   .office-team-dock {
-    padding: 8px 4px;
+    padding: 6px 4px;
   }
   .office-person-label {
     font-size: 8px;
@@ -1221,38 +1376,32 @@ sized for the side panel. */
 }
 
 /* Expanded office campus */
-.office-container {
-  padding: 22px;
-}
 .office-directory {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px 12px;
-  position: relative;
-  z-index: 8;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 .office-find-person {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  border: 1px solid var(--office-border);
-  background: var(--office-paper);
-  border-radius: 12px;
-  padding: 0 12px;
-  color: var(--office-muted);
-}
-.office-find-person {
   flex: 1;
   position: relative;
   min-width: 140px;
+  min-height: var(--office-control);
+  border: 1px solid var(--office-border);
+  background: var(--office-paper);
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--office-muted);
 }
 .office-find-person input {
   flex: 1;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: calc(var(--office-control) - 2px);
   background: transparent;
   border: 0;
   color: var(--office-ink);
@@ -1314,22 +1463,34 @@ sized for the side panel. */
   font-size: 12px;
   color: var(--office-muted);
 }
+/*
+ * Longer teams scroll sideways (the wheel too, see TeamStrip). The scrollbar is left out, so the strip
+ * keeps to one row; the faded ends show there is more.
+ */
 .office-team-people {
   overflow-x: auto;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 5px 3px;
-  scrollbar-width: thin;
+  padding: 0 18px;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+.office-team-people::-webkit-scrollbar {
+  display: none;
 }
 .office-team-people button {
-  flex: 0 0 82px;
+  flex: 0 0 76px;
 }
 .office-team-people button > span:last-child {
-  width: 82px;
+  width: 76px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 11px;
+}
+.office-team-people .office-portrait {
+  width: 34px;
+  height: 34px;
 }
 .office-portrait svg {
   width: 100%;
@@ -1360,36 +1521,17 @@ sized for the side panel. */
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.office-view-controls button {
-  width: 40px;
-  height: 40px;
-}
 .office-container input:focus-visible,
 .office-container select:focus-visible,
 .office-container textarea:focus-visible {
   outline: none;
 }
-@media (max-width: 1250px) {
-  .office-container {
-    padding: 14px;
-    gap: 12px;
-  }
-  .office-heading {
-    padding-bottom: 12px;
-  }
-  .office-directory {
-    padding-bottom: 8px;
-  }
-}
 @media (max-width: 960px) {
-  .office-directory {
+  .office-topbar {
     flex-wrap: wrap;
   }
   .office-find-person {
     flex: 1 1 210px;
-  }
-  .office-presence small {
-    max-width: 150px;
   }
 }
 
@@ -1478,14 +1620,8 @@ sized for the side panel. */
     min-height: 540px;
     max-height: 720px;
   }
-  .office-navigation {
-    align-items: flex-start;
-  }
-  .office-view-controls {
-    flex-direction: column;
-  }
   .office-directory {
-    padding-inline: 0;
+    flex-wrap: wrap;
     gap: 8px;
   }
   .office-team-people button {
@@ -1602,6 +1738,10 @@ sized for the side panel. */
 .knowledge-library-intro .btn {
   flex: none;
 }
+/* The overlay is already roomy; an empty shelf needn't add a screen of padding to it. */
+.knowledge-library .empty-state {
+  padding: 28px 24px;
+}
 @keyframes office-fade {
   from {
     opacity: 0;
@@ -1715,6 +1855,229 @@ sized for the side panel. */
   color: var(--office-blue);
   font-size: 11px;
   cursor: pointer;
+}
+
+/* A team the lead gathered: people, what each said, the plan waiting for Start, the tasks, the report. */
+.team-card {
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--office-border);
+  border-left: 3px solid #8b5cf6;
+  border-radius: 10px;
+  background: var(--office-soft);
+  color: var(--office-ink);
+  font-size: 12px;
+}
+.team-card.failed,
+.team-card.is-failed {
+  border-left-color: #d97706;
+}
+.team-card.is-done {
+  border-left-color: #16a34a;
+}
+.team-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-card header .team-chip {
+  margin-left: auto;
+}
+.team-goal {
+  margin: 8px 0;
+  line-height: 1.45;
+}
+.team-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.team-people li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  background: var(--office-paper);
+  font-size: 11px;
+}
+.team-people li.is-thinking {
+  opacity: 0.6;
+}
+.team-face {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.team-face.fallback {
+  display: grid;
+  place-items: center;
+  background: var(--office-paper);
+  color: var(--office-muted);
+}
+.team-progress,
+.team-summary {
+  margin: 0 0 8px;
+  color: var(--office-muted);
+}
+.team-minutes {
+  margin-bottom: 8px;
+}
+.team-minutes summary {
+  color: var(--office-blue);
+  font-size: 11px;
+  cursor: pointer;
+}
+.team-minute {
+  margin-top: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--office-border);
+  line-height: 1.45;
+}
+.team-minute p {
+  margin: 2px 0;
+}
+.team-tasks {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.team-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-paper);
+}
+.team-task-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.team-task-meta,
+.team-task-note {
+  overflow: hidden;
+  color: var(--office-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-task-meta code {
+  font-size: 10px;
+}
+.team-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(100, 116, 139, 0.16);
+  color: var(--office-ink);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.team-chip.is-working,
+.team-chip.is-meeting,
+.team-chip.is-reporting {
+  background: rgba(56, 103, 246, 0.16);
+  color: var(--office-blue);
+}
+.team-chip.is-planned {
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+.team-chip.is-done {
+  background: rgba(22, 163, 74, 0.16);
+  color: #15803d;
+}
+.team-chip.is-failed,
+.team-chip.is-blocked,
+.team-chip.is-stopped {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b42318;
+}
+[data-theme='dark'] .team-chip.is-planned {
+  color: #fbbf24;
+}
+[data-theme='dark'] .team-chip.is-done {
+  color: #4ade80;
+}
+[data-theme='dark'] .team-chip.is-failed,
+[data-theme='dark'] .team-chip.is-blocked,
+[data-theme='dark'] .team-chip.is-stopped,
+[data-theme='dark'] .team-error {
+  color: #f87171;
+}
+.team-open {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: none;
+  color: var(--office-blue);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.team-note {
+  margin: 0 0 8px;
+  color: #b45309;
+}
+.team-error {
+  color: #b42318;
+}
+.team-report {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--office-paper);
+  line-height: 1.5;
+}
+.team-report p {
+  margin: 4px 0;
+}
+.team-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.team-actions:empty {
+  display: none;
+}
+.team-button {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--office-border);
+  border-radius: 15px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.team-button.primary {
+  border-color: transparent;
+  background: var(--office-blue);
+  color: #fff;
+}
+.team-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.team-button:focus-visible,
+.team-open:focus-visible {
+  outline: 2px solid var(--office-blue);
+  outline-offset: 2px;
 }
 
 /* A team's tasks, opened from its board. */

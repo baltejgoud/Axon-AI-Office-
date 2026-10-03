@@ -1,4 +1,5 @@
 import { PLANNER_TOOL_NAMES } from '../tasks/tools';
+import { TEAM_TOOL_NAMES } from '../team/tools';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
@@ -29,6 +30,10 @@ interface PendingApproval {
 
 /** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
 const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
+/** The tools that save files. They share one "save files without asking" grant, and the folder check. */
+export const FILE_SAVERS = new Set(['write_file', 'edit_file']);
+/** The name a tool's session grant is kept under. */
+const grantName = (toolName: string) => (FILE_SAVERS.has(toolName) ? 'write_file' : toolName);
 
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
@@ -71,7 +76,7 @@ export class PermissionManager {
     if (connector === 'off') return { action: 'deny', reason: 'This tool is turned off in Settings → Connectors.' };
 
     // 1. Session-level grant check
-    if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${toolName}:*`)) {
+    if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${grantName(toolName)}:*`)) {
       return { action: 'allow', bySession: true };
     }
     // A connector tool: your override, or its server's read-only mark.
@@ -81,9 +86,11 @@ export class PermissionManager {
     if (toolName === 'ask_colleague') return { action: 'allow' };
     // The receptionist's planner tools only touch the task records.
     if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
+    // Finding people and calling a meeting only read; the plan waits for you before anything is done.
+    if (TEAM_TOOL_NAMES.has(toolName)) return { action: 'allow' };
 
     // 2. Path containment check
-    if (['read_file', 'write_file', 'list_files'].includes(toolName)) {
+    if (['read_file', 'list_files'].includes(toolName) || FILE_SAVERS.has(toolName)) {
       const p = args.path || args.directory || args.directoryPath;
       if (p && roots.length > 0 && !this.isPathWithinRoots(String(p), roots)) {
         return { action: 'deny', reason: `Path "${p}" is outside allowed workspace roots.` };
@@ -106,8 +113,8 @@ export class PermissionManager {
       return { action: this.defaultPolicy[toolName] || 'allow' };
     }
 
-    // 5. write_file defaults to ask (requires approval card)
-    if (toolName === 'write_file') {
+    // 5. Saving a file defaults to ask (requires approval card)
+    if (FILE_SAVERS.has(toolName)) {
       return { action: this.defaultPolicy[toolName] || 'ask' };
     }
 
@@ -172,7 +179,7 @@ export class PermissionManager {
     this.pendingApprovals.delete(requestId);
     if (outcome === 'approved-session') {
       const { toolName, arguments: args } = pending.request;
-      this.sessionGrants.add(EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${toolName}:*`);
+      this.sessionGrants.add(EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${grantName(toolName)}:*`);
     }
     pending.resolve(outcome);
     return true;

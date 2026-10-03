@@ -68,7 +68,7 @@ export function MessageView({
       </div>
       <div className="message-body">
         <div className="message-meta">
-          <strong>{m.role === 'user' ? 'You' : authorName}</strong>
+          <strong>{m.role === 'user' ? (m.from ?? 'You') : authorName}</strong>
           <span className="text-caption" title={new Date(m.createdAt).toLocaleString()}>
             {timeAgo(m.createdAt)}
           </span>

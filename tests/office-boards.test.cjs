@@ -125,7 +125,8 @@ const agents = require('../src/renderer/src/features/office/data/officeAgents.ts
 test('a board for every department and every core team room, and one for everyone', () => {
   const teams = boards.TASK_BOARDS.map((b) => b.team).sort();
   const departments = districts.DISTRICTS.flatMap((d) => d.departments);
-  assert.deepEqual(teams, [...departments, 'Files room', 'Library', 'Lounge', 'Planning', 'Today'].sort());
+  // The boardroom's board shows whichever team is meeting.
+  assert.deepEqual(teams, [...departments, 'Boardroom', 'Files room', 'Library', 'Lounge', 'Planning', 'Today'].sort());
   for (const b of boards.TASK_BOARDS) {
     const item = layout.FURNITURE.find((f) => f.id === b.itemId);
     assert.ok(item, b.itemId);

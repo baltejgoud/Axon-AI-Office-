@@ -44,43 +44,24 @@
 
 /*
  * A shorter office (data-office-size, from its height) gives the floor the room: first a slimmer
- * heading and team strip, then only the finder, the district chips and the floor, then the floor.
+ * team strip (faces only), then no presence line and smaller faces, then only the tools and the floor.
  */
-.office-workspace[data-office-size~='compact'] .office-heading {
-  padding-bottom: 10px;
-}
-.office-workspace[data-office-size~='compact'] .office-wordmark {
-  font-size: 26px;
-  letter-spacing: -1.2px;
-}
-.office-workspace[data-office-size~='compact'] .office-heading p,
 .office-workspace[data-office-size~='compact'] .office-presence small,
-.office-workspace[data-office-size~='compact'] .office-team-caption,
 .office-workspace[data-office-size~='compact'] .office-team-people button > span:last-child {
   display: none;
 }
 .office-workspace[data-office-size~='compact'] .office-team-dock {
-  gap: 6px;
-  padding: 6px 10px;
-  margin-top: 8px;
-}
-.office-workspace[data-office-size~='compact'] .office-team-people .office-portrait {
-  width: 34px;
-  height: 34px;
+  padding: 5px 10px 5px 14px;
 }
 .office-workspace[data-office-size~='compact'] .office-minimap {
-  width: 150px;
+  width: 120px;
 }
-.office-workspace[data-office-size~='tight'] .office-heading {
+.office-workspace[data-office-size~='tight'] .office-presence,
+.office-workspace[data-office-size~='tight'] .office-team-caption span {
   display: none;
 }
-/* The heading steps aside; a small wordmark stays on the floor, and the strip keeps its faces. */
-.office-workspace[data-office-size~='tight'] .office-directory-mark {
-  display: block;
-}
 .office-workspace[data-office-size~='tight'] .office-team-dock {
-  padding: 4px 8px;
-  margin-top: 6px;
+  padding: 4px 8px 4px 12px;
   border-radius: 14px;
 }
 .office-workspace[data-office-size~='tight'] .office-team-people .office-portrait {
@@ -88,10 +69,11 @@
   height: 28px;
 }
 .office-workspace[data-office-size~='tight'] .office-team-people button {
+  flex-basis: 40px;
   padding: 1px;
 }
 .office-workspace[data-office-size~='tight'] .office-minimap {
-  width: 120px;
+  width: 100px;
 }
 .office-workspace[data-office-size~='tiny'] .office-team-dock,
 .office-workspace[data-office-size~='tiny'] .office-directory,
@@ -101,14 +83,15 @@
   display: none;
 }
 
+/* The brand: it sits at the start of the top row, at every size. */
 .office-directory-mark {
-  display: none;
+  display: block;
   flex: none;
   align-self: center;
-  margin: 0 6px 0 4px;
-  font-size: 22px;
+  margin: 0 6px 0 2px;
+  font-size: 24px;
   font-weight: 650;
-  letter-spacing: -1px;
+  letter-spacing: -1.2px;
   line-height: 1;
   color: var(--office-ink);
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp, perform } from './state';
-import { Button, EmptyState, IconBook, IconPlus, IconSearch, IconTrash } from './ui';
+import { Button, EmptyState, IconBook, IconFolderPlus, IconPlus, IconSearch, IconTrash } from './ui';
 import { syncOfficeLibrary } from './features/office/library';
 
 /** The office library: documents the Library's coworkers can search. Shown in an overlay. */
@@ -17,16 +17,32 @@ export function Knowledge() {
       await syncOfficeLibrary();
     }, 'Documents imported').finally(() => setBusy(false));
   };
+  const importFolder = () => {
+    setBusy(true);
+    void perform(async () => {
+      const result = await window.axon.knowledgeImportFolder();
+      if (!result) return;
+      await useApp.getState().refresh();
+      await syncOfficeLibrary();
+      const skipped = result.skipped ? `, ${result.skipped} skipped` : '';
+      useApp.getState().pushToast(
+        `Imported ${result.imported} document${result.imported === 1 ? '' : 's'}${skipped}${result.truncated ? ' (folder capped at 500 files)' : ''}`
+      );
+    }).finally(() => setBusy(false));
+  };
   return (
     <div className="knowledge-library stack">
       <div className="knowledge-library-intro">
         <p>
           The Knowledge Librarian and Research Analyst search these documents and cite the passages
           they use. PDF, DOCX, TXT, Markdown, Excel, CSV and text-based code files · 15 MB per file · no OCR.
-          Import only files you trust.
+          Import a whole folder to add everything inside it, sub-folders included. Import only files you trust.
         </p>
         <Button variant="primary" icon={IconPlus} disabled={busy} onClick={importDocs}>
           {busy ? 'Importing…' : 'Import documents'}
+        </Button>
+        <Button icon={IconFolderPlus} disabled={busy} onClick={importFolder}>
+          Import a whole folder
         </Button>
       </div>
 
@@ -94,12 +110,7 @@ export function Knowledge() {
         <EmptyState
           icon={IconBook}
           title="The shelves are empty"
-          description="Import documents and the Library's coworkers can search them for you."
-          action={
-            <Button variant="primary" icon={IconPlus} disabled={busy} onClick={importDocs}>
-              Import documents
-            </Button>
-          }
+          description="Import documents above and the Library's coworkers can search them for you."
         />
       )}
     </div>

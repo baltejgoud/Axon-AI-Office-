@@ -18,7 +18,8 @@ export function OfficeDirectory({ onChoose }: { onChoose: (id: string) => void }
       <IconSearch size={16} />
       <input
         aria-label="Find a coworker"
-        placeholder="Find a person or specialty… (front-end, SRE, business analyst)"
+        placeholder="Find a person or specialty…"
+        title="Try front-end, SRE or business analyst"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {

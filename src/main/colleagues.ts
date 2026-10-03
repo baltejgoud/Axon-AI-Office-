@@ -12,6 +12,8 @@ export const LIMIT_REACHED = 'You have asked three colleagues already; finish wi
 const CONSULT_STEPS = 5;
 /** A search score that names one person rather than a whole field. */
 const CLEAR_MATCH = 55;
+/** Said when the steps run out with the colleague still reaching for tools. */
+const ANSWER_NOW = 'You are out of steps. Answer now, in a few sentences, from what you have already read. Do not use tools.';
 
 export const ASK_COLLEAGUE: ToolDefinition = {
   name: 'ask_colleague',
@@ -86,6 +88,8 @@ export interface ConsultDeps {
   execute: (name: string, args: Record<string, unknown>) => Promise<string>;
   /** A tool the colleague asked for but wasn't given: for the audit trail. */
   refused?: (name: string, args: Record<string, unknown>) => void;
+  /** Their system prompt when they answer in another setting than a question, such as a team meeting. */
+  system?: string;
 }
 
 /** The colleague thinks it through, reading files if allowed, and returns their answer. */
@@ -98,33 +102,39 @@ export async function consult(
   question: string,
   deps: ConsultDeps
 ): Promise<string> {
-  const system = consultSystemPrompt(colleague, askerName);
+  const system = deps.system ?? consultSystemPrompt(colleague, askerName);
   const allowed = new Set(deps.tools.map((tool) => tool.name));
   const messages: ChatRequestMessage[] = [{ role: 'user', content: question }];
-  let output = '';
-  for (let step = 0; step < CONSULT_STEPS; step++) {
+  const offered = deps.tools.length ? deps.tools : undefined;
+
+  /** One turn: the text they said, and the tools they asked for instead of answering. */
+  const turn = async (tools: ToolDefinition[] | undefined) => {
     let text = '';
     const result = await deps.stream(
       provider,
       key,
-      {
-        model: modelId,
-        messages,
-        system,
-        temperature: 0.3,
-        maxTokens: deps.maxTokens,
-        tools: deps.tools.length ? deps.tools : undefined,
-        signal: deps.signal
-      },
+      { model: modelId, messages, system, temperature: 0.3, maxTokens: deps.maxTokens, tools, signal: deps.signal },
       (chunk, delta) => {
         if (delta?.type === 'text') text += delta.text;
         else if (chunk && delta?.type !== 'thought') text += chunk;
       }
     );
-    output += text;
-    const calls = result.toolCalls ?? [];
+    return { text, calls: result.toolCalls ?? [], replay: result.replay };
+  };
+
+  // Only the last turn is the answer: the ones before it were what they said while reading.
+  let answer = '';
+  let ranOut = false;
+  for (let step = 0; step < CONSULT_STEPS; step++) {
+    const { text, calls, replay } = await turn(offered);
+    answer = text;
     if (!calls.length) break;
-    messages.push({ role: 'assistant', content: text, toolCalls: calls, replay: result.replay });
+    if (step === CONSULT_STEPS - 1) {
+      // Out of steps with tools still asked for: make them answer rather than narrate.
+      ranOut = true;
+      break;
+    }
+    messages.push({ role: 'assistant', content: text, toolCalls: calls, replay });
     for (const call of calls) {
       let args: Record<string, unknown> = {};
       try {
@@ -138,5 +148,10 @@ export async function consult(
       messages.push({ role: 'tool', toolCallId: call.id, content });
     }
   }
-  return output.trim() || '(no answer)';
+  // One tool-free turn, so a colleague who spent every step reading still answers from it.
+  if (ranOut) {
+    messages.push({ role: 'user', content: ANSWER_NOW });
+    answer = (await turn(undefined)).text;
+  }
+  return answer.trim() || '(no answer)';
 }

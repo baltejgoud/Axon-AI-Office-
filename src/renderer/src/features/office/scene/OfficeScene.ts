@@ -473,6 +473,20 @@ export class OfficeScene {
     this.simulation.endHelp(helperId);
   }
 
+  /** A team gathers in the boardroom, the lead at the head; how many took a seat. */
+  public startTeamMeeting(key: string, leadId: string, attendeeIds: readonly string[]): number {
+    return this.simulation.startTeamMeeting(key, leadId, attendeeIds);
+  }
+
+  public endTeamMeeting(key: string): void {
+    this.simulation.endTeamMeeting(key);
+  }
+
+  /** The open team's goal or tasks, on the boardroom's board. */
+  public setMeeting(cards: readonly TaskItem[]): void {
+    this.boards.setMeeting(cards);
+  }
+
   /** Whose desk each desk is, for the screens' status strip. */
   private readonly deskOwners = new Map(
     Object.entries(HOME_DESKS).map(([agentId, deskId]) => [deskId, agentId])

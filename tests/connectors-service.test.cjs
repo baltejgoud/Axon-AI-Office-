@@ -161,7 +161,8 @@ test('the permission rule: off denies (even after always-allow), allow and ask p
 
 test('toolsFor adds connector tools without a folder', () => {
   const names = toolsFor({ agentId: 'chief-of-staff', hasFolder: false, registry: [{ name: 'read_file' }], connectorTools: [{ name: 'mcp_notes_search' }] }).map((t) => t.name);
-  assert.deepEqual(names, ['ask_colleague', 'mcp_notes_search']);
+  // The Chief of Staff also leads teams.
+  assert.deepEqual(names, ['ask_colleague', 'find_people', 'call_team_meeting', 'mcp_notes_search']);
 });
 
 test("a coworker gets their own connectors: reads run, changes ask, and others' tools are refused", async (t) => {

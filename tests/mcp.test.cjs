@@ -123,19 +123,17 @@ test('MCPClientManager registers discovered tools into ToolRegistry', async () =
   const manager = new MCPClientManager(registry);
 
   try {
-    await manager.syncServers([
-      {
-        id: 'calc-srv',
-        name: 'Calculator',
-        transport: 'stdio',
-        command: process.execPath,
-        args: ['-e', serverScript],
-        enabled: true
-      }
-    ]);
-
-    // Give it a brief moment to finish connecting and registering
-    await new Promise(r => setTimeout(r, 400));
+    // syncServers() starts a new server detached (void this.start(cfg)), so awaiting it proves nothing.
+    // reconnect() is the same start, awaited (client.ts:638) — it resolves once connect() has run, so
+    // the tools below are registered by then. No sleep, so nothing depends on how loaded the box is.
+    await manager.reconnect({
+      id: 'calc-srv',
+      name: 'Calculator',
+      transport: 'stdio',
+      command: process.execPath,
+      args: ['-e', serverScript],
+      enabled: true
+    });
 
     const tool = registry.get('mcp_calculator_add');
     assert.ok(tool, 'Tool mcp_calculator_add should be registered');
