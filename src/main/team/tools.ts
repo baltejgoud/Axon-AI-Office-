@@ -1,5 +1,6 @@
 import { COWORKERS, RECEPTIONIST_ID, coworkerById } from '../../shared/coworkers';
 import { scoreCoworkers } from '../../shared/coworkerSearch';
+import { ROOMS, pickRoom, roomName, roomNamed, theRoom, type MeetingRoomId } from '../../shared/rooms';
 import type { ToolDefinition } from '../../shared/types';
 import { resolveColleague } from '../colleagues';
 
@@ -25,7 +26,7 @@ export const FIND_PEOPLE: ToolDefinition = {
 export const CALL_TEAM_MEETING: ToolDefinition = {
   name: 'call_team_meeting',
   description:
-    'Gather a team for work that needs more than one specialty. They meet in the boardroom, each says how they would approach their part, and you then turn that into a plan the user approves before anyone starts; then each does their part and you report back. Pick 2-12 people by name (use find_people first). A question you can answer alone needs no meeting.',
+    'Gather a team for work that needs more than one specialty. They meet in a meeting room (a free six-seater, or the boardroom for more than five), each says how they would approach their part, and you then turn that into a plan the user approves before anyone starts; then each does their part from that room and you report back. Pick 2-12 people by name (use find_people first). A question you can answer alone needs no meeting.',
   parameters: {
     type: 'object',
     properties: {
@@ -34,6 +35,10 @@ export const CALL_TEAM_MEETING: ToolDefinition = {
         type: 'array',
         items: { type: 'string' },
         description: 'Their names, e.g. ["Backend Developer", "QA Engineer"]'
+      },
+      room: {
+        type: 'string',
+        description: `Only when the user names a room: ${ROOMS.map((r) => r.name).join(', ')}. Otherwise leave it out and a free room that fits is picked.`
       }
     },
     required: ['goal', 'attendees']
@@ -168,4 +173,22 @@ export function resolveAttendees(names: unknown, leadId: string): { ids: string[
   if (ids.length > MAX_ATTENDEES)
     return { error: `At most ${MAX_ATTENDEES} people fit the boardroom; pick the ones the goal needs most.` };
   return { ids };
+}
+
+/**
+ * The room a team of `people` (the lead included) gets: the one the lead named when it fits and is
+ * free, with a word for the lead when it was not. `busy` holds the rooms of the other open teams.
+ */
+export function resolveRoom(asked: unknown, people: number, busy: readonly MeetingRoomId[]): { room: MeetingRoomId; note?: string } {
+  const text = typeof asked === 'string' ? asked.trim() : '';
+  const wanted = text ? roomNamed(text) : null;
+  const room = pickRoom(people, busy, wanted);
+  if (!text || room === wanted) return { room };
+  const seats = ROOMS.find((r) => r.id === wanted)?.seats ?? 0;
+  const why = !wanted
+    ? `There is no room called "${text}" (the rooms are ${ROOMS.map((r) => r.name).join(', ')})`
+    : people > seats
+      ? `${roomName(wanted)} seats ${seats}, too few for ${people}`
+      : `${roomName(wanted)} has another team in it`;
+  return { room, note: `${why}, so they meet in ${theRoom(room)}.` };
 }

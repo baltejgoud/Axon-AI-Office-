@@ -1,4 +1,5 @@
 import { coworkerById, type Coworker } from '../../shared/coworkers';
+import { roomName, roomOf } from '../../shared/rooms';
 import type { ChatRequestMessage, ProviderConfig, Team, TeamAssignment, TeamPlan } from '../../shared/types';
 import { rolesBlock } from '../prompt';
 import type { streamChat } from '../providers';
@@ -164,7 +165,7 @@ export function teamsBlock(teams: Team[]): string {
     '## Your teams',
     ...teams.map((t) =>
       [
-        `### ${t.goal} — ${t.status}${t.note ? ` (${t.note})` : ''}`,
+        `### ${t.goal} — ${t.status}, ${roomName(roomOf(t))}${t.note ? ` (${t.note})` : ''}`,
         ...(t.plan?.assignments ?? []).map(
           (a) => `- ${a.id} ${a.title}: ${nameOf(a.ownerId)}, ${a.status}${a.note ? ` (${a.note})` : ''}`
         ),

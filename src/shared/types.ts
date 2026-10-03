@@ -5,6 +5,7 @@
  */
 import type { ContextUsage } from './context-usage';
 import type { RunEstimate } from './cost';
+import type { MeetingRoomId } from './rooms';
 import type { VoiceSettings } from './speech';
 
 export type ID = string;
@@ -445,6 +446,8 @@ export interface Team {
   conversationId: ID;
   goal: string;
   attendees: string[];
+  /** Where they meet and stay while they work; teams from before there were rooms used the boardroom. */
+  room?: MeetingRoomId;
   /** Everyone on the team uses the lead conversation's model. */
   providerId: ID;
   modelId: string;

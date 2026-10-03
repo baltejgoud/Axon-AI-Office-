@@ -51,7 +51,8 @@ import { AUDIO_MAX_BYTES, SPEECH_TIMEOUT_MS, cleanVoice, transcribe } from './sp
 import { PROMPT_MAX, chosenEngine } from '../shared/speech';
 import { RepeatGuard, capToolResult } from './runGuards';
 import { OPEN_TEAM, interruptTeams } from './team/plan';
-import { FIND_PEOPLE, TEAM_LEADS, TEAM_TOOL_NAMES, findPeople, resolveAttendees, rosterBlock } from './team/tools';
+import { FIND_PEOPLE, TEAM_LEADS, TEAM_TOOL_NAMES, findPeople, resolveAttendees, resolveRoom, rosterBlock } from './team/tools';
+import { roomName, roomOf, theRoom } from '../shared/rooms';
 import { MEETING_ASK, draftPlan, meetingSystemPrompt, taskBrief, teammateContext, teamsBlock, writeReport, type ModelCall } from './team/meeting';
 
 /** How long a team's changes wait to be saved together. */
@@ -1448,20 +1449,24 @@ export class Service {
     if (open) return { content: `A team is already ${open.status} on "${open.goal}". Wait for it, or ask the user to stop it.`, isError: true };
     const people = resolveAttendees(args.attendees, chat.agentId ?? '');
     if ('error' in people) return { content: people.error, isError: true };
+    const busy = this.state.teams.filter((t) => OPEN_TEAM.has(t.status)).map(roomOf);
+    const { room, note: roomNote } = resolveRoom(args.room, people.ids.length + 1, busy);
     const team = this.teams.create({
       leadId: chat.agentId!,
       conversationId: chat.id,
       goal: text(goal, 4000),
       attendees: people.ids,
       providerId: chat.providerId,
-      modelId: chat.modelId
+      modelId: chat.modelId,
+      room
     });
     void this.teams.meet(team.id);
     return {
       content: JSON.stringify({
         team: team.id,
         attendees: people.ids.map((id) => coworkerById(id)?.name ?? id),
-        note: 'The meeting has started. The plan will appear in this conversation for the user to approve. Tell the user in one or two sentences who you gathered and why; do not plan the work yourself.'
+        room: roomName(room),
+        note: `${roomNote ? `${roomNote} ` : ''}The meeting has started in ${theRoom(room)}, where the team stays until its work is done. The plan will appear in this conversation for the user to approve. Tell the user in one or two sentences who you gathered, why, and which room; do not plan the work yourself.`
       })
     };
   }

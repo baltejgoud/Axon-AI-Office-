@@ -1,3 +1,4 @@
+import type { MeetingRoomId } from '../../shared/rooms';
 import type { Team, TeamAssignment, TeamPlan } from '../../shared/types';
 import { MAX_PARALLEL, OPEN_TEAM, RESULT_LIMIT, blockDependants, progress, readyAssignments, resetForRetry } from './plan';
 
@@ -76,7 +77,7 @@ export class TeamRunner {
     for (let set = this.busy.get(teamId); set?.size; set = this.busy.get(teamId)) await Promise.allSettled([...set]);
   }
 
-  create(input: { leadId: string; conversationId: string; goal: string; attendees: string[]; providerId: string; modelId: string }): Team {
+  create(input: { leadId: string; conversationId: string; goal: string; attendees: string[]; providerId: string; modelId: string; room?: MeetingRoomId }): Team {
     const now = this.now();
     const team: Team = { id: this.deps.id(), ...input, status: 'meeting', minutes: [], createdAt: now, updatedAt: now };
     this.deps.teams().push(team);

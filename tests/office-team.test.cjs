@@ -24,10 +24,16 @@ test('a call_team_meeting call finds its team by the id in its result', () => {
   assert.equal(team.teamOfCall({ name: 'call_team_meeting', result: 'not json' }, teams), undefined);
 });
 
-test('people sit in the boardroom while their team meets and for the wrap-up', () => {
-  assert.deepEqual(team.openMeetings(teams), [
-    { id: 'a', leadId: 'chief-of-staff', attendees: ['x', 'y'] },
-    { id: 'c', leadId: 'ops-coordinator', attendees: ['w'] }
+test('people sit in their team’s room from the meeting to the report, working from there; teams from before rooms used the boardroom', () => {
+  const working = { id: 'd', status: 'working', leadId: 'ops-coordinator', attendees: ['p', 'q'], room: 'room-3', plan: { summary: '', assignments: [
+    { id: 't1', ownerId: 'p', status: 'working' }, { id: 't2', ownerId: 'q', status: 'waiting' }] } };
+  const closed = ['done', 'stopped', 'failed', 'discarded'].map((status, i) => ({ id: `z${i}`, status, leadId: 'chief-of-staff', attendees: ['x'] }));
+  assert.deepEqual(team.openMeetings([...teams, { id: 'e', status: 'planned', leadId: 'chief-of-staff', attendees: ['v'], room: 'room-1' }, working, ...closed]), [
+    { id: 'a', leadId: 'chief-of-staff', attendees: ['x', 'y'], room: 'boardroom', working: [] },
+    { id: 'b', leadId: 'chief-of-staff', attendees: ['z'], room: 'boardroom', working: [] },
+    { id: 'c', leadId: 'ops-coordinator', attendees: ['w'], room: 'boardroom', working: [] },
+    { id: 'e', leadId: 'chief-of-staff', attendees: ['v'], room: 'room-1', working: [] },
+    { id: 'd', leadId: 'ops-coordinator', attendees: ['p', 'q'], room: 'room-3', working: ['p'] }
   ]);
 });
 
@@ -45,4 +51,14 @@ test('the boardroom board shows the open team: its goal while they meet, then ea
   assert.deepEqual(team.teamBoardCards([meeting, working]).map((c) => [c.title, c.coworkerId, c.status]),
     [['API', 'backend-developer', 'done'], ['Form', 'frontend-developer', 'attention']]);
   assert.deepEqual(team.teamBoardCards([{ ...working, status: 'done' }]), []);
+});
+
+test('each room’s board shows the team in that room', () => {
+  const inRoom3 = { id: 'r3', status: 'meeting', leadId: 'ops-coordinator', goal: 'Launch posts', updatedAt: 5, attendees: [], room: 'room-3' };
+  const inBoardroom = { id: 'b', status: 'meeting', leadId: 'chief-of-staff', goal: 'Big build', updatedAt: 1, attendees: [] };
+  const boards = team.roomBoardCards([inRoom3, inBoardroom]);
+  assert.deepEqual(Object.keys(boards), ['boardroom', 'room-1', 'room-2', 'room-3', 'room-4']);
+  assert.deepEqual(boards['room-3'].map((c) => c.title), ['Launch posts']);
+  assert.deepEqual(boards.boardroom.map((c) => c.title), ['Big build'], 'the newer team elsewhere does not take the boardroom board');
+  assert.deepEqual(boards['room-1'], []);
 });

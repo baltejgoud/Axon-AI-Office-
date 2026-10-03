@@ -30,7 +30,8 @@ import type { SignSpec } from './campus/signs';
 import type { Team } from '../../../../shared/types';
 import { useApp } from '../../state';
 import { activeHelp } from './tasks';
-import { openMeetings, teamBoardCards } from './team';
+import { openMeetings, roomBoardCards } from './team';
+import { roomOf } from '../../../../shared/rooms';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 
@@ -60,15 +61,16 @@ export function OfficeCanvas({
     helping.current = next;
   }, []);
   const teams = useApp((s) => s.data?.teams);
-  /** Teams in the boardroom, as last sent to the scene. */
+  /** Teams in their rooms, as last sent to the scene. */
   const meeting = useRef(new Set<string>());
   const syncTeams = useCallback((world: OfficeScene, all: readonly Team[]) => {
     const now = openMeetings(all);
     const next = new Set(now.map((m) => m.id));
     for (const key of meeting.current) if (!next.has(key)) world.endTeamMeeting(key);
-    for (const m of now) if (!meeting.current.has(m.id)) world.startTeamMeeting(m.id, m.leadId, m.attendees);
+    // Every time, so whose team task is running stays current.
+    for (const m of now) world.startTeamMeeting(m.id, m.leadId, m.attendees, m.room, m.working);
     meeting.current = next;
-    world.setMeeting(teamBoardCards(all));
+    world.setRoomBoards(roomBoardCards(all));
   }, []);
   /** The latest sign handler; the scene is created once and calls through this. */
   const signClick = useRef<(sign: SignSpec) => void>(() => {});
@@ -118,15 +120,15 @@ export function OfficeCanvas({
       world.onSignClick = (sign) => signClick.current(sign);
       // A team's board opens its task list; the Today board goes to the receptionist's planner.
       world.onBoardClick = (team) => {
-        const kind = TASK_BOARDS.find((board) => board.team === team)?.kind;
-        if (kind === 'today') return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
-        // The boardroom's board: the lead's conversation with the team on it.
-        if (kind === 'meeting') {
+        const board = TASK_BOARDS.find((b) => b.team === team);
+        if (board?.kind === 'today') return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
+        // A meeting room's board: the lead's conversation with the team in that room.
+        if (board?.room) {
           const open = [...(useApp.getState().data?.teams ?? [])]
-            .filter((t) => ['meeting', 'planned', 'working', 'reporting'].includes(t.status))
+            .filter((t) => ['meeting', 'planned', 'working', 'reporting'].includes(t.status) && roomOf(t) === board.room)
             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-          if (open) useOfficeStore.getState().focusOn({ agentId: open.leadId, conversationId: open.conversationId });
-          return;
+          if (open) return useOfficeStore.getState().focusOn({ agentId: open.leadId, conversationId: open.conversationId });
+          if (board.kind === 'meeting') return;
         }
         useOfficeStore.getState().openTeamBoard(team);
       };

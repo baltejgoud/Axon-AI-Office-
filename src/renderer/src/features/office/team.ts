@@ -1,3 +1,4 @@
+import { ROOMS, roomOf, type MeetingRoomId } from '../../../../shared/rooms';
 import type { AssignmentStatus, TaskItem, TaskStatus, Team, TeamStatus, ToolCall } from '../../../../shared/types';
 
 /** A team's status in words, for its card. */
@@ -35,11 +36,29 @@ export function teamOfCall(call: Pick<ToolCall, 'result'>, teams: readonly Team[
   }
 }
 
-/** Teams whose people should be in the boardroom: meeting, or gathered for the wrap-up. */
-export function openMeetings(teams: readonly Team[]): { id: string; leadId: string; attendees: string[] }[] {
+/** A team in its room: who, where, and whose task is running now (they work from the room). */
+export interface OpenMeeting {
+  id: string;
+  leadId: string;
+  attendees: string[];
+  room: MeetingRoomId;
+  working: string[];
+}
+
+/**
+ * Teams whose people should be in their room: from the meeting, through the plan waiting for you
+ * and the work, to the report. Once a team is done (or stopped) everyone goes back to their desk.
+ */
+export function openMeetings(teams: readonly Team[]): OpenMeeting[] {
   return teams
-    .filter((t) => t.status === 'meeting' || t.status === 'reporting')
-    .map(({ id, leadId, attendees }) => ({ id, leadId, attendees }));
+    .filter((t) => OPEN.has(t.status))
+    .map((t) => ({
+      id: t.id,
+      leadId: t.leadId,
+      attendees: t.attendees,
+      room: roomOf(t),
+      working: (t.plan?.assignments ?? []).filter((a) => a.status === 'working').map((a) => a.ownerId)
+    }));
 }
 
 const TASK_TO_CARD: Record<AssignmentStatus, TaskStatus> = {
@@ -52,11 +71,13 @@ const TASK_TO_CARD: Record<AssignmentStatus, TaskStatus> = {
 };
 
 /**
- * The boardroom board's cards: the newest open team's goal (under its lead) while it meets, then
- * each task under its owner. The board shows who from the card's coworker.
+ * A room board's cards: the newest open team in that room, its goal (under its lead) while it meets,
+ * then each task under its owner. The board shows who from the card's coworker.
  */
-export function teamBoardCards(teams: readonly Team[]): TaskItem[] {
-  const open = teams.filter((t) => OPEN.has(t.status)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+export function teamBoardCards(teams: readonly Team[], room: MeetingRoomId = 'boardroom'): TaskItem[] {
+  const open = teams
+    .filter((t) => OPEN.has(t.status) && roomOf(t) === room)
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
   if (!open) return [];
   const card = (id: string, title: string, coworkerId: string, status: TaskStatus): TaskItem => ({
     id: `${open.id}-${id}`,
@@ -69,4 +90,9 @@ export function teamBoardCards(teams: readonly Team[]): TaskItem[] {
   });
   if (!open.plan) return [card('goal', open.goal, open.leadId, open.status === 'meeting' ? 'working' : 'open')];
   return open.plan.assignments.map((a) => card(a.id, a.title, a.ownerId, TASK_TO_CARD[a.status]));
+}
+
+/** Every room board's cards, by room. */
+export function roomBoardCards(teams: readonly Team[]): Record<MeetingRoomId, TaskItem[]> {
+  return Object.fromEntries(ROOMS.map((room) => [room.id, teamBoardCards(teams, room.id)])) as Record<MeetingRoomId, TaskItem[]>;
 }

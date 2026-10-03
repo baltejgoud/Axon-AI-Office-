@@ -1,3 +1,4 @@
+import { roomName, type MeetingRoomId } from '../../../../../shared/rooms';
 import type { Vec2, ZoneId } from '../simulation/types';
 import type { LayoutBuilder } from './builder';
 
@@ -114,8 +115,7 @@ function buildLounge(b: LayoutBuilder): void {
   }
 }
 
-/** The office's meeting rooms, where a team works together until its tasks are done. */
-export type MeetingRoomId = 'boardroom' | 'room-1' | 'room-2' | 'room-3' | 'room-4';
+export type { MeetingRoomId };
 
 export interface MeetingRoom {
   id: MeetingRoomId;
@@ -260,13 +260,18 @@ export const BOARDROOM_SEATS: readonly string[] = [
 ];
 
 /** Every meeting room, the boardroom first: twelve and the lead there, six in each of the others. */
-export const MEETING_ROOMS: readonly MeetingRoom[] = [
-  { id: 'boardroom', name: 'Boardroom', seats: BOARDROOM_SEATS, boardItemId: 'boardroom-whiteboard', focus: { x: -13.2, z: 0.1 } },
-  { id: 'room-1', name: 'Room 1', seats: sixSeats('room-1'), boardItemId: 'meeting-whiteboard', focus: { x: -7.8, z: -10.5 } },
-  { id: 'room-2', name: 'Room 2', seats: sixSeats('room-2'), boardItemId: 'planning-whiteboard', focus: { x: -1.6, z: -10.5 } },
-  { id: 'room-3', name: 'Room 3', seats: sixSeats('room-3'), boardItemId: 'room-3-whiteboard', focus: { x: -16.2, z: 6.5 } },
-  { id: 'room-4', name: 'Room 4', seats: sixSeats('room-4'), boardItemId: 'room-4-whiteboard', focus: { x: -10.2, z: 6.5 } }
-];
+export const MEETING_ROOMS: readonly MeetingRoom[] = (
+  [
+    { id: 'boardroom', seats: BOARDROOM_SEATS, boardItemId: 'boardroom-whiteboard', focus: { x: -13.2, z: 0.1 } },
+    { id: 'room-1', seats: sixSeats('room-1'), boardItemId: 'meeting-whiteboard', focus: { x: -7.8, z: -10.5 } },
+    { id: 'room-2', seats: sixSeats('room-2'), boardItemId: 'planning-whiteboard', focus: { x: -1.6, z: -10.5 } },
+    { id: 'room-3', seats: sixSeats('room-3'), boardItemId: 'room-3-whiteboard', focus: { x: -16.2, z: 6.5 } },
+    { id: 'room-4', seats: sixSeats('room-4'), boardItemId: 'room-4-whiteboard', focus: { x: -10.2, z: 6.5 } }
+  ] as const
+).map((room) => ({ ...room, name: roomName(room.id) }));
+
+export const meetingRoom = (id: MeetingRoomId): MeetingRoom =>
+  MEETING_ROOMS.find((room) => room.id === id) ?? MEETING_ROOMS[0];
 
 /**
  * The boardroom, where the Chief of Staff gathers a team: a glass room with one long table for twelve
