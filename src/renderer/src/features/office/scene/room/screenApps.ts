@@ -77,6 +77,7 @@ const DEPARTMENT_APPS: Readonly<Record<string, ScreenPair>> = {
   'Sales Management': { main: 'pipeline', second: 'email' },
   'Customer Success': { main: 'tickets', second: 'email' },
   'Marketing Management': { main: 'calendar', second: 'bi' },
+  'Growth & Outreach': { main: 'pipeline', second: 'email' },
   'HR & People': { main: 'candidates', second: 'calendar' },
   'Strategy & Innovation': { main: 'slides', second: 'spreadsheet' },
   'Operations Management': { main: 'spreadsheet', second: 'email' },

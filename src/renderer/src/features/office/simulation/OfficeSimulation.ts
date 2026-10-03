@@ -1164,14 +1164,10 @@ export class OfficeSimulation {
       )[0];
       chosen.push(picked);
     }
-    const coachHome = chosen.find((agent) => agent.home === 'desk-product');
-    // The Product Coach hosts from the head of the Planning A table; otherwise any meeting space.
-    const venue = coachHome
-      ? 'meeting-room'
-      : this.rng.weighted({ 'planning-room': 40, 'meeting-room': 30, boardroom: 30 });
+    // Any meeting room; a small group prefers the six-seaters to the boardroom.
+    const venue = this.rng.weighted({ 'room-1': 22, 'room-2': 22, 'room-3': 22, 'room-4': 22, boardroom: 12 });
     const free = this.poisOfType((poi) => poi.group === venue && this.hasRoom(poi.id));
-    const needed = chosen.filter((agent) => !(venue === 'meeting-room' && agent === coachHome));
-    if (free.length < needed.length) return;
+    if (free.length < chosen.length) return;
 
     const meeting: Meeting = {
       id: ++this.meetingCount,
@@ -1185,11 +1181,6 @@ export class OfficeSimulation {
     for (const agent of chosen) {
       this.cancelPlan(agent);
       agent.meetingId = meeting.id;
-      if (venue === 'meeting-room' && agent === coachHome) {
-        meeting.seats.set(agent.id, agent.home);
-        this.setPlan(agent, { kind: 'meeting', steps: [this.doing('meeting', null)] });
-        continue;
-      }
       const seat = seats.splice(Math.floor(this.rng.next() * seats.length), 1)[0];
       this.reserve(agent, seat);
       meeting.seats.set(agent.id, seat);

@@ -1,4 +1,5 @@
 import type { DistrictId } from '../campus/districts';
+import type { MeetingRoomId } from '../campus/commons';
 
 /** Floor coordinates in metres. x runs along the back wall, z toward the viewer. */
 export interface Vec2 {
@@ -63,7 +64,7 @@ export interface PointOfInterest {
   seated: boolean;
   capacity: number;
   /** Meeting venue this seat belongs to. */
-  group?: 'meeting-room' | 'planning-room' | 'boardroom';
+  group?: MeetingRoomId;
   /** For visit spots: the desk whose occupant is being visited. */
   hostDeskId?: string;
   /** Set on spots that belong to a district neighbourhood; untagged spots are in the Commons. */

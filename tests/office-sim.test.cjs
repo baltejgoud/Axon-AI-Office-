@@ -43,7 +43,7 @@ function runUntil(office, predicate, limit, dt = 1 / 60) {
 }
 
 test('every department works at its own desks, reachable from the café', () => {
-  assert.equal(new Set(catalog.SPECIALIST_ROLES.map((role) => role.id)).size, 199);
+  assert.equal(new Set(catalog.SPECIALIST_ROLES.map((role) => role.id)).size, 204);
   for (const group of catalog.SPECIALIST_GROUPS) {
     const ids = catalog.SPECIALIST_ROLES.filter((role) => role.group === group).map((role) => role.id);
     const office = new OfficeSimulation({ agentIds: [...ALL, ...ids], seed: 17 });
@@ -94,7 +94,7 @@ test('coffee breaks go to the nearest station or the café', () => {
     if (expected === 'cafe') assert.ok(CAFE_PICKUP.includes(pickup), `${person.id} at ${pickup}`);
     else assert.ok(pickup.startsWith(`${expected}-pickup`), `${person.id} at ${pickup}, expected ${expected}`);
   }
-  assert.equal(districtsSeen.size, 7);
+  assert.equal(districtsSeen.size, 8);
 });
 
 test('largest department runs with distinct seats and furniture-safe paths', () => {
@@ -438,7 +438,7 @@ test('reduced motion keeps everyone at their desks; work still starts', () => {
 
 const agents = require('../src/renderer/src/features/office/data/officeAgents.ts');
 
-test('208 people: at most twelve away from their desks, and a step stays cheap', () => {
+test('213 people: at most twelve away from their desks, and a step stays cheap', () => {
   const ids = agents.OFFICE_AGENTS.map((a) => a.id);
   const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
   for (const id of ids) office.setTaskStatus(id, 'idle');

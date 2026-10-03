@@ -23,11 +23,11 @@ test('every catalog department belongs to exactly one district', () => {
   const listed = districts.DISTRICTS.flatMap((d) => d.departments);
   assert.equal(new Set(listed).size, listed.length);
   assert.deepEqual([...listed].sort(), [...catalog.SPECIALIST_GROUPS].sort());
-  assert.equal(catalog.SPECIALIST_GROUPS.length, 22);
+  assert.equal(catalog.SPECIALIST_GROUPS.length, 23);
 });
 
-test('all 208 coworkers have a district and department', () => {
-  assert.equal(agents.OFFICE_AGENTS.length, 208);
+test('all 213 coworkers have a district and department', () => {
+  assert.equal(agents.OFFICE_AGENTS.length, 213);
   for (const a of agents.OFFICE_AGENTS) {
     assert.ok(districts.districtById(a.district), a.id);
     assert.ok(a.department, a.id);
@@ -75,10 +75,13 @@ test('the campus grows 12 m each way and every district keeps its size', () => {
     design: [13, 17],
     leadership: [19, 17],
     'ai-data': [35, 19],
-    business: [32, 16.5],
     'people-ops': [35, 20]
   };
   for (const [id, wd] of Object.entries(kept)) assert.deepEqual(size(id), wd, id);
+  // Marketing & Growth and Business share what was Business alone: 32 m with a corridor between them.
+  const [marketing, business] = [size('marketing'), size('business')];
+  assert.equal(Math.round((marketing[0] + business[0] + 2.6) * 100) / 100, 32);
+  assert.deepEqual([marketing[1], business[1]], [16.5, 16.5]);
   const r = layout.ROOM;
   for (const d of districts.DISTRICTS) {
     const b = d.bounds;
@@ -103,8 +106,7 @@ test('the bigger Commons has room for more people', () => {
   assert.ok(count((p) => p.type === 'cafe-seat' && !p.district) >= 19, 'café seats');
   assert.ok(count((p) => p.type === 'lounge' && p.zoneId === 'chat') >= 7, 'lounge seats');
   assert.ok(count((p) => p.type === 'lounge' && p.zoneId === 'knowledge') >= 3, 'reading nooks');
-  assert.ok(count((p) => p.group === 'meeting-room') >= 7, 'planning A');
-  assert.ok(count((p) => p.group === 'planning-room') >= 6, 'planning B');
+  for (const room of ['room-1', 'room-2', 'room-3', 'room-4']) assert.equal(count((p) => p.group === room), 6, room);
   const sofas = layout.FURNITURE.filter((f) => f.kind === 'sofa' && f.x < -11 && f.z < -6 && f.x > -20);
   assert.ok(sofas.length >= 3, 'lounge sofas');
   assert.equal(layout.FURNITURE.filter((f) => f.kind === 'bookshelf-tall').length, 2);
@@ -157,16 +159,17 @@ test('each executive office is furnished', () => {
 
 const signs = require('../src/renderer/src/features/office/campus/signs.ts');
 
-test('signs: one per district and one per executive, and nothing hangs overhead', () => {
+test('signs: one per district, one per executive and one per meeting room, and nothing hangs overhead', () => {
   const of = (k) => signs.SIGNS.filter((s) => s.kind === k);
-  assert.equal(of('district').length, 8);
+  assert.equal(of('district').length, 9);
+  assert.deepEqual(of('room').map((s) => s.title), ['Boardroom', 'Room 1', 'Room 2', 'Room 3', 'Room 4']);
   assert.deepEqual(
     of('nameplate')
       .map((s) => s.title)
       .sort(),
     ['CEO', 'CFO', 'CGO', 'CIO', 'CMO', 'COO', 'CPO', 'CRO', 'CSO', 'CTO']
   );
-  assert.equal(signs.SIGNS.length, 18);
+  assert.equal(signs.SIGNS.length, 24);
   assert.ok(signs.SIGNS.every((s) => !('hanging' in s)));
   assert.equal(new Set(signs.SIGNS.map((s) => s.id)).size, signs.SIGNS.length);
 });
@@ -212,7 +215,7 @@ test('podGrid fits every department in its cell', () => {
 test('every coworker has a unique home desk with a workstation', () => {
   const desks = agents.OFFICE_AGENTS.map((a) => layout.HOME_DESKS[a.id]);
   assert.ok(desks.every(Boolean));
-  assert.equal(new Set(desks).size, 208);
+  assert.equal(new Set(desks).size, 213);
   // The receptionist keeps the front desk; the Ops Coordinator works from the pods.
   assert.equal(layout.HOME_DESKS['receptionist'], 'desk-reception');
   assert.equal(layout.HOME_DESKS['ops-coordinator'], 'desk-ops');

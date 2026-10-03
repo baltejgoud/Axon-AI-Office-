@@ -3,17 +3,18 @@ import { signOpacity, signScale, type SignKind, type SignSpec, type SignTier } f
 import { UI_FONT, uiFontReady } from '../../../../fonts';
 
 /**
- * Draws every sign in the office from one shared text atlas: a mesh of quads per kind (two draw
+ * Draws every sign in the office from one shared text atlas: a mesh of quads per kind (three draw
  * calls in all), rebuilt only when the zoom or the hovered sign changes. Each sign is a face with
  * a dark rim behind it.
  */
 
-const KINDS: readonly SignKind[] = ['district', 'nameplate'];
+const KINDS: readonly SignKind[] = ['district', 'nameplate', 'room'];
 const PICKABLE = new Set<SignKind>(['district']);
 /** Pixel size of each kind's slot in the atlas; the same shape as the panel. */
 const SLOT: Record<SignKind, [number, number]> = {
   district: [512, 170],
-  nameplate: [256, 82]
+  nameplate: [256, 82],
+  room: [320, 121]
 };
 const ATLAS_WIDTH = 2048;
 /** Quads per sign: the rim and the face. */
@@ -195,7 +196,7 @@ export class SignLayer {
     const y = slot.y + inset;
     const w = slot.w - inset * 2;
     const h = slot.h - inset * 2;
-    const plate = sign.kind === 'nameplate';
+    const plate = sign.kind !== 'district';
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, h * 0.16);
     ctx.fillStyle = plate ? '#f4f1ea' : sign.color;

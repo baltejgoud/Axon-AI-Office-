@@ -260,7 +260,7 @@
     "preview": true,
     "accountApp": "google",
     "defaultCoworkers": ["receptionist", "chief-of-staff"],
-    "defaultGroups": []
+    "defaultGroups": ["Growth & Outreach", "Customer Success"]
   },
   {
     "id": "google-calendar",
@@ -310,7 +310,7 @@
     "clientIdEnv": "AXON_HUBSPOT_CLIENT_ID",
     "clientSecretEnv": "AXON_HUBSPOT_CLIENT_SECRET",
     "defaultCoworkers": ["ops-coordinator", "marketing-strategist"],
-    "defaultGroups": ["Sales Management", "Marketing Management", "Customer Success"]
+    "defaultGroups": ["Sales Management", "Marketing Management", "Growth & Outreach", "Customer Success"]
   },
   {
     "id": "stripe",
@@ -408,8 +408,8 @@
     "site": "https://composio.dev",
     "url": "https://connect.composio.dev/mcp",
     "auth": "oauth",
-    "defaultCoworkers": ["ops-coordinator", "chats"],
-    "defaultGroups": []
+    "defaultCoworkers": ["ops-coordinator", "chats", "social-media-manager"],
+    "defaultGroups": ["Growth & Outreach"]
   },
   {
     "id": "zapier",

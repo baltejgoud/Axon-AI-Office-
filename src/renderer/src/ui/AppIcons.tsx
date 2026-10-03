@@ -1354,6 +1354,12 @@ export const IconWorld = tabler([
   'M11.5 3a17 17 0 0 0 0 18',
   'M12.5 3a17 17 0 0 1 0 18'
 ]);
+/** A megaphone, for Marketing, from Tabler Icons (MIT) */
+export const IconSpeakerphone = tabler([
+  'M18 8a3 3 0 0 1 0 6',
+  'M10 8v11a1 1 0 0 1 -1 1h-1a1 1 0 0 1 -1 -1v-5',
+  'M12 8h0l4.524 -3.77a.9 .9 0 0 1 1.476 .692v12.156a.9 .9 0 0 1 -1.476 .692l-4.524 -3.77h-8a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h8'
+]);
 /** A microphone, for voice typing, from Tabler Icons (MIT) */
 export const IconMic = tabler([
   'M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z',
