@@ -13,6 +13,8 @@ import { afterLastWindow, appUserModelId, loginItem, startedInBackground } from 
 import { showNotice } from './shell/notify';
 import { createTray } from './shell/tray';
 import { WINDOW_ICON } from './shell/icon';
+import { startBrowserBridge } from './browserBridge';
+let browserBridge: Awaited<ReturnType<typeof startBrowserBridge>> | undefined;
 let window: BrowserWindow | null = null;
 let service: Service;
 let quitting = false;
@@ -20,44 +22,164 @@ let quitting = false;
 let tray: Tray | null = null;
 const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
 const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
-  'snapshot', 'providerSave', 'providerTest', 'providerModels', 'providerConnect', 'providerDelete', 'workspaceSave', 'workspaceDelete', 'agentSave', 'agentDelete', 'agentExport', 'agentImport',
-  'settingsSave', 'mcpServerSave', 'mcpServerDelete',
-  'connectorAdd', 'connectorReconnect', 'connectorSignInCancel', 'connectorSignOut', 'connectorAppSave', 'chatCreate', 'chatRename', 'chatModelSet','chatSelectionSet', 'chatDelete', 'chatSend', 'chatStop', 'getContextUsage', 'usageReport', 'listBackups', 'restoreBackup', 'auditList', 'auditExport', 'revertChange', 'toolApprove', 'attach', 'speechTranscribe', 'knowledgeImport', 'knowledgeImportFolder','knowledgeDelete', 'knowledgeSearch',
-  'projectChoose', 'projectRecent', 'projectOpen', 'projectForget', 'projectList', 'projectRead', 'projectWrite', 'projectSearch',
-  'taskAdd', 'taskUpdate', 'taskDelete', 'officeStart', 'teamStart', 'teamStop', 'teamDiscard', 'teamRetry',
-  'accountsGet', 'githubSignInStart', 'githubSignInFinish', 'githubSignInCancel', 'githubSignOut', 'googleSignIn', 'googleSignInCancel', 'googleSignOut', 'accountAppSave',
-  'githubRepos', 'gitCheck', 'scmStatus', 'scmDiff', 'scmStage', 'scmUnstage', 'scmCommit', 'scmSync', 'scmBranches', 'scmCheckout', 'scmCreateBranch',
-  'scmClone', 'scmPublish', 'openLink', 'processStop', 'processOpen'
+  'runtimeRuns',
+  'conversationClose',
+  'projectClose',
+  'terminalList',
+  'terminalOpen',
+  'terminalWrite',
+  'terminalResize',
+  'terminalKill',
+  'snapshot',
+  'providerSave',
+  'providerTest',
+  'providerModels',
+  'providerConnect',
+  'providerDelete',
+  'workspaceSave',
+  'workspaceDelete',
+  'agentSave',
+  'agentDelete',
+  'agentExport',
+  'agentImport',
+  'settingsSave',
+  'mcpServerSave',
+  'mcpServerDelete',
+  'connectorAdd',
+  'connectorReconnect',
+  'connectorSignInCancel',
+  'connectorSignOut',
+  'connectorAppSave',
+  'chatCreate',
+  'getConversationCost',
+  'chatHistoryPage',
+  'chatRename',
+  'chatModelSet',
+  'chatMemoryCorrect',
+  'getContextInspector',
+  'readToolArtifact',
+  'chatSelectionSet',
+  'chatDelete',
+  'chatSend',
+  'chatStop',
+  'getContextUsage',
+  'usageReport',
+  'listBackups',
+  'restoreBackup',
+  'auditList',
+  'auditExport',
+  'revertChange',
+  'toolApprove',
+  'attach',
+  'speechTranscribe',
+  'knowledgeImport',
+  'knowledgeImportFolder',
+  'knowledgeDelete',
+  'knowledgeSearch',
+  'projectChoose',
+  'projectRecent',
+  'projectOpen',
+  'projectForget',
+  'projectList',
+  'projectRead',
+  'projectWrite',
+  'projectSearch',
+  'taskAdd',
+  'taskUpdate',
+  'taskDelete',
+  'officeStart',
+  'teamStart',
+  'teamStop',
+  'teamDiscard',
+  'teamRetry',
+  'accountsGet',
+  'githubSignInStart',
+  'githubSignInFinish',
+  'githubSignInCancel',
+  'githubSignOut',
+  'googleSignIn',
+  'googleSignInCancel',
+  'googleSignOut',
+  'accountAppSave',
+  'githubRepos',
+  'gitCheck',
+  'scmStatus',
+  'scmDiff',
+  'scmStage',
+  'scmUnstage',
+  'scmCommit',
+  'scmSync',
+  'scmBranches',
+  'scmCheckout',
+  'scmCreateBranch',
+  'scmClone',
+  'scmPublish',
+  'openLink',
+  'processStop',
+  'processOpen'
 ];
 const rendererFile = join(__dirname, '../renderer/index.html');
 function createWindow(): void {
   // Axon is one big office: open maximized unless the user last left it restored.
   const stateFile = join(app.getPath('userData'), 'window-state.json');
-  const saved = loadWindowState(stateFile, screen.getAllDisplays().map(d => d.workArea));
-  window = new BrowserWindow({ ...(saved.bounds ?? { width: 1380, height: 900 }), minWidth: 980, minHeight: 680, show: false,
-    title: 'Axon — AI Studio', backgroundColor: '#f7f8fa', autoHideMenuBar: true,
+  const saved = loadWindowState(
+    stateFile,
+    screen.getAllDisplays().map((d) => d.workArea)
+  );
+  window = new BrowserWindow({
+    ...(saved.bounds ?? { width: 1380, height: 900 }),
+    minWidth: 980,
+    minHeight: 680,
+    show: false,
+    title: 'Axon — AI Studio',
+    backgroundColor: '#f7f8fa',
+    autoHideMenuBar: true,
     icon: nativeImage.createFromDataURL(WINDOW_ICON),
-    webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true
+    }
+  });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', event => event.preventDefault());
+  window.webContents.on('will-navigate', (event) => event.preventDefault());
   // A coworker's development server shows in a frame on their work surface; that frame may only go
   // to pages on this machine (the page's own Content-Security-Policy frame-src says the same).
-  window.webContents.on('will-frame-navigate', event => {
-    if (!event.isMainFrame && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(event.url)) event.preventDefault();
+  window.webContents.on('will-frame-navigate', (event) => {
+    if (!event.isMainFrame && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(event.url))
+      event.preventDefault();
   });
-  window.webContents.on('will-attach-webview', event => event.preventDefault());
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
   window.once('ready-to-show', () => {
     if (saved.maximized) window?.maximize();
     window?.show();
   });
   window.on('close', () => {
-    if (window) saveWindowState(stateFile, { maximized: window.isMaximized(), bounds: window.getNormalBounds() });
+    if (window)
+      saveWindowState(stateFile, { maximized: window.isMaximized(), bounds: window.getNormalBounds() });
     // Closing to the tray for the first time: say that Axon is still there.
-    if (!quitting && service && afterLastWindow({ keepInTray: service.settings.keepInTray, platform: process.platform }) === 'tray' && service.firstTrayClose())
-      showNotice({ title: 'Axon is still running', body: 'Reminders will still arrive. Quit from the Axon icon in the tray.', target: TODAY }, showWindow);
+    if (
+      !quitting &&
+      service &&
+      afterLastWindow({ keepInTray: service.settings.keepInTray, platform: process.platform }) === 'tray' &&
+      service.firstTrayClose()
+    )
+      showNotice(
+        {
+          title: 'Axon is still running',
+          body: 'Reminders will still arrive. Quit from the Axon icon in the tray.',
+          target: TODAY
+        },
+        showWindow
+      );
   });
-  window.on('closed', () => { window = null; });
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
+  window.on('closed', () => {
+    window = null;
+  });
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL)
+    void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(rendererFile);
 }
 /**
@@ -79,52 +201,111 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.setAppUserModelId(appUserModelId(app.isPackaged, process.execPath));
   app.on('second-instance', () => showWindow());
-  void app.whenReady().then(() => {
-    const paths = new PathService(); paths.ensure();
-    const repo = new Repository(paths.db, paths.backups);
-    service = new Service(repo, new Vault(paths.secrets), paths.root, event => {
-      if (window && !window.isDestroyed()) window.webContents.send('platform:stream', event);
-    }, join(__dirname, 'parse-worker.js'));
-    // Copy buttons need clipboard writes, and voice typing the microphone (never the camera, and only
-    // for Axon's own window); every other web permission stays denied.
-    const allowed = new Set(['clipboard-sanitized-write']);
-    const ownWindow = (contents: Electron.WebContents | null) => !!window && contents === window.webContents;
-    session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
-      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes ?? [] : [];
-      const microphone = permission === 'media' && ownWindow(contents) && mediaTypes.length > 0 && mediaTypes.every(type => type === 'audio');
-      callback(allowed.has(permission) || microphone);
-    });
-    session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
-      allowed.has(permission) || (permission === 'media' && details.mediaType === 'audio' && ownWindow(contents)));
-    for (const method of methods) ipcMain.handle(`platform:${method}`, (event, ...args: unknown[]) => {
-      const expected = !app.isPackaged && process.env.ELECTRON_RENDERER_URL ? process.env.ELECTRON_RENDERER_URL : pathToFileURL(rendererFile).href;
-      if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url.split('#')[0] !== expected.replace(/\/$/, '') && event.senderFrame.url.split('#')[0] !== `${expected.replace(/\/$/, '')}/`) throw new Error('Untrusted IPC sender.');
-      if (JSON.stringify(args).length > 2200000) throw new Error('IPC payload too large.');
-      const fn = service[method] as (...values: unknown[]) => unknown;
-      return fn.apply(service, args);
-    });
-    service.attachShell({
-      notify: notice => showNotice(notice, showWindow),
-      windowVisible: () => !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
-      applySettings: settings => {
-        const item = loginItem(settings, app.isPackaged, process.platform);
-        if (item) app.setLoginItemSettings(item);
+  void app
+    .whenReady()
+    .then(async () => {
+      const paths = new PathService();
+      paths.ensure();
+      const repo = new Repository(paths.db, paths.backups);
+      service = new Service(
+        repo,
+        new Vault(paths.secrets),
+        paths.root,
+        (event) => {
+          browserBridge?.emit(event);
+          if (window && !window.isDestroyed()) window.webContents.send('platform:stream', event);
+        },
+        join(__dirname, 'parse-worker.js')
+      );
+      // Copy buttons need clipboard writes, and voice typing the microphone (never the camera, and only
+      // for Axon's own window); every other web permission stays denied.
+      const allowed = new Set(['clipboard-sanitized-write']);
+      const ownWindow = (contents: Electron.WebContents | null) =>
+        !!window && contents === window.webContents;
+      session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+        const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
+        const microphone =
+          permission === 'media' &&
+          ownWindow(contents) &&
+          mediaTypes.length > 0 &&
+          mediaTypes.every((type) => type === 'audio');
+        callback(allowed.has(permission) || microphone);
+      });
+      session.defaultSession.setPermissionCheckHandler(
+        (contents, permission, _origin, details) =>
+          allowed.has(permission) ||
+          (permission === 'media' && details.mediaType === 'audio' && ownWindow(contents))
+      );
+      for (const method of methods)
+        ipcMain.handle(`platform:${method}`, (event, ...args: unknown[]) => {
+          const expected =
+            !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+              ? process.env.ELECTRON_RENDERER_URL
+              : pathToFileURL(rendererFile).href;
+          if (
+            !window ||
+            event.sender !== window.webContents ||
+            event.senderFrame !== window.webContents.mainFrame ||
+            (event.senderFrame.url.split('#')[0] !== expected.replace(/\/$/, '') &&
+              event.senderFrame.url.split('#')[0] !== `${expected.replace(/\/$/, '')}/`)
+          )
+            throw new Error('Untrusted IPC sender.');
+          if (JSON.stringify(args).length > 2200000) throw new Error('IPC payload too large.');
+          const fn = service[method] as (...values: unknown[]) => unknown;
+          return fn.apply(service, args);
+        });
+      if (!app.isPackaged && process.env.AXON_BROWSER_CONTROL === '1') {
+        browserBridge = await startBrowserBridge((method, args) => {
+          const fn = service[method as keyof Service] as (...values: unknown[]) => unknown;
+          return fn.apply(service, args);
+        }, methods);
       }
+      service.attachShell({
+        notify: (notice) => showNotice(notice, showWindow),
+        windowVisible: () => !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
+        applySettings: (settings) => {
+          const item = loginItem(settings, app.isPackaged, process.platform);
+          if (item) app.setLoginItemSettings(item);
+        }
+      });
+      tray = createTray({ open: () => showWindow(), today: () => showWindow(TODAY), quit: () => app.quit() });
+      // Started by Windows at sign-in: wait in the tray until needed.
+      if (!startedInBackground(process.argv)) createWindow();
+      app.on('activate', () => {
+        if (!window) createWindow();
+      });
+    })
+    .catch((error) => {
+      dialog.showErrorBox('Axon could not start', error instanceof Error ? error.message : 'Startup failed');
+      app.quit();
     });
-    tray = createTray({ open: () => showWindow(), today: () => showWindow(TODAY), quit: () => app.quit() });
-    // Started by Windows at sign-in: wait in the tray until needed.
-    if (!startedInBackground(process.argv)) createWindow();
-    app.on('activate', () => { if (!window) createWindow(); });
-  }).catch(error => { dialog.showErrorBox('Axon could not start', error instanceof Error ? error.message : 'Startup failed'); app.quit(); });
   // With Keep running in the tray on, closing the window leaves Axon waiting in the tray.
   app.on('window-all-closed', () => {
-    if (!service || afterLastWindow({ keepInTray: service.settings.keepInTray, platform: process.platform }) === 'quit') app.quit();
+    if (
+      !service ||
+      afterLastWindow({ keepInTray: service.settings.keepInTray, platform: process.platform }) === 'quit'
+    )
+      app.quit();
   });
-  app.on('before-quit', event => {
+  app.on('before-quit', (event) => {
     if (!service || quitting) return;
-    event.preventDefault(); service.stopAll(); service.shutdown(); tray?.destroy(); tray = null;
-    void service.repo.store.flushAll().then(() => { quitting = true; app.quit(); }).catch(() => {
-      dialog.showErrorBox('Storage error', 'Could not save data. Free disk space and try closing Axon again.');
-    });
+    event.preventDefault();
+    service.stopAll();
+    browserBridge?.close();
+    service.shutdown();
+    tray?.destroy();
+    tray = null;
+    void service.repo.store
+      .flushAll()
+      .then(() => {
+        quitting = true;
+        app.quit();
+      })
+      .catch(() => {
+        dialog.showErrorBox(
+          'Storage error',
+          'Could not save data. Free disk space and try closing Axon again.'
+        );
+      });
   });
 }

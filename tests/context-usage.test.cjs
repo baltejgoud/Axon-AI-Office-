@@ -9,62 +9,28 @@ require.extensions['.ts'] = (module, file) => module._compile(
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { contextUsage, meterTone, MIN_CONTEXT_WINDOW } = require('../src/shared/context-usage.ts');
-const { fitToBudget, requestSize } = require('../src/main/history.ts');
+const { ContextBudgetPlanner } = require('../src/main/context.ts');
 
-test('an empty conversation is an empty meter, estimated from characters', () => {
-  assert.deepEqual(contextUsage({ usedChars: 0, budgetChars: 300000 }), { usedChars: 0, budgetChars: 300000, pct: 0, estimated: true });
+test('meter reflects compiled token sections, reserves and model window', () => {
+  const plan = new ContextBudgetPlanner().compile({model:'m', system:'rules', messages:[{role:'user',content:'hello'}],maxTokens:4096}, {id:'m',displayName:'m',contextWindow:32768});
+  const usage = contextUsage(plan);
+  assert.equal(usage.pct, plan.inputTokens / plan.contextWindow);
+  assert.equal(usage.tokenBasis.usedTokens, Object.values(plan.sections).reduce((a,b)=>a+b,0));
+  assert.equal(usage.outputReserve,4096);
+  assert.equal(usage.estimated,true);
 });
-
-test('a conversation over budget is full, and keeps its real size so the window can say turns are left out', () => {
-  const usage = contextUsage({ usedChars: 450000, budgetChars: 300000 });
-  assert.equal(usage.pct, 1);
-  assert.equal(usage.usedChars, 450000);
-  assert.equal(usage.estimated, true);
+test('meter has no character budget and remains finite for invalid counters', () => {
+  const usage=contextUsage({inputTokens:NaN,contextWindow:0});
+  assert.equal(usage.pct,0);
+  assert.equal(usage.budgetChars,0);
 });
-
-test('a model with a context window and a reported prompt size is measured in tokens', () => {
-  const usage = contextUsage({ usedChars: 30000, budgetChars: 300000, contextWindow: 8192, promptTokens: 6144 });
-  assert.deepEqual(usage.tokenBasis, { usedTokens: 6144, windowTokens: 8192 });
-  assert.equal(usage.estimated, false);
-  assert.equal(usage.pct, 0.75);
-});
-
-test('without a window, or without a reported prompt size, the meter stays on characters', () => {
-  for (const input of [{ promptTokens: 5000 }, { contextWindow: 128000 }, {}]) {
-    const usage = contextUsage({ usedChars: 60000, budgetChars: 300000, ...input });
-    assert.equal(usage.estimated, true);
-    assert.equal(usage.tokenBasis, undefined);
-    assert.equal(usage.pct, 0.2);
-  }
-});
-
-test('a context window typed wrong (zero, negative, not a number, tiny) is ignored: never a NaN or negative meter', () => {
-  for (const contextWindow of [0, -128000, NaN, Infinity, MIN_CONTEXT_WINDOW - 1]) {
-    const usage = contextUsage({ usedChars: 60000, budgetChars: 300000, contextWindow, promptTokens: 5000 });
-    assert.equal(usage.estimated, true, `window ${contextWindow}`);
-    assert.equal(usage.pct, 0.2, `window ${contextWindow}`);
-  }
-  assert.equal(contextUsage({ usedChars: 10, budgetChars: 0 }).pct, 0);
-  assert.equal(contextUsage({ usedChars: NaN, budgetChars: 300000 }).pct, 0);
-});
-
-test('the fuller of the two limits wins: a large window never hides that Axon is trimming', () => {
-  // 70K tokens of a 200K window is 35%, but the history is past the character budget.
-  const usage = contextUsage({ usedChars: 330000, budgetChars: 300000, contextWindow: 200000, promptTokens: 70000 });
-  assert.equal(usage.pct, 1);
-  assert.equal(usage.estimated, false);
-});
-
-test('the meter reaches 100% exactly where fitToBudget starts leaving turns out', () => {
-  const system = 'You are Axon.';
-  const turn = (i) => [{ role: 'user', content: `question ${i} ${'x'.repeat(100)}` }, { role: 'assistant', content: `answer ${i}` }];
-  const history = [...turn(1), ...turn(2), { role: 'user', content: 'now' }];
-  const budget = system.length + requestSize(history);
-  assert.equal(contextUsage({ usedChars: system.length + requestSize(history), budgetChars: budget }).pct, 1);
-  assert.equal(fitToBudget(history, budget - system.length).length, history.length, 'at exactly 100% nothing is trimmed');
-  const over = contextUsage({ usedChars: system.length + requestSize(history), budgetChars: budget - 1 });
-  assert.ok(over.usedChars > over.budgetChars);
-  assert.ok(fitToBudget(history, budget - 1 - system.length).length < history.length, 'one character more and the oldest turn goes');
+test('long history is archived locally while meter measures the working set', () => {
+  const messages=Array.from({length:1000},(_,i)=>({role:'user',content:`Question ${i}`}));
+  const plan=new ContextBudgetPlanner().compile({model:'m',messages,maxTokens:4096},{id:'m',displayName:'m',contextWindow:32768});
+  const usage=contextUsage(plan);
+  assert.ok(usage.pct<.5);
+  assert.ok(usage.archivedTokens>0);
+  assert.equal(messages.length,1000);
 });
 
 test('the meter warns as it fills', () => {

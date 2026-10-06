@@ -615,6 +615,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
                 <tr>
                   <th scope="col">Model</th>
                   <th scope="col">Context window (tokens)</th>
+                  <th scope="col">Response and history budgets</th>
                   <th scope="col">$ per 1M input tokens</th>
                   <th scope="col">$ per 1M output tokens</th>
                 </tr>
@@ -634,6 +635,16 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
                           value={typed.contextWindow}
                           onChange={(e) => setDetail(id, 'contextWindow', e.target.value)}
                         />
+                      </td>
+                      <td>
+                        <select className="input" aria-label={`Tokenizer for ${id}`} value={typed.tokenizer ?? ''} onChange={e => setDetail(id, 'tokenizer', e.target.value)}>
+                          <option value="">Automatic tokenizer</option>
+                          {['o200k_base', 'cl100k_base', 'p50k_base', 'r50k_base', 'bytes'].map(value => <option key={value} value={value}>{value === 'bytes' ? 'Conservative byte estimate' : value}</option>)}
+                        </select>
+                        {(['maxOutputTokens', 'recommendedOutputReserve', 'contextSafetyMargin', 'recentContextTurns'] as const).map(field => <input
+                          key={field} className="input" inputMode="numeric"
+                          aria-label={`${({maxOutputTokens: "Output limit", recommendedOutputReserve: "Response reserve", contextSafetyMargin: "Safety margin", recentContextTurns: "Recent turns"})[field]} for ${id}`} placeholder={({maxOutputTokens: "Output limit", recommendedOutputReserve: "Response reserve", contextSafetyMargin: "Safety margin", recentContextTurns: "Recent turns"})[field]}
+                          value={typed[field] ?? ''} onChange={e => setDetail(id, field, e.target.value)} />)}
                       </td>
                       <td>
                         <input

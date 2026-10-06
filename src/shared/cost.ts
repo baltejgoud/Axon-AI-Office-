@@ -37,8 +37,12 @@ export interface RunEstimate {
 
 /** The estimate for a call carrying `requestChars` of system prompt and history; none without a price. */
 export function runEstimate(model: ModelSpec | undefined, requestChars: number, maxOutputTokens: number): RunEstimate | undefined {
+  return runEstimateTokens(model, estimateTokens(requestChars), maxOutputTokens);
+}
+
+/** Estimate from the actual compiled working-set token budget, including tool schemas. */
+export function runEstimateTokens(model: ModelSpec | undefined, inputTokens: number, maxOutputTokens: number): RunEstimate | undefined {
   if (!hasPrice(model)) return undefined;
-  const inputTokens = estimateTokens(requestChars);
   return {
     inputTokens,
     maxOutputTokens,

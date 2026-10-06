@@ -5,7 +5,7 @@ import { PLANNER_TOOLS } from './tasks/tools';
 import { TEAM_LEADS, TEAM_TOOLS } from './team/tools';
 
 /** What a colleague may use to look something up; nothing that changes a file or runs a command. */
-export const READ_ONLY_TOOLS: readonly string[] = ['read_file', 'list_files', 'search_code'];
+export const READ_ONLY_TOOLS: readonly string[] = ['read_file', 'list_files', 'search_code', 'file_context', 'get_symbol'];
 
 /**
  * The folders a run may work in. A workspace with file access brings its folders and the project

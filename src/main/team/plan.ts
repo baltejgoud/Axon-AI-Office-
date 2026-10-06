@@ -20,7 +20,8 @@ export function interruptTeams(teams: Team[], now: number): boolean {
     team.note = 'Axon closed while the team was working. Retry to carry on.';
     team.updatedAt = now;
     for (const a of team.plan?.assignments ?? [])
-      if (a.status === 'working') Object.assign(a, { status: 'stopped', note: 'Axon closed while this was running' });
+      if (a.status === 'working')
+        Object.assign(a, { status: 'stopped', note: 'Axon closed while this was running' });
     changed = true;
   }
   return changed;
@@ -28,11 +29,18 @@ export function interruptTeams(teams: Team[], now: number): boolean {
 
 /** A project path as listings show it: slashes, no leading ./ or /. */
 export function normalPath(path: string): string {
-  return path.trim().replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/^\/+/, '').replace(/\/+$/, '');
+  return path
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^(\.\/)+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
 }
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const strings = (value: unknown) =>
-  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim()) : [];
+  Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim())
+    : [];
 
 /** Every task each task waits for, directly or through others. A task in a loop waits for itself. */
 function prerequisites(assignments: { id: string; dependsOn: string[] }[]): Map<string, Set<string>> {
@@ -59,10 +67,12 @@ export function validatePlan(
 ): { ok: true; plan: TeamPlan } | { ok: false; errors: string[] } {
   const raw = Array.isArray(input.assignments) ? (input.assignments as Record<string, unknown>[]) : [];
   if (!raw.length) return { ok: false, errors: ['The plan needs at least one task.'] };
-  if (raw.length > MAX_ASSIGNMENTS) return { ok: false, errors: [`A plan has at most ${MAX_ASSIGNMENTS} tasks; merge some.`] };
+  if (raw.length > MAX_ASSIGNMENTS)
+    return { ok: false, errors: [`A plan has at most ${MAX_ASSIGNMENTS} tasks; merge some.`] };
   const errors: string[] = [];
   const ownerOf = (name: string) =>
-    attendees.find((p) => p.id === name.toLowerCase() || p.name.toLowerCase() === name.toLowerCase())?.id ?? null;
+    attendees.find((p) => p.id === name.toLowerCase() || p.name.toLowerCase() === name.toLowerCase())?.id ??
+    null;
   const ids = new Set<string>();
   const assignments: TeamAssignment[] = raw.map((item, index) => {
     const id = text(item?.id) || `t${index + 1}`;
@@ -71,7 +81,9 @@ export function validatePlan(
     const owner = text(item?.owner);
     const ownerId = ownerOf(owner);
     if (!ownerId)
-      errors.push(`${id}: "${owner}" is not in this meeting. Owners must be attendees: ${attendees.map((p) => p.name).join(', ')}.`);
+      errors.push(
+        `${id}: "${owner}" is not in this meeting. Owners must be attendees: ${attendees.map((p) => p.name).join(', ')}.`
+      );
     const title = text(item?.title);
     const brief = text(item?.brief);
     if (!title || !brief) errors.push(`${id}: every task needs a title and a brief.`);
@@ -82,6 +94,9 @@ export function validatePlan(
       brief,
       dependsOn: [...new Set(strings(item?.depends_on))],
       files: [...new Set(strings(item?.files).map(normalPath))],
+      ...(['fast', 'standard', 'deep', 'coding'].includes(String(item.profile))
+        ? { profile: item.profile as TeamAssignment['profile'] }
+        : {}),
       status: 'waiting' as const
     };
   });
@@ -105,22 +120,32 @@ export function validatePlan(
           `${a.id} and ${b.id} both own ${file} but could run at the same time; make one wait for the other, or give the file to one of them.`
         );
     }
-  return errors.length ? { ok: false, errors } : { ok: true, plan: { summary: text(input.summary), assignments } };
+  return errors.length
+    ? { ok: false, errors }
+    : { ok: true, plan: { summary: text(input.summary), assignments } };
 }
 
 /** Tasks that may start now: waiting, with every task they wait for done. */
-export function readyAssignments<T extends Pick<TeamAssignment, 'id' | 'status' | 'dependsOn'>>(assignments: T[]): T[] {
+export function readyAssignments<T extends Pick<TeamAssignment, 'id' | 'status' | 'dependsOn'>>(
+  assignments: T[]
+): T[] {
   const done = new Set(assignments.filter((a) => a.status === 'done').map((a) => a.id));
   return assignments.filter((a) => a.status === 'waiting' && a.dependsOn.every((d) => done.has(d)));
 }
 
 /** Waiting tasks that can never start, because something they wait for failed, stopped or is blocked. */
-export function blockDependants(assignments: Pick<TeamAssignment, 'id' | 'status' | 'dependsOn' | 'note'>[]): boolean {
+export function blockDependants(
+  assignments: Pick<TeamAssignment, 'id' | 'status' | 'dependsOn' | 'note'>[]
+): boolean {
   let changed = false;
   let again = true;
   while (again) {
     again = false;
-    const dead = new Set(assignments.filter((a) => a.status === 'failed' || a.status === 'stopped' || a.status === 'blocked').map((a) => a.id));
+    const dead = new Set(
+      assignments
+        .filter((a) => a.status === 'failed' || a.status === 'stopped' || a.status === 'blocked')
+        .map((a) => a.id)
+    );
     for (const a of assignments)
       if (a.status === 'waiting' && a.dependsOn.some((d) => dead.has(d))) {
         a.status = 'blocked';
@@ -132,9 +157,12 @@ export function blockDependants(assignments: Pick<TeamAssignment, 'id' | 'status
 }
 
 /** Where the work stands: all done, still going (running or able to start), or stuck on failures. */
-export function progress(assignments: Pick<TeamAssignment, 'id' | 'status' | 'dependsOn'>[]): 'done' | 'working' | 'stuck' {
+export function progress(
+  assignments: Pick<TeamAssignment, 'id' | 'status' | 'dependsOn'>[]
+): 'done' | 'working' | 'stuck' {
   if (assignments.every((a) => a.status === 'done')) return 'done';
-  if (assignments.some((a) => a.status === 'working') || readyAssignments(assignments).length) return 'working';
+  if (assignments.some((a) => a.status === 'working') || readyAssignments(assignments).length)
+    return 'working';
   return 'stuck';
 }
 

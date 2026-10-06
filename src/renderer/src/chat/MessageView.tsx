@@ -1,9 +1,9 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { Message, ToolCall } from '../../../shared/types';
-import { perform } from '../state';
+import { perform, useApp } from '../state';
 import { timeAgo } from '../format';
 import { Button, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
 import { CodeBlock } from './CodeBlock';
@@ -14,9 +14,17 @@ export function visibleUserText(content: string): string {
 }
 
 /** The standard card for a tool call: its name and state, opening to its arguments and result. */
-export function ToolCallDetails({ call: tc }: { call: ToolCall }) {
+export function ToolCallDetails({ call: tc, conversationId }: { call: ToolCall; conversationId?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [fullOutput, setFullOutput] = useState<{ content: string; nextOffset?: number; total: number } | null>(null);
+  const loadOutput = async () => {
+    const id = conversationId ?? useApp.getState().data?.messages.find(m => tc.outputArtifactId ? m.toolOutputId === tc.outputArtifactId : m.toolCallId === tc.id)?.conversationId;
+    if (!id) return;
+    const next = await window.axon.readToolArtifact(id, tc.outputArtifactId ?? tc.id, fullOutput?.nextOffset ?? 0);
+    setFullOutput(next);
+  };
   return (
-    <details className="tool-call-item">
+    <details className="tool-call-item" onToggle={e => setExpanded(e.currentTarget.open)}>
       <summary className="tool-call-summary">
         <span className="tool-call-name">
           <IconTerminal size={14} />
@@ -26,7 +34,7 @@ export function ToolCallDetails({ call: tc }: { call: ToolCall }) {
           {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
         </span>
       </summary>
-      <div className="tool-call-body">
+      {expanded && <div className="tool-call-body">
         <div className="tool-call-label">Arguments</div>
         <pre className="tool-call-pre">{tc.arguments}</pre>
         {tc.result && (
@@ -35,8 +43,13 @@ export function ToolCallDetails({ call: tc }: { call: ToolCall }) {
             <pre className="tool-call-pre scrollable">{tc.result}</pre>
           </>
         )}
+        {tc.outputArtifactId && <>
+          <button onClick={() => void perform(loadOutput)}>{fullOutput ? fullOutput.nextOffset === undefined ? 'Read from start' : 'Next output page' : 'View full saved output'}</button>
+          {fullOutput && <pre className="tool-call-pre scrollable">{fullOutput.content}</pre>}
+          {fullOutput && <small>{fullOutput.nextOffset ?? fullOutput.total} / {fullOutput.total} characters</small>}
+        </>}
         {tc.error && <div className="tool-call-error">{tc.error}</div>}
-      </div>
+      </div>}
     </details>
   );
 }
@@ -57,6 +70,7 @@ export function MessageView({
    */
   renderToolCall?: (call: ToolCall) => ReactNode;
 }) {
+  const [thoughtOpen, setThoughtOpen] = useState(false);
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
   const calls = (m.toolCalls ?? [])
     .map((call) => ({ call, custom: renderToolCall?.(call) }))
@@ -84,9 +98,9 @@ export function MessageView({
           )}
         </div>
         {m.thought && (
-          <details className="thought-block">
+          <details className="thought-block" onToggle={e => setThoughtOpen(e.currentTarget.open)}>
             <summary>Thought process</summary>
-            <div className="thought-content">{m.thought}</div>
+            {thoughtOpen && <div className="thought-content">{m.thought}</div>}
           </details>
         )}
         {calls.length > 0 && (
@@ -95,7 +109,7 @@ export function MessageView({
               custom ? (
                 <Fragment key={call.id}>{custom}</Fragment>
               ) : (
-                <ToolCallDetails key={call.id} call={call} />
+                <ToolCallDetails key={call.id} call={call} conversationId={m.conversationId} />
               )
             )}
           </div>

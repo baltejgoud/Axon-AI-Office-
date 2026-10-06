@@ -5,13 +5,27 @@ const path = require('node:path');
 const Module = require('node:module');
 const original = Module._load;
 /** Electron as the service sees it; a test sets the native dialog's answer and watches restarts. */
-const electron = { app: { isPackaged: false, relaunch() {}, quit() {} }, dialog: {}, utilityProcess: { fork: () => ({ on() {}, postMessage() {}, kill() {} }) } };
+const electron = {
+  app: { isPackaged: false, relaunch() {}, quit() {} },
+  dialog: {},
+  utilityProcess: { fork: () => ({ on() {}, postMessage() {}, kill() {} }) }
+};
 Module._load = function (name, ...args) {
   if (name === 'electron') return electron;
   return original.call(this, name, ...args);
 };
-require.extensions['.ts'] = (module, file) => module._compile(
-  ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, resolveJsonModule: true } }).outputText, file);
+require.extensions['.ts'] = (module, file) =>
+  module._compile(
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        esModuleInterop: true,
+        resolveJsonModule: true
+      }
+    }).outputText,
+    file
+  );
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Repository } = require('../src/main/repository.ts');
@@ -28,42 +42,100 @@ const makeService = (emit = () => {}) => {
 };
 const addProvider = (repo) =>
   repo.state.providers.push({
-    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
-    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
-    enabled: true, createdAt: 0, hasApiKey: false
+    id: 'p1',
+    name: 'MockProvider',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
   });
 /** A conversation with an office coworker, as the office starts one. */
 const coworkerChat = (service, agentId = 'backend-developer') =>
-  service.chatCreate('p1', 'm1', null, agentId, { skillIds: [], roleIds: [] }, null, `You are Axon's ${agentId}.`);
+  service.chatCreate(
+    'p1',
+    'm1',
+    null,
+    agentId,
+    { skillIds: [], roleIds: [] },
+    null,
+    `You are Axon's ${agentId}.`
+  );
 const mockModel = (t, respond) => {
   const providersModule = require('../src/main/providers.ts');
   const original = providersModule.streamChat;
-  t.after(() => { providersModule.streamChat = original; });
+  t.after(() => {
+    providersModule.streamChat = original;
+  });
   providersModule.streamChat = respond;
 };
 
 test('chatSelectionSet rejects unknown ids and caps at 50', async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  repo.state.providers.push({ id: 'p', name: 'P', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', models: [{ id: 'm', displayName: 'm' }], enabled: true, createdAt: 0, hasApiKey: false });
+  repo.state.providers.push({
+    id: 'p',
+    name: 'P',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm', displayName: 'm' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
+  });
   const chat = await service.chatCreate('p', 'm', null);
-  await assert.rejects(service.chatSelectionSet(chat.id, { skillIds: ['nope/x'], roleIds: [] }), /Unknown skill: nope\/x/);
-  await assert.rejects(service.chatSelectionSet(chat.id, { skillIds: [], roleIds: Array.from({ length: 51 }, () => 'frontend-developer') }), /at most 50 roles/);
-  await service.chatSelectionSet(chat.id, { skillIds: ['superpowers/brainstorming'], roleIds: ['frontend-developer', 'frontend-developer'] });
-  assert.deepEqual(repo.state.conversations.find(c => c.id === chat.id).roleIds, ['frontend-developer']);
+  await assert.rejects(
+    service.chatSelectionSet(chat.id, { skillIds: ['nope/x'], roleIds: [] }),
+    /Unknown skill: nope\/x/
+  );
+  await assert.rejects(
+    service.chatSelectionSet(chat.id, {
+      skillIds: [],
+      roleIds: Array.from({ length: 51 }, () => 'frontend-developer')
+    }),
+    /at most 50 roles/
+  );
+  await service.chatSelectionSet(chat.id, {
+    skillIds: ['superpowers/brainstorming'],
+    roleIds: ['frontend-developer', 'frontend-developer']
+  });
+  assert.deepEqual(repo.state.conversations.find((c) => c.id === chat.id).roleIds, ['frontend-developer']);
 });
 
 test('chatCreate merges agent selections first', async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  repo.state.providers.push({ id: 'p', name: 'P', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', models: [{ id: 'm', displayName: 'm' }], enabled: true, createdAt: 0, hasApiKey: false });
+  repo.state.providers.push({
+    id: 'p',
+    name: 'P',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm', displayName: 'm' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
+  });
   const agent = {
-    id: repo.id(), name: 'Agent', systemPrompt: 'You are an agent.', providerId: null, modelId: null,
-    tools: [], workspaceId: null, skillIds: ['ponytail/ponytail-review'], roleIds: ['backend-developer'],
-    maxSteps: 1, schedule: { kind: 'manual' }, createdAt: Date.now(), updatedAt: Date.now()
+    id: repo.id(),
+    name: 'Agent',
+    systemPrompt: 'You are an agent.',
+    providerId: null,
+    modelId: null,
+    tools: [],
+    workspaceId: null,
+    skillIds: ['ponytail/ponytail-review'],
+    roleIds: ['backend-developer'],
+    maxSteps: 1,
+    schedule: { kind: 'manual' },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
   repo.state.agents.push(agent);
-  const chat = await service.chatCreate('p', 'm', null, agent.id, { skillIds: ['superpowers/brainstorming'], roleIds: ['backend-developer', 'frontend-developer'] });
+  const chat = await service.chatCreate('p', 'm', null, agent.id, {
+    skillIds: ['superpowers/brainstorming'],
+    roleIds: ['backend-developer', 'frontend-developer']
+  });
   assert.deepEqual(chat.skillIds, ['ponytail/ponytail-review', 'superpowers/brainstorming']);
   assert.deepEqual(chat.roleIds, ['backend-developer', 'frontend-developer']);
 });
@@ -80,15 +152,22 @@ test('subagent enforces permissions: rejects mutating actions and recursive disp
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   repo.state.providers.push({
-    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
-    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
-    enabled: true, createdAt: 0, hasApiKey: false
+    id: 'p1',
+    name: 'MockProvider',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
   });
 
   // Mock streamChat so that the model returns tool calls
   const providersModule = require('../src/main/providers.ts');
   const originalStreamChat = providersModule.streamChat;
-  t.after(() => { providersModule.streamChat = originalStreamChat; });
+  t.after(() => {
+    providersModule.streamChat = originalStreamChat;
+  });
 
   let callCount = 0;
   providersModule.streamChat = async (provider, key, req, onChunk) => {
@@ -99,8 +178,16 @@ test('subagent enforces permissions: rejects mutating actions and recursive disp
       // Return a mutating tool call and a dispatch_subagent tool call
       return {
         toolCalls: [
-          { id: 'call_1', name: 'write_file', arguments: JSON.stringify({ path: 'src/malicious.ts', content: 'boom' }) },
-          { id: 'call_2', name: 'dispatch_subagent', arguments: JSON.stringify({ role: 'nested', task: 'nested task' }) }
+          {
+            id: 'call_1',
+            name: 'write_file',
+            arguments: JSON.stringify({ path: 'src/malicious.ts', content: 'boom' })
+          },
+          {
+            id: 'call_2',
+            name: 'dispatch_subagent',
+            arguments: JSON.stringify({ role: 'nested', task: 'nested task' })
+          }
         ]
       };
     }
@@ -122,13 +209,18 @@ test('project scoping: code workspace (fileAccess disabled) does not expose tool
   await service.project.choose(projDir);
 
   repo.state.providers.push({
-    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
-    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
-    enabled: true, createdAt: 0, hasApiKey: false
+    id: 'p1',
+    name: 'MockProvider',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
   });
 
   // 1. Built-in Code Assistant workspace has fileAccess.enabled === false
-  const codeWs = repo.state.workspaces.find(w => w.id === 'code');
+  const codeWs = repo.state.workspaces.find((w) => w.id === 'code');
   assert.ok(codeWs);
   assert.equal(codeWs.fileAccess.enabled, false);
 
@@ -145,9 +237,14 @@ test('context budget: long conversation is trimmed with sliding window rather th
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   repo.state.providers.push({
-    id: 'p1', name: 'MockProvider', kind: 'openai-compatible',
-    baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }],
-    enabled: true, createdAt: 0, hasApiKey: false
+    id: 'p1',
+    name: 'MockProvider',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    models: [{ id: 'm1', displayName: 'm1' }],
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false
   });
 
   const chat = await service.chatCreate('p1', 'm1', null);
@@ -167,7 +264,9 @@ test('context budget: long conversation is trimmed with sliding window rather th
   // Mock streamChat
   const providersModule = require('../src/main/providers.ts');
   const originalStreamChat = providersModule.streamChat;
-  t.after(() => { providersModule.streamChat = originalStreamChat; });
+  t.after(() => {
+    providersModule.streamChat = originalStreamChat;
+  });
 
   let sentRequests = [];
   providersModule.streamChat = async (provider, key, req, onChunk) => {
@@ -185,25 +284,41 @@ test('context budget: long conversation is trimmed with sliding window rather th
   assert.equal(sentRequests[sentRequests.length - 1].content, 'New user prompt');
 });
 
-
 test('a coworker conversation gets one task record that follows its runs', async (t) => {
   const events = [];
   const { dir, repo, service } = makeService((event) => events.push(event));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   const chat = await coworkerChat(service);
-  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('Here is the contract.'); return { toolCalls: [] }; });
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    onChunk('Here is the contract.');
+    return { toolCalls: [] };
+  });
   await service.chatSend(chat.id, 'Design the API contract', []);
   assert.equal(repo.state.tasks.length, 1);
   const [task] = repo.state.tasks;
   assert.deepEqual(
-    { kind: task.kind, status: task.status, title: task.title, coworkerId: task.coworkerId, conversationId: task.conversationId },
-    { kind: 'work', status: 'done', title: 'Design the API contract', coworkerId: 'backend-developer', conversationId: chat.id }
+    {
+      kind: task.kind,
+      status: task.status,
+      title: task.title,
+      coworkerId: task.coworkerId,
+      conversationId: task.conversationId
+    },
+    {
+      kind: 'work',
+      status: 'done',
+      title: 'Design the API contract',
+      coworkerId: 'backend-developer',
+      conversationId: chat.id
+    }
   );
   const seen = events.filter((e) => e.channel === 'tasks').map((e) => e.tasks[0].status);
   assert.deepEqual(seen, ['working', 'done']);
 
-  mockModel(t, async () => { throw new Error('Rate limited'); });
+  mockModel(t, async () => {
+    throw new Error('Rate limited');
+  });
   await service.chatSend(chat.id, 'Once more', []);
   assert.equal(repo.state.tasks.length, 1);
   assert.equal(task.status, 'attention');
@@ -211,7 +326,10 @@ test('a coworker conversation gets one task record that follows its runs', async
 
   // Chats that belong to no coworker get no record.
   const plain = await service.chatCreate('p1', 'm1', null);
-  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('Hi.'); return { toolCalls: [] }; });
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    onChunk('Hi.');
+    return { toolCalls: [] };
+  });
   await service.chatSend(plain.id, 'Hello', []);
   assert.equal(repo.state.tasks.length, 1);
 });
@@ -248,30 +366,51 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
     askerCalls++;
     if (askerCalls === 1) {
       offered = (req.tools ?? []).map((tool) => tool.name);
-      const ask = (n) => ({ id: `ask${n}`, name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: `Question ${n}?` }) });
+      const ask = (n) => ({
+        id: `ask${n}`,
+        name: 'ask_colleague',
+        arguments: JSON.stringify({ colleague: 'Backend Developer', question: `Question ${n}?` })
+      });
       return { toolCalls: [ask(1), ask(2), ask(3), ask(4)] };
     }
     onChunk('Done, with help.');
     return { toolCalls: [] };
   });
   await service.chatSend(chat.id, 'Build the settings page', []);
-  assert.deepEqual(offered, ['ask_colleague'], 'no folder: only asking a colleague');
+  assert.deepEqual(offered, ['ask_colleague', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'], 'no folder: colleague and scoped memory retrieval');
   assert.equal(consults, 3);
   const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
   assert.equal(results.length, 4);
   const answered = results.slice(0, 3).map((m) => JSON.parse(m.content));
-  assert.deepEqual(answered.map((r) => [r.colleague, r.name]), Array(3).fill(['backend-developer', 'Backend Developer']));
-  assert.deepEqual(answered.map((r) => r.answer), ['Answer 1.', 'Answer 2.', 'Answer 3.']);
+  assert.deepEqual(
+    answered.map((r) => [r.colleague, r.name]),
+    Array(3).fill(['backend-developer', 'Backend Developer'])
+  );
+  assert.deepEqual(
+    answered.map((r) => r.answer),
+    ['Answer 1.', 'Answer 2.', 'Answer 3.']
+  );
   assert.match(results[3].content, /asked three colleagues already/);
   assert.ok(results[3].error);
   const help = repo.state.tasks.filter((task) => task.kind === 'help');
   assert.equal(help.length, 3);
-  assert.ok(help.every((task) => task.status === 'done' && task.coworkerId === 'backend-developer' && task.forCoworkerId === 'frontend-developer' && task.conversationId === chat.id));
+  assert.ok(
+    help.every(
+      (task) =>
+        task.status === 'done' &&
+        task.coworkerId === 'backend-developer' &&
+        task.forCoworkerId === 'frontend-developer' &&
+        task.conversationId === chat.id
+    )
+  );
   const work = repo.state.tasks.find((task) => task.kind === 'work');
   assert.equal(work.status, 'done');
   // The asking message keeps every call's outcome, so the thread reads the same after a reload.
   const asking = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length);
-  assert.deepEqual(asking.toolCalls.map((tc) => Boolean(tc.result)), [true, true, true, false]);
+  assert.deepEqual(
+    asking.toolCalls.map((tc) => Boolean(tc.result)),
+    [true, true, true, false]
+  );
   assert.match(asking.toolCalls[3].error, /asked three colleagues already/);
 });
 
@@ -285,7 +424,20 @@ test('a colleague who cannot be reached ends their help with the reason', async 
     if (req.system.includes('is asking you a question')) throw new Error('Provider down');
     askerCalls++;
     if (askerCalls === 1)
-      return { toolCalls: [{ id: 'a', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'engineer', question: 'Q?' }) }, { id: 'b', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Security Engineer', question: 'Is this safe?' }) }] };
+      return {
+        toolCalls: [
+          {
+            id: 'a',
+            name: 'ask_colleague',
+            arguments: JSON.stringify({ colleague: 'engineer', question: 'Q?' })
+          },
+          {
+            id: 'b',
+            name: 'ask_colleague',
+            arguments: JSON.stringify({ colleague: 'Security Engineer', question: 'Is this safe?' })
+          }
+        ]
+      };
     onChunk('Carrying on.');
     return { toolCalls: [] };
   });
@@ -307,9 +459,27 @@ test('the receptionist keeps the planner with her own tools, knowing the date', 
   mockModel(t, async (_p, _k, req, onChunk) => {
     calls++;
     if (calls === 1) {
-      assert.deepEqual(req.tools.map((tool) => tool.name), ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task']);
-      assert.match(req.system, /Now: \w+day \d+ \w+ \d{4}, \d\d:\d\d \(UTC[+-]\d\d:\d\d\)\. Today is \d{4}-\d\d-\d\d\./);
-      return { toolCalls: [{ id: 'add', name: 'add_task', arguments: JSON.stringify({ title: 'Prep the investor deck', due: '2099-01-02T10:00', remind_at: '2099-01-02T09:30' }) }] };
+      assert.deepEqual(
+        req.tools.map((tool) => tool.name),
+        ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
+      );
+      assert.match(
+        req.system,
+        /Now: \w+day \d+ \w+ \d{4}, \d\d:\d\d \(UTC[+-]\d\d:\d\d\)\. Today is \d{4}-\d\d-\d\d\./
+      );
+      return {
+        toolCalls: [
+          {
+            id: 'add',
+            name: 'add_task',
+            arguments: JSON.stringify({
+              title: 'Prep the investor deck',
+              due: '2099-01-02T10:00',
+              remind_at: '2099-01-02T09:30'
+            })
+          }
+        ]
+      };
     }
     onChunk('Added: Prep the investor deck.');
     return { toolCalls: [] };
@@ -322,8 +492,12 @@ test('the receptionist keeps the planner with her own tools, knowing the date', 
   assert.equal(todos[0].remindAt, new Date(2099, 0, 2, 9, 30).getTime());
   // She has no work records of her own; the call keeps its result for the thread.
   assert.equal(repo.state.tasks.filter((task) => task.kind === 'work').length, 0);
-  const call = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length).toolCalls[0];
-  assert.match(call.result, /^Added "Prep the investor deck" \(id [^)]+\) — due Fri 2 Jan 2099 10:00, reminder Fri 2 Jan 2099 09:30\.$/);
+  const call = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length)
+    .toolCalls[0];
+  assert.match(
+    call.result,
+    /^Added "Prep the investor deck" \(id [^)]+\) — due Fri 2 Jan 2099 10:00, reminder Fri 2 Jan 2099 09:30\.$/
+  );
 });
 
 test('the receptionist on a model without tools says so plainly', async (t) => {
@@ -335,7 +509,9 @@ test('the receptionist on a model without tools says so plainly', async (t) => {
     throw new Error('registry.ollama.ai/library/gemma:2b does not support tools');
   });
   await service.chatSend(chat.id, 'What is on today?', []);
-  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  const reply = repo.state.messages
+    .filter((m) => m.conversationId === chat.id && m.role === 'assistant')
+    .pop();
   assert.equal(reply.error, "This model can't use tools, so I can't keep your planner. Pick another model.");
 });
 
@@ -348,7 +524,11 @@ async function waitFor(find, what) {
   }
   throw new Error(`Timed out waiting for ${what}`);
 }
-const within = (promise, ms, what) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} did not finish`)), ms))]);
+const within = (promise, ms, what) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} did not finish`)), ms))
+  ]);
 
 test('after a tool call fails, the next message still sends every call with its result', async (t) => {
   const { dir, repo, service } = makeService();
@@ -358,8 +538,15 @@ test('after a tool call fails, the next message still sends every call with its 
   const sent = [];
   let calls = 0;
   mockModel(t, async (_p, _k, req, onChunk) => {
-    sent.push(req.messages.map((m) => ({ role: m.role, toolCallId: m.toolCallId, calls: m.toolCalls?.map((c) => c.id) })));
-    if (++calls === 1) return { toolCalls: [{ id: 't1', name: 'read_file', arguments: '{"path":"missing.txt"}' }] };
+    sent.push(
+      req.messages.map((m) => ({
+        role: m.role,
+        toolCallId: m.toolCallId,
+        calls: m.toolCalls?.map((c) => c.id)
+      }))
+    );
+    if (++calls === 1)
+      return { toolCalls: [{ id: 't1', name: 'read_file', arguments: '{"path":"missing.txt"}' }] };
     onChunk('Sorry, I could not read it.');
     return { toolCalls: [] };
   });
@@ -383,9 +570,14 @@ test('Stop while a tool waits for approval withdraws it, and the tool never runs
   fs.mkdirSync(folder);
   await service.project.choose(folder);
   const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
-  mockModel(t, async () => ({ toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }] }));
+  mockModel(t, async () => ({
+    toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }]
+  }));
   const run = service.chatSend(chat.id, 'Write a.txt', []);
-  const request = await waitFor(() => events.find((e) => e.channel === 'chat' && e.approvalRequired)?.approvalRequired, 'the approval');
+  const request = await waitFor(
+    () => events.find((e) => e.channel === 'chat' && e.approvalRequired)?.approvalRequired,
+    'the approval'
+  );
   service.chatStop(chat.id);
   await within(run, 2000, 'the stopped run');
   assert.deepEqual(service.snapshot().pendingApprovals, []);
@@ -401,7 +593,8 @@ test('malformed tool arguments go back to the model as an error instead of runni
   const chat = await service.chatCreate('p1', 'm1', null);
   let calls = 0;
   mockModel(t, async (_p, _k, _req, onChunk) => {
-    if (++calls === 1) return { toolCalls: [{ id: 'w', name: 'write_file', arguments: '{"path": "a.txt", "cont' }] };
+    if (++calls === 1)
+      return { toolCalls: [{ id: 'w', name: 'write_file', arguments: '{"path": "a.txt", "cont' }] };
     onChunk('Retrying.');
     return { toolCalls: [] };
   });
@@ -420,8 +613,20 @@ test('colleagues and sub-agents answer within the configured max tokens', async 
   let askerCalls = 0;
   mockModel(t, async (_p, _k, req, onChunk) => {
     seen.push({ system: req.system, maxTokens: req.maxTokens, signal: req.signal });
-    if (req.system.includes('is asking you a question') || req.system.includes('autonomous subagent')) { onChunk('Answer.'); return { toolCalls: [] }; }
-    if (++askerCalls === 1) return { toolCalls: [{ id: 'a', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'Q?' }) }] };
+    if (req.system.includes('is asking you a question') || req.system.includes('autonomous subagent')) {
+      onChunk('Answer.');
+      return { toolCalls: [] };
+    }
+    if (++askerCalls === 1)
+      return {
+        toolCalls: [
+          {
+            id: 'a',
+            name: 'ask_colleague',
+            arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'Q?' })
+          }
+        ]
+      };
     onChunk('Done.');
     return { toolCalls: [] };
   });
@@ -433,7 +638,8 @@ test('colleagues and sub-agents answer within the configured max tokens', async 
   const subagent = seen.find((s) => s.system.includes('autonomous subagent'));
   assert.equal(consult.maxTokens, 8000);
   assert.equal(subagent.maxTokens, 8000);
-  assert.equal(subagent.signal, stop.signal);
+  assert.ok(subagent.signal instanceof AbortSignal);
+  assert.equal(subagent.signal.aborted, false);
 });
 
 test('an answer cut off at the token limit says so', async (t) => {
@@ -441,9 +647,14 @@ test('an answer cut off at the token limit says so', async (t) => {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   const chat = await service.chatCreate('p1', 'm1', null);
-  mockModel(t, async (_p, _k, _req, onChunk) => { onChunk('The first half of'); return { truncated: true }; });
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    onChunk('The first half of');
+    return { truncated: true };
+  });
   await service.chatSend(chat.id, 'Write an essay', []);
-  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  const reply = repo.state.messages
+    .filter((m) => m.conversationId === chat.id && m.role === 'assistant')
+    .pop();
   assert.equal(reply.content, 'The first half of');
   assert.match(reply.error, /max-token limit/);
 });
@@ -458,18 +669,26 @@ test('a thinking model that runs out of tokens before answering is told apart, w
     return { truncated: true };
   });
   await service.chatSend(chat.id, 'Plan my week', []);
-  const reply = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant').pop();
+  const reply = repo.state.messages
+    .filter((m) => m.conversationId === chat.id && m.role === 'assistant')
+    .pop();
   assert.equal(reply.content, '');
   assert.match(reply.error, /thinking/);
   assert.match(reply.error, /Raise Max tokens/);
 });
 
-test('each tool round sends the provider\'s own turn back with it', async (t) => {
+test("each tool round sends the provider's own turn back with it", async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   const chat = await service.chatCreate('p1', 'm1', null);
-  const replay = { kind: 'anthropic', content: [{ type: 'thinking', thinking: '', signature: 'sig' }, { type: 'tool_use', id: 't1', name: 'list_files', input: {} }] };
+  const replay = {
+    kind: 'anthropic',
+    content: [
+      { type: 'thinking', thinking: '', signature: 'sig' },
+      { type: 'tool_use', id: 't1', name: 'list_files', input: {} }
+    ]
+  };
   let second;
   let calls = 0;
   mockModel(t, async (_p, _k, req, onChunk) => {
@@ -487,7 +706,10 @@ test('max tokens can be set up to 128,000 for long answers', async (t) => {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   await service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 64000 });
   assert.equal(repo.state.settings.defaultMaxTokens, 64000);
-  await assert.rejects(service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 200000 }), /Invalid settings/);
+  await assert.rejects(
+    service.settingsSave({ ...repo.state.settings, defaultMaxTokens: 200000 }),
+    /Invalid settings/
+  );
 });
 
 test('an agent with an interval schedule from an older build never runs on its own', async (t) => {
@@ -500,11 +722,34 @@ test('an agent with an interval schedule from an older build never runs on its o
   addProvider(repo);
   const now = Date.now();
   // Put straight into memory, as an older build left it, before the service starts.
-  repo.state.agents.push({ id: 'old', name: 'Nightly digest', systemPrompt: 'Summarise.', providerId: 'p1', modelId: 'm1', tools: [], workspaceId: null,
-    skillIds: [], roleIds: [], maxSteps: 3, schedule: { kind: 'interval', intervalMinutes: 1, input: 'Write the digest.' }, createdAt: now, updatedAt: now });
+  repo.state.agents.push({
+    id: 'old',
+    name: 'Nightly digest',
+    systemPrompt: 'Summarise.',
+    providerId: 'p1',
+    modelId: 'm1',
+    tools: [],
+    workspaceId: null,
+    skillIds: [],
+    roleIds: [],
+    maxSteps: 3,
+    schedule: { kind: 'interval', intervalMinutes: 1, input: 'Write the digest.' },
+    createdAt: now,
+    updatedAt: now
+  });
   let calls = 0;
-  mockModel(t, async (_p, _k, _req, onChunk) => { calls++; onChunk('Digest.'); return { toolCalls: [] }; });
-  const service = new Service(repo, { has: () => false, get: () => null, set() {}, remove() {} }, dir, () => {}, 'worker');
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    calls++;
+    onChunk('Digest.');
+    return { toolCalls: [] };
+  });
+  const service = new Service(
+    repo,
+    { has: () => false, get: () => null, set() {}, remove() {} },
+    dir,
+    () => {},
+    'worker'
+  );
   t.after(() => service.shutdown());
   t.mock.timers.tick(5 * 60_000);
   for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
@@ -539,7 +784,7 @@ test('each step of a run stops showing as generating when the next one starts', 
   assert.ok(events.indexOf(first[finished]) < second, 'before the next step speaks');
 });
 
-test('the context meter comes with each step, measured as fitToBudget measures, and again when the run ends', async (t) => {
+test('the context meter comes with each step, measured from compiled token sections, and again when the run ends', async (t) => {
   const events = [];
   const { dir, repo, service } = makeService((event) => events.push(event));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -554,32 +799,45 @@ test('the context meter comes with each step, measured as fitToBudget measures, 
   await service.chatSend(chat.id, 'Say hello', []);
   const metered = events.filter((e) => e.channel === 'chat' && e.contextUsage);
   const first = metered[0].contextUsage;
-  assert.equal(first.budgetChars, 300000);
-  assert.equal(first.usedChars, sent.system.length + sent.size);
+  assert.ok(first.tokenBasis.usedTokens > 0);
+  assert.ok(first.outputReserve + first.safetyMargin + first.tokenBasis.usedTokens <= first.tokenBasis.windowTokens);
   assert.equal(first.estimated, true);
   const last = metered.at(-1);
   assert.equal(last.done, true);
-  assert.ok(last.contextUsage.usedChars > first.usedChars, 'the reply counts once it is part of the conversation');
+  assert.ok(
+    last.contextUsage.tokenBasis.usedTokens > 0,
+    'the reply counts once it is part of the conversation'
+  );
 });
 
-test('a conversation past the budget shows a full meter as older turns are left out', async (t) => {
+test('a long conversation shows a healthy compiled meter while history remains saved', async (t) => {
   const events = [];
   const { dir, repo, service } = makeService((event) => events.push(event));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   const chat = await service.chatCreate('p1', 'm1', null);
   for (let i = 0; i < 5; i++)
-    repo.state.messages.push({ id: repo.id(), conversationId: chat.id, role: i % 2 === 0 ? 'user' : 'assistant', content: `Message ${i}: ${'A'.repeat(80000)}`, createdAt: Date.now() + i });
+    repo.state.messages.push({
+      id: repo.id(),
+      conversationId: chat.id,
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `Message ${i}: ${'A'.repeat(80000)}`,
+      createdAt: Date.now() + i
+    });
   let count;
-  mockModel(t, async (_p, _k, req, onChunk) => { count = req.messages.length; onChunk('ok'); return { toolCalls: [] }; });
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    count = req.messages.length;
+    onChunk('ok');
+    return { toolCalls: [] };
+  });
   await service.chatSend(chat.id, 'New user prompt', []);
   const first = events.find((e) => e.channel === 'chat' && e.contextUsage).contextUsage;
-  assert.equal(first.pct, 1);
-  assert.ok(first.usedChars > first.budgetChars);
+  assert.ok(first.pct < 0.85);
+  assert.ok(first.archivedTokens > 0);
   assert.ok(count < 6, 'and the request was trimmed');
 });
 
-test('the meter is there before anything is sent, in tokens once the model has a window and a reported prompt', async (t) => {
+test('the meter is there before anything is sent, as a token estimate for the selected model', async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
@@ -588,15 +846,24 @@ test('the meter is there before anything is sent, in tokens once the model has a
   assert.equal(await service.getContextUsage('nope'), null);
   const fresh = await service.getContextUsage(chat.id);
   assert.equal(fresh.estimated, true);
-  assert.ok(fresh.usedChars > 0, 'the system prompt already takes room');
+  assert.ok(fresh.tokenBasis.usedTokens > 0, 'the system prompt already takes room');
   repo.state.messages.push(
     { id: repo.id(), conversationId: chat.id, role: 'user', content: 'hi', createdAt: 1 },
-    { id: repo.id(), conversationId: chat.id, role: 'assistant', content: 'hello', createdAt: 2, providerId: 'p1', modelId: 'm1', usage: { promptTokens: 4096, completionTokens: 5 } }
+    {
+      id: repo.id(),
+      conversationId: chat.id,
+      role: 'assistant',
+      content: 'hello',
+      createdAt: 2,
+      providerId: 'p1',
+      modelId: 'm1',
+      usage: { promptTokens: 4096, completionTokens: 5 }
+    }
   );
   const measured = await service.getContextUsage(chat.id);
-  assert.deepEqual(measured.tokenBasis, { usedTokens: 4096, windowTokens: 8192 });
-  assert.equal(measured.estimated, false);
-  assert.equal(measured.pct, 0.5);
+  assert.equal(measured.tokenBasis.windowTokens, 8192);
+  assert.equal(measured.estimated, true);
+  assert.equal(measured.pct, measured.tokenBasis.usedTokens / 8192);
 });
 
 test('a priced model gets an estimate before each call; an unpriced one gets none', async (t) => {
@@ -613,11 +880,14 @@ test('a priced model gets an estimate before each call; an unpriced one gets non
   });
   await service.chatSend(chat.id, 'Unpriced', []);
   assert.ok(!events.some((e) => e.estimate), 'no price, no estimate');
-  Object.assign(repo.state.providers[0].models[0], { pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15 });
+  Object.assign(repo.state.providers[0].models[0], {
+    pricePerMillionInputTokens: 3,
+    pricePerMillionOutputTokens: 15
+  });
   events.length = 0;
   await service.chatSend(chat.id, 'Priced', []);
   const { estimate } = events.find((e) => e.estimate);
-  assert.equal(estimate.inputTokens, Math.ceil(sent.size / 4));
+  assert.equal(estimate.inputTokens, events.find(e => e.estimate).contextUsage.tokenBasis.usedTokens);
   assert.equal(estimate.maxOutputTokens, sent.maxTokens);
   assert.ok(Math.abs(estimate.maxOutputCost - (sent.maxTokens * 15) / 1e6) < 1e-12);
 });
@@ -632,14 +902,20 @@ test("each step's reported usage reaches the window as the step ends", async (t)
   mockModel(t, async (_p, _k, _req, onChunk) => {
     if (++calls === 1) {
       onChunk('Let me look.');
-      return { toolCalls: [{ id: 't1', name: 'list_files', arguments: '{}' }], promptTokens: 100, completionTokens: 10 };
+      return {
+        toolCalls: [{ id: 't1', name: 'list_files', arguments: '{}' }],
+        promptTokens: 100,
+        completionTokens: 10
+      };
     }
     onChunk('Done.');
     return { toolCalls: [], promptTokens: 150, completionTokens: 5 };
   });
   await service.chatSend(chat.id, 'Look around', []);
   const replies = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'assistant');
-  const ended = events.find((e) => e.channel === 'chat' && e.messageId === replies[0].id && e.streaming === false);
+  const ended = events.find(
+    (e) => e.channel === 'chat' && e.messageId === replies[0].id && e.streaming === false
+  );
   assert.deepEqual(ended.usage, { promptTokens: 100, completionTokens: 10 });
 });
 
@@ -647,19 +923,48 @@ test("a model keeps the context window and prices you give it; a detail that isn
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const provider = {
-    id: 'px', name: 'Priced', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', enabled: true, createdAt: 0, hasApiKey: false,
+    id: 'px',
+    name: 'Priced',
+    kind: 'openai-compatible',
+    baseUrl: 'https://example.com/v1',
+    enabled: true,
+    createdAt: 0,
+    hasApiKey: false,
     models: [
-      { id: 'm', displayName: 'm', contextWindow: 128000, pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15, junk: 'x' },
+      {
+        id: 'm',
+        displayName: 'm',
+        contextWindow: 128000,
+        pricePerMillionInputTokens: 3,
+        pricePerMillionOutputTokens: 15,
+        junk: 'x'
+      },
       { id: 'free', displayName: 'free', pricePerMillionInputTokens: 0, pricePerMillionOutputTokens: 0 }
     ]
   };
   await service.providerSave(provider);
   assert.deepEqual(repo.state.providers[0].models, [
-    { id: 'm', displayName: 'm', contextWindow: 128000, pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 15 },
+    {
+      id: 'm',
+      displayName: 'm',
+      contextWindow: 128000,
+      pricePerMillionInputTokens: 3,
+      pricePerMillionOutputTokens: 15
+    },
     { id: 'free', displayName: 'free', pricePerMillionInputTokens: 0, pricePerMillionOutputTokens: 0 }
   ]);
-  for (const bad of [{ pricePerMillionInputTokens: -1 }, { pricePerMillionOutputTokens: 'lots' }, { pricePerMillionInputTokens: NaN }, { contextWindow: 0 }, { contextWindow: 1.5 }])
-    await assert.rejects(service.providerSave({ ...provider, id: 'py', models: [{ id: 'm', displayName: 'm', ...bad }] }), /whole number of tokens|dollar amount/, JSON.stringify(bad));
+  for (const bad of [
+    { pricePerMillionInputTokens: -1 },
+    { pricePerMillionOutputTokens: 'lots' },
+    { pricePerMillionInputTokens: NaN },
+    { contextWindow: 0 },
+    { contextWindow: 1.5 }
+  ])
+    await assert.rejects(
+      service.providerSave({ ...provider, id: 'py', models: [{ id: 'm', displayName: 'm', ...bad }] }),
+      /whole number of tokens|dollar amount/,
+      JSON.stringify(bad)
+    );
   assert.equal(repo.state.providers.length, 1);
 });
 
@@ -667,9 +972,21 @@ test("Settings → Usage adds up every reply's reported usage", async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
-  Object.assign(repo.state.providers[0].models[0], { pricePerMillionInputTokens: 2, pricePerMillionOutputTokens: 10 });
+  Object.assign(repo.state.providers[0].models[0], {
+    pricePerMillionInputTokens: 2,
+    pricePerMillionOutputTokens: 10
+  });
   const chat = await service.chatCreate('p1', 'm1', null);
-  repo.state.messages.push({ id: repo.id(), conversationId: chat.id, role: 'assistant', content: 'ok', createdAt: Date.now(), providerId: 'p1', modelId: 'm1', usage: { promptTokens: 1000, completionTokens: 200 } });
+  repo.state.messages.push({
+    id: repo.id(),
+    conversationId: chat.id,
+    role: 'assistant',
+    content: 'ok',
+    createdAt: Date.now(),
+    providerId: 'p1',
+    modelId: 'm1',
+    usage: { promptTokens: 1000, completionTokens: 200 }
+  });
   const report = service.usageReport();
   assert.equal(report.allTime.turns, 1);
   assert.ok(Math.abs(report.allTime.cost - 0.004) < 1e-12);
@@ -677,14 +994,38 @@ test("Settings → Usage adds up every reply's reported usage", async (t) => {
 });
 
 const backupFile = 'state-2026-09-20T08-00-00-000Z.json';
-const seedBackup = (dir) => fs.writeFileSync(path.join(dir, 'backups', backupFile),
-  JSON.stringify({ version: 1, settings: {}, providers: [], conversations: [{ id: 'old' }], messages: [], workspaces: [], agents: [], documents: [], chunks: [] }));
+const seedBackup = (dir) =>
+  fs.writeFileSync(
+    path.join(dir, 'backups', backupFile),
+    JSON.stringify({
+      version: 1,
+      settings: {},
+      providers: [],
+      conversations: [{ id: 'old' }],
+      messages: [],
+      workspaces: [],
+      agents: [],
+      documents: [],
+      chunks: []
+    })
+  );
 const answerDialog = (t, response) => {
   const seen = { asked: null, restarts: 0, quits: 0 };
-  electron.dialog.showMessageBox = async (options) => { seen.asked = options; return { response }; };
-  electron.app.relaunch = () => { seen.restarts++; };
-  electron.app.quit = () => { seen.quits++; };
-  t.after(() => { delete electron.dialog.showMessageBox; electron.app.relaunch = () => {}; electron.app.quit = () => {}; });
+  electron.dialog.showMessageBox = async (options) => {
+    seen.asked = options;
+    return { response };
+  };
+  electron.app.relaunch = () => {
+    seen.restarts++;
+  };
+  electron.app.quit = () => {
+    seen.quits++;
+  };
+  t.after(() => {
+    delete electron.dialog.showMessageBox;
+    electron.app.relaunch = () => {};
+    electron.app.quit = () => {};
+  });
   return seen;
 };
 
@@ -706,7 +1047,11 @@ test('restoring asks first, Cancel being the default, and Cancel changes nothing
   assert.equal(seen.asked.cancelId, 0);
   assert.equal(seen.restarts, 0);
   const saved = path.join(dir, 'db', 'platform-v1.json');
-  assert.ok(!fs.existsSync(saved) || !JSON.parse(fs.readFileSync(saved, 'utf8')).conversations.some((c) => c.id === 'old'), 'nothing restored');
+  assert.ok(
+    !fs.existsSync(saved) ||
+      !JSON.parse(fs.readFileSync(saved, 'utf8')).conversations.some((c) => c.id === 'old'),
+    'nothing restored'
+  );
 });
 
 test('restoring after you confirm puts the backup back and restarts Axon', async (t) => {
@@ -718,7 +1063,10 @@ test('restoring after you confirm puts the backup back and restarts Axon', async
   assert.equal(seen.restarts, 1);
   assert.equal(seen.quits, 1);
   const saved = JSON.parse(fs.readFileSync(path.join(dir, 'db', 'platform-v1.json'), 'utf8'));
-  assert.deepEqual(saved.conversations.map((c) => c.id), ['old']);
+  assert.deepEqual(
+    saved.conversations.map((c) => c.id),
+    ['old']
+  );
 });
 
 test('an unknown restore point is refused before anything is asked', async (t) => {
@@ -743,22 +1091,41 @@ test('every call in a run is in the audit trail with its decision and result', a
   let calls = 0;
   mockModel(t, async (_p, _k, _req, onChunk) => {
     calls++;
-    if (calls === 1) return { toolCalls: [
-      { id: 'l', name: 'list_files', arguments: '{}' },
-      { id: 'b', name: 'bogus_tool', arguments: '{}' },
-      { id: 'j', name: 'read_file', arguments: '{"path": ' },
-      { id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'one' }) },
-      { id: 'r', name: 'run_command', arguments: JSON.stringify({ command: 'npm test' }) }
-    ] };
-    if (calls === 2) return { toolCalls: [{ id: 'w2', name: 'write_file', arguments: JSON.stringify({ path: 'b.txt', content: 'two' }) }] };
-    if (calls === 3) return { toolCalls: [{ id: 'w3', name: 'write_file', arguments: JSON.stringify({ path: 'c.txt', content: 'three' }) }] };
+    if (calls === 1)
+      return {
+        toolCalls: [
+          { id: 'l', name: 'list_files', arguments: '{}' },
+          { id: 'b', name: 'bogus_tool', arguments: '{}' },
+          { id: 'j', name: 'read_file', arguments: '{"path": ' },
+          { id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'one' }) },
+          { id: 'r', name: 'run_command', arguments: JSON.stringify({ command: 'npm test' }) }
+        ]
+      };
+    if (calls === 2)
+      return {
+        toolCalls: [
+          { id: 'w2', name: 'write_file', arguments: JSON.stringify({ path: 'b.txt', content: 'two' }) }
+        ]
+      };
+    if (calls === 3)
+      return {
+        toolCalls: [
+          { id: 'w3', name: 'write_file', arguments: JSON.stringify({ path: 'c.txt', content: 'three' }) }
+        ]
+      };
     onChunk('Done.');
     return { toolCalls: [] };
   });
   const run = service.chatSend(chat.id, 'Do things', []);
-  const first = await waitFor(() => events.filter((e) => e.approvalRequired)[0]?.approvalRequired, 'the first approval');
+  const first = await waitFor(
+    () => events.filter((e) => e.approvalRequired)[0]?.approvalRequired,
+    'the first approval'
+  );
   await service.toolApprove({ requestId: first.id, approved: false });
-  const second = await waitFor(() => events.filter((e) => e.approvalRequired)[1]?.approvalRequired, 'the second approval');
+  const second = await waitFor(
+    () => events.filter((e) => e.approvalRequired)[1]?.approvalRequired,
+    'the second approval'
+  );
   await service.toolApprove({ requestId: second.id, approved: true, alwaysAllowSession: true });
   await run;
   assert.deepEqual(decisions(service), [
@@ -788,7 +1155,9 @@ test("a stopped run's waiting call is recorded as withdrawn", async (t) => {
   fs.mkdirSync(folder);
   await service.project.choose(folder);
   const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
-  mockModel(t, async () => ({ toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }] }));
+  mockModel(t, async () => ({
+    toolCalls: [{ id: 'w', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'x' }) }]
+  }));
   const run = service.chatSend(chat.id, 'Write a.txt', []);
   await waitFor(() => events.find((e) => e.approvalRequired), 'the approval');
   service.chatStop(chat.id);
@@ -806,28 +1175,45 @@ test("a colleague's lookups are recorded on behalf of the coworker who asked", a
   await service.project.choose(folder);
   const { coworkerById } = require('../src/shared/coworkers.ts');
   const chat = await coworkerChat(service, 'frontend-developer');
-  let asker = 0, consulted = 0;
+  let asker = 0,
+    consulted = 0;
   mockModel(t, async (_p, _k, req, onChunk) => {
     if (req.system.includes('is asking you a question')) {
-      if (++consulted === 1) return { toolCalls: [
-        { id: 'cr', name: 'read_file', arguments: JSON.stringify({ path: 'a.txt' }) },
-        { id: 'cw', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'no' }) }
-      ] };
+      if (++consulted === 1)
+        return {
+          toolCalls: [
+            { id: 'cr', name: 'read_file', arguments: JSON.stringify({ path: 'a.txt' }) },
+            { id: 'cw', name: 'write_file', arguments: JSON.stringify({ path: 'a.txt', content: 'no' }) }
+          ]
+        };
       onChunk('It says hello.');
       return { toolCalls: [] };
     }
-    if (++asker === 1) return { toolCalls: [{ id: 'ask', name: 'ask_colleague', arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'What is in a.txt?' }) }] };
+    if (++asker === 1)
+      return {
+        toolCalls: [
+          {
+            id: 'ask',
+            name: 'ask_colleague',
+            arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'What is in a.txt?' })
+          }
+        ]
+      };
     onChunk('Thanks.');
     return { toolCalls: [] };
   });
   await service.chatSend(chat.id, 'Ask about a.txt', []);
   const entries = service.audit.all();
-  const asking = coworkerById('frontend-developer').name, helping = coworkerById('backend-developer').name;
-  assert.deepEqual(entries.map((e) => [e.actor.kind, e.actor.name, e.actor.onBehalfOf ?? null, e.tool, e.decision]), [
-    ['colleague', helping, asking, 'read_file', 'allowed'],
-    ['colleague', helping, asking, 'write_file', 'skipped'],
-    ['coworker', asking, null, 'ask_colleague', 'allowed']
-  ]);
+  const asking = coworkerById('frontend-developer').name,
+    helping = coworkerById('backend-developer').name;
+  assert.deepEqual(
+    entries.map((e) => [e.actor.kind, e.actor.name, e.actor.onBehalfOf ?? null, e.tool, e.decision]),
+    [
+      ['colleague', helping, asking, 'read_file', 'allowed'],
+      ['colleague', helping, asking, 'write_file', 'skipped'],
+      ['coworker', asking, null, 'ask_colleague', 'allowed']
+    ]
+  );
   assert.ok(entries.every((e) => e.conversationId === chat.id));
 });
 
@@ -836,27 +1222,48 @@ test("a sub-agent's calls are recorded on behalf of the run that sent it", async
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   let calls = 0;
-  mockModel(t, async () => (++calls === 1
-    ? { toolCalls: [
-      { id: 's1', name: 'write_file', arguments: JSON.stringify({ path: 'x.ts', content: 'boom' }) },
-      { id: 's2', name: 'dispatch_subagent', arguments: JSON.stringify({ role: 'nested', task: 'more' }) }
-    ] }
-    : { toolCalls: [] }));
-  await service.runSubagent('p1', 'm1', 'researcher', 'Look around', null, undefined, undefined, undefined, { conversationId: 'c1', name: 'Assistant' });
-  assert.deepEqual(service.audit.all().map((e) => [e.actor.kind, e.actor.onBehalfOf, e.tool, e.decision, e.conversationId]), [
-    ['subagent', 'Assistant', 'write_file', 'denied', 'c1'],
-    ['subagent', 'Assistant', 'dispatch_subagent', 'denied', 'c1']
-  ]);
+  mockModel(t, async () =>
+    ++calls === 1
+      ? {
+          toolCalls: [
+            { id: 's1', name: 'write_file', arguments: JSON.stringify({ path: 'x.ts', content: 'boom' }) },
+            {
+              id: 's2',
+              name: 'dispatch_subagent',
+              arguments: JSON.stringify({ role: 'nested', task: 'more' })
+            }
+          ]
+        }
+      : { toolCalls: [] }
+  );
+  await service.runSubagent('p1', 'm1', 'researcher', 'Look around', null, undefined, undefined, undefined, {
+    conversationId: 'c1',
+    name: 'Assistant'
+  });
+  assert.deepEqual(
+    service.audit.all().map((e) => [e.actor.kind, e.actor.onBehalfOf, e.tool, e.decision, e.conversationId]),
+    [
+      ['subagent', 'Assistant', 'write_file', 'denied', 'c1'],
+      ['subagent', 'Assistant', 'dispatch_subagent', 'denied', 'c1']
+    ]
+  );
 });
 
 test('the activity log is listed and exported over IPC', async (t) => {
   const { dir, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  service.audit.record({ actor: { kind: 'you', name: 'You' }, tool: 'write_file', subject: 'a.txt', decision: 'reverted' });
+  service.audit.record({
+    actor: { kind: 'you', name: 'You' },
+    tool: 'write_file',
+    subject: 'a.txt',
+    decision: 'reverted'
+  });
   assert.equal(service.auditList({ group: 'changes' }).length, 1);
   const out = path.join(dir, 'export.json');
   electron.dialog.showSaveDialog = async () => ({ canceled: false, filePath: out });
-  t.after(() => { delete electron.dialog.showSaveDialog; });
+  t.after(() => {
+    delete electron.dialog.showSaveDialog;
+  });
   assert.equal(await service.auditExport(), true);
   assert.equal(JSON.parse(fs.readFileSync(out, 'utf8'))[0].subject, 'a.txt');
 });
@@ -872,15 +1279,28 @@ const writeOnce = async (t, file, content) => {
   await made.service.project.choose(folder);
   const chat = await made.service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
   let calls = 0;
-  mockModel(t, async () => (++calls === 1 ? { toolCalls: [{ id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: file, content }) }] } : { toolCalls: [] }));
-  return { ...made, folder, chat, events, run: async (before) => {
-    if (before !== undefined) fs.writeFileSync(path.join(folder, file), before);
-    const run = made.service.chatSend(chat.id, 'Write it', []);
-    const request = await waitFor(() => events.find((e) => e.approvalRequired)?.approvalRequired, 'the approval');
-    await made.service.toolApprove({ requestId: request.id, approved: true });
-    await run;
-    return made.repo.state.messages.flatMap((m) => m.toolCalls ?? []).find((c) => c.id === 'w1');
-  } };
+  mockModel(t, async () =>
+    ++calls === 1
+      ? { toolCalls: [{ id: 'w1', name: 'write_file', arguments: JSON.stringify({ path: file, content }) }] }
+      : { toolCalls: [] }
+  );
+  return {
+    ...made,
+    folder,
+    chat,
+    events,
+    run: async (before) => {
+      if (before !== undefined) fs.writeFileSync(path.join(folder, file), before);
+      const run = made.service.chatSend(chat.id, 'Write it', []);
+      const request = await waitFor(
+        () => events.find((e) => e.approvalRequired)?.approvalRequired,
+        'the approval'
+      );
+      await made.service.toolApprove({ requestId: request.id, approved: true });
+      await run;
+      return made.repo.state.messages.flatMap((m) => m.toolCalls ?? []).find((c) => c.id === 'w1');
+    }
+  };
 };
 
 test('a saved write keeps the version it replaced, so it can be undone', async (t) => {
@@ -953,4 +1373,94 @@ test('undo only works in the project the change was made in', async (t) => {
   const seen = answerDialog(t, 1);
   await assert.rejects(service.revertChange('w1'), /Open .* to undo this change/);
   assert.equal(seen.asked, null);
+});
+
+test('provider context overflow recompiles and retries exactly once without duplicate text', async t => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, {recursive:true,force:true}));
+  addProvider(repo);
+  const chat = await service.chatCreate('p1','m1',null);
+  let calls = 0;
+  mockModel(t, async (_p,_k,req,onChunk) => {
+    calls++;
+    assert.equal(req.messages.at(-1).content,'Continue current task');
+    if (calls === 1) throw new Error('context_length_exceeded');
+    onChunk('Recovered safely.');
+    return {toolCalls:[],promptTokens:100,completionTokens:4};
+  });
+  await service.chatSend(chat.id,'Continue current task',[]);
+  assert.equal(calls,2);
+  assert.equal(repo.state.messages.filter(m=>m.role==='assistant').at(-1).content,'Recovered safely.');
+});
+test('a second overflow offers recovery guidance and never loops', async t => {
+  const {dir,repo,service} = makeService();
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  addProvider(repo);
+  const chat=await service.chatCreate('p1','m1',null);
+  let calls=0;
+  mockModel(t,async()=>{ calls++; throw new Error('prompt too long'); });
+  await service.chatSend(chat.id,'Keep my task',[]);
+  assert.equal(calls,2);
+  assert.match(repo.state.messages.filter(m=>m.role==='assistant').at(-1).error,/Your full conversation is saved/);
+  assert.equal(repo.state.messages.find(m=>m.role==='user').content,'Keep my task');
+});
+
+test('oversize required input saves the user request and emits a finished recovery state', async t => {
+  const events=[];
+  const {dir,repo,service}=makeService(event=>events.push(event));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  addProvider(repo);
+  const chat=await service.chatCreate('p1','m1',null);
+  let calls=0;
+  mockModel(t,async()=>{ calls++; return {toolCalls:[]}; });
+  const input='z'.repeat(50000);
+  await service.chatSend(chat.id,input,[]);
+  assert.equal(calls,0);
+  assert.equal(repo.state.messages.find(m=>m.role==='user').content,input);
+  const finished=events.findLast(event=>event.channel==='chat' && event.done);
+  assert.equal(finished.contextUsage.state,'recovery-required');
+  assert.match(finished.error,/Split the input/);
+});
+
+
+test('background semantic checkpoint retains unlabeled user requirements independently of compilation', async t => {
+  const { dir, repo, service } = makeService();
+  t.after(() => { service.shutdown(); fs.rmSync(dir, { recursive: true, force: true }); });
+  addProvider(repo);
+  const chat = await coworkerChat(service);
+  repo.appendMessages({ id: 'semantic-source', conversationId: chat.id, role: 'user', content: 'I would prefer the quiet theme. The launch belongs on Friday.', createdAt: Date.now() });
+  service.scheduleSemanticCheckpoint(chat);
+  assert.equal(chat.memoryNeedsCheckpoint, true);
+  await new Promise(resolve => setTimeout(resolve, 450));
+  assert.equal(chat.memoryNeedsCheckpoint, false);
+  const canonical = chat.memory.facts.find(f => f.sourceMessageId === 'semantic-source').text;
+  await service.chatMemoryCorrect(chat.id, canonical, 'Prefer the blue theme.');
+  assert.equal(chat.memoryCorrections[canonical], 'Prefer the blue theme.');
+  assert.ok(chat.memory.facts.some(f => f.text === canonical));
+  assert.ok(chat.memory.facts.some(f => f.sourceMessageId === 'semantic-source' && f.text.includes('quiet theme')));
+  const restart = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+  assert.ok(restart.state.conversations.find(c => c.id === chat.id).memory.facts.some(f => f.text.includes('Friday')));
+});
+
+test('background semantic checkpoint rejects stale results and classifies changed source again', async t => {
+  const { dir, repo, service } = makeService();
+  t.after(() => { service.shutdown(); fs.rmSync(dir, { recursive: true, force: true }); });
+  addProvider(repo);
+  service.vault.has = () => true;
+  service.vault.get = () => 'key';
+  const chat = await coworkerChat(service);
+  const source = { id: 'semantic-stale', conversationId: chat.id, role: 'user', content: 'Friday launch', createdAt: Date.now() };
+  repo.appendMessages(source);
+  let calls = 0;
+  mockModel(t, async (_provider, _key, _request, emit) => {
+    calls++;
+    if (calls === 1) source.content = 'Monday launch';
+    emit(JSON.stringify([{ kind: 'goal', text: calls === 1 ? 'Friday launch' : 'Monday launch', sourceMessageId: source.id }]));
+    return {};
+  });
+  service.scheduleSemanticCheckpoint(chat);
+  await new Promise(resolve => setTimeout(resolve, 850));
+  assert.equal(calls, 2);
+  assert.ok(chat.memory.facts.some(f => f.text === 'Monday launch'));
+  assert.ok(!chat.memory.facts.some(f => f.text === 'Friday launch'));
 });

@@ -165,6 +165,21 @@ export function FilesPanel() {
 
       {root && (
         <div className="office-file-browser">
+          <button
+            className="office-file-entry"
+            onClick={() =>
+              void run(async () => {
+                if (await window.axon.projectClose()) {
+                  setRoot(null);
+                  setFiles([]);
+                  setPicked([]);
+                  await useApp.getState().refresh();
+                }
+              })
+            }
+          >
+            <IconClose size={15} /> Close project
+          </button>
           <p className="office-file-root" title={root}>
             {folderName(root)}
             {folder && ` / ${folder.replace(/\/$/, '')}`}

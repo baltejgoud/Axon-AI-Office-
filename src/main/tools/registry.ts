@@ -1,3 +1,5 @@
+import { CodeContextCache } from '../code-context';
+import { TerminalService, defaultShell } from '../runtime/terminal';
 import { exec, execFile } from 'node:child_process';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { FileChange, ToolDefinition } from '../../shared/types';
@@ -24,9 +26,7 @@ const LIST_FILES_LIMIT = 1000;
 
 /** Which shell runs a command, for the model: on Windows it is cmd.exe, and models assume bash otherwise. */
 export function shellNote(platform: string): string {
-  return platform === 'win32'
-    ? 'Commands run in Windows cmd.exe, not bash: use dir, type, findstr, where and copy; head, tail, grep, ls, cat and rm may not exist, and single quotes do not quote. Chain with &&.'
-    : 'Commands run in /bin/sh.';
+  return `Commands use ${defaultShell(platform as NodeJS.Platform)}. Use native syntax for this shell. Prefer list_files, search_code and read_file for filesystem discovery.`;
 }
 const SHELL_NOTE = shellNote(process.platform);
 /** What cmd.exe says about a program it can't find. */
@@ -38,16 +38,22 @@ const MAY_BE_EMPTY = new Set(['content', 'new_string', 'old_string']);
 export function missingArguments(definition: ToolDefinition, args: Record<string, unknown>): string | null {
   const required = (definition.parameters as { required?: unknown }).required;
   if (!Array.isArray(required)) return null;
-  const blank = (name: string) => !MAY_BE_EMPTY.has(name) && typeof args[name] === 'string' && !(args[name] as string).trim();
-  const missing = required.filter((name): name is string =>
-    typeof name === 'string' && (args[name] === undefined || args[name] === null || blank(name)));
+  const blank = (name: string) =>
+    !MAY_BE_EMPTY.has(name) && typeof args[name] === 'string' && !(args[name] as string).trim();
+  const missing = required.filter(
+    (name): name is string =>
+      typeof name === 'string' && (args[name] === undefined || args[name] === null || blank(name))
+  );
   return missing.length
-    ? `${definition.name} needs ${missing.map(name => `'${name}'`).join(' and ')}, which ${missing.length > 1 ? 'were' : 'was'} missing, so it was not run. Call it again with every required argument.`
+    ? `${definition.name} needs ${missing.map((name) => `'${name}'`).join(' and ')}, which ${missing.length > 1 ? 'were' : 'was'} missing, so it was not run. Call it again with every required argument.`
     : null;
 }
 
 /** Whether a file is there, and its text: null for a new file, or one too big (or too binary) to read, which is not a new file. */
-async function readBefore(project: Project, path: string): Promise<{ existed: boolean; before: string | null }> {
+async function readBefore(
+  project: Project,
+  path: string
+): Promise<{ existed: boolean; before: string | null }> {
   const existed = await project.exists(path);
   if (!existed) return { existed, before: null };
   try {
@@ -65,6 +71,9 @@ const quote = (value: string) => JSON.stringify(value);
 
 export interface ToolContext {
   project: Project;
+  terminals?: TerminalService;
+  signal?: AbortSignal;
+  runId?: string;
   allowShell: boolean;
   subagentRunner?: (role: string, task: string) => Promise<string>;
   /** A running command's output so far, a few times a second, for the window. */
@@ -94,11 +103,17 @@ export interface ToolHandlerResult {
 
 export interface RegisteredTool {
   definition: ToolDefinition;
-  preparePreview?: (args: Record<string, any>, ctx: ToolContext) => Promise<{
-    type: 'diff' | 'command' | 'generic';
-    content: string;
-    path?: string;
-  } | undefined>;
+  preparePreview?: (
+    args: Record<string, any>,
+    ctx: ToolContext
+  ) => Promise<
+    | {
+        type: 'diff' | 'command' | 'generic';
+        content: string;
+        path?: string;
+      }
+    | undefined
+  >;
   /** Refuses a call that cannot work before anyone is asked to approve it; the reason goes back to the model. */
   validate?: (args: Record<string, any>, ctx: ToolContext) => Promise<string | null>;
   execute: (args: Record<string, any>, ctx: ToolContext) => Promise<ToolHandlerResult>;
@@ -112,6 +127,9 @@ export class ToolRegistry {
   }
 
   register(tool: RegisteredTool) {
+    tool.definition.retentionPolicy ??= tool.definition.name === 'list_files' ? 'EPHEMERAL'
+      : /command|process|mcp/.test(tool.definition.name) ? 'SUMMARIZE'
+      : /read_file|file_context|get_symbol/.test(tool.definition.name) ? 'REFERENCE_ONLY' : 'PIN_CURRENT_TASK';
     this.tools.set(tool.definition.name, tool);
   }
 
@@ -132,10 +150,27 @@ export class ToolRegistry {
   }
 
   getDefinitions(): ToolDefinition[] {
-    return Array.from(this.tools.values()).map(t => t.definition);
+    return Array.from(this.tools.values()).map((t) => t.definition);
   }
 
   private registerCoreTools() {
+    const codeContext = new CodeContextCache();
+    for (const name of ['file_context', 'get_symbol']) this.register({
+      definition: { name, description: name === 'file_context' ? 'Get a hashed file snapshot and symbol/import index without loading its full code. TypeScript and JavaScript supported.' : 'Retrieve exact source lines of a named symbol from a TypeScript or JavaScript file.',
+        parameters: { type: 'object', properties: { path: { type: 'string' }, symbol: { type: 'string' } }, required: name === 'get_symbol' ? ['path', 'symbol'] : ['path'] } },
+      execute: async (args, ctx) => {
+        try {
+          const path = String(args.path), raw = await ctx.project.read(path);
+          const snapshot = await codeContext.snapshot(path, raw);
+          if (name === 'file_context') return { content: JSON.stringify({ ...snapshot, symbols: snapshot.symbols.slice(0, 100), totalSymbols: snapshot.symbols.length }) };
+          const symbol = snapshot.symbols.find(s => s.name === args.symbol);
+          if (!symbol) return { content: 'Symbol not found. Use file_context for available symbols, or read_file for other languages.', isError: true };
+          const end = Math.min(symbol.endLine, symbol.startLine + 199);
+          return { content: JSON.stringify({ ...symbol, hash: snapshot.hash, excerptEndLine: end,
+            code: raw.split('\n').slice(symbol.startLine - 1, end).map((line, i) => `${symbol.startLine + i}: ${line}`).join('\n') }) };
+        } catch (error) { return { content: String(error), isError: true }; }
+      }
+    });
     // 1. read_file
     this.register({
       definition: {
@@ -182,7 +217,10 @@ export class ToolRegistry {
       execute: async (args, ctx) => {
         try {
           if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
-          const prefix = String(args.directory || '').trim().replace(/^[\\/]+/, '').replace(/[\\/]+$/, '');
+          const prefix = String(args.directory || '')
+            .trim()
+            .replace(/^[\\/]+/, '')
+            .replace(/[\\/]+$/, '');
           // Only that folder is walked, so a huge sibling can't use up the cap first.
           const filtered = await ctx.project.list(prefix || undefined);
           // A listing cut short says so. It must never look like an empty directory.
@@ -192,7 +230,13 @@ export class ToolRegistry {
               ? `\n\n(showing ${LIST_FILES_LIMIT} of ${filtered.length} files; narrow 'directory' to see the rest.)`
               : '';
           if (!filtered.length)
-            return { content: ctx.project.listTruncated ? `No files reached.${note}` : prefix ? `No files found in ${prefix}/.` : 'No files found.' };
+            return {
+              content: ctx.project.listTruncated
+                ? `No files reached.${note}`
+                : prefix
+                  ? `No files found in ${prefix}/.`
+                  : 'No files found.'
+            };
           return { content: filtered.slice(0, LIST_FILES_LIMIT).join('\n') + note };
         } catch (err: any) {
           return { content: `Error listing files: ${err.message}`, isError: true };
@@ -204,7 +248,8 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'search_code',
-        description: 'Search for text across project files. Returns matching file paths, line numbers, and snippets.',
+        description:
+          'Search for text across project files. Returns matching file paths, line numbers, and snippets.',
         parameters: {
           type: 'object',
           properties: {
@@ -219,11 +264,17 @@ export class ToolRegistry {
           const hits = await ctx.project.search(String(args.query));
           // A search that stopped early says so: what it didn't reach was not searched.
           const note = [
-            hits.length >= SEARCH_HITS ? `(showing the first ${SEARCH_HITS} matches; search for something more specific to see others.)` : '',
-            ctx.project.listTruncated ? '(the project has more files than one search reads, so some were not searched. A missing match is not proof there is none.)' : ''
-          ].filter(Boolean).join('\n');
+            hits.length >= SEARCH_HITS
+              ? `(showing the first ${SEARCH_HITS} matches; search for something more specific to see others.)`
+              : '',
+            ctx.project.listTruncated
+              ? '(the project has more files than one search reads, so some were not searched. A missing match is not proof there is none.)'
+              : ''
+          ]
+            .filter(Boolean)
+            .join('\n');
           if (!hits.length) return { content: note ? `No matches found.\n\n${note}` : 'No matches found.' };
-          const formatted = hits.map(h => `${h.path}:${h.line}  ${h.text}`).join('\n');
+          const formatted = hits.map((h) => `${h.path}:${h.line}  ${h.text}`).join('\n');
           return { content: note ? `${formatted}\n\n${note}` : formatted };
         } catch (err: any) {
           return { content: `Error searching project: ${err.message}`, isError: true };
@@ -233,7 +284,8 @@ export class ToolRegistry {
 
     // 4. write_file: new files, and whole-file replacements a guard keeps proportionate
     /** What a whole-file write would leave: the text sent, with the final newline the file had. */
-    const written = (before: string | null, content: string) => (before === null ? content : preserveTrailingNewline(before, content));
+    const written = (before: string | null, content: string) =>
+      before === null ? content : preserveTrailingNewline(before, content);
     /** Why a whole-file write would eat far more of an existing file than it adds; null when it wouldn't. */
     const guard = (before: string | null, after: string) => {
       if (before === null) return null;
@@ -299,8 +351,16 @@ export class ToolRegistry {
       const { existed, before } = await readBefore(project, filePath);
       if (!existed) return { error: `${filePath} does not exist. Use write_file to create a new file.` };
       if (before === null) return { error: `${filePath} can't be edited: it is over 1 MB or not text.` };
-      const result = applyUniqueEdit(before, String(args.old_string ?? ''), String(args.new_string ?? ''), args.replace_all === true);
-      if (!result.ok) return { error: `${result.reason} in ${filePath}. Read the file again and copy old_string exactly, including indentation.` };
+      const result = applyUniqueEdit(
+        before,
+        String(args.old_string ?? ''),
+        String(args.new_string ?? ''),
+        args.replace_all === true
+      );
+      if (!result.ok)
+        return {
+          error: `${result.reason} in ${filePath}. Read the file again and copy old_string exactly, including indentation.`
+        };
       return { before, after: result.text, replacements: result.replacements };
     };
     this.register({
@@ -312,18 +372,26 @@ export class ToolRegistry {
           type: 'object',
           properties: {
             path: { type: 'string', description: 'Relative path of the file to edit' },
-            old_string: { type: 'string', description: 'The exact text to replace, with enough surrounding lines to be unique' },
+            old_string: {
+              type: 'string',
+              description: 'The exact text to replace, with enough surrounding lines to be unique'
+            },
             new_string: { type: 'string', description: 'The text to put in its place (empty to delete it)' },
             replace_all: { type: 'boolean', description: 'Replace every occurrence instead of exactly one' }
           },
           required: ['path', 'old_string', 'new_string']
         }
       },
-      validate: async (args, ctx) => (ctx.project.root ? (await edited(args, ctx.project)).error ?? null : null),
+      validate: async (args, ctx) =>
+        ctx.project.root ? ((await edited(args, ctx.project)).error ?? null) : null,
       preparePreview: async (args, ctx) => {
         const result = await edited(args, ctx.project);
         return result.error === undefined
-          ? { type: 'diff', content: createUnifiedDiff(String(args.path), result.before!, result.after!), path: String(args.path) }
+          ? {
+              type: 'diff',
+              content: createUnifiedDiff(String(args.path), result.before!, result.after!),
+              path: String(args.path)
+            }
           : { type: 'generic', content: result.error, path: String(args.path) };
       },
       execute: async (args, ctx) => {
@@ -354,7 +422,8 @@ export class ToolRegistry {
           type: 'object',
           properties: {
             command: { type: 'string', description: 'The shell command line to run' },
-            cwd: { type: 'string', description: 'Optional working directory relative to project root' }
+            cwd: { type: 'string', description: 'Optional working directory relative to project root' },
+            timeout: { type: 'number', description: 'Maximum command duration in milliseconds, up to 600000' }
           },
           required: ['command']
         }
@@ -376,55 +445,28 @@ export class ToolRegistry {
 
         const cmd = String(args.command).trim();
         const targetCwd = workingFolder(ctx.project.root, args.cwd);
-        if (!targetCwd) return { content: 'Working directory outside project root is not permitted.', isError: true };
+        if (!targetCwd)
+          return { content: 'Working directory outside project root is not permitted.', isError: true };
 
-        return new Promise<ToolHandlerResult>((resolvePromise) => {
-          // The window sees the output as it comes; the model gets it whole, as before.
-          let soFar = '';
-          let finished = false;
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          const send = () => {
-            timer = undefined;
-            if (!finished) ctx.onOutput?.(soFar);
-          };
-          const heard = (chunk: string | Buffer) => {
-            soFar = (soFar + String(chunk)).slice(-OUTPUT_TAIL);
-            if (!timer && !finished) timer = setTimeout(send, OUTPUT_EVERY_MS);
-          };
-          const child = exec(
-            cmd,
-            {
-              cwd: targetCwd,
-              timeout: 60_000,
-              maxBuffer: 2 * 1024 * 1024,
-              env: { ...process.env, CI: '1' }
-            },
-            (error, stdout, stderr) => {
-              finished = true;
-              if (timer) clearTimeout(timer);
-              const combined = [
-                stdout ? stdout.trim() : '',
-                stderr ? `[stderr]\n${stderr.trim()}` : ''
-              ].filter(Boolean).join('\n\n');
-
-              if (error) {
-                const failed = combined || `Command exited with code ${error.code || 1}: ${error.message}`;
-                resolvePromise({
-                  content: NOT_A_COMMAND.test(failed) ? `${failed}\n\n${SHELL_NOTE}` : failed,
-                  isError: true
-                });
-              } else {
-                resolvePromise({
-                  content: combined || '(command completed with no output)'
-                });
-              }
-            }
-          );
-          if (ctx.onOutput) {
-            child.stdout?.on('data', heard);
-            child.stderr?.on('data', heard);
-          }
-        });
+        const terminals =
+          ctx.terminals ??
+          new TerminalService((session, data) => {
+            if (data) ctx.onOutput?.(session.output);
+          });
+        try {
+          const result = await terminals.run({
+            conversationId: ctx.conversationId ?? 'command',
+            runId: ctx.runId,
+            root: ctx.project.root,
+            command: cmd,
+            cwd: args.cwd,
+            timeout: args.timeout,
+            signal: ctx.signal
+          });
+          return { content: JSON.stringify(result), isError: result.exitCode !== 0 };
+        } catch (error) {
+          return { content: error instanceof Error ? error.message : String(error), isError: true };
+        }
       }
     });
 
@@ -432,13 +474,13 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'start_process',
-        description:
-          `Start a long-running command in the background in the project folder, such as a development server (npm run dev) or a file watcher. Returns its first output and the local address it serves, which the user sees in a live Preview. Use run_command for commands that finish. ${SHELL_NOTE}`,
+        description: `Start a long-running command in the background in the project folder, such as a development server (npm run dev) or a file watcher. Returns its first output and the local address it serves, which the user sees in a live Preview. Use run_command for commands that finish. ${SHELL_NOTE}`,
         parameters: {
           type: 'object',
           properties: {
             command: { type: 'string', description: 'The shell command line to start' },
-            cwd: { type: 'string', description: 'Optional working directory relative to project root' }
+            cwd: { type: 'string', description: 'Optional working directory relative to project root' },
+            timeout: { type: 'number', description: 'Maximum command duration in milliseconds, up to 600000' }
           },
           required: ['command']
         }
@@ -451,14 +493,18 @@ export class ToolRegistry {
       execute: async (args, ctx) => {
         if (!ctx.allowShell) return { content: 'Shell execution is disabled in settings.', isError: true };
         if (!ctx.project.root) return { content: 'No project folder is open.', isError: true };
-        if (!ctx.processes || !ctx.conversationId) return { content: 'Background processes are not available here.', isError: true };
+        if (!ctx.processes || !ctx.conversationId)
+          return { content: 'Background processes are not available here.', isError: true };
         const cmd = String(args.command).trim();
         const cwd = workingFolder(ctx.project.root, args.cwd);
-        if (!cwd) return { content: 'Working directory outside project root is not permitted.', isError: true };
+        if (!cwd)
+          return { content: 'Working directory outside project root is not permitted.', isError: true };
         try {
           const info = await ctx.processes.start(ctx.conversationId, cmd, cwd);
           const state = info.running
-            ? info.url ? `It serves ${info.url}; the user sees that page in the Preview.` : 'It is running.'
+            ? info.url
+              ? `It serves ${info.url}; the user sees that page in the Preview.`
+              : 'It is running.'
             : `It ended with exit code ${info.exitCode ?? 'unknown'}.`;
           return {
             content: `Started \`${cmd}\` as ${info.id}. ${state}\n\nOutput so far:\n${info.output.slice(-4000) || '(nothing yet)'}`,
@@ -473,10 +519,13 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'read_process',
-        description: 'Read the latest output of a background process started with start_process, and whether it is still running.',
+        description:
+          'Read the latest output of a background process started with start_process, and whether it is still running.',
         parameters: {
           type: 'object',
-          properties: { id: { type: 'string', description: 'The process id start_process gave, such as p1' } },
+          properties: {
+            id: { type: 'string', description: 'The process id start_process gave, such as p1' }
+          },
           required: ['id']
         }
       },
@@ -485,7 +534,9 @@ export class ToolRegistry {
         if (!info || info.conversationId !== ctx.conversationId)
           return { content: `No background process ${String(args.id)} in this conversation.`, isError: true };
         const state = info.running ? 'is running' : `ended with exit code ${info.exitCode ?? 'unknown'}`;
-        return { content: `${info.id} (\`${info.command}\`) ${state}.${info.url ? ` It serves ${info.url}.` : ''}\n\n${info.output.slice(-8000) || '(no output)'}` };
+        return {
+          content: `${info.id} (\`${info.command}\`) ${state}.${info.url ? ` It serves ${info.url}.` : ''}\n\n${info.output.slice(-8000) || '(no output)'}`
+        };
       }
     });
     this.register({
@@ -494,7 +545,9 @@ export class ToolRegistry {
         description: 'Stop a background process started with start_process.',
         parameters: {
           type: 'object',
-          properties: { id: { type: 'string', description: 'The process id start_process gave, such as p1' } },
+          properties: {
+            id: { type: 'string', description: 'The process id start_process gave, such as p1' }
+          },
           required: ['id']
         }
       },
@@ -502,7 +555,9 @@ export class ToolRegistry {
         const info = ctx.processes?.read(String(args.id));
         if (!info || info.conversationId !== ctx.conversationId)
           return { content: `No background process ${String(args.id)} in this conversation.`, isError: true };
-        return { content: ctx.processes!.stop(info.id) ? `Stopped ${info.id}.` : `${info.id} is not running.` };
+        return {
+          content: ctx.processes!.stop(info.id) ? `Stopped ${info.id}.` : `${info.id} is not running.`
+        };
       }
     });
 
@@ -537,11 +592,12 @@ export class ToolRegistry {
         if (!msg) return { content: 'Commit message is required.', isError: true };
         const files = gitFiles(args.files);
         // git runs directly, never through a shell, so a message or file name can't start another command.
-        const git = (gitArgs: string[]) => new Promise<{ ok: boolean; out: string }>((resolvePromise) => {
-          execFile('git', gitArgs, { cwd: ctx.project.root!, timeout: 60_000 }, (err, stdout, stderr) => {
-            resolvePromise({ ok: !err, out: String(stdout || stderr || err?.message || '') });
+        const git = (gitArgs: string[]) =>
+          new Promise<{ ok: boolean; out: string }>((resolvePromise) => {
+            execFile('git', gitArgs, { cwd: ctx.project.root!, timeout: 60_000 }, (err, stdout, stderr) => {
+              resolvePromise({ ok: !err, out: String(stdout || stderr || err?.message || '') });
+            });
           });
-        });
         const added = await git(files.length ? ['add', '--', ...files] : ['add', '-A']);
         if (!added.ok) return { content: `Git add failed: ${added.out}`, isError: true };
         const committed = await git(['commit', '-m', msg]);
@@ -580,7 +636,8 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'update_memory',
-        description: 'Update persistent project knowledge, architectural decisions, and notes in .axon/MEMORY.md.',
+        description:
+          'Update persistent project knowledge, architectural decisions, and notes in .axon/MEMORY.md.',
         parameters: {
           type: 'object',
           properties: {
@@ -620,12 +677,19 @@ export class ToolRegistry {
     this.register({
       definition: {
         name: 'dispatch_subagent',
-        description: 'Dispatch an autonomous subagent with a designated role to perform a dedicated subtask and return findings.',
+        description:
+          'Dispatch an autonomous subagent with a designated role to perform a dedicated subtask and return findings.',
         parameters: {
           type: 'object',
           properties: {
-            role: { type: 'string', description: 'Designated role or title for the subagent (e.g. Code Reviewer, Security Auditor)' },
-            task: { type: 'string', description: 'Clear, actionable instructions for what the subagent must do' }
+            role: {
+              type: 'string',
+              description: 'Designated role or title for the subagent (e.g. Code Reviewer, Security Auditor)'
+            },
+            task: {
+              type: 'string',
+              description: 'Clear, actionable instructions for what the subagent must do'
+            }
           },
           required: ['role', 'task']
         }
@@ -636,7 +700,10 @@ export class ToolRegistry {
       }),
       execute: async (args, ctx) => {
         if (!ctx.subagentRunner) {
-          return { content: 'Subagent execution is not available in the current environment.', isError: true };
+          return {
+            content: 'Subagent execution is not available in the current environment.',
+            isError: true
+          };
         }
         try {
           const result = await ctx.subagentRunner(String(args.role), String(args.task));

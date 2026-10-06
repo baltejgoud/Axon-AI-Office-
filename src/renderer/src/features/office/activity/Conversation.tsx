@@ -1,4 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { Virtuoso } from 'react-virtuoso';
+import { runStage } from '../../../../../shared/runtimePresentation';
+import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Conversation as Thread, Message, ToolCall } from '../../../../../shared/types';
 import { useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
@@ -45,7 +48,36 @@ export function Conversation({
   /** The chat tab is showing; coming back to it picks up at the newest message again. */
   shown?: boolean;
 }) {
+  const activeRun = useApp((s) =>
+    s.data?.runs?.findLast((r) => r.conversationId === conversation?.id && ACTIVE_RUN_STATUSES.has(r.status))
+  );
   const allMessages = useApp((s) => s.data?.messages);
+  const historyEpoch = useRef(0);
+  const [history, setHistory] = useState<Message[]>([]);
+  const [nextBefore, setNextBefore] = useState<number>();
+  const [historyError, setHistoryError] = useState('');
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    historyEpoch.current++;
+    setLoadingHistory(false);
+    setHistory([]); setNextBefore(undefined); setHistoryError('');
+    if (conversation) void window.axon.chatHistoryPage(conversation.id).then(page => {
+      if (!disposed) { setHistory(page.messages); setNextBefore(page.nextBefore); }
+    }).catch(error => { if (!disposed) setHistoryError(String(error)); });
+    return () => { disposed = true; };
+  }, [conversation?.id]);
+  const loadEarlier = async () => {
+    if (!conversation || nextBefore === undefined || loadingHistory) return;
+    setLoadingHistory(true);
+    const epoch = historyEpoch.current;
+    try {
+      const page = await window.axon.chatHistoryPage(conversation.id, nextBefore);
+      if (epoch !== historyEpoch.current) return;
+      setHistory(previous => [...page.messages, ...previous]); setNextBefore(page.nextBefore);
+    } catch (error) { if (epoch === historyEpoch.current) setHistoryError(String(error)); }
+    finally { if (epoch === historyEpoch.current) setLoadingHistory(false); }
+  };
   const approvals = useApp((s) => s.pendingApprovals);
   // When the current run began: the task you sent goes just before what it produced.
   const runStartedAt = useApp(
@@ -54,9 +86,9 @@ export function Conversation({
   const messages = useMemo(
     () =>
       conversation
-        ? withOutcomes((allMessages ?? []).filter((m) => m.conversationId === conversation.id))
+        ? withOutcomes([...new Map([...history, ...(allMessages ?? []).filter(m => m.conversationId === conversation.id)].map(m => [m.id, m])).values()])
         : [],
-    [allMessages, conversation]
+    [allMessages, conversation, history]
   );
   const shown = useMemo(() => {
     if (!pendingTask) return messages;
@@ -115,27 +147,36 @@ export function Conversation({
       {(shown.length > 0 || pending > 0) && (
         <section className="office-thread" aria-label={`Conversation with ${agentName}`}>
           <div className="messages">
-            {shown.map((m, i) => {
-              const steps = summaries.get(i);
-              return (
-                <Fragment key={m.id}>
-                  {!onlyWork(m) && (
-                    <MessageView
-                      message={m}
-                      authorName={agentName}
-                      renderToolCall={(call) => officeToolCard(call, m.createdAt)}
-                    />
-                  )}
-                  {steps && conversation && (
-                    <WorkSummary
-                      conversationId={conversation.id}
-                      steps={steps}
-                      live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
-                    />
-                  )}
-                </Fragment>
-              );
-            })}
+            {nextBefore !== undefined && <button disabled={loadingHistory} onClick={() => void loadEarlier()}>{loadingHistory ? 'Loading history...' : 'Load earlier messages'}</button>}
+            {historyError && <p role="alert">{historyError}</p>}
+            <Virtuoso
+              style={{ height: 'min(58vh, 700px)', minHeight: 240 }}
+              data={shown}
+              followOutput="auto"
+              initialTopMostItemIndex={Math.max(0, shown.length - 1)}
+              itemContent={(i, m) => {
+                const steps = summaries.get(i);
+                return (
+                  <Fragment key={m.id}>
+                    {!onlyWork(m) && (
+                      <MessageView
+                        message={m}
+                        authorName={agentName}
+                        renderToolCall={(call) => officeToolCard(call, m.createdAt)}
+                      />
+                    )}
+                    {steps && conversation && (
+                      <WorkSummary
+                        conversationId={conversation.id}
+                        steps={steps}
+                        live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
+                      />
+                    )}
+                  </Fragment>
+                );
+              }}
+            />
+            {activeRun && <p role="status">{runStage(activeRun)}</p>}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>
         </section>

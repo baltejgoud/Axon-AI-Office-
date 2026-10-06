@@ -21,6 +21,11 @@ export interface ModelSpec {
   displayName: string;
   /** Tokens the model can take in one request, as you entered it; measures the context meter in tokens. */
   contextWindow?: number;
+  maxOutputTokens?: number;
+  recommendedOutputReserve?: number;
+  contextSafetyMargin?: number;
+  recentContextTurns?: number;
+  tokenizer?: 'o200k_base' | 'cl100k_base' | 'p50k_base' | 'r50k_base' | 'bytes';
   supportsTools?: boolean;
   supportsVision?: boolean;
   /** USD per million input tokens, as you entered it. Axon ships no prices. */
@@ -64,6 +69,7 @@ export interface Attachment {
 }
 
 export interface ToolCall {
+  outputArtifactId?: string;
   id: string;
   name: string;
   arguments: string;
@@ -107,6 +113,8 @@ export interface FileChange {
 }
 
 export interface Message {
+  /** Full tool payload stored outside the hot conversation JSON. */
+  toolOutputId?: string;
   id: ID;
   conversationId: ID;
   role: MessageRole;
@@ -129,6 +137,12 @@ export interface Message {
   from?: string;
 }
 
+export interface ConversationMemory {
+  updatedAt: number;
+  sourceHashes?: Record<string, string>;
+  sourceMessageIds: string[];
+  facts: { kind: 'constraint' | 'decision' | 'goal' | 'rejected' | 'completed' | 'active' | 'question' | 'blocker' | 'file' | 'artifact' | 'command' | 'test' | 'external' | 'handoff'; text: string; sourceTurn: number; sourceMessageId?: string }[];
+}
 export interface Conversation {
   id: ID;
   title: string;
@@ -143,6 +157,10 @@ export interface Conversation {
   updatedAt: number;
   pinned?: boolean;
   archived?: boolean;
+  memory?: ConversationMemory;
+  memoryNeedsCheckpoint?: boolean;
+  memoryCorrections?: Record<string, string>;
+  attachmentRefs?: { id: string; name: string }[];
 }
 
 /* -------------------------------- Workspaces ---------------------------------- */
@@ -236,6 +254,12 @@ export interface KnowledgeSearchHit {
 /* --------------------------------- Settings ----------------------------------- */
 
 export interface Settings {
+  providerConcurrency?: Record<string, number>;
+  teamConcurrency?: number;
+  autoFitCredits?: boolean;
+  modelProfiles?: Partial<
+    Record<'fast' | 'standard' | 'deep' | 'coding', { providerId: string; modelId: string }>
+  >;
   theme: 'dark' | 'light' | 'system';
   autoTitleConversations: boolean;
   defaultTemperature: number;
@@ -323,6 +347,8 @@ export interface ProviderReplay {
 }
 
 export interface ChatRequestMessage {
+  /** Local provenance only; provider adapters do not serialize this field. */
+  sourceMessageId?: string;
   role: MessageRole;
   content: string;
   images?: { mime: string; base64: string }[];
@@ -334,13 +360,23 @@ export interface ChatRequestMessage {
   replay?: ProviderReplay;
 }
 
+export type ToolRetentionPolicy = 'EPHEMERAL' | 'SUMMARIZE' | 'PIN_CURRENT_TASK' | 'PERSIST_MEMORY' | 'REFERENCE_ONLY';
 export interface ToolDefinition {
+  retentionPolicy?: ToolRetentionPolicy;
   name: string;
   description: string;
   parameters: Record<string, unknown>;
 }
 
+export interface ContextSection {
+  key: 'project' | 'retrieved' | 'task' | 'files'; text: string; priority: 0 | 1 | 2 | 3;
+}
 export interface ChatRequest {
+  /** Local priority sections; compiled into the system prompt before provider serialization. */
+  contextSections?: ContextSection[];
+  /** Local memory corrections; never serialized by provider adapters. */
+  memoryCorrections?: Record<string, string>;
+  semanticFacts?: ConversationMemory['facts'];
   model: string;
   messages: ChatRequestMessage[];
   system?: string;
@@ -353,6 +389,7 @@ export interface ChatRequest {
 }
 
 export interface ChatUsage {
+  cachedPromptTokens?: number;
   promptTokens?: number;
   completionTokens?: number;
 }
@@ -405,11 +442,19 @@ export interface FocusTarget {
 
 /* ---------------------------------- Teams ----------------------------------- */
 
-export type TeamStatus = 'meeting' | 'planned' | 'working' | 'reporting' | 'done' | 'stopped' | 'failed' | 'discarded';
+export type TeamStatus =
+  'meeting' | 'planned' | 'working' | 'reporting' | 'done' | 'stopped' | 'failed' | 'discarded';
 export type AssignmentStatus = 'waiting' | 'working' | 'done' | 'failed' | 'stopped' | 'blocked';
 
 /** One task in a team's plan: who does it, what it waits for, the files it owns, and how it went. */
+export interface AgentCompletionReport {
+  task: string; status: 'done' | 'failed' | 'stopped'; summary: string;
+  decisions: string[]; filesChanged: string[]; tests: string[]; blockers: string[];
+  artifacts: string[]; needsFollowUp: boolean;
+}
 export interface TeamAssignment {
+  completionReport?: AgentCompletionReport;
+  profile?: 'fast' | 'standard' | 'deep' | 'coding';
   id: string;
   ownerId: string;
   title: string;
@@ -489,6 +534,8 @@ export interface TaskItem {
 /* --------------------------------- Streaming ---------------------------------- */
 
 export type StreamEvent =
+  | { channel: 'runtime'; runs: import('./runtime').AgentRun[]; messages: import('./runtime').AgentMessage[] }
+  | { channel: 'terminal'; session: import('./runtime').TerminalSession; data: string }
   | {
       channel: 'chat';
       conversationId: ID;
@@ -565,7 +612,8 @@ export interface FileNode {
 
 /* --------------------------------- Skills & roles ------------------------------- */
 
-export type SkillCategory = 'design' | 'engineering' | 'workflow' | 'review' | 'content' | 'integration' | 'other';
+export type SkillCategory =
+  'design' | 'engineering' | 'workflow' | 'review' | 'content' | 'integration' | 'other';
 
 export interface Skill {
   id: string;

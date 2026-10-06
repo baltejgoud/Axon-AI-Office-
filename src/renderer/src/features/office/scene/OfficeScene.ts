@@ -696,7 +696,7 @@ export class OfficeScene {
 
   private start(): void {
     const frame = (now: number) => {
-      this.animationFrameId = requestAnimationFrame(frame);
+      this.animationFrameId = null;
       if (document.hidden) {
         this.lastFrame = 0;
         return;
@@ -706,8 +706,24 @@ export class OfficeScene {
       this.elapsed += dt;
       this.fps += (1 / Math.max(dt, 1e-3) - this.fps) * 0.05;
       this.tick(dt);
+      this.animationFrameId = requestAnimationFrame(frame);
     };
-    this.animationFrameId = requestAnimationFrame(frame);
+    const onVisibility = () => {
+      this.lastFrame = 0;
+      if (document.hidden) {
+        if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = null;
+      } else if (this.animationFrameId === null) {
+        this.animationFrameId = requestAnimationFrame(frame);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    const cleanup = this.cleanupListeners;
+    this.cleanupListeners = () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      cleanup();
+    };
+    onVisibility();
   }
 
   private tick(dt: number): void {

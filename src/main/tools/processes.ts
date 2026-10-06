@@ -1,4 +1,4 @@
-import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { TerminalService } from '../runtime/terminal';
 import type { ProcessInfo } from '../../shared/types';
 
 /** How much of a process's output is kept, from the end. */
@@ -15,124 +15,83 @@ const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
  */
 export function localAddress(text: string): string | undefined {
   // The host must end there: http://localhost.example.com is somewhere else.
-  const found = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d{1,5})?(?![\w-]|\.\w)(?:\/[^\s'"<>)\]]*)?/i.exec(
-    text.replace(ANSI, '')
-  );
+  const found =
+    /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d{1,5})?(?![\w-]|\.\w)(?:\/[^\s'"<>)\]]*)?/i.exec(
+      text.replace(ANSI, '')
+    );
   // A sentence's comma or full stop after an address is not part of it.
   return found?.[0].replace(/[.,;:!?]+$/, '').replace('0.0.0.0', 'localhost');
 }
 
 interface Running {
   info: ProcessInfo;
-  child: ChildProcess;
-  timer?: ReturnType<typeof setTimeout>;
+  terminalId: string;
 }
-
-/**
- * Commands that keep running after the tool call that started them: development servers and
- * watchers. A few at a time; all of them stop when Axon quits.
- */
+/** Background commands are views over the same PTY service used by agent and user terminals. */
 export class ProcessManager {
   private readonly items = new Map<string, Running>();
   private counter = 0;
-
+  private readonly terminals: TerminalService;
   constructor(
     private readonly emit: (info: ProcessInfo) => void,
-    private readonly limit = 4
-  ) {}
-
+    private readonly limit = 4,
+    terminals?: TerminalService
+  ) {
+    this.terminals = terminals ?? new TerminalService(() => {});
+    this.terminals.subscribe((session) => {
+      const item = [...this.items.values()].find((i) => i.terminalId === session.id);
+      if (!item) return;
+      item.info.output = session.output.replace(ANSI, '').slice(-OUTPUT_TAIL);
+      item.info.running = session.running;
+      item.info.exitCode = session.exitCode;
+      item.info.url ??= localAddress(item.info.output);
+      this.emit({ ...item.info });
+    });
+  }
   list(): ProcessInfo[] {
     return [...this.items.values()].map((item) => ({ ...item.info }));
   }
-
   read(id: string): ProcessInfo | undefined {
     const item = this.items.get(id);
     return item && { ...item.info };
   }
-
-  /**
-   * Starts `command` in `cwd` and answers once it serves a local page, has run for `wait` ms, or
-   * has ended, whichever comes first.
-   */
-  start(conversationId: string, command: string, cwd: string, wait = 10_000): Promise<ProcessInfo> {
-    const running = [...this.items.values()].filter((item) => item.info.running).length;
-    if (running >= this.limit)
-      return Promise.reject(new Error(`At most ${this.limit} background processes run at once. Stop one first.`));
+  async start(conversationId: string, command: string, cwd: string, wait = 10000): Promise<ProcessInfo> {
+    if (this.list().filter((i) => i.running).length >= this.limit)
+      throw new Error(`At most ${this.limit} background processes run at once. Stop one first.`);
+    const session = await this.terminals.background({ conversationId, command, root: cwd });
     const id = `p${++this.counter}`;
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      windowsHide: true,
-      // Its own process group elsewhere, so stopping it stops what it started.
-      detached: process.platform !== 'win32',
-      // No browser windows of its own (the page shows in Axon), and no colour codes.
-      env: { ...process.env, BROWSER: 'none', FORCE_COLOR: '0', NO_COLOR: '1' }
-    });
     const item: Running = {
-      child,
-      info: { id, conversationId, command, cwd, running: true, output: '', startedAt: Date.now() }
+      terminalId: session.id,
+      info: {
+        id,
+        conversationId,
+        command,
+        cwd,
+        running: session.running,
+        output: session.output.replace(ANSI, ''),
+        startedAt: session.startedAt
+      }
     };
     this.items.set(id, item);
-    const send = () => {
-      if (item.timer) clearTimeout(item.timer);
-      item.timer = undefined;
-      this.emit({ ...item.info });
-    };
-    return new Promise((resolve) => {
-      let answered = false;
-      const answer = () => {
-        if (answered) return;
-        answered = true;
-        clearTimeout(waiting);
-        resolve({ ...item.info });
-      };
-      const waiting = setTimeout(answer, wait);
-      const heard = (chunk: Buffer | string) => {
-        item.info.output = (item.info.output + String(chunk).replace(ANSI, '')).slice(-OUTPUT_TAIL);
-        if (!item.info.url) {
-          const url = localAddress(item.info.output);
-          if (url) {
-            item.info.url = url;
-            send();
-            answer();
-          }
-        }
-        if (!item.timer) item.timer = setTimeout(send, EMIT_EVERY_MS);
-      };
-      child.stdout?.on('data', heard);
-      child.stderr?.on('data', heard);
-      const ended = (code: number | null) => {
-        if (!item.info.running) return;
-        item.info.running = false;
-        item.info.exitCode = code;
-        send();
-        answer();
-      };
-      child.on('exit', (code) => ended(code));
-      child.on('error', (error) => {
-        item.info.output += `\n${error.message}`;
-        ended(null);
-      });
-      send();
-    });
+    this.emit({ ...item.info });
+    const until = Date.now() + wait;
+    while (item.info.running && !item.info.url && Date.now() < until)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    // Bound completed process metadata; full terminal history is owned by TerminalService.
+    const ended = [...this.items.values()].filter((i) => !i.info.running);
+    for (const old of ended.slice(0, Math.max(0, ended.length - 40))) this.items.delete(old.info.id);
+    return { ...item.info };
   }
-
-  /** Stops a process and everything it started. False if there was nothing running by that id. */
   stop(id: string): boolean {
     const item = this.items.get(id);
-    if (!item?.info.running || !item.child.pid) return false;
-    const pid = item.child.pid;
-    if (process.platform === 'win32') execFile('taskkill', ['/pid', String(pid), '/T', '/F'], () => undefined);
-    else {
-      try {
-        process.kill(-pid, 'SIGTERM');
-      } catch {
-        item.child.kill('SIGTERM');
-      }
-    }
+    if (!item?.info.running) return false;
+    this.terminals.kill(item.terminalId);
     return true;
   }
-
+  stopConversation(conversationId: string): void {
+    for (const item of this.items.values())
+      if (item.info.conversationId === conversationId) this.stop(item.info.id);
+  }
   stopAll(): void {
     for (const id of this.items.keys()) this.stop(id);
   }

@@ -1,3 +1,4 @@
+import { MultiAgents } from './MultiAgents';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FilesPanel } from './FilesPanel';
 import { IconBook, IconCompose, IconDotsHorizontal, IconSparkle } from '../../../ui';
@@ -25,7 +26,7 @@ const TAB_LABEL: Record<PanelTab, string> = {
   chat: 'Chat',
   planner: 'Planner',
   files: 'Files',
-  updates: 'Updates'
+  updates: 'Multi Agents'
 };
 
 /**
@@ -59,9 +60,7 @@ export function ActivityPanel() {
     runtime?.status === 'idle' && assistant
       ? assistant.error
         ? 'error'
-        : assistant.streaming
-          ? 'working'
-          : 'completed'
+        : 'completed'
       : (runtime?.status ?? 'idle');
   const streaming = status === 'working';
   const activities = runtime?.activities ?? [];
@@ -73,9 +72,7 @@ export function ActivityPanel() {
     ...(filesRoom ? [{ id: 'files' as const }] : []),
     { id: 'chat' },
     ...(reception ? [{ id: 'planner' as const, count: <PlannerCount /> }] : []),
-    ...(activities.length
-      ? [{ id: 'updates' as const, count: <span className="activity-tab-count">{activities.length}</span> }]
-      : [])
+    { id: 'updates' as const }
   ];
   const tab = tabs.some((t) => t.id === panelTab) ? panelTab : defaultTab(agent.id);
 
@@ -130,7 +127,12 @@ export function ActivityPanel() {
                 label: 'New conversation',
                 icon: <IconCompose size={15} />,
                 disabled: !conversation,
-                onSelect: () => startFresh(agent.id)
+                onSelect: () => {
+                  void (async () => {
+                    if (!conversation || (await window.axon.conversationClose(conversation.id)))
+                      startFresh(agent.id);
+                  })();
+                }
               },
               ...(libraryResident
                 ? [
@@ -218,7 +220,7 @@ export function ActivityPanel() {
       )}
       {tab === 'updates' && (
         <TabPanel id="updates">
-          <Updates activities={activities} />
+          <MultiAgents conversationId={conversation?.id} activities={activities} />
         </TabPanel>
       )}
       <AgentComposer key={agent.id} agentId={agent.id} />

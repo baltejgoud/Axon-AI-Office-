@@ -55,7 +55,7 @@ export function ApprovalCard({
               </>
             ) : request.arguments.command ? (
               <>
-                : command <code>{String(request.arguments.command)}</code>
+                <span>Review the command below before approving.</span>
               </>
             ) : null}
             .
@@ -70,14 +70,21 @@ export function ApprovalCard({
       )}
 
       {preview?.type === 'command' && (
-        <div className="approval-preview-cmd">
+        <details className="approval-preview-cmd">
+          <summary>Command · requires your permission</summary>
           <IconTerminal size={14} />
-          <span>$ {preview.content}</span>
-        </div>
+          <pre style={{ maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{preview.content}</pre>
+        </details>
       )}
 
       <div className="approval-actions">
-        <Button variant="ghost" size="sm" icon={IconClose} disabled={submitting} onClick={() => handle(false)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={IconClose}
+          disabled={submitting}
+          onClick={() => handle(false)}
+        >
           Reject
         </Button>
         <Button variant="secondary" size="sm" disabled={submitting} onClick={() => handle(true, true)}>

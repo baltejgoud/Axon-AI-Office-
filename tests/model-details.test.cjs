@@ -13,8 +13,8 @@ const { detailsOf, withDetails } = require('../src/renderer/src/settings/modelDe
 test("saved details come back as the fields' text, and go out again unchanged", () => {
   const models = [{ id: 'm', displayName: 'm', contextWindow: 128000, pricePerMillionInputTokens: 3, pricePerMillionOutputTokens: 0.25 }, { id: 'plain', displayName: 'plain' }];
   const details = detailsOf(models);
-  assert.deepEqual(details.m, { contextWindow: '128000', inputPrice: '3', outputPrice: '0.25' });
-  assert.deepEqual(details.plain, { contextWindow: '', inputPrice: '', outputPrice: '' });
+  assert.deepEqual(details.m, { contextWindow: '128000', inputPrice: '3', outputPrice: '0.25', maxOutputTokens: '', recommendedOutputReserve: '', contextSafetyMargin: '', recentContextTurns: '', tokenizer: '' });
+  assert.deepEqual(details.plain, { contextWindow: '', inputPrice: '', outputPrice: '', maxOutputTokens: '', recommendedOutputReserve: '', contextSafetyMargin: '', recentContextTurns: '', tokenizer: '' });
   assert.deepEqual(withDetails(['m', 'plain'], details), { models });
 });
 
@@ -36,4 +36,9 @@ test('a detail that is not a number says which model and what to type', () => {
   assert.match(row({ contextWindow: '128k' }).error, /whole number/);
   assert.match(row({ inputPrice: '-1' }).error, /Input price for kimi.*dollar amount/);
   assert.match(row({ outputPrice: 'lots' }).error, /Output price for kimi.*dollar amount/);
+});
+
+ test('explicit tokenizer selection survives provider form round trip', () => {
+  const models = [{ id: 'custom', displayName: 'custom', tokenizer: 'cl100k_base' }];
+  assert.deepEqual(withDetails(['custom'], detailsOf(models)), { models });
 });

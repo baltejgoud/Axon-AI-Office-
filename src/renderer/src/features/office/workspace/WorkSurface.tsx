@@ -1,3 +1,4 @@
+import { LiveTerminal } from './LiveTerminal';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
 import { OFFICE_AGENTS } from '../data/officeAgents';
@@ -77,7 +78,9 @@ export function WorkSurface({
     [allProcesses, conversationId]
   );
   const served = [...processes.values()].filter((p) => p.url).sort((a, b) => b.startedAt - a.startedAt)[0];
-  const kinds: WorkKind[] = served ? [...work.tabs, 'preview'] : work.tabs;
+  const kinds: WorkKind[] = [
+    ...new Set<WorkKind>([...work.tabs, 'terminal', ...(served ? ['preview' as const] : [])])
+  ];
   /** Where a step is best seen: a server they started, on its page once it has one. */
   const kindOf = (step: WorkStep): WorkKind =>
     step.name === 'start_process' && step.processId && processes.get(step.processId)?.url
@@ -167,15 +170,7 @@ export function WorkSurface({
       <div className="work-panel" id="work-panel" role="tabpanel" aria-labelledby={`work-tab-${tab}`}>
         {tab === 'code' && <CodeView work={work} requests={requests} project={project} target={target} />}
         {tab === 'files' && <FilesView searches={work.searches} />}
-        {tab === 'terminal' && (
-          <TerminalView
-            commands={work.commands}
-            requests={requests}
-            processes={processes}
-            project={project}
-            target={target}
-          />
-        )}
+        {tab === 'terminal' && <LiveTerminal conversationId={conversationId} />}
         {tab === 'preview' && served && <PreviewView process={served} />}
         {tab === 'browser' && <BrowserView pages={work.pages} />}
         {tab === 'tool' && <ToolsView tools={work.tools} requests={requests} />}

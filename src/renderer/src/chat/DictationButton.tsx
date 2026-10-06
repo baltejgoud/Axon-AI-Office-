@@ -5,6 +5,8 @@ import { clock, type DictationPhase } from './useDictation';
 
 interface DictationButtonProps {
   phase: DictationPhase;
+  canRetry?: boolean;
+  onRetry?: () => void;
   elapsed: number;
   /** Gets the live loudness as `--mic-level`. */
   meter: RefObject<HTMLElement | null>;
@@ -12,7 +14,7 @@ interface DictationButtonProps {
 }
 
 /** The composer's microphone: start speaking, then click again (or press Enter) to put the words in the box. */
-export function DictationButton({ phase, elapsed, meter, onClick }: DictationButtonProps) {
+export function DictationButton({ phase, elapsed, meter, onClick, canRetry, onRetry }: DictationButtonProps) {
   const recording = phase === 'recording';
   const title =
     phase === 'transcribing'
@@ -41,11 +43,22 @@ export function DictationButton({ phase, elapsed, meter, onClick }: DictationBut
           <IconMic size={16} />
         )}
       </button>
+      {canRetry && (
+        <button type="button" onClick={onRetry}>
+          Retry transcription
+        </button>
+      )}
       {recording && (
         <span className="dictation-clock" aria-live="off">
           {clock(elapsed)}
         </span>
       )}
+      {phase === 'starting' && (
+        <span className="dictation-status" role="status">
+          Starting microphone…
+        </span>
+      )}
+      {recording && <span className="dictation-status">Listening…</span>}
       {phase === 'transcribing' && <span className="dictation-status">Transcribing…</span>}
     </span>
   );

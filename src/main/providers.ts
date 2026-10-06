@@ -1,4 +1,4 @@
-import type { ProviderConfig, ChatRequest, ChatRequestMessage, ChatUsage, ToolCall, StreamDelta, ProviderReplay } from '../shared/types';
+import type { ProviderConfig, ChatRequest, ChatRequestMessage, ChatUsage, ToolCall, StreamDelta, ProviderReplay, ModelSpec } from '../shared/types';
 
 export function endpoint(provider: ProviderConfig): URL {
   const defaults = { 'openai-compatible': 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com/v1', gemini: 'https://generativelanguage.googleapis.com/v1beta' };
@@ -87,6 +87,8 @@ export const timeouts = { headersMs: 180_000, idleMs: 300_000 };
 /** Anthropic requires max_tokens; used when the caller sets none. */
 const DEFAULT_MAX_TOKENS = 4096;
 const ATTEMPTS = 3;
+/** Waits for other in-flight requests to settle before a credit check is allowed to fail: about two minutes. */
+const CROWDED_ATTEMPTS = 8;
 /** Worth retrying before any output: timeouts, rate limits, overload and gateway errors. */
 const RETRY_STATUSES = [408, 429, 500, 502, 503, 504, 529];
 /** Optional fields some models refuse. A 400 that names one is retried without it. */
@@ -132,6 +134,7 @@ export class ProviderError extends Error {
 function hint(status: number): string {
   if (status === 401 || status === 403) return 'Check the API key.';
   if (status === 404) return 'Check the endpoint URL and model ID.';
+  if (status === 402) return 'Add credits, or lower the output limit in Settings so fewer credits are held per request.';
   if (status === 429) return 'Rate limited or out of quota; try again later.';
   if (status >= 500) return 'The provider is having trouble; try again.';
   return 'Check endpoint, model, key, and quota.';
@@ -375,6 +378,31 @@ export async function checkModel(provider: ProviderConfig, key: string | null, m
  * The models an endpoint offers this key, for picking IDs in Settings: sorted, without repeats.
  * OpenAI-compatible `/models` (Kimi, Qwen, OpenRouter, DeepSeek, Ollama...), Anthropic's and Gemini's own lists.
  */
+const discoveredLimits = new Map<string, Partial<ModelSpec>>();
+const metadataKey = (provider: ProviderConfig, id: string) => `${provider.kind}:${endpoint(provider).href}:${id}`;
+export function contextModel(provider: ProviderConfig, id: string): ModelSpec | undefined {
+  const manual = provider.models.find(model => model.id === id);
+  const metadata = discoveredLimits.get(metadataKey(provider, id));
+  if (!manual && !metadata) return undefined;
+  return { id, displayName: id, ...metadata, ...manual,
+    ...(metadata?.contextWindow ? { contextWindow: Math.min(manual?.contextWindow ?? metadata.contextWindow, metadata.contextWindow) } : {}),
+    ...(metadata?.maxOutputTokens ? { maxOutputTokens: Math.min(manual?.maxOutputTokens ?? metadata.maxOutputTokens, metadata.maxOutputTokens) } : {}) };
+}
+/** Accept numeric limit fields returned by the endpoint, never model-name guesses. */
+export function ingestModelLimits(provider: ProviderConfig, body: unknown): void {
+  const list = Array.isArray(body) ? body : (body as any)?.data ?? (body as any)?.models;
+  if (!Array.isArray(list)) return;
+  const valid = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 1024 && value <= 100_000_000 ? value : undefined;
+  for (const item of list) {
+    const id = typeof item?.id === 'string' ? item.id : typeof item?.name === 'string' ? item.name.replace(/^models\//, '') : null;
+    if (!id) continue;
+    const contextWindow = valid(item.context_length ?? item.context_window ?? item.inputTokenLimit);
+    const maxOutputTokens = valid(item.top_provider?.max_completion_tokens ?? item.max_output_tokens ?? item.outputTokenLimit);
+    if (contextWindow || maxOutputTokens) discoveredLimits.set(metadataKey(provider, id), {
+      ...(contextWindow ? { contextWindow } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}) });
+  }
+}
+
 export async function listModels(provider: ProviderConfig, key: string | null, signal?: AbortSignal): Promise<string[]> {
   const base = endpoint(provider).href.replace(/\/$/, '');
   const headers: Record<string, string> = {};
@@ -398,6 +426,7 @@ export async function listModels(provider: ProviderConfig, key: string | null, s
   let body: { data?: unknown; models?: unknown } | unknown[] | null = null;
   try { body = JSON.parse(await readCapped(response, 8_000_000)); } catch { /* Not a list. */ }
   const ids = modelIdsOf(provider, body);
+  ingestModelLimits(provider, body);
   if (!ids) throw new Error('The endpoint did not return a model list. Type the model IDs from your provider\'s documentation.');
   return [...new Set(ids)].sort();
 }
@@ -440,9 +469,11 @@ export async function streamChat(
   /** Gemini parts in order, kept whole for replay. */
   const parts: Record<string, unknown>[] = [];
 
-  const readUsage = (prompt?: unknown, completion?: unknown): void => {
+  const readUsage = (prompt?: unknown, completion?: unknown, cached?: unknown): void => {
     if (typeof prompt === 'number' || typeof completion === 'number')
       usage = {
+        ...usage,
+        ...(typeof cached === 'number' ? { cachedPromptTokens: cached } : {}),
         promptTokens: typeof prompt === 'number' ? prompt : usage.promptTokens,
         completionTokens: typeof completion === 'number' ? completion : usage.completionTokens
       };
@@ -467,7 +498,7 @@ export async function streamChat(
       throwIfError(event, key);
 
       if (provider.kind === 'anthropic') {
-        if (event.type === 'message_start') readUsage(event.message?.usage?.input_tokens);
+        if (event.type === 'message_start') readUsage(event.message?.usage?.input_tokens, undefined, event.message?.usage?.cache_read_input_tokens);
         if (event.type === 'message_delta') {
           readUsage(undefined, event.usage?.output_tokens);
           if (event.delta?.stop_reason === 'max_tokens') truncated = true;
@@ -504,7 +535,7 @@ export async function streamChat(
           emit('', { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments });
         }
       } else if (provider.kind === 'gemini') {
-        readUsage(event.usageMetadata?.promptTokenCount, event.usageMetadata?.candidatesTokenCount);
+        readUsage(event.usageMetadata?.promptTokenCount, event.usageMetadata?.candidatesTokenCount, event.usageMetadata?.cachedContentTokenCount);
         const candidate = event.candidates?.[0];
         if (candidate?.finishReason === 'MAX_TOKENS') truncated = true;
         if (['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII'].includes(candidate?.finishReason)) refusedAnswer = true;
@@ -530,7 +561,7 @@ export async function streamChat(
           }
         }
       } else {
-        if (event.usage) readUsage(event.usage.prompt_tokens, event.usage.completion_tokens);
+        if (event.usage) readUsage(event.usage.prompt_tokens, event.usage.completion_tokens, event.usage.prompt_tokens_details?.cached_tokens);
         const choice = event.choices?.[0];
         if (choice?.finish_reason === 'length') truncated = true;
         if (choice?.finish_reason === 'content_filter') refusedAnswer = true;
@@ -621,10 +652,16 @@ async function post(url: string, headers: Record<string, string>, payload: Recor
     const timer = setTimeout(() => waiting.abort(), timeouts.headersMs);
     try {
       const response = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.any([signal, waiting.signal]), redirect: 'error' });
-      if (response.ok || attempt >= ATTEMPTS || !RETRY_STATUSES.includes(response.status)) return response;
+      if (response.ok) return response;
+      // "Would exceed your credits given your in-flight requests": the balance covers this request once
+      // the others finish, so wait for them instead of failing. A 402 without that wording is a real shortfall.
+      const crowded = response.status === 402 && attempt < CROWDED_ATTEMPTS
+        && /in-flight/i.test(errorDetail(await readCapped(response.clone(), 4_000)));
+      if (!crowded && (attempt >= ATTEMPTS || !RETRY_STATUSES.includes(response.status))) return response;
       await response.body?.cancel();
       const retryAfter = Number(response.headers.get('retry-after'));
-      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 30) * 1000 : 500 * 2 ** (attempt - 1), userSignal);
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 30) * 1000
+        : crowded ? Math.min(2000 * 2 ** (attempt - 1), 30_000) : 500 * 2 ** (attempt - 1), userSignal);
     } catch (error) {
       if (userSignal?.aborted) throw error;
       if (waiting.signal.aborted) throw new Error(`The provider did not answer within ${Math.round(timeouts.headersMs / 1000)} seconds.`);

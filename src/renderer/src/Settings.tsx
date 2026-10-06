@@ -274,6 +274,83 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
           />
         </div>
       )}
+      <SettingsGroup title="Work capacity">
+        <SettingRow
+          label="Coworkers per team"
+          hint="Maximum tasks that can run simultaneously; dependencies and ownership still apply."
+        >
+          <NumberSetting
+            value={settings.teamConcurrency ?? 3}
+            min={1}
+            max={8}
+            step={1}
+            onCommit={(teamConcurrency) => save({ teamConcurrency })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Auto-fit output to available credits"
+          hint="When the provider reports an affordable output ceiling, retry once below that ceiling. Answers may be shorter."
+        >
+          <Switch
+            label="Auto-fit credits"
+            checked={settings.autoFitCredits === true}
+            onChange={(autoFitCredits) => save({ autoFitCredits })}
+          />
+        </SettingRow>
+        {(['fast', 'standard', 'deep', 'coding'] as const).map((profile) => (
+          <SettingRow
+            key={profile}
+            label={`${profile[0].toUpperCase() + profile.slice(1)} profile`}
+            hint="Optional model for team tasks explicitly assigned this profile. Unassigned tasks retain the lead’s selected model."
+          >
+            <select
+              aria-label={`${profile} model profile`}
+              value={
+                settings.modelProfiles?.[profile]
+                  ? `${settings.modelProfiles[profile]!.providerId}::${settings.modelProfiles[profile]!.modelId}`
+                  : ''
+              }
+              onChange={(e) => {
+                const profiles = { ...settings.modelProfiles };
+                if (!e.target.value) delete profiles[profile];
+                else {
+                  const [providerId, ...model] = e.target.value.split('::');
+                  profiles[profile] = { providerId, modelId: model.join('::') };
+                }
+                save({ modelProfiles: profiles });
+              }}
+            >
+              <option value="">Use lead’s selected model</option>
+              {providers
+                .filter((p) => p.enabled)
+                .flatMap((p) =>
+                  p.models.map((m) => (
+                    <option key={`${p.id}::${m.id}`} value={`${p.id}::${m.id}`}>
+                      {p.name} · {m.displayName}
+                    </option>
+                  ))
+                )}
+            </select>
+          </SettingRow>
+        ))}
+        {providers.map((provider) => (
+          <SettingRow
+            key={provider.id}
+            label={provider.name}
+            hint="Maximum simultaneous model requests. Extra work waits in the provider queue."
+          >
+            <NumberSetting
+              value={settings.providerConcurrency?.[provider.id] ?? 2}
+              min={1}
+              max={8}
+              step={1}
+              onCommit={(limit) =>
+                save({ providerConcurrency: { ...settings.providerConcurrency, [provider.id]: limit } })
+              }
+            />
+          </SettingRow>
+        ))}
+      </SettingsGroup>
       <SettingsGroup title="Answers">
         <SettingRow
           label="Quick replies"

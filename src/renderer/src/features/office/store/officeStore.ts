@@ -156,7 +156,7 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
 
   setAgentStatus: (agentId: string, status: AgentStatus) => {
     const current = get().agentRuntime[agentId];
-    if (!current) return;
+    if (!current || current.status === status) return;
     set({
       agentRuntime: {
         ...get().agentRuntime,

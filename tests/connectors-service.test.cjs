@@ -219,7 +219,9 @@ test('over the tool budget, whole connectors are left out and the reply says whi
   mockModel(t, async (_p, _k, req, onChunk) => { offered = (req.tools ?? []).map((tool) => tool.name); onChunk('hi'); return { toolCalls: [] }; });
   const chat = await service.chatCreate('p1', 'm1', null);
   await service.chatSend(chat.id, 'hello', []);
-  assert.equal(offered.filter((n) => n.startsWith('mcp_alpha')).length, 60);
+  assert.ok(offered.filter((n) => n.startsWith('mcp_alpha')).length <= 15);
+  assert.ok(offered.includes('discover_tools'));
+  assert.equal(offered.length,20);
   assert.equal(offered.filter((n) => n.startsWith('mcp_beta')).length, 0);
   const reply = repo.state.messages.find((m) => m.conversationId === chat.id && m.role === 'assistant');
   assert.match(reply.notice, /Left out Beta: too many tools/);
