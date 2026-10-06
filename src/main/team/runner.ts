@@ -1,12 +1,21 @@
 import type { MeetingRoomId } from '../../shared/rooms';
-import type { Team, TeamAssignment, TeamPlan } from '../../shared/types';
-import { MAX_PARALLEL, OPEN_TEAM, RESULT_LIMIT, blockDependants, progress, readyAssignments, resetForRetry } from './plan';
+import type { Team, TeamAssignment, TeamPlan, AgentCompletionReport } from '../../shared/types';
+import {
+  MAX_PARALLEL,
+  OPEN_TEAM,
+  RESULT_LIMIT,
+  blockDependants,
+  progress,
+  readyAssignments,
+  resetForRetry
+} from './plan';
 
 /** Attendees answering at once in a meeting. */
 const MEETING_PARALLEL = 4;
 
 /** How an owner's run ended, and what they said last. */
 export interface WorkOutcome {
+  report?: AgentCompletionReport;
   outcome: 'done' | 'failed' | 'stopped';
   answer: string;
   error?: string;
@@ -17,6 +26,7 @@ export interface TeamRunnerDeps {
   teams: () => Team[];
   id: () => string;
   now?: () => number;
+  concurrency?: () => number;
   /** After any change: save, and tell the window. */
   changed: () => void;
   /** One attendee's input to the meeting. */
@@ -24,7 +34,11 @@ export interface TeamRunnerDeps {
   /** The lead's plan from the minutes, or why there is none. */
   plan: (team: Team, signal: AbortSignal) => Promise<{ plan: TeamPlan } | { errors: string[] }>;
   /** One task, run in a new conversation for its owner; `started` names that conversation as soon as it exists. */
-  work: (team: Team, assignment: TeamAssignment, started: (conversationId: string) => void) => Promise<WorkOutcome>;
+  work: (
+    team: Team,
+    assignment: TeamAssignment,
+    started: (conversationId: string) => void
+  ) => Promise<WorkOutcome>;
   /** Stops an owner's run. */
   stopWork: (conversationId: string) => void;
   /** The lead's report once everything is done. */
@@ -74,12 +88,28 @@ export class TeamRunner {
 
   /** Resolves once nothing of this team is in flight. */
   async idle(teamId: string): Promise<void> {
-    for (let set = this.busy.get(teamId); set?.size; set = this.busy.get(teamId)) await Promise.allSettled([...set]);
+    for (let set = this.busy.get(teamId); set?.size; set = this.busy.get(teamId))
+      await Promise.allSettled([...set]);
   }
 
-  create(input: { leadId: string; conversationId: string; goal: string; attendees: string[]; providerId: string; modelId: string; room?: MeetingRoomId }): Team {
+  create(input: {
+    leadId: string;
+    conversationId: string;
+    goal: string;
+    attendees: string[];
+    providerId: string;
+    modelId: string;
+    room?: MeetingRoomId;
+  }): Team {
     const now = this.now();
-    const team: Team = { id: this.deps.id(), ...input, status: 'meeting', minutes: [], createdAt: now, updatedAt: now };
+    const team: Team = {
+      id: this.deps.id(),
+      ...input,
+      status: 'meeting',
+      minutes: [],
+      createdAt: now,
+      updatedAt: now
+    };
     this.deps.teams().push(team);
     this.touch(team);
     return team;
@@ -113,12 +143,18 @@ export class TeamRunner {
       await Promise.all(Array.from({ length: Math.min(MEETING_PARALLEL, queue.length) }, attend));
       if (signal.aborted) return;
       // The minutes in the order people sit, whoever finished first.
-      team.minutes.sort((a, b) => team.attendees.indexOf(a.coworkerId) - team.attendees.indexOf(b.coworkerId));
+      team.minutes.sort(
+        (a, b) => team.attendees.indexOf(a.coworkerId) - team.attendees.indexOf(b.coworkerId)
+      );
       if (!team.minutes.some((m) => !m.error))
-        return this.fail(team, `Nobody in the meeting could answer: ${team.minutes[0]?.error ?? 'no answer'}`);
+        return this.fail(
+          team,
+          `Nobody in the meeting could answer: ${team.minutes[0]?.error ?? 'no answer'}`
+        );
       const drafted = await this.deps.plan(team, signal);
       if (signal.aborted) return;
-      if ('errors' in drafted) return this.fail(team, `The plan did not hold together: ${drafted.errors.join(' ')}`);
+      if ('errors' in drafted)
+        return this.fail(team, `The plan did not hold together: ${drafted.errors.join(' ')}`);
       team.plan = drafted.plan;
       team.status = 'planned';
       this.touch(team);
@@ -152,8 +188,15 @@ export class TeamRunner {
     blockDependants(assignments);
     const running = this.running.get(team.id) ?? new Set<string>();
     this.running.set(team.id, running);
+    const busyOwners = new Set(
+      this.deps
+        .teams()
+        .flatMap((t) => t.plan?.assignments.filter((a) => a.status === 'working').map((a) => a.ownerId) ?? [])
+    );
     for (const a of readyAssignments(assignments)) {
-      if (running.size >= MAX_PARALLEL) break;
+      if (busyOwners.has(a.ownerId)) continue;
+      busyOwners.add(a.ownerId);
+      if (running.size >= Math.max(1, Math.min(8, this.deps.concurrency?.() ?? MAX_PARALLEL))) break;
       running.add(a.id);
       a.status = 'working';
       a.note = undefined;
@@ -174,16 +217,19 @@ export class TeamRunner {
         // Stopped while their conversation was being set up: stop it as it starts.
         if (team.status !== 'working') this.deps.stopWork(conversationId);
       });
-      a.status = ended.outcome;
+      a.status = team.status === 'working' ? ended.outcome : 'stopped';
+      a.completionReport = ended.report;
       a.result = ended.answer.trim().slice(0, RESULT_LIMIT) || undefined;
       a.note = ended.error;
     } catch (error) {
-      a.status = 'failed';
+      a.status = team.status === 'working' ? 'failed' : 'stopped';
       a.note = message(error);
     } finally {
       running.delete(a.id);
       this.touch(team);
       this.schedule(team);
+      for (const other of this.deps.teams())
+        if (other.id !== team.id && other.status === 'working') this.schedule(other);
     }
   }
 
@@ -231,7 +277,8 @@ export class TeamRunner {
   /** Carries a failed or stopped team on: the meeting again if it had no plan, otherwise what didn't finish. */
   retry(teamId: string): void {
     const team = this.get(teamId);
-    if (team.status !== 'failed' && team.status !== 'stopped') throw new Error('Only a failed or stopped team can be retried.');
+    if (team.status !== 'failed' && team.status !== 'stopped')
+      throw new Error('Only a failed or stopped team can be retried.');
     team.note = undefined;
     if (!team.plan) {
       team.status = 'meeting';

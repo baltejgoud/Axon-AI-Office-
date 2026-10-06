@@ -1,3 +1,5 @@
+import { ACTIVE_RUN_STATUSES } from '../../../../shared/runtime';
+import { GlobalWork } from './shell/GlobalWork';
 import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -61,6 +63,7 @@ export function OfficeCanvas({
     helping.current = next;
   }, []);
   const teams = useApp((s) => s.data?.teams);
+  const runs = useApp((s) => s.data?.runs);
   /** Teams in their rooms, as last sent to the scene. */
   const meeting = useRef(new Set<string>());
   const syncTeams = useCallback((world: OfficeScene, all: readonly Team[]) => {
@@ -68,7 +71,14 @@ export function OfficeCanvas({
     const next = new Set(now.map((m) => m.id));
     for (const key of meeting.current) if (!next.has(key)) world.endTeamMeeting(key);
     // Every time, so whose team task is running stays current.
-    for (const m of now) world.startTeamMeeting(m.id, m.leadId, m.attendees, m.room, m.working);
+    for (const m of now) {
+      const teamWorkers = (useApp.getState().data?.runs ?? [])
+        .filter((r) => r.teamId === m.id && ACTIVE_RUN_STATUSES.has(r.status))
+        .map((r) => r.agentId);
+      world.startTeamMeeting(m.id, m.leadId, m.attendees, m.room, [
+        ...new Set([...m.working, ...teamWorkers])
+      ]);
+    }
     meeting.current = next;
     world.setRoomBoards(roomBoardCards(all));
   }, []);
@@ -121,13 +131,20 @@ export function OfficeCanvas({
       // A team's board opens its task list; the Today board goes to the receptionist's planner.
       world.onBoardClick = (team) => {
         const board = TASK_BOARDS.find((b) => b.team === team);
-        if (board?.kind === 'today') return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
+        if (board?.kind === 'today')
+          return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
         // A meeting room's board: the lead's conversation with the team in that room.
         if (board?.room) {
           const open = [...(useApp.getState().data?.teams ?? [])]
-            .filter((t) => ['meeting', 'planned', 'working', 'reporting'].includes(t.status) && roomOf(t) === board.room)
+            .filter(
+              (t) =>
+                ['meeting', 'planned', 'working', 'reporting'].includes(t.status) && roomOf(t) === board.room
+            )
             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-          if (open) return useOfficeStore.getState().focusOn({ agentId: open.leadId, conversationId: open.conversationId });
+          if (open)
+            return useOfficeStore
+              .getState()
+              .focusOn({ agentId: open.leadId, conversationId: open.conversationId });
           if (board.kind === 'meeting') return;
         }
         useOfficeStore.getState().openTeamBoard(team);
@@ -189,7 +206,7 @@ export function OfficeCanvas({
   // A team meeting gathers its people in the boardroom; its board shows the team's goal, then its tasks.
   useEffect(() => {
     if (scene.current) syncTeams(scene.current, teams ?? []);
-  }, [teams, syncTeams]);
+  }, [teams, runs, syncTeams]);
 
   // The Today board's day labels move on with the clock.
   useEffect(() => {
@@ -341,9 +358,7 @@ export function OfficeCanvas({
         <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
         <div className="office-presence">
           <span className="office-presence-dot" />
-          <span className="office-presence-main">
-            {working.length ? `${working.length} working right now` : 'Your team is ready'}
-          </span>
+          <GlobalWork />
           <small>
             {OFFICE_AGENTS.length} coworkers · {DISTRICTS.reduce((n, d) => n + d.departments.length, 0)}{' '}
             departments

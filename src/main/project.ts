@@ -164,7 +164,15 @@ export class Project {
     const totalFiles = files.length;
     return `### Project Structure (${totalFiles} files)\n\`\`\`\n${sample}${totalFiles > 100 ? `\n... and ${totalFiles - 100} more files` : ''}\n\`\`\``;
   }
-  async getProjectContext(): Promise<string> {
+  async getProjectDirectives(): Promise<string> {
+    if (!this.root) return '';
+    const parts: string[] = [];
+    for (const directive of ['AGENTS.md', 'CLAUDE.md', '.cursorrules']) {
+      try { const content = await this.read(directive); parts.push(`### Directives (${directive})\n${content}`); } catch {}
+    }
+    return parts.join('\n\n');
+  }
+  async getProjectContext(includeDirectives = true): Promise<string> {
     if (!this.root) return '';
     const parts: string[] = [`## Open Project: ${this.root}`];
 
@@ -176,10 +184,10 @@ export class Project {
       } catch {}
     }
 
-    for (const directive of ['AGENTS.md', 'CLAUDE.md', '.cursorrules']) {
+    if (includeDirectives) for (const directive of ['AGENTS.md', 'CLAUDE.md', '.cursorrules']) {
       try {
         const content = await this.read(directive);
-        parts.push(`### Directives (${directive})\n${content.slice(0, 6000)}`);
+        parts.push(`### Directives (${directive})\n${content}`);
       } catch {}
     }
 

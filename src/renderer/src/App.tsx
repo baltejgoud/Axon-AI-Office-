@@ -46,6 +46,13 @@ export function App() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = window.axon.onStream((event) => {
+      if (event.channel === 'terminal') return; // PTY subscribers draw directly, without refreshing the office.
+      if (event.channel === 'runtime') {
+        const current = useApp.getState().data;
+        if (current)
+          useApp.getState().patch({ data: { ...current, runs: event.runs, agentMessages: event.messages } });
+        return;
+      }
       // A notification or the tray, with the window already open.
       if (event.channel === 'focus') {
         useOfficeStore.getState().focusOn(event);

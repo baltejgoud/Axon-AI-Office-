@@ -8,7 +8,7 @@ require.extensions['.ts'] = (module, file) => module._compile(
 );
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { requestHistory, fitToBudget } = require('../src/main/history.ts');
+const { requestHistory } = require('../src/main/history.ts');
 
 let clock = 0;
 const msg = (role, content, extra = {}) => ({ id: `m${++clock}`, conversationId: 'c', role, content, createdAt: clock, ...extra });
@@ -46,24 +46,10 @@ test('results whose call is gone, system prompts and empty failed answers are le
   assert.deepEqual(history.map((m) => m.content), ['Hi', 'Hi again']);
 });
 
-test('trimming drops whole oldest turns, so history starts with the user', () => {
-  const big = 'x'.repeat(400);
-  const requests = requestHistory([
-    msg('user', big),
-    msg('assistant', '', { toolCalls: [call('t1')] }),
-    msg('tool', big, { toolCallId: 't1' }),
-    msg('assistant', big),
-    msg('user', 'Latest question')
+test('provider call IDs reused in later turns cannot replace earlier results', () => {
+  const history=requestHistory([
+    msg('user','first'),msg('assistant','',{toolCalls:[call('reused')]}),msg('tool','first output',{toolCallId:'reused'}),
+    msg('user','second'),msg('assistant','',{toolCalls:[call('reused')]}),msg('tool','second output',{toolCallId:'reused'})
   ]);
-  const fitted = fitToBudget(requests, 500);
-  assert.equal(fitted[0].role, 'user');
-  assert.equal(fitted[fitted.length - 1].content, 'Latest question');
-  assert.ok(!fitted.some((m) => m.role === 'tool'));
-});
-
-test('a single turn over budget keeps its question, shortened', () => {
-  const fitted = fitToBudget([{ role: 'user', content: 'y'.repeat(5000) }], 1000);
-  assert.equal(fitted.length, 1);
-  assert.ok(fitted[0].content.length < 5000);
-  assert.match(fitted[0].content, /truncated/);
+  assert.deepEqual(history.filter(m=>m.role==='tool').map(m=>m.content),['first output','second output']);
 });

@@ -1,15 +1,15 @@
-/**
- * How full a conversation's context is. The characters are what `fitToBudget` trims by (the system
- * prompt plus the untrimmed history, against the character budget), so a full meter is exactly the
- * point where older turns start to be left out. When the model has a context window and last
- * reported its prompt size, tokens are measured too, and the fuller of the two shows.
- */
+/** Compiled working context. Character fields are retained only for old IPC clients. */
 export interface ContextUsage {
+  state?: 'healthy' | 'optimizing' | 'compacting' | 'near-limit' | 'recovery-required';
+  outputReserve?: number;
+  safetyMargin?: number;
+  archivedTokens?: number;
+  sections?: Record<string, number>;
   usedChars: number;
   budgetChars: number;
   /** The fuller of usedChars / budgetChars and, when known, usedTokens / windowTokens; within [0, 1]. */
   pct: number;
-  /** The provider's last reported prompt size, against the model's context window. */
+  /** Estimated compiled input tokens, against the selected model window. */
   tokenBasis?: { usedTokens: number; windowTokens: number };
   /** True when tokenBasis is absent (character proxy only). */
   estimated: boolean;
@@ -22,13 +22,12 @@ const ratio = (used: number, total: number) => (total > 0 ? Math.min(1, Math.max
 /** A count that can be trusted: finite and above zero, else 0. */
 const count = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
 
-export function contextUsage(input: { usedChars: number; budgetChars: number; contextWindow?: number; promptTokens?: number }): ContextUsage {
-  const usedChars = count(input.usedChars), budgetChars = count(input.budgetChars);
-  const chars = ratio(usedChars, budgetChars);
-  const windowTokens = count(input.contextWindow), usedTokens = count(input.promptTokens);
-  if (windowTokens >= MIN_CONTEXT_WINDOW && usedTokens > 0)
-    return { usedChars, budgetChars, pct: Math.max(chars, ratio(usedTokens, windowTokens)), tokenBasis: { usedTokens, windowTokens }, estimated: false };
-  return { usedChars, budgetChars, pct: chars, estimated: true };
+export function contextUsage(input: { inputTokens: number; contextWindow: number; outputReserve?: number; safetyMargin?: number; archivedTokens?: number; sections?: Record<string, number> }): ContextUsage {
+  const windowTokens = count(input.contextWindow);
+  const usedTokens = count(input.inputTokens);
+  return { usedChars: 0, budgetChars: 0, pct: ratio(usedTokens, windowTokens), estimated: true,
+    tokenBasis: { usedTokens, windowTokens }, outputReserve: count(input.outputReserve),
+    safetyMargin: count(input.safetyMargin), archivedTokens: count(input.archivedTokens), sections: input.sections };
 }
 
 /** How the meter looks: fine, getting full, or full (older turns are going, or about to). */

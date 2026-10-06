@@ -1,7 +1,5 @@
 import type { Role } from '../shared/types';
 
-export const SKILL_BUDGET = 80_000;
-
 export function dedupe(...lists: string[][]): string[] {
   return [...new Set(lists.flat())];
 }
@@ -25,8 +23,6 @@ export function skillsBlock(skills: { name: string; source: string; body: string
     ...skills.map((s) => `## Skill: ${s.name} (${s.source})\n${s.body}`),
     '</skills>'
   ].join('\n\n');
-  if (block.length > SKILL_BUDGET)
-    throw new Error(`Selected skills exceed the budget (${block.length.toLocaleString('en-US')} of 80,000 characters). Remove a skill.`);
   return block;
 }
 

@@ -10,13 +10,58 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-smoke-'));
 // Seed two models and a workspace whose default is not the global first model.
 const now = Date.now();
 fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
-fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify({
-  version: 1, providers: [{ id: 'seed', name: 'Seed', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1234/v1',
-    models: [{ id: 'first', displayName: 'First' }, { id: 'workspace', displayName: 'Workspace default' }], enabled: true, createdAt: now, hasApiKey: false }],
-  workspaces: [{ id: 'research', name: 'Research test', systemPrompt: 'Research carefully.', defaultProviderId: 'seed', defaultModelId: 'workspace', enabledTools: [], knowledgeDocIds: [], roleIds: ['backend-developer'], fileAccess: { enabled: false, roots: [] }, createdAt: now, updatedAt: now }],
-  conversations: [], messages: [], agents: [], documents: [], chunks: [],
-  settings: { theme: 'dark', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
-}));
+fs.writeFileSync(
+  path.join(profile, 'data/db/platform-v1.json'),
+  JSON.stringify({
+    version: 1,
+    providers: [
+      {
+        id: 'seed',
+        name: 'Seed',
+        kind: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        models: [
+          { id: 'first', displayName: 'First' },
+          { id: 'workspace', displayName: 'Workspace default' }
+        ],
+        enabled: true,
+        createdAt: now,
+        hasApiKey: false
+      }
+    ],
+    workspaces: [
+      {
+        id: 'research',
+        name: 'Research test',
+        systemPrompt: 'Research carefully.',
+        defaultProviderId: 'seed',
+        defaultModelId: 'workspace',
+        enabledTools: [],
+        knowledgeDocIds: [],
+        roleIds: ['backend-developer'],
+        fileAccess: { enabled: false, roots: [] },
+        createdAt: now,
+        updatedAt: now
+      }
+    ],
+    conversations: [{ id: 'endurance-ui', title: 'Endurance history', agentId: 'chief-of-staff', providerId: 'seed', modelId: 'first', workspaceId: null, skillIds: [], roleIds: [], createdAt: now - 1000, updatedAt: now - 1000 }],
+    messages: Array.from({length:5000}, (_,i) => ({ id: `history-${i}`, conversationId: 'endurance-ui', role: i % 2 ? 'assistant' : 'user', content: `Historical message ${i}`, createdAt: now - 5000 + i })),
+    agents: [],
+    documents: [],
+    chunks: [],
+    settings: {
+      theme: 'dark',
+      autoTitleConversations: true,
+      defaultTemperature: 0.7,
+      defaultMaxTokens: 4096,
+      streamDeltas: true,
+      allowShellExecution: false,
+      shellAllowlist: [],
+      sendCrashDiagnostics: false,
+      dataDirectoryNote: ''
+    }
+  })
+);
 app.setPath('userData', profile);
 // Keep the test window restored and off-screen; the app itself opens maximized.
 fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maximized: false }));
@@ -30,13 +75,25 @@ const mock = http.createServer((request, response) => {
   request.on('end', () => {
     bodies.push(Buffer.concat(chunks).toString('utf8'));
     lastAuth = String(request.headers.authorization || '');
-    if (lastAuth !== 'Bearer smoke-key-123') { response.writeHead(401); response.end(); return; }
+    if (lastAuth !== 'Bearer smoke-key-123') {
+      response.writeHead(401);
+      response.end();
+      return;
+    }
     // "List the files" gets a tool call first, so the activity log has a call to show.
-    const parsed = (() => { try { return JSON.parse(bodies.at(-1)); } catch { return {}; } })();
+    const parsed = (() => {
+      try {
+        return JSON.parse(bodies.at(-1));
+      } catch {
+        return {};
+      }
+    })();
     const last = parsed.messages?.at(-1);
     if (last?.role === 'user' && last.content === 'List the files') {
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_list","type":"function","function":{"name":"list_files","arguments":"{}"}}]}}]}\n\n');
+      response.write(
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_list","type":"function","function":{"name":"list_files","arguments":"{}"}}]}}]}\n\n'
+      );
       response.write('data: {"choices":[{"finish_reason":"tool_calls"}]}\n\n');
       response.write('data: [DONE]\n\n');
       response.end();
@@ -49,34 +106,59 @@ const mock = http.createServer((request, response) => {
     response.end();
   });
 });
-mock.listen(0, '127.0.0.1', () => { globalThis.__axonMockPort = mock.address().port; });
+mock.listen(0, '127.0.0.1', () => {
+  globalThis.__axonMockPort = mock.address().port;
+});
 // Loopback-only MCP server (Streamable HTTP, no sign-in) for the connector round trip.
 const mcpMock = http.createServer((request, response) => {
   let body = '';
   request.on('data', (c) => (body += c));
   request.on('end', () => {
-    if (request.method !== 'POST') { response.writeHead(200); response.end(); return; }
+    if (request.method !== 'POST') {
+      response.writeHead(200);
+      response.end();
+      return;
+    }
     const msg = JSON.parse(body);
-    if (msg.id === undefined) { response.writeHead(202); response.end(); return; }
-    const reply = (result) => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result })); };
-    if (msg.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} } });
-    if (msg.method === 'tools/list') return reply({ tools: [{ name: 'lookup', description: 'Find a note', annotations: { readOnlyHint: true } }, { name: 'create_note', description: 'Write a note' }] });
+    if (msg.id === undefined) {
+      response.writeHead(202);
+      response.end();
+      return;
+    }
+    const reply = (result) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
+    };
+    if (msg.method === 'initialize')
+      return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} } });
+    if (msg.method === 'tools/list')
+      return reply({
+        tools: [
+          { name: 'lookup', description: 'Find a note', annotations: { readOnlyHint: true } },
+          { name: 'create_note', description: 'Write a note' }
+        ]
+      });
     reply({ content: [{ type: 'text', text: 'ok' }] });
   });
 });
-mcpMock.listen(0, '127.0.0.1', () => { globalThis.__axonMcpPort = mcpMock.address().port; });
-const timeout = setTimeout(() => { console.error('SMOKE_FAIL: timed out'); app.exit(1); }, 45000);
+mcpMock.listen(0, '127.0.0.1', () => {
+  globalThis.__axonMcpPort = mcpMock.address().port;
+});
+const timeout = setTimeout(() => {
+  console.error('SMOKE_FAIL: timed out');
+  app.exit(1);
+}, 45000);
 app.on('web-contents-created', (_, contents) => {
   contents.on('did-fail-load', (_, code, description) => console.error('LOAD_FAIL', code, description));
   contents.on('preload-error', (_, file, error) => console.error('PRELOAD_FAIL', file, error.message));
   contents.once('did-finish-load', async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       const result = await contents.executeJavaScript(`(async () => {
         if (!window.axon) throw new Error('Missing preload bridge');
         const state = await window.axon.snapshot();
         if (state.version !== 1) throw new Error('Invalid snapshot');
-        if (!(state.skills.length > 800) || state.roles.length !== 198) throw new Error('Catalogs missing from snapshot');
+        if (!(state.skills.length > 800) || state.roles.length !== ${require('../src/roles/roles.json').length}) throw new Error('Catalogs missing from snapshot');
         if (typeof require !== 'undefined' || typeof process !== 'undefined') throw new Error('Node exposed in renderer');
         if (!document.querySelector('.office-viewport')) throw new Error('Office did not render');
         if (document.querySelector('.sidebar, .chat-view, .return-to-office')) throw new Error('A page other than the office is reachable');
@@ -95,7 +177,7 @@ app.on('web-contents-created', (_, contents) => {
         if (assistant.usage?.promptTokens !== 7 || assistant.usage?.completionTokens !== 4) throw new Error('Usage not captured: ' + JSON.stringify(assistant.usage));
         // Transparency: the context meter, the usage report (a hand-computed sum) and restore points.
         const meter = await window.axon.getContextUsage(chat.id);
-        if (!meter || meter.budgetChars !== 300000 || !(meter.usedChars > 0) || !(meter.pct > 0 && meter.pct <= 1)) throw new Error('Context meter wrong: ' + JSON.stringify(meter));
+        if (!meter || meter.tokenBasis?.windowTokens !== 32768 || !(meter.tokenBasis.usedTokens > 0) || !(meter.outputReserve > 0) || !(meter.pct > 0 && meter.pct <= 1)) throw new Error('Context meter wrong: ' + JSON.stringify(meter));
         const report = await window.axon.usageReport();
         const expected = (7 * 3 + 4 * 15) / 1e6;
         if (report.allTime.turns !== 1 || report.allTime.promptTokens !== 7 || report.allTime.completionTokens !== 4 || Math.abs(report.allTime.cost - expected) > 1e-12) throw new Error('Usage report wrong: ' + JSON.stringify(report.allTime));
@@ -136,8 +218,15 @@ app.on('web-contents-created', (_, contents) => {
         return { cards };
       })()`);
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
-      fs.writeFileSync(path.join(__dirname, '../test-results/connectors.png'), (await contents.capturePage()).toPNG());
-      const shot = async (name) => fs.writeFileSync(path.join(__dirname, `../test-results/${name}.png`), (await contents.capturePage()).toPNG());
+      fs.writeFileSync(
+        path.join(__dirname, '../test-results/connectors.png'),
+        (await contents.capturePage()).toPNG()
+      );
+      const shot = async (name) =>
+        fs.writeFileSync(
+          path.join(__dirname, `../test-results/${name}.png`),
+          (await contents.capturePage()).toPNG()
+        );
       // Settings → Usage shows the priced model's cost; Privacy & security lists the start-up snapshot.
       result.usagePage = await contents.executeJavaScript(`(async () => {
         document.querySelector('#settings-tab-usage').click();
@@ -216,13 +305,35 @@ app.on('web-contents-created', (_, contents) => {
         pick.click();
         await wait(1200);
         const meter = document.querySelector('.context-meter');
-        if (!meter || !/\\d+% context/.test(meter.textContent)) throw new Error('Context meter not shown: ' + meter?.textContent);
+        if (!meter || !meter.textContent.includes(' / ')) throw new Error('Context meter not shown: ' + meter?.textContent);
         meter.querySelector('.context-meter-summary').click();
         await wait();
-        if (!meter.textContent.includes('characters Axon can send')) throw new Error('Meter details wrong: ' + meter.textContent);
+        if (!meter.textContent.includes('Reserved response:')) throw new Error('Meter details wrong: ' + meter.textContent);
         return meter.textContent;
       })()`);
       await shot('context-meter');
+      result.virtualization = await contents.executeJavaScript(`(async () => {
+        const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+        document.querySelector('[aria-label="Conversation options"]').click();
+        await wait(200);
+        const older = [...document.querySelectorAll('[role="menuitem"]')].find(b => b.textContent.includes('Endurance history'));
+        if (!older) throw new Error('Durable older conversation is missing');
+        older.click();
+        await wait(1000);
+        const page = await window.axon.chatHistoryPage('endurance-ui');
+        if (page.total !== 5000 || page.messages.length !== 100 || page.nextBefore !== 4900) throw new Error('History page contract failed');
+        const previous = await window.axon.chatHistoryPage('endurance-ui', page.nextBefore);
+        if (previous.messages.length !== 100 || previous.messages[0].id !== 'history-4800') throw new Error('Earlier history page failed');
+        const snapshot = await window.axon.snapshot();
+        if (snapshot.messages.filter(m => m.conversationId === 'endurance-ui').length !== 100) throw new Error('Snapshot sent the full transcript');
+        const loadEarlier = [...document.querySelectorAll('button')].find(b => b.textContent === 'Load earlier messages');
+        if (!loadEarlier) throw new Error('Earlier history control is missing');
+        loadEarlier.click();
+        await wait(300);
+        const rows = document.querySelectorAll('[data-item-index]').length;
+        if (!(rows > 0 && rows < 100)) throw new Error('5000-message history rendered too many rows: ' + rows);
+        return { stored: 5000, mountedRows: rows, pagedHistory: true, earlierPage: true };
+      })()`);
       result.layeredEscape = await contents.executeJavaScript(`(async () => {
         const { chatId, providerId: id } = window.__smoke;
         // Layered Esc: a modal opened inside the Settings sheet closes first; the sheet stays open.
@@ -242,16 +353,18 @@ app.on('web-contents-created', (_, contents) => {
           Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
           el.dispatchEvent(new Event('input', { bubbles: true }));
         };
-        type(dialog.querySelector('input[placeholder="https://your-provider.example/v1"]'), 'http://127.0.0.1:${globalThis.__axonMockPort}/v1');
+        type(dialog.querySelector('input[type=url]'), 'http://127.0.0.1:${globalThis.__axonMockPort}/v1');
         type(dialog.querySelector('input[type=password]'), 'smoke-key-123');
-        type(dialog.querySelector('textarea'), 'mock-model');
+        type(dialog.querySelector('input[aria-label="Add a model ID"]'), 'mock-model');
+        await wait();
+        [...dialog.querySelectorAll('.model-add button')].find(b => b.textContent.trim() === 'Add').click();
         await wait();
         const testButton = [...dialog.querySelectorAll('button')].find(b => b.textContent.includes('Test connection'));
         if (!testButton) throw new Error('Test connection button missing');
         testButton.click();
         let passed = null;
-        for (let i = 0; i < 30 && !passed; i++) { await wait(); passed = dialog.querySelector('.provider-test-results .is-ok code'); }
-        if (passed?.textContent !== 'mock-model') throw new Error('Test connection result not shown: ' + dialog.querySelector('.provider-test')?.textContent);
+        for (let i = 0; i < 30 && !passed; i++) { await wait(); passed = dialog.querySelector('.test-results .is-ok .test-model'); }
+        if (passed?.textContent !== 'mock-model') throw new Error('Test connection result not shown: ' + dialog.querySelector('.test-results')?.textContent);
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         await wait();
         if (document.querySelectorAll('[role=dialog]').length !== 1 || !document.querySelector('.office-overlay')) throw new Error('Esc did not close only the provider modal');
@@ -262,22 +375,46 @@ app.on('web-contents-created', (_, contents) => {
         return true;
       })()`);
       result.title = await contents.executeJavaScript('document.title');
-      if (lastAuth !== 'Bearer smoke-key-123') throw new Error('API key header not received by provider: ' + lastAuth);
-      const sent = bodies.map((body) => JSON.parse(body)).find((body) => body.messages?.some((m) => m.role === 'system'));
+      if (lastAuth !== 'Bearer smoke-key-123')
+        throw new Error('API key header not received by provider: ' + lastAuth);
+      const sent = bodies
+        .filter((body) => body.trim())
+        .map((body) => JSON.parse(body))
+        .find((body) => body.messages?.some((m) => m.role === 'system'));
       if (!sent) throw new Error('The chat request never reached the provider');
       const system = sent.messages.find((m) => m.role === 'system')?.content || '';
-      const r = system.indexOf('<roles>'), s = system.indexOf('<skills>');
-      if (r < 0 || s < 0 || r > s) throw new Error('Roles/skills blocks missing or misordered in system prompt');
-      const backendIdx = system.indexOf('## Backend Developer'), frontendIdx = system.indexOf('## Frontend Developer');
-      if (backendIdx < 0 || frontendIdx < 0 || backendIdx > frontendIdx) throw new Error('Workspace roles did not precede conversation roles in system prompt');
-      if (!system.includes('## Skill: brainstorming (superpowers)')) throw new Error('Selected skill not injected');
+      const r = system.indexOf('<roles>'),
+        s = system.indexOf('<skills>');
+      if (r < 0 || s < 0 || r > s)
+        throw new Error('Roles/skills blocks missing or misordered in system prompt');
+      const backendIdx = system.indexOf('## Backend Developer'),
+        frontendIdx = system.indexOf('## Frontend Developer');
+      if (backendIdx < 0 || frontendIdx < 0 || backendIdx > frontendIdx)
+        throw new Error('Workspace roles did not precede conversation roles in system prompt');
+      if (!system.includes('## Skill: brainstorming (superpowers)'))
+        throw new Error('Selected skill not injected');
       console.log('SMOKE_PASS', JSON.stringify(result));
       const image = await contents.capturePage();
       fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
       fs.writeFileSync(path.join(__dirname, '../test-results/desktop.png'), image.toPNG());
-      clearTimeout(timeout); mock.close(); mcpMock.close(); app.quit();
-    } catch (error) { console.error('SMOKE_FAIL', error); clearTimeout(timeout); mock.close(); mcpMock.close(); app.exit(1); }
+      clearTimeout(timeout);
+      mock.close();
+      mcpMock.close();
+      app.quit();
+    } catch (error) {
+      console.error('SMOKE_FAIL', error);
+      console.error(
+        'SMOKE_UI',
+        await contents.executeJavaScript('document.body.innerText.slice(0, 1500)').catch(() => 'unavailable')
+      );
+      clearTimeout(timeout);
+      mock.close();
+      mcpMock.close();
+      app.exit(1);
+    }
   });
 });
 require('../out/main/index.js');
-app.on('will-quit', () => { console.log('SMOKE_PROFILE', profile); });
+app.on('will-quit', () => {
+  console.log('SMOKE_PROFILE', profile);
+});

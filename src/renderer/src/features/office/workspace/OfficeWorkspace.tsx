@@ -85,7 +85,7 @@ export function OfficeWorkspace() {
   if (watched.current !== conversation?.id) watched.current = null;
   if (workingNow && conversation) watched.current = conversation.id;
   const open = surfaceOpen({
-    hasWork: Boolean(conversation && work.latest),
+    hasWork: Boolean(conversation),
     watched: watched.current !== null,
     run,
     choice: conversation ? choices[conversation.id] : undefined
@@ -219,7 +219,7 @@ export function OfficeWorkspace() {
 
   return (
     <div ref={root} className={`office-workspace${open ? ' has-work' : ''}${resizing ? ' is-resizing' : ''}`}>
-      <OfficeCanvas work={work.latest ? { open, toggle: () => setWork(!open) } : undefined} />
+      <OfficeCanvas work={conversation ? { open, toggle: () => setWork(!open) } : undefined} />
       <div
         ref={divider}
         className="work-divider"

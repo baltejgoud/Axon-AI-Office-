@@ -1,10 +1,43 @@
-import type { ProviderConfig, Conversation, Message, Workspace, Agent, KnowledgeDoc, KnowledgeChunk, Settings, StreamEvent, Skill, SkillSourceInfo, Role, Selection, ToolApprovalDecision, ToolApprovalRequest, MCPServerConfig, TaskItem, FocusTarget, ProcessInfo, Team } from './types';
+import type { AgentRun, AgentMessage, TerminalSession } from './runtime';
+import type {
+  ProviderConfig,
+  Conversation,
+  Message,
+  Workspace,
+  Agent,
+  KnowledgeDoc,
+  KnowledgeChunk,
+  Settings,
+  StreamEvent,
+  Skill,
+  SkillSourceInfo,
+  Role,
+  Selection,
+  ToolApprovalDecision,
+  ToolApprovalRequest,
+  MCPServerConfig,
+  TaskItem,
+  FocusTarget,
+  ProcessInfo,
+  Team
+} from './types';
 import type { Briefing } from './planner';
-import type { AccountProfile, AccountsState, DeviceCode, PublishInput, RepoSummary, ScmDiff, ScmStatus } from './scm';
+import type {
+  AccountProfile,
+  AccountsState,
+  DeviceCode,
+  PublishInput,
+  RepoSummary,
+  ScmDiff,
+  ScmStatus
+} from './scm';
 import type { ContextUsage } from './context-usage';
 import type { AuditEntry, AuditQuery } from './audit';
 export interface PlatformState {
   version: 1;
+  runtimeVersion?: 1;
+  runs?: AgentRun[];
+  agentMessages?: AgentMessage[];
   providers: ProviderConfig[];
   conversations: Conversation[];
   messages: Message[];
@@ -114,6 +147,14 @@ export interface TaskPatch {
   status?: 'open' | 'done';
 }
 export interface PlatformAPI {
+  runtimeRuns(): Promise<AgentRun[]>;
+  conversationClose(id: string): Promise<boolean>;
+  projectClose(): Promise<boolean>;
+  terminalList(conversationId: string): Promise<TerminalSession[]>;
+  terminalOpen(conversationId: string): Promise<TerminalSession>;
+  terminalWrite(id: string, data: string): Promise<void>;
+  terminalResize(id: string, cols: number, rows: number): Promise<void>;
+  terminalKill(id: string): Promise<void>;
   snapshot(): Promise<Snapshot>;
   providerSave(provider: ProviderConfig, key?: string): Promise<void>;
   /** Checks the form's endpoint, key and models without saving. With no key typed, the saved key is used only for the saved endpoint. */
@@ -139,7 +180,17 @@ export interface PlatformAPI {
   connectorSignOut(id: string): Promise<void>;
   /** Your own OAuth app for a connector this build has none for. */
   connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void>;
-  chatCreate(providerId: string, modelId: string, workspaceId: string | null, agentId?: string, selection?: Selection, projectRoot?: string | null, systemPrompt?: string): Promise<Conversation>;
+  chatCreate(
+    providerId: string,
+    modelId: string,
+    workspaceId: string | null,
+    agentId?: string,
+    selection?: Selection,
+    projectRoot?: string | null,
+    systemPrompt?: string
+  ): Promise<Conversation>;
+  getConversationCost(conversationId: string): Promise<import('./cost').ConversationCost>;
+  chatHistoryPage(conversationId: string, before?: number, limit?: number): Promise<{ messages: Message[]; total: number; nextBefore?: number }>;
   chatRename(id: string, title: string): Promise<void>;
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
   chatDelete(id: string): Promise<void>;
@@ -163,6 +214,9 @@ export interface PlatformAPI {
   attach(): Promise<{ id: string; name: string }[]>;
   /** Voice typing: a composer recording as text, by the engine Settings → Voice picks. `prompt` names what you're likely to say. */
   speechTranscribe(audio: ArrayBuffer, mime: string, prompt: string): Promise<string>;
+  readToolArtifact(conversationId: string, toolCallId: string, offset?: number): Promise<{ content: string; nextOffset?: number; total: number }>;
+  getContextInspector(id: string): Promise<{ sections: Record<string, number>; system: string; messages: string; tools: string }>;
+  chatMemoryCorrect(id: string, original: string, replacement: string): Promise<void>;
   chatModelSet(id: string, providerId: string, modelId: string): Promise<void>;
   knowledgeImport(): Promise<void>;
   knowledgeImportFolder(): Promise<{ imported: number; skipped: number; truncated: boolean } | null>;
@@ -230,4 +284,8 @@ export interface PlatformAPI {
   processOpen(id: string): Promise<void>;
   onStream(callback: (event: StreamEvent) => void): () => void;
 }
-declare global { interface Window { axon: PlatformAPI } }
+declare global {
+  interface Window {
+    axon: PlatformAPI;
+  }
+}

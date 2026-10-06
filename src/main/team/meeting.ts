@@ -102,7 +102,7 @@ export async function draftPlan(team: Team, model: ModelCall): Promise<{ plan: T
 export async function writeReport(team: Team, model: ModelCall): Promise<string> {
   const lead = coworkerById(team.leadId);
   const work = (team.plan?.assignments ?? [])
-    .map((a) => `## ${a.title} (${nameOf(a.ownerId)})\n${a.result || '(no hand-off)'}`)
+    .map((a) => `## ${a.title} (${nameOf(a.ownerId)})\n${a.completionReport ? JSON.stringify(a.completionReport) : a.result || '(no hand-off)'}`)
     .join('\n\n');
   let text = '';
   await model.stream(
@@ -140,7 +140,7 @@ export function taskBrief(team: Team, assignment: TeamAssignment): string {
   const handOffs = assignment.dependsOn
     .map((id) => all.find((a) => a.id === id))
     .filter((a): a is TeamAssignment => !!a)
-    .map((a) => `### ${a.title} (${nameOf(a.ownerId)})\n${a.result || '(no hand-off)'}`);
+    .map((a) => `### ${a.title} (${nameOf(a.ownerId)})\n${a.completionReport ? JSON.stringify(a.completionReport) : a.result || '(no hand-off)'}`);
   return [
     `Team goal: ${team.goal}`,
     team.plan?.summary ? `The plan: ${team.plan.summary}` : '',

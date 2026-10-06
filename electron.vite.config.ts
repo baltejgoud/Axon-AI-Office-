@@ -1,6 +1,7 @@
 import { defineConfig } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
+import { browserBridgePlugin } from './scripts/browserBridgePlugin';
 
 const sharedAlias = { '@shared': resolve(__dirname, 'src/shared') };
 
@@ -28,7 +29,7 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
     resolve: { alias: { ...sharedAlias, '@': resolve(__dirname, 'src/renderer/src') } },
-    plugins: [react()],
+    plugins: [react(), browserBridgePlugin()],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/renderer/index.html') }

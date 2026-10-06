@@ -4,13 +4,13 @@ import { errorText } from '../accounts';
 export type DictationPhase = 'idle' | 'starting' | 'recording' | 'transcribing';
 
 /** A recording this long stops and is transcribed by itself. */
-export const MAX_RECORDING_MS = 15 * 60_000;
+export const MAX_RECORDING_MS = 2 * 60_000;
 /** Loudness (RMS) speech reaches; a recording that never does was silence or a muted microphone. */
 const HEARD_RMS = 0.006;
 /** Opus in WebM: what Chromium records natively, and what Groq and OpenAI read. */
 const MIME = 'audio/webm;codecs=opus';
 /** Bits per second: well past what speech needs, so nothing is lost before transcription. */
-const BITRATE = 64_000;
+const BITRATE = 24_000;
 
 /** One recording: the microphone, the recorder, and the loudness meter. */
 interface Recording {
@@ -57,6 +57,8 @@ function microphoneProblem(error: unknown): string {
  */
 export function useDictation(options: DictationOptions) {
   const [phase, setPhase] = useState<DictationPhase>('idle');
+  const [canRetry, setCanRetry] = useState(false);
+  const failure = useRef<Recording | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const meter = useRef<HTMLElement | null>(null);
   const current = useRef<Recording | null>(null);
@@ -81,22 +83,32 @@ export function useDictation(options: DictationOptions) {
 
   const transcribe = async (rec: Recording, type: string) => {
     const blob = new Blob(rec.chunks, { type });
+    const started = performance.now();
     if (rec.metered && rec.peak < HEARD_RMS) {
+      if (current.current === rec) current.current = null;
       go('idle');
       latest.current.onError('I didn’t hear anything. Check that your microphone is on and not muted.');
       return;
     }
     try {
-      const text = await window.axon.speechTranscribe(
-        await blob.arrayBuffer(),
-        blob.type,
-        latest.current.prompt()
-      );
+      const bytes = await blob.arrayBuffer();
+      const encoded = performance.now();
+      const text = await window.axon.speechTranscribe(bytes, blob.type, latest.current.prompt());
       if (rec.dropped) return;
-      if (text) latest.current.onText(text);
-      else latest.current.onError('No words came through. Try again, a little closer to the microphone.');
+      if (text) {
+        latest.current.onText(text);
+        console.debug('[voice latency]', {
+          encodingMs: encoded - started,
+          providerMs: performance.now() - encoded,
+          bytes: bytes.byteLength
+        });
+      } else latest.current.onError('No words came through. Try again, a little closer to the microphone.');
     } catch (error) {
-      if (!rec.dropped) latest.current.onError(errorText(error));
+      if (!rec.dropped) {
+        failure.current = rec;
+        setCanRetry(true);
+        latest.current.onError(errorText(error));
+      }
     } finally {
       if (current.current === rec) {
         current.current = null;
@@ -117,6 +129,8 @@ export function useDictation(options: DictationOptions) {
 
   /** Drops the recording, or the transcription on its way, and puts nothing in the box. */
   const cancel = useCallback(() => {
+    failure.current = null;
+    setCanRetry(false);
     const rec = current.current;
     current.current = null;
     attempt.current++;
@@ -131,6 +145,9 @@ export function useDictation(options: DictationOptions) {
 
   const start = useCallback(async () => {
     if (phaseRef.current !== 'idle') return;
+    failure.current = null;
+    setCanRetry(false);
+    const captureStarted = performance.now();
     go('starting');
     const mine = ++attempt.current;
     // Made during the click or key press, so the meter is allowed to run.
@@ -153,10 +170,20 @@ export function useDictation(options: DictationOptions) {
       void audio.close().catch(() => undefined);
       return;
     }
-    const recorder = new MediaRecorder(stream, {
-      ...(MediaRecorder.isTypeSupported(MIME) ? { mimeType: MIME } : {}),
-      audioBitsPerSecond: BITRATE
-    });
+    console.debug('[voice latency]', { captureInitializationMs: performance.now() - captureStarted });
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, {
+        ...(MediaRecorder.isTypeSupported(MIME) ? { mimeType: MIME } : {}),
+        audioBitsPerSecond: BITRATE
+      });
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      void audio.close();
+      go('idle');
+      latest.current.onError(microphoneProblem(error));
+      return;
+    }
     const analyser = audio.createAnalyser();
     analyser.fftSize = 1024;
     audio.createMediaStreamSource(stream).connect(analyser);
@@ -172,6 +199,13 @@ export function useDictation(options: DictationOptions) {
       peak: 0,
       metered: false,
       dropped: false
+    };
+    recorder.onerror = () => {
+      rec.dropped = true;
+      release(rec);
+      current.current = null;
+      go('idle');
+      latest.current.onError('Microphone recording failed. Try recording again.');
     };
     recorder.ondataavailable = (event) => {
       if (event.data.size) rec.chunks.push(event.data);
@@ -192,7 +226,7 @@ export function useDictation(options: DictationOptions) {
       if (ms >= MAX_RECORDING_MS) finish();
     }, 250);
     current.current = rec;
-    recorder.start(1000);
+    recorder.start(100);
     listen();
     setElapsed(0);
     go('recording');
@@ -207,7 +241,16 @@ export function useDictation(options: DictationOptions) {
   // Leaving the chat lets go of the microphone and forgets the recording.
   useEffect(() => cancel, [cancel]);
 
-  return { phase, elapsed, meter, start, finish, cancel, toggle };
+  const retry = useCallback(() => {
+    const rec = failure.current;
+    if (!rec || phaseRef.current !== 'idle') return;
+    failure.current = null;
+    setCanRetry(false);
+    current.current = rec;
+    go('transcribing');
+    void transcribe(rec, rec.recorder.mimeType || MIME);
+  }, []);
+  return { phase, elapsed, meter, start, finish, cancel, toggle, canRetry, retry };
 }
 
 /** "0:07", "1:23". */

@@ -358,3 +358,38 @@
   background: #2f2610;
   color: #f2c14e;
 }
+
+.global-work {
+  position: relative;
+}
+.global-work > button {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.global-work-panel {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  z-index: 30;
+  width: 320px;
+  padding: 16px;
+  background: var(--surface, #202631);
+  border: 1px solid var(--border, #465063);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px #0005;
+}
+.global-work-panel > button {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border, #465063);
+  color: inherit;
+  border-radius: 8px;
+}

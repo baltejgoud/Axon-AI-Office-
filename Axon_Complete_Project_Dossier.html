@@ -502,7 +502,7 @@ figcaption {
     <ul class="toc-sublist">
         <li class="toc-subitem"><span>3.1 Repository Anatomy & Complete Source Code Hierarchy</span><span>Directory</span></li>
         <li class="toc-subitem"><span>3.2 The 9 Core Commons Coworkers</span><span>Roster</span></li>
-        <li class="toc-subitem"><span>3.3 The 199 Domain Specialists across 22 Department Groups</span><span>Specialists</span></li>
+        <li class="toc-subitem"><span>3.3 The 204 Domain Specialists across 23 Department Groups</span><span>Specialists</span></li>
         <li class="toc-subitem"><span>3.4 The 39 Catalog Connectors (Model Context Protocol)</span><span>Integrations</span></li>
         <li class="toc-subitem"><span>3.5 The 895 Ingested Skills & Synthesis Pipeline</span><span>Skills</span></li>
         <li class="toc-subitem"><span>3.6 Design System Architecture & UI Primitives</span><span>Design Tokens</span></li>
@@ -519,6 +519,7 @@ figcaption {
         <li class="toc-subitem"><span>4.3 Dependency Hardening & Vulnerability Remediation (19 → 0)</span><span>Hardening</span></li>
         <li class="toc-subitem"><span>4.4 Testing, E2E Smoke Validation & Benchmarks</span><span>Verification</span></li>
         <li class="toc-subitem"><span>4.5 Marketing Platform & Launch Motion Production</span><span>Media</span></li>
+        <li class="toc-subitem"><span>4.6 Progress Update: Sept 30 – Oct 4, 2026 (Teams, Voice, Rooms, Speed)</span><span>Update</span></li>
     </ul>
 
     <li class="toc-item">
@@ -581,7 +582,7 @@ figcaption {
     The standard paradigm of artificial intelligence interaction has been dominated by the ephemeral single-threaded "chat box." Whether integrated as an IDE side-panel or accessed through a web portal, traditional generative interfaces suffer from severe structural deficiencies: context amnesia, lack of embodied spatial orientation, monolithic agent personas that attempt to perform all software disciplines simultaneously, and opaque execution loops that mutate local files without visual auditability.
 </p>
 <p>
-    <strong>Axon</strong> reimagines this entire interaction model. In Axon, artificial intelligence is not an abstract conversational endpoint; <em>your AI has an office now</em>. Users enter an embodied, interactive 3D virtual office campus populated by 208 distinct, persistent coworkers. Each coworker possesses a dedicated role profile, specialized domain capabilities, assigned tools, and custom system prompts. Rather than forcing a single model to act as frontend developer, security auditor, database architect, and product manager in turn, the user collaborates with specialized personnel seated in purpose-built departments.
+    <strong>Axon</strong> reimagines this entire interaction model. In Axon, artificial intelligence is not an abstract conversational endpoint; <em>your AI has an office now</em>. Users enter an embodied, interactive 3D virtual office campus populated by 213 distinct, persistent coworkers. Each coworker possesses a dedicated role profile, specialized domain capabilities, assigned tools, and custom system prompts. Rather than forcing a single model to act as frontend developer, security auditor, database architect, and product manager in turn, the user collaborates with specialized personnel seated in purpose-built departments.
 </p>
 
 <figure>
@@ -644,8 +645,8 @@ figcaption {
         </tr>
         <tr>
             <td><strong>Ecosystem Size</strong></td>
-            <td>208 Coworkers (9 Core + 199 Specialists)</td>
-            <td>22 distinct department groups spanning engineering, design, product, security, and executive management.</td>
+            <td>213 Coworkers (9 Core + 204 Specialists)</td>
+            <td>23 distinct department groups spanning engineering, design, product, security, and executive management.</td>
         </tr>
         <tr>
             <td><strong>Integration Layer</strong></td>
@@ -1269,7 +1270,7 @@ Passage contents extracted from local index...
             <td>
                 <code>platform.ts</code>: Typed IPC bridge method signatures.<br>
                 <code>types.ts</code>: Universal data models (Messages, Providers, Workspaces, Tools).<br>
-                <code>coworkers.ts</code>: Roster of 9 Core + 199 Specialist coworkers.<br>
+                <code>coworkers.ts</code>: Roster of 9 Core + 204 Specialist coworkers.<br>
                 <code>connectors.ts</code>: MCP catalog definitions and transport interfaces.<br>
                 <code>cost.ts</code>: Token pricing math and cost reconciliation formulas.
             </td>
@@ -1416,9 +1417,9 @@ Passage contents extracted from local index...
     <span>Chapter 3: What Axon Contains</span>
 </div>
 
-<h3>3.3 The 199 Domain Specialists across 22 Department Groups</h3>
+<h3>3.3 The 204 Domain Specialists across 23 Department Groups</h3>
 <p>
-    Beyond the 9 Core Commons specialists, Axon contains 198 authored specialist roles (`src/roles/roles.json`) plus a dedicated Business Analyst, totaling <strong>199 domain specialists</strong>. Each specialist represents a deeply calibrated engineering, operational, or executive discipline.
+    Beyond the 9 Core Commons specialists, Axon contains 203 authored specialist roles (`src/roles/roles.json`) plus a dedicated Business Analyst, totaling <strong>204 domain specialists</strong>. Each specialist represents a deeply calibrated engineering, operational, or executive discipline.
 </p>
 
 <table>
@@ -2182,6 +2183,77 @@ Communicates: in component hierarchies, React Profiler flame graphs and Storyboo
             Executes electron-builder to generate unpacked Windows binaries (<code>dist/win-unpacked/Axon.exe</code>), validating clean zero-exit-code builds.
         </p>
     </div>
+</div>
+
+<div class="page-break"></div>
+<div class="header-bar">
+    <span>Axon AI Studio — Master Dossier</span>
+    <span>Chapter 4: What All We Have Done</span>
+</div>
+
+<h3>4.6 Progress Update: Sept 30 – Oct 4, 2026</h3>
+<p>
+    Since the dossier was first issued (Sept 30), Axon moved from a single-coworker office to one where <strong>coworkers form teams, meet in rooms, take voice input, and answer in seconds</strong>. Everything in the table is merged on <code>main</code> and <code>feat/transparency</code>; side branches are listed below it.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width: 18%;">Date</th>
+            <th style="width: 27%;">Milestone</th>
+            <th style="width: 55%;">What shipped</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Oct 3<br><code>893822d</code></td>
+            <td><strong>Team meetings &amp; safer agent edits</strong></td>
+            <td>The Chief of Staff and Ops Coordinator find the right people (<code>find_people</code>) and gather 2&ndash;12 of them (<code>call_team_meeting</code>). Attendees give input in a new boardroom, the lead drafts a checked plan (owners, order, files), and <strong>nothing starts until the user presses Start</strong>. Tasks then run in dependency order, up to three at once, each in its owner's conversation with the hand-offs it builds on; the lead reports back. Stop team, Retry and restart are handled. New <code>edit_file</code> tool for targeted changes; <code>write_file</code> refuses rewrites that drop far more than they add; malformed tool calls go back to the model before any approval card; messages sent mid-run wait for the next step; Stop button (and Esc) in the composer. Also fixed a broken build (a function inside the Project class, two tool schemas with misplaced <code>required</code>).</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>d5f735b</code></td>
+            <td><strong>Voice typing</strong></td>
+            <td>Microphone button and Ctrl+M in the office composer. Audio goes to an OpenAI-style transcription endpoint: Groq <code>whisper-large-v3</code> by default, OpenAI <code>gpt-4o-transcribe</code> when an OpenAI key exists. Accuracy work: language pinned (English default), temperature 0, a glossary of names and code identifiers from the thread, silence segments and glossary echo dropped, empty recordings never sent. Words land at the cursor to review before sending. Only Axon's own window may use the microphone, never the camera. New Settings &rarr; Voice typing section; <code>speech.test.cjs</code> and <code>dictation-desktop.cjs</code> tests.</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>0410a53</code></td>
+            <td><strong>Quick answers &amp; a Chief of Staff who acts</strong></td>
+            <td>Measured on real chats: a simple question took 9&ndash;13 model calls and minutes, with answers up to 3,000 characters. Fixes: house rules for every coworker (short answers, tools only when needed, never the same lookup twice); only software builders start with the project map; a <strong>Quick replies</strong> setting (on by default) skips thinking on OpenRouter models (Nemotron 23 s &rarr; 2.5 s per step); tool results capped at 30,000 characters with repeated lookups answered from cache; code search batches files and skips binaries (4.5 s &rarr; 0.7 s). Result on the same free models: <strong>11&ndash;28 s and 1&ndash;3 steps</strong>. <code>find_people</code> now ranks by the words of a need.</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>d2d75cb</code></td>
+            <td><strong>Marketing &amp; Growth district, six meeting rooms</strong></td>
+            <td>Same campus footprint, rearranged. Five meeting rooms: Boardroom (12 seats), Rooms 1&ndash;2 (6 seats) and two new glass six-seaters, Rooms 3&ndash;4; each with a screen, whiteboard and door sign. New <strong>Marketing &amp; Growth</strong> district (coral carpet) holding Marketing Management, Customer Success and a new Growth &amp; Outreach department (Lead Generation Specialist, SDR, Email Marketing Specialist, Content Creator, Copywriter): roles grow to <strong>203 authored specialists</strong>. Gmail, HubSpot and Composio (LinkedIn, Instagram, X) are pre-assigned to the team once connected; role profiles state that nothing goes out before the user approves it.</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>0150bf3</code></td>
+            <td><strong>Teams meet and work in their own room</strong></td>
+            <td>A team gets the room the user named when it fits and is free, otherwise the smallest free room that fits. It stays there through the meeting, plan approval, work and report, then everyone walks back to their desks. Several teams run at once, each in its own room; each room's board shows the team's goal and every task by owner and status. Verified: two teams at once (Room 1 and Room 3), 60 fps at 1080p on mains power, 2.26 M triangles.</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>e019dc5</code></td>
+            <td><strong>Long meeting goals</strong></td>
+            <td>A real six-person meeting with a 5,393-character goal threw "Invalid text input" and ended the turn, so the lead re-called with two people. Goals up to 12,000 characters are now accepted whole; longer ones return a tool error naming the limit so the lead can shorten and retry. Regression tests added.</td>
+        </tr>
+        <tr>
+            <td>Oct 3<br><code>4c3ef72</code></td>
+            <td><strong>Chat layout</strong></td>
+            <td>Your messages sit on the right in a text-sized bubble (up to 85% of the panel); coworkers answer on the left.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h4>In progress and on side branches</h4>
+<ul>
+    <li><strong>Credit-aware retries (uncommitted on <code>feat/transparency</code>):</strong> an HTTP 402 saying a request would exceed credits given in-flight requests now waits for the others to settle (up to 8 attempts, about two minutes) instead of failing; a plain 402 gets a clear hint to add credits or lower the output limit. Model picker refinements are in progress.</li>
+    <li><strong><code>feat/axon-collab</code> (not yet merged):</strong> team tasks with the same owner must be ordered; team-task chats and approvals show live; department asks resolve, leads convene early, honest timeouts; a hang in the team-service test fixed.</li>
+    <li><strong><code>feat/axon-self-improve</code> (not yet merged):</strong> keyboard and focus management for the conversation menu and profile dialog; Planner and Updates panels stay mounted behind other tabs; agent conversations receive the open project root; new installs start at 8,192 max tokens instead of 4,096.</li>
+    <li><strong><code>fix/production-hardening</code> (not yet merged):</strong> release audit fixes (agent escape and permission gaps closed), data safety, sandboxed document parsers, update handling, logging, signed packaging, and a smoke test that imports a PDF and CSV through the sandboxed reader.</li>
+    <li><strong>Strategy documents:</strong> <code>market-fit-audit.md</code> and <code>strategic-framework.md</code> drafted at the repository root.</li>
+</ul>
+
+<div class="callout callout-info">
+    <strong>Current verification state:</strong> 569 unit tests plus the team-service suite (7) pass, typecheck is clean, and the office and team desktop checks pass at 60 fps (1080p, mains power) with 2.26 M triangles. The roster is now <strong>213 coworkers</strong> (9 core + 204 specialists) across 23 department groups, and the campus has <strong>five meeting rooms</strong>.
 </div>
 
 <div class="page-break"></div>

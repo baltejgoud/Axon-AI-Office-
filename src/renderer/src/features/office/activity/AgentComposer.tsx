@@ -162,9 +162,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   /** Stops the run: the reply so far stays, a waiting approval is withdrawn, and a message you queued goes next. */
   const handleStop = () => {
     if (!conversation) return;
-    void window.axon.chatStop(conversation.id).catch((error) =>
-      patch({ error: error instanceof Error ? error.message : 'Could not stop.' })
-    );
+    void window.axon
+      .chatStop(conversation.id)
+      .catch((error) => patch({ error: error instanceof Error ? error.message : 'Could not stop.' }));
     pushActivity(agentId, { type: 'message', title: 'Stopped', detail: 'You stopped this task' });
   };
 
@@ -206,7 +206,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     useOfficeStore.getState().setPanelTab('chat');
     useOfficeStore.getState().setLastResponse(agentId, '');
     setAgentTask(agentId, textToSend);
-    setAgentStatus(agentId, 'working');
+    // Working indicators are set only by the main-process supervisor.
 
     pushActivity(agentId, {
       type: 'task_assigned',
@@ -380,6 +380,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           </button>
 
           <DictationButton
+            canRetry={dictation.canRetry}
+            onRetry={dictation.retry}
             phase={dictation.phase}
             elapsed={dictation.elapsed}
             meter={dictation.meter}
@@ -397,7 +399,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
               void window.axon
                 .chatModelSet(conversation.id, providerId, modelParts.join('::'))
                 .then(() => useApp.getState().refresh())
-                .catch((error) => patch({ error: error instanceof Error ? error.message : 'Could not change the model.' }));
+                .catch((error) =>
+                  patch({ error: error instanceof Error ? error.message : 'Could not change the model.' })
+                );
             }}
             onManage={() => useOfficeStore.getState().openOverlay('settings')}
           />
@@ -408,7 +412,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
           <span className="composer-end">
             <span className="composer-hint">
-              {dictation.phase === 'recording' ? 'Enter to finish · Esc to cancel' : 'Shift+Enter for a new line'}
+              {dictation.phase === 'recording'
+                ? 'Enter to finish · Esc to cancel'
+                : 'Shift+Enter for a new line'}
             </span>
 
             {needsModel ? (

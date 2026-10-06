@@ -11,7 +11,7 @@ require.extensions['.ts'] = (module, path) => module._compile(ts.transpileModule
 }).outputText, path);
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { dedupe, rolesBlock, skillsBlock, SKILL_BUDGET } = require('../src/main/prompt.ts');
+const { dedupe, rolesBlock, skillsBlock } = require('../src/main/prompt.ts');
 const { catalog, skillBodies, hasSkill } = require('../src/main/skills.ts');
 const { roles, roleProfiles, hasRole } = require('../src/main/roles.ts');
 
@@ -28,15 +28,12 @@ test('rolesBlock names every role and includes each profile', () => {
   assert.equal(rolesBlock([]), '');
 });
 
-test('skillsBlock wraps each skill with its source and enforces the budget', () => {
+test('skillsBlock wraps selected skills and leaves model admission to the token planner', () => {
   const block = skillsBlock([{ name: 'tdd', source: 'sp', body: 'Do TDD.' }]);
   assert.ok(block.includes('## Skill: tdd (sp)\nDo TDD.'));
   assert.ok(block.includes('not available here'));
   assert.equal(skillsBlock([]), '');
-  assert.throws(
-    () => skillsBlock([{ name: 'big', source: 's', body: 'x'.repeat(SKILL_BUDGET) }]),
-    /Selected skills exceed the budget \(\d[\d,]* of 80,000 characters\)\. Remove a skill\./
-  );
+  assert.ok(skillsBlock([{ name: 'big', source: 's', body: 'x'.repeat(100000) }]).length > 100000);
 });
 
 test('bundled catalogs load and resolve ids', () => {

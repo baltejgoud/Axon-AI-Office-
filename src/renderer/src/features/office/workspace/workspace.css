@@ -987,3 +987,107 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.live-terminal {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #10151e;
+  color: #e3e7ef;
+  padding: 12px;
+  gap: 10px;
+}
+.live-terminal-toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.live-terminal-toolbar button,
+.live-terminal-toolbar input,
+.live-terminal-toolbar select {
+  background: #222d3c;
+  color: #e3e7ef;
+  border: 1px solid #455469;
+  border-radius: 5px;
+  padding: 5px;
+}
+.live-terminal-screen {
+  flex: 1;
+  min-height: 160px;
+}
+.multi-agents {
+  padding: 16px;
+}
+.multi-agents nav {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+.multi-agents article,
+.multi-agents li {
+  padding: 12px;
+  border: 1px solid var(--office-border);
+  border-radius: 10px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.multi-agents p {
+  margin: 6px 0;
+}
+.multi-agents button {
+  margin: 4px;
+  padding: 6px 10px;
+}
+.multi-task-graph article {
+  border-left: 3px solid #758aff;
+}
+.multi-agents ol {
+  list-style: none;
+  padding: 0;
+}
+
+.office-container .multi-agents {
+  color: var(--office-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.office-container .multi-agents header {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--office-soft);
+}
+.office-container .multi-agents h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.office-container .multi-agents button {
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.office-container .multi-agents button:hover,
+.office-container .multi-agents button[aria-pressed='true'] {
+  background: var(--office-soft);
+  border-color: var(--office-muted);
+}
+.office-container .multi-agents article {
+  background: var(--office-paper);
+}
+.office-container .multi-agents small,
+.office-container .multi-agents time {
+  color: var(--office-muted);
+}
+.office-container .multi-agents details {
+  margin-top: 8px;
+}
+.office-container .multi-agents summary {
+  cursor: pointer;
+  color: var(--office-muted);
+}
+.office-container .multi-agents progress {
+  width: 100%;
+  accent-color: #758aff;
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Conversation } from '../../../shared/types';
 import { meterTone } from '../../../shared/context-usage';
 import { conversationCost, formatTokens, formatUsd, hasPrice, modelOf } from '../../../shared/cost';
-import { useApp } from '../state';
+import { useApp, perform } from '../state';
 import { useEscape } from '../ui/escape';
 import './contextMeter.css';
 
@@ -18,6 +18,8 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
   const allMessages = useApp((s) => s.data?.messages);
   const providers = useApp((s) => s.data?.providers);
   const estimates = useApp((s) => s.estimates);
+  const [inspection, setInspection] = useState<{ sections: Record<string, number>; system: string; messages: string; tools: string } | null>(null);
+  const [editing, setEditing] = useState<{ original: string; replacement: string } | null>(null);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEscape(() => setOpen(false), open);
@@ -44,22 +46,33 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
     return () => {
       current = false;
     };
-  }, [conversation.id]);
+  }, [conversation.id, conversation.modelId, conversation.providerId]);
 
   const messages = useMemo(
     () => (allMessages ?? []).filter((m) => m.conversationId === conversation.id),
     [allMessages, conversation.id]
   );
+  const [recordedCost, setRecordedCost] = useState<ReturnType<typeof conversationCost> | null>(null);
+  const completedKey = messages.filter(m => m.role === 'assistant' && !m.streaming).map(m => `${m.id}:${m.usage?.promptTokens}:${m.usage?.completionTokens}`).join('|');
+  useEffect(() => {
+    let current = true;
+    setRecordedCost(null);
+    void window.axon.getConversationCost(conversation.id).then(cost => { if (current) setRecordedCost(cost); }).catch(() => {});
+    return () => { current = false; };
+  }, [conversation.id, completedKey, providers]);
   const cost = useMemo(
-    () => conversationCost(messages, providers ?? [], estimates),
-    [messages, providers, estimates]
+    () => {
+      if (!recordedCost) return conversationCost(messages, providers ?? [], estimates);
+      const liveCost = conversationCost(messages.filter(m => m.streaming), providers ?? [], estimates);
+      return { ...recordedCost, estimating: liveCost.estimating, priced: recordedCost.priced || liveCost.priced };
+    },
+    [messages, providers, estimates, recordedCost]
   );
   const model = modelOf(providers ?? [], conversation.providerId, conversation.modelId);
   const live = messages.find((m) => m.streaming);
   const estimate = live ? estimates[live.id] : undefined;
   const pct = usage?.pct ?? 0;
   const percent = Math.round(pct * 100);
-  const trimming = !!usage && usage.usedChars > usage.budgetChars;
   const tokens = cost.promptTokens + cost.completionTokens;
   const summaryCost = cost.priced
     ? `${cost.estimating > 0 ? '~' : ''}${formatUsd(cost.actual + cost.estimating)}`
@@ -89,7 +102,7 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
           <span style={{ width: `${percent}%` }} />
         </span>
         <span className="context-meter-pct">
-          {!usage ? 'Measuring' : trimming ? 'Full' : `${percent}%`}
+          {!usage ? 'Measuring' : usage.tokenBasis ? `${formatTokens(usage.tokenBasis.usedTokens)} / ${formatTokens(usage.tokenBasis.windowTokens)}` : `${percent}%`}
           <span className="context-meter-word"> context</span>
         </span>
         {summaryCost && (
@@ -102,32 +115,41 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
             <h5>Context</h5>
             {usage ? (
               <>
-                <p>
-                  {usage.usedChars.toLocaleString()} of {usage.budgetChars.toLocaleString()} characters Axon
-                  can send.
-                </p>
-                {usage.tokenBasis && (
-                  <p>
-                    {usage.tokenBasis.usedTokens.toLocaleString()} of{' '}
-                    {usage.tokenBasis.windowTokens.toLocaleString()} tokens in the model's window, as the
-                    provider last reported.
-                  </p>
-                )}
-                {trimming && (
-                  <p className="context-meter-warn">Older messages are left out so the rest fits.</p>
-                )}
-                <p className="context-meter-note">
-                  {!usage.estimated
-                    ? 'Measured in tokens the provider reported.'
-                    : model?.contextWindow
-                      ? 'Estimated from characters until the model reports its tokens.'
-                      : 'Estimated from characters. Give this model its context window in Settings → Models to measure tokens.'}
-                </p>
+                <p>{usage.state === 'recovery-required' ? 'Recovery required' : pct < .5 ? 'Healthy' : pct < .75 ? 'Optimizing' : 'Near limit'}</p>
+                {usage.sections && Object.entries(usage.sections).map(([section, tokens]) => (
+                  <p key={section}>{section}: {formatTokens(tokens)} tokens</p>
+                ))}
+                <p>Reserved response: {formatTokens(usage.outputReserve ?? 0)} tokens</p>
+                <p>Safety margin: {formatTokens(usage.safetyMargin ?? 0)} tokens</p>
+                {!!usage.archivedTokens && <p>Older history: {formatTokens(usage.archivedTokens)} estimated tokens retained locally.</p>}
+                <p className="context-meter-note">Model tokenizer counts where available, with conservative estimates for other models. Full conversation history remains available.</p>
               </>
             ) : (
               <p>Measuring…</p>
             )}
           </section>
+          {!!conversation.memory?.facts.length && <section>
+            <h5>What Axon remembers</h5>
+            {conversation.memory.facts.map((fact, index) => {
+              const displayed = conversation.memoryCorrections?.[fact.text] ?? fact.text;
+              return <p key={index}>{fact.kind}: {displayed || '(removed)'} <button onClick={() => setEditing({ original: fact.text, replacement: displayed })}>Edit</button></p>;
+            })}
+            {editing && <div>
+              <textarea aria-label="Correct remembered fact" value={editing.replacement} onChange={e => setEditing({...editing, replacement: e.target.value})} />
+              <button onClick={() => void perform(async () => { await window.axon.chatMemoryCorrect(conversation.id, editing.original, editing.replacement); setEditing(null); })}>Save correction</button>
+              <button onClick={() => setEditing(null)}>Cancel</button>
+            </div>}
+            <p className="context-meter-note">Corrections change working memory. Original messages remain in your history.</p>
+          </section>}
+          {import.meta.env.DEV && <section>
+            <button onClick={() => void window.axon.getContextInspector(conversation.id).then(setInspection)}>Context Inspector</button>
+            {inspection && <details open><summary>Compiled request · credentials redacted</summary>
+              <pre>{JSON.stringify(inspection.sections, null, 2)}</pre>
+              <h5>System and memory</h5><pre>{inspection.system}</pre>
+              <h5>Recent chat and current task</h5><pre>{inspection.messages}</pre>
+              <h5>Tools</h5><pre>{inspection.tools}</pre>
+            </details>}
+          </section>}
           <section>
             <h5>Cost</h5>
             {cost.priced && (

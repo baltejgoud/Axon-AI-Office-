@@ -45,7 +45,7 @@ function setup(t, savedKey = 'sk-saved') {
   t.after(() => {
     Object.assign(providers, originals);
     service.shutdown();
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
   return { service, secrets, checked, listed };
 }

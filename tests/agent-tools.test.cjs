@@ -4,15 +4,21 @@ const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
 const original = Module._load;
-Module._load = function(name, ...args) {
+Module._load = function (name, ...args) {
   if (name === 'electron') return { app: { isPackaged: false } };
   return original.call(this, name, ...args);
 };
-require.extensions['.ts'] = (module, file) => module._compile(
-  ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
-  }).outputText, file
-);
+require.extensions['.ts'] = (module, file) =>
+  module._compile(
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        esModuleInterop: true
+      }
+    }).outputText,
+    file
+  );
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -33,13 +39,17 @@ async function projectWith(t, files) {
   return { dir, project, ctx: { project, allowShell: false } };
 }
 
-const lines = (n, prefix = 'line') => Array.from({ length: n }, (_, i) => `${prefix} ${i + 1}`).join('\n') + '\n';
+const lines = (n, prefix = 'line') =>
+  Array.from({ length: n }, (_, i) => `${prefix} ${i + 1}`).join('\n') + '\n';
 
 test('edit_file changes only the text it names and keeps the rest of the file', async (t) => {
   const { dir, ctx } = await projectWith(t, { 'a.ts': 'const a = 1;\nconst b = 2;\n// keep me\n' });
   const edit = new ToolRegistry().get('edit_file');
   assert.ok(edit, 'edit_file is registered');
-  const result = await edit.execute({ path: 'a.ts', old_string: 'const b = 2;', new_string: 'const b = 3;' }, ctx);
+  const result = await edit.execute(
+    { path: 'a.ts', old_string: 'const b = 2;', new_string: 'const b = 3;' },
+    ctx
+  );
   assert.ok(!result.isError, result.content);
   assert.equal(fs.readFileSync(path.join(dir, 'a.ts'), 'utf8'), 'const a = 1;\nconst b = 3;\n// keep me\n');
   assert.deepEqual([result.change.added, result.change.removed, result.change.created], [1, 1, false]);
@@ -52,13 +62,21 @@ test('edit_file that cannot apply is refused before anyone is asked, with the re
   const edit = new ToolRegistry().get('edit_file');
   assert.match(await edit.validate({ path: 'a.ts', old_string: 'nope', new_string: 'y' }, ctx), /not found/);
   assert.match(await edit.validate({ path: 'a.ts', old_string: 'x', new_string: 'y' }, ctx), /2 times/);
-  assert.match(await edit.validate({ path: 'missing.ts', old_string: 'x', new_string: 'y' }, ctx), /write_file/);
-  assert.equal(await edit.validate({ path: 'a.ts', old_string: 'x', new_string: 'y', replace_all: true }, ctx), null);
+  assert.match(
+    await edit.validate({ path: 'missing.ts', old_string: 'x', new_string: 'y' }, ctx),
+    /write_file/
+  );
+  assert.equal(
+    await edit.validate({ path: 'a.ts', old_string: 'x', new_string: 'y', replace_all: true }, ctx),
+    null
+  );
 });
 
 test('edit_file previews its change as a diff', async (t) => {
   const { ctx } = await projectWith(t, { 'a.ts': 'one\ntwo\n' });
-  const preview = await new ToolRegistry().get('edit_file').preparePreview({ path: 'a.ts', old_string: 'two', new_string: 'TWO' }, ctx);
+  const preview = await new ToolRegistry()
+    .get('edit_file')
+    .preparePreview({ path: 'a.ts', old_string: 'two', new_string: 'TWO' }, ctx);
   assert.equal(preview.type, 'diff');
   assert.ok(preview.content.includes('-two') && preview.content.includes('+TWO'), preview.content);
 });
@@ -69,7 +87,10 @@ test('a whole-file write that drops most of an existing file is refused, pointin
   const reason = await write.validate({ path: 'big.ts', content: 'line 1\nline 2\n' }, ctx);
   assert.match(reason, /edit_file/);
   // A small edit and a new file are fine.
-  assert.equal(await write.validate({ path: 'big.ts', content: lines(120).replace('line 7\n', 'line seven\n') }, ctx), null);
+  assert.equal(
+    await write.validate({ path: 'big.ts', content: lines(120).replace('line 7\n', 'line seven\n') }, ctx),
+    null
+  );
   assert.equal(await write.validate({ path: 'new.ts', content: 'hello\n' }, ctx), null);
   // The guard holds even if the call is made without asking first.
   const run = await write.execute({ path: 'big.ts', content: 'line 1\n' }, ctx);
@@ -78,7 +99,9 @@ test('a whole-file write that drops most of an existing file is refused, pointin
 
 test('a whole-file write keeps the final newline the file had', async (t) => {
   const { dir, ctx } = await projectWith(t, { 'a.ts': 'one\ntwo\n' });
-  const result = await new ToolRegistry().get('write_file').execute({ path: 'a.ts', content: 'one\nTWO' }, ctx);
+  const result = await new ToolRegistry()
+    .get('write_file')
+    .execute({ path: 'a.ts', content: 'one\nTWO' }, ctx);
   assert.ok(!result.isError, result.content);
   assert.equal(fs.readFileSync(path.join(dir, 'a.ts'), 'utf8'), 'one\nTWO\n');
   assert.equal(result.written, 'one\nTWO\n');
@@ -105,7 +128,10 @@ test('list_files of a folder walks that folder, even when the rest of the projec
 
 test('list_files says when a listing was cut short instead of looking empty', async (t) => {
   const { ctx } = await projectWith(t, { 'src/a.ts': 'x' });
-  ctx.project.list = async function () { this.listTruncated = true; return []; };
+  ctx.project.list = async function () {
+    this.listTruncated = true;
+    return [];
+  };
   const result = await new ToolRegistry().get('list_files').execute({ directory: 'tests' }, ctx);
   assert.doesNotMatch(result.content, /^No files found\.$/);
   assert.match(result.content, /cut short|cap/);
@@ -132,23 +158,32 @@ test('search_code says when it stopped early, so no match is not mistaken for no
 });
 
 test('the shell tools say which shell runs the command', () => {
-  assert.match(shellNote('win32'), /cmd\.exe/);
-  assert.match(shellNote('win32'), /not bash/i);
+  assert.match(shellNote('win32'), /powershell|pwsh|cmd/i);
+  assert.match(shellNote('win32'), /native syntax/i);
   assert.match(shellNote('linux'), /sh/);
   const run = new ToolRegistry().get('run_command').definition.description;
   assert.ok(run.includes(shellNote(process.platform)), run);
 });
 
-test('a command that cmd.exe does not know comes back with the hint', { skip: process.platform !== 'win32' }, async (t) => {
-  const { project } = await projectWith(t, { 'a.txt': 'x' });
-  const result = await new ToolRegistry().get('run_command').execute({ command: 'axonnosuchcommand -n 1 a.txt' }, { project, allowShell: true });
-  assert.ok(result.isError);
-  assert.match(result.content, /cmd\.exe/);
-});
+test(
+  'an unknown command comes back with its actual shell identity',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const { project } = await projectWith(t, { 'a.txt': 'x' });
+    const result = await new ToolRegistry()
+      .get('run_command')
+      .execute({ command: 'axonnosuchcommand -n 1 a.txt' }, { project, allowShell: true });
+    assert.ok(result.isError);
+    assert.match(result.content, /powershell|pwsh|cmd/i);
+  }
+);
 
 test('edit_file is checked like write_file: inside the folder, and asked about', () => {
   const permissions = new PermissionManager();
   const scope = { roots: [path.resolve('/project')], allowShell: false };
   assert.equal(permissions.check({ toolName: 'edit_file', args: { path: 'a.ts' } }, scope).action, 'ask');
-  assert.equal(permissions.check({ toolName: 'edit_file', args: { path: '../outside.ts' } }, scope).action, 'deny');
+  assert.equal(
+    permissions.check({ toolName: 'edit_file', args: { path: '../outside.ts' } }, scope).action,
+    'deny'
+  );
 });

@@ -117,3 +117,6 @@
   color: var(--danger-text);
   font-weight: 600;
 }
+.context-meter-details { max-height: min(70vh, 600px); overflow: auto; overflow-wrap: anywhere; }
+.context-meter-details pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }
+.context-meter-details textarea { width: 100%; min-height: 90px; box-sizing: border-box; }

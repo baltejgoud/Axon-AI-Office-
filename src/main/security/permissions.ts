@@ -90,7 +90,7 @@ export class PermissionManager {
     if (TEAM_TOOL_NAMES.has(toolName)) return { action: 'allow' };
 
     // 2. Path containment check
-    if (['read_file', 'list_files'].includes(toolName) || FILE_SAVERS.has(toolName)) {
+    if (['read_file', 'list_files', 'file_context', 'get_symbol'].includes(toolName) || FILE_SAVERS.has(toolName)) {
       const p = args.path || args.directory || args.directoryPath;
       if (p && roots.length > 0 && !this.isPathWithinRoots(String(p), roots)) {
         return { action: 'deny', reason: `Path "${p}" is outside allowed workspace roots.` };
@@ -109,7 +109,7 @@ export class PermissionManager {
     }
 
     // 4. Safe read-only tools default to allow within workspace
-    if (toolName === 'read_file' || toolName === 'list_files' || toolName === 'search_code') {
+    if (['read_file', 'list_files', 'search_code', 'file_context', 'get_symbol'].includes(toolName)) {
       return { action: this.defaultPolicy[toolName] || 'allow' };
     }
 

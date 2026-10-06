@@ -51,7 +51,7 @@ export function ModelPicker({
             value: `${p.id}::${m.id}`,
             providerName: p.name,
             id: m.id,
-            label: m.displayName && m.displayName !== m.id ? m.displayName : m.id
+            label: m.displayName && m.displayName !== m.id ? m.displayName : shortModelName(m.id)
           }))
         ),
     [providers]
@@ -221,7 +221,17 @@ export function ModelPicker({
                             pick(option);
                           }}
                         >
-                          <span className="model-picker-option-name">{option.label}</span>
+                          <ModelIcon
+                            name={option.providerName}
+                            size={15}
+                            className="model-picker-option-icon"
+                          />
+                          <span className="model-picker-option-copy">
+                            <span className="model-picker-option-name">{option.label}</span>
+                            {option.label !== option.id && (
+                              <span className="model-picker-option-id">{option.id}</span>
+                            )}
+                          </span>
                           {option.value === value && <IconCheck size={13} />}
                         </div>
                       </div>
