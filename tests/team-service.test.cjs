@@ -62,6 +62,33 @@ async function waitFor(find, what) {
 const lead = (service, id = 'chief-of-staff') =>
   service.chatCreate('p1', 'm1', null, id, { skillIds: [], roleIds: [] }, null, `You are Axon's ${id}.`);
 
+test('Chief of Staff greeting with an existing ChatGPT catalog reaches inference and has a healthy meter', async (t) => {
+  const { service, repo } = await setup(t);
+  repo.state.providers[0] = { ...repo.state.providers[0], id: 'chatgpt-plan', auth: 'chatgpt', kind: 'openai-responses', baseUrl: 'https://api.openai.com/v1', models: [{ id: 'gpt-6.1-sol', displayName: 'GPT-6.1-Sol' }] };
+  service.chatgpt.accessToken = async () => 'mock-plan-token';
+  repo.state.settings.autoTitleConversations = false;
+  const chief = require('../src/shared/coworkers.ts').COWORKERS.find(c => c.id === 'chief-of-staff');
+  const chat = await service.chatCreate('chatgpt-plan', 'gpt-6.1-sol', null, chief.id, { skillIds: [], roleIds: [] }, null, chief.systemPrompt);
+  let called = false;
+  mockModel(t, async (_n, req, onChunk) => {
+    called = true;
+    assert.equal(req.messages.at(-1).content, 'hi');
+    assert.ok(req.system.includes('Chief of Staff'));
+    onChunk('Hi! What can I help with?');
+    return { toolCalls: [], promptTokens: 2000, completionTokens: 10 };
+  });
+  await service.chatSend(chat.id, 'hi', []);
+  await waitFor(() => repo.conversationMessages(chat.id).some(m => m.role === 'assistant' && !m.streaming), 'greeting to finish');
+  assert.ok(called);
+  const messages = repo.conversationMessages(chat.id);
+  assert.ok(messages.some(m => m.role === 'assistant' && m.content.includes('Hi!')));
+  assert.ok(!messages.some(m => m.error));
+  const meter = await service.getContextUsage(chat.id);
+  assert.equal(meter.tokenBasis.windowTokens, 1050000);
+  assert.ok(meter.pct < 1);
+  assert.notEqual(meter.state, 'recovery-required');
+});
+
 const PLAN = { summary: 'API then form', assignments: [
   { id: 't1', owner: 'Backend Developer', title: 'API', brief: 'Build the API', files: ['src/api.ts'] },
   { id: 't2', owner: 'Frontend Developer', title: 'Form', brief: 'Build the form', depends_on: ['t1'], files: ['src/form.tsx'] }] };
@@ -73,6 +100,7 @@ function teamModel(t, plan = PLAN) {
     const system = req.system ?? '';
     const last = req.messages.at(-1);
     asked.push({ system, last: last?.content, tools: req.tools?.map((x) => x.name) ?? [] });
+    if (system.includes('Review whether the assigned business task')) { onChunk('{"complete":true,"blockers":[]}'); return { toolCalls: [] }; }
     if (req.tools?.some((x) => x.name === 'propose_plan'))
       return { toolCalls: [{ id: `plan${n}`, name: 'propose_plan', arguments: JSON.stringify(plan) }] };
     if (system.includes('has called a team meeting')) { onChunk('My input.'); return { toolCalls: [] }; }
@@ -116,6 +144,26 @@ test('the Chief of Staff calls a meeting; the plan waits; Start runs the tasks i
   assert.equal(formChat.agentId, 'frontend-developer');
   assert.equal(formChat.title, 'Form');
   assert.equal(team.report, 'Report: done.');
+});
+
+test('company context and documents reach meeting attendees and task owners and survive storage', async (t) => {
+  const { service, repo } = await setup(t);
+  repo.state.documents.push({ id: 'sanket-doc', name: 'Sanket report', kind: 'pdf', size: 10, chunkCount: 1, createdAt: 1, workspaceIds: [] });
+  repo.state.chunks.push({ id: 'chunk', docId: 'sanket-doc', docName: 'Sanket report', index: 0, text: 'Sanket password reset requirements: account recovery needs a token.', tokens: 20 });
+  await service.workspaceSave({ id: 'sanket', company: true, name: 'Sanket', description: 'Supply chain optimization', systemPrompt: 'Company operating rules', instructions: 'Do not invent customer results.', defaultProviderId: 'p1', defaultModelId: 'm1', knowledgeDocIds: ['sanket-doc'], enabledTools: [], skillIds: [], roleIds: [], fileAccess: { enabled: false, roots: [] }, createdAt: 1, updatedAt: 1 });
+  const chat = await service.chatCreate('p1', 'm1', 'sanket', 'chief-of-staff', { skillIds: [], roleIds: [] }, null, 'You are the Chief of Staff.');
+  const asked = teamModel(t);
+  await service.chatSend(chat.id, 'Add password reset', []);
+  const team = await waitFor(() => repo.state.teams.find(t => t.status === 'planned'), 'company plan');
+  assert.match(team.context, /Company operating rules/);
+  assert.match(team.context, /Sanket report/);
+  assert.ok(asked.filter(a => a.system.includes('has called a team meeting')).every(a => a.system.includes('Do not invent customer results.')));
+  await service.teamStart(team.id);
+  await waitFor(() => team.status === 'done', 'company report');
+  for (const assignment of team.plan.assignments) assert.equal(repo.state.conversations.find(c => c.id === assignment.conversationId).workspaceId, 'sanket');
+  assert.equal(asked.filter(a => a.system.includes('Review whether the assigned business task')).length, 2);
+  await repo.save();
+  assert.equal(repo.state.workspaces.find(w => w.id === 'sanket').company, true);
 });
 
 test('a coworker who is not a lead has no team tools; vague attendees start nothing', async (t) => {

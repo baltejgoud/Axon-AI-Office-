@@ -12,6 +12,8 @@ const ringGeometry = new THREE.RingGeometry(0.36, 0.43, 56);
 const haloGeometry = new THREE.CircleGeometry(0.43, 40);
 const hitGeometry = new THREE.BoxGeometry(0.62, 1.8, 0.62);
 const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
+const cupHandle = new THREE.TorusGeometry(0.022, 0.006, 6, 12);
+const cupMaterial = new THREE.MeshStandardMaterial({ color: '#fbfaf6', roughness: 0.35 });
 /** Books, folders, tablets and clipboards are held face-out, tipped back a little. */
 const HELD_FLAT_TILT = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, -0.35));
 
@@ -24,11 +26,17 @@ const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 function heldProp(item: HeldItem, accent: string): THREE.Object3D {
   switch (item) {
-    case 'cup':
+    case 'cup': {
+      const handle = new THREE.Mesh(cupHandle, cupMaterial);
+      handle.rotation.y = Math.PI / 2;
+      handle.position.set(0.047, 0.03, 0);
       return new THREE.Group().add(
         cylinder('#fbfaf6', 0.04, 0.1, [0, 0.03, 0]),
-        cylinder(accent, 0.041, 0.035, [0, 0.03, 0])
+        cylinder(accent, 0.041, 0.035, [0, 0.03, 0]),
+        cylinder('#51382c', 0.035, 0.003, [0, 0.081, 0]),
+        handle
       );
+    }
     case 'book':
       return box('#3d5a80', [0.03, 0.22, 0.16], [0, 0, 0.02]);
     case 'folder':

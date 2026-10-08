@@ -4,6 +4,7 @@ import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import { HOME_DESKS, poiById } from '../simulation/layout';
 import type { Vec2 } from '../simulation/types';
 import { shortName, type LabelTier } from './framing';
+import { visibleSpatialLabels } from './spatialLabels';
 const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: 'Idle',
   working: 'Working',
@@ -44,6 +45,9 @@ export interface SceneLabelsProps {
   statuses: Readonly<Record<string, AgentStatus>>;
   loading: boolean;
   onAgent: (id: string) => void;
+  bounds: Bounds | null;
+  target: Vec2;
+  onPlace: (kind: 'district' | 'department', target: string) => void;
 }
 
 /**
@@ -52,12 +56,17 @@ export interface SceneLabelsProps {
  * The scene positions the tags; `data-anchor` says whom each follows.
  */
 export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function SceneLabels(
-  { tier, people, selectedId, statuses, loading, onAgent },
+  { tier, people, selectedId, statuses, loading, onAgent, bounds, target, onPlace },
   ref
 ) {
   const tags = tier === 'near' ? people : people.filter((id) => id === selectedId);
   return (
     <div ref={ref} className={`office-scene-labels tier-${tier} ${loading ? 'is-loading' : ''}`}>
+      {tier !== 'near' && visibleSpatialLabels(tier === 'far' ? 'district' : 'department', bounds, target).map(label => <button
+        key={label.id} data-anchor={`place:${label.id}`} className={`office-place-label ${label.kind}`} style={{ '--place-color': label.color } as CSSProperties}
+        onClick={() => onPlace(label.kind, label.target)} aria-label={`Go to ${label.title}, ${label.people} people`}>
+        <strong>{label.title}</strong><small>{label.people} people</small>
+      </button>)}
       {tags.map((id) => {
         const agent = AGENTS.get(id);
         if (!agent) return null;

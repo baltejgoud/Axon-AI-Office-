@@ -1,4 +1,4 @@
-import type { FileChange, Message, ToolCall } from '../../../../../shared/types';
+import type { FileChange, Message, ToolCall, ToolApprovalRequest } from '../../../../../shared/types';
 
 /** The office's share of the left side when a work surface first opens: 60 office, 40 work. */
 export const DEFAULT_WORK_SPLIT = 0.6;
@@ -162,12 +162,28 @@ export function readText(output: string): { text: string; firstLine: number } {
 }
 
 /** Everything a coworker did in a thread (messages as `withOutcomes` gives them), by surface. */
-export function workOf(messages: readonly Message[]): Work {
+export function workOf(messages: readonly Message[], approvals: readonly ToolApprovalRequest[] = []): Work {
+  // An approval may arrive just before its streaming tool call. Review must still have a surface.
+  const known = new Set(messages.flatMap((m) => (m.toolCalls ?? []).map((call) => call.id)));
+  const pending = approvals
+    .filter((request) => !known.has(request.toolCallId))
+    .map((request) =>
+      stepOf(
+        {
+          id: request.toolCallId,
+          name: request.toolName,
+          arguments: JSON.stringify(request.arguments)
+        },
+        messages.at(-1)?.createdAt ?? 0
+      )
+    )
+    .filter((step): step is WorkStep => step !== null);
   const steps = messages.flatMap((m) =>
     m.role === 'assistant'
       ? (m.toolCalls ?? []).map((call) => stepOf(call, m.createdAt)).filter((s): s is WorkStep => s !== null)
       : []
   );
+  steps.push(...pending);
   const files = new Map<string, WorkFile>();
   for (const step of steps) {
     const path = stepPath(step);
@@ -185,7 +201,8 @@ export function workOf(messages: readonly Message[]): Work {
       const from = String(step.args.old_string ?? '');
       const to = String(step.args.new_string ?? '');
       if (file.firstLine === 1 && from && file.text.includes(from))
-        file.text = step.args.replace_all === true ? file.text.split(from).join(to) : file.text.replace(from, () => to);
+        file.text =
+          step.args.replace_all === true ? file.text.split(from).join(to) : file.text.replace(from, () => to);
       file.touch = 'written';
       if (step.state === 'done') file.written = step;
     } else if (step.read) {

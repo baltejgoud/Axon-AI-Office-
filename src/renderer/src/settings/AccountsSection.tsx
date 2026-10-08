@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AccountProfile, DeviceCode } from '../../../shared/scm';
+import type { ProviderConfig } from '../../../shared/types';
 import { errorText, useAccounts } from '../accounts';
 import { useApp } from '../state';
 import {
@@ -11,13 +12,17 @@ import {
   IconGitHub,
   IconGoogle,
   IconLoader,
+  IconKey,
   IconUser
 } from '../ui';
 import { SettingsGroup } from './controls';
 import { AccountAppDialog } from './AccountAppDialog';
+import { ClaudeCard } from './ClaudeAccount';
+import { ModelIcon } from './ModelIcon';
+import { PRESETS } from './ProviderDialog';
 
 /** Settings → Accounts: GitHub for your repositories, Google for who you are, and the Git they both need. */
-export function AccountsSection() {
+export function AccountsSection({ onAddProvider }: { onAddProvider: (provider: ProviderConfig) => void }) {
   const { accounts, refresh } = useAccounts();
   /** After signing out of GitHub: how to withdraw Axon's access there too. */
   const [revokeHint, setRevokeHint] = useState(false);
@@ -30,12 +35,12 @@ export function AccountsSection() {
         <div>
           <h3>Accounts</h3>
           <p>
-            Sign in with GitHub to clone your repositories, publish folders and sync your work. Sign in with
-            Google to show who you are in Axon, then connect Gmail if you want your coworkers to read and
-            draft mail.
+            Connect model accounts and the services your coworkers use. Model access and repository sign-ins
+            are managed separately.
           </p>
         </div>
       </header>
+      <ModelAccounts onAddProvider={onAddProvider} />
       {!accounts ? (
         <p className="account-note">Loading…</p>
       ) : (
@@ -95,6 +100,140 @@ export function AccountsSection() {
         </>
       )}
     </div>
+  );
+}
+
+function ModelAccounts({ onAddProvider }: { onAddProvider: (p: ProviderConfig) => void }) {
+  const provider = useApp((s) => s.data?.providers.find((p) => p.auth === 'chatgpt'));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  useEffect(
+    () => () => {
+      void window.axon.chatgptCancel();
+    },
+    []
+  );
+  const action = async (task: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      await task();
+      await useApp.getState().refresh();
+      setNote(success);
+    } catch (err) {
+      setError(errorText(err));
+      await useApp.getState().refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addKey = (name: string) => {
+    const preset = PRESETS.find((p) => p.name === name)!;
+    onAddProvider({
+      id: crypto.randomUUID(),
+      name: preset.name,
+      kind: preset.kind,
+      baseUrl: preset.baseUrl,
+      models: preset.models.map((id) => ({ id, displayName: id })),
+      enabled: true,
+      createdAt: Date.now(),
+      hasApiKey: false
+    });
+  };
+  return (
+    <section className="settings-group" aria-label="AI model accounts">
+      <h4 className="settings-group-title">AI model accounts</h4>
+      <div className="subscription-grid">
+        <article className="subscription-card">
+          <header>
+            <span className="preset-mark tint-openai">
+              <ModelIcon name="ChatGPT" size={22} />
+            </span>
+            <h4>ChatGPT</h4>
+          </header>
+          <p>
+            Use an eligible ChatGPT plan through OpenAI’s official sign-in. Available models come from your
+            account; requests count toward its limits.
+          </p>
+          {provider && (
+            <p className="subscription-status">
+              {provider.accountLabel} · {provider.models.length} models connected
+            </p>
+          )}
+          <div className="subscription-actions">
+            <Button
+              disabled={busy}
+              variant="primary"
+              onClick={() =>
+                void action(
+                  () => window.axon.chatgptSignIn(),
+                  'ChatGPT connected. Choose its models in chat.'
+                )
+              }
+            >
+              {busy ? (
+                <>
+                  <IconLoader className="spin" size={14} /> Connecting…
+                </>
+              ) : (
+                <>
+                  <ModelIcon name="ChatGPT" size={16} />{' '}
+                  {provider ? 'Reconnect ChatGPT' : 'Continue with ChatGPT'}
+                </>
+              )}
+            </Button>
+            {busy && <Button onClick={() => void window.axon.chatgptCancel()}>Cancel</Button>}
+            {provider && (
+              <>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void action(() => window.axon.chatgptRefreshModels(), 'Available models updated.')
+                  }
+                >
+                  Refresh models
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void action(async () => {
+                      const result = await window.axon.chatgptSignOut();
+                      if (!result.remoteRevoked)
+                        throw new Error(
+                          'Signed out locally. Remote revocation was not confirmed; disconnect Axon in ChatGPT settings.'
+                        );
+                    }, 'ChatGPT disconnected.')
+                  }
+                >
+                  Sign out
+                </Button>
+              </>
+            )}
+            {!provider && (
+              <Button size="sm" icon={IconKey} onClick={() => addKey('OpenAI')}>
+                Use API key
+              </Button>
+            )}
+          </div>
+          {(note || error) && (
+            <p
+              role={error ? 'alert' : 'status'}
+              className={error ? 'subscription-error' : 'subscription-status'}
+            >
+              {error || note}
+            </p>
+          )}
+          <LinkButton url="https://developers.openai.com/siwc/token-sharing-open-source">
+            Plan access details
+          </LinkButton>
+        </article>
+        <ClaudeCard onEditModels={onAddProvider} />
+      </div>
+    </section>
   );
 }
 

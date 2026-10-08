@@ -30,7 +30,12 @@ export async function loopbackAuthorize(input: {
   signal: AbortSignal;
   messages: LoopbackMessages;
   timeoutMs?: number;
-}): Promise<{ code: string; redirectUri: string }> {
+  /** Pre-registered providers require a stable loopback address. */
+  callback?: { host: 'localhost'; port: number };
+  /** Some providers require /auth/callback and return a dynamically issued client ID. */
+  callbackPath?: '/callback' | '/auth/callback';
+  ignoreInvalidState?: boolean;
+}): Promise<{ code: string; redirectUri: string; clientId?: string }> {
   let server: Server | null = null;
   try {
     return await new Promise((resolve, reject) => {
@@ -44,17 +49,19 @@ export async function loopbackAuthorize(input: {
       let redirectUri = '';
       server = createServer((request, response) => {
         const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-        if (url.pathname !== '/callback') { response.writeHead(404).end(); return; }
+        if (url.pathname !== (input.callbackPath ?? '/callback')) { response.writeHead(404).end(); return; }
+        // Unsolicited callbacks must not cancel a legitimate browser sign-in.
+        if (input.ignoreInvalidState && url.searchParams.get('state') !== input.state) { response.writeHead(400).end(); return; }
         const ok = url.searchParams.get('state') === input.state && !!url.searchParams.get('code');
         response.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' }).end(page(ok));
         if (ok) {
           clearTimeout(timer);
-          resolve({ code: url.searchParams.get('code')!, redirectUri });
+          resolve({ code: url.searchParams.get('code')!, redirectUri, ...(url.searchParams.has('client_id') ? { clientId: url.searchParams.get('client_id')! } : {}) });
         } else fail(new Error(url.searchParams.get('error') === 'access_denied' ? input.messages.declined : input.messages.failed));
       });
       server.on('error', fail);
-      server.listen(0, '127.0.0.1', () => {
-        redirectUri = `http://127.0.0.1:${(server!.address() as { port: number }).port}/callback`;
+      server.listen(input.callback?.port ?? 0, input.callback?.host ?? '127.0.0.1', () => {
+        redirectUri = `http://${input.callback?.host ?? '127.0.0.1'}:${(server!.address() as { port: number }).port}${input.callbackPath ?? '/callback'}`;
         Promise.resolve()
           .then(() => input.authorizationUrl(redirectUri))
           .then((url) => input.openExternal(url))

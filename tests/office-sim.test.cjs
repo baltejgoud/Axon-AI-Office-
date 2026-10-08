@@ -522,6 +522,20 @@ test('a team meeting seats the lead at the head of the boardroom and the team ro
   assert.equal(calm.startTeamMeeting('team1', 'chief-of-staff', ids.slice(1)), 0);
 });
 
+test('a completed member leaves individually while the remaining member stays in the room', () => {
+  const ids = ['chief-of-staff', 'research-analyst', 'designer'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 5 });
+  office.step(1 / 60);
+  office.startTeamMeeting('partial', ids[0], ids.slice(1), 'room-1');
+  const seated = id => office.view(id).sit === 1 && layout.poiById(office.view(id).poiId ?? '')?.group === 'room-1';
+  runUntil(office, () => ids.every(seated), 240, 0.05);
+  office.startTeamMeeting('partial', ids[0], ['designer'], 'room-1');
+  runUntil(office, () => office.view('research-analyst').poiId === layout.HOME_DESKS['research-analyst'] && office.view('research-analyst').sit === 1, 240, 0.05);
+  assert.ok(seated('designer'));
+  assert.ok(seated('chief-of-staff'));
+  assert.equal(office.view('research-analyst').poiId, layout.HOME_DESKS['research-analyst']);
+});
+
 test('someone busy when the meeting starts joins it once their task ends', () => {
   const ids = ['chief-of-staff', 'research-analyst', 'designer'];
   const office = new OfficeSimulation({ agentIds: ids, seed: 7 });

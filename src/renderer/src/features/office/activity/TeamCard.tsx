@@ -46,7 +46,7 @@ export function TeamCard({ call }: { call: ToolCall }) {
   return <TeamBody team={team} />;
 }
 
-function TeamBody({ team }: { team: Team }) {
+export function TeamBody({ team }: { team: Team }) {
   const patch = useApp((s) => s.patch);
   const [busy, setBusy] = useState(false);
   const act = async (action: (id: string) => Promise<void>) => {
@@ -115,6 +115,11 @@ function TeamBody({ team }: { team: Team }) {
         </div>
       )}
       <div className="team-actions">
+        {team.report && <button className="team-button" onClick={() => {
+          const url = URL.createObjectURL(new Blob([`# Team completion report\n\n${team.goal}\n\n${team.report}`], { type: 'text/markdown;charset=utf-8' }));
+          const link = document.createElement('a'); link.href = url; link.download = `team-report-${team.id}.md`; link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }}>Download report</button>}
         {team.status === 'planned' && (
           <>
             <button className="team-button" disabled={busy} onClick={() => void act(window.axon.teamDiscard)}>
@@ -125,7 +130,7 @@ function TeamBody({ team }: { team: Team }) {
             </button>
           </>
         )}
-        {(team.status === 'meeting' || team.status === 'working' || team.status === 'reporting') && (
+        {(team.status === 'meeting' || team.status === 'working' || team.status === 'reporting' || (team.status === 'failed' && team.plan)) && (
           <button className="team-button" disabled={busy} onClick={() => void act(window.axon.teamStop)}>
             Stop team
           </button>

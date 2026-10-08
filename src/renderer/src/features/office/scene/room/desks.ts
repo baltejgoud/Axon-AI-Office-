@@ -18,6 +18,7 @@ const TOP = 0.04;
 const HANDLE = { metalness: 0.4, roughness: 0.45 } as const;
 const PLASTIC = { roughness: 0.5 } as const;
 const METAL = { metalness: 0.4, roughness: 0.35 } as const;
+const MUG_HANDLE = new THREE.TorusGeometry(0.022, 0.007, 6, 14);
 
 /** A district's colour at a point on the floor, for dividers, chairs and mouse pads. */
 export function accentAt(x: number, z: number): string {
@@ -205,7 +206,10 @@ function keyboard(dark: boolean): THREE.Group {
   const base = dark ? '#2f343c' : '#e6e8eb';
   const key = dark ? '#505763' : '#c9cdd3';
   const g = group(bevelBox(base, [0.38, 0.016, 0.13], [0, 0.008, 0], 0.005, PLASTIC));
-  for (let i = 0; i < 4; i++) g.add(box(key, [0.34, 0.005, 0.019], [0, 0.018, 0.045 - i * 0.024]));
+  // Individual keycaps give each workstation a readable silhouette; static batching joins them.
+  for (let row = 0; row < 4; row++)
+    for (let col = 0; col < 11; col++)
+      g.add(box(key, [0.025, 0.005, 0.018], [-0.15 + col * 0.029, 0.018, 0.045 - row * 0.024]));
   g.add(box(key, [0.15, 0.005, 0.017], [0, 0.018, -0.05]));
   return noShadow(g);
 }
@@ -215,7 +219,8 @@ function mouse(pad: string, dark: boolean): THREE.Group {
   return noShadow(
     group(
       box(pad, [0.19, 0.004, 0.16], [0, 0.002, 0], { roughness: 0.95 }),
-      part(LOW.gem, mat(dark ? '#30353d' : '#eceef1', PLASTIC), [0.055, 0.032, 0.09], [0.01, 0.02, 0])
+      part(LOW.gem, mat(dark ? '#30353d' : '#eceef1', PLASTIC), [0.055, 0.032, 0.09], [0.01, 0.02, 0]),
+      box(dark ? '#8d96a4' : '#606b7a', [0.005, 0.005, 0.019], [0.01, 0.035, 0.012])
     )
   );
 }
@@ -308,17 +313,19 @@ function deskProp(prop: DeskProp, accent: string, seed: number): THREE.Object3D 
           ],
           accent,
           [0, 0, 0],
-          8,
+          16,
           PLASTIC
         ),
-        box(accent, [0.012, 0.05, 0.03], [0.047, 0.05, 0], PLASTIC),
+        part(MUG_HANDLE, mat(accent, PLASTIC), [1, 1, 1], [0.049, 0.051, 0], [0, Math.PI / 2, 0]),
         part(LOW.can, mat('#4a3122'), [0.07, 0.004, 0.07], [0, 0.08, 0])
       );
     case 'notebook':
       return group(
         box(NOTEBOOKS[Math.floor(random() * NOTEBOOKS.length)], [0.15, 0.014, 0.21], [0, 0.007, 0]),
         box(PALETTE.paper, [0.004, 0.01, 0.2], [0.074, 0.007, 0]),
-        box('#2b2f36', [0.01, 0.016, 0.212], [0.05, 0.008, 0])
+        box('#2b2f36', [0.01, 0.016, 0.212], [0.05, 0.008, 0]),
+        box(PALETTE.darkMetal, [0.008, 0.008, 0.16], [-0.04, 0.019, 0.015]),
+        box('#c4ccd5', [0.008, 0.008, 0.022], [-0.04, 0.019, 0.084], METAL)
       );
     case 'lamp':
       return group(

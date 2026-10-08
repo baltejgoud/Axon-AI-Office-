@@ -167,11 +167,12 @@ export function progress(
 }
 
 /** Retry: what failed, stopped or was blocked goes back to waiting. */
-export function resetForRetry(assignments: Pick<TeamAssignment, 'status' | 'note'>[]): number {
+export function resetForRetry(assignments: Pick<TeamAssignment, 'status' | 'note' | 'retryNote'>[]): number {
   let count = 0;
   for (const a of assignments)
     if (a.status === 'failed' || a.status === 'stopped' || a.status === 'blocked') {
       a.status = 'waiting';
+      a.retryNote = a.note;
       a.note = undefined;
       count++;
     }

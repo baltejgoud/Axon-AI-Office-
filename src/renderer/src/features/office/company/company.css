@@ -1,0 +1,144 @@
+.company-operations {
+  color: var(--text-primary);
+}
+.company-services {
+  margin-bottom: 28px;
+}
+.company-services > p,
+.company-services article p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.company-service-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.company-service-grid article {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-panel);
+}
+.company-service-grid article p {
+  flex: 1;
+}
+.company-service-grid small {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+.company-services button {
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  cursor: pointer;
+}
+.company-services button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.company-services .company-error {
+  color: var(--danger);
+}
+@media (max-width: 800px) {
+  .company-service-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.company-intro {
+  max-width: 740px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+.company-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 32px;
+}
+.company-layout section {
+  min-width: 0;
+}
+.company-layout label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.company-layout input:not([type='checkbox']),
+.company-layout textarea,
+.company-layout select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--surface-panel);
+  font: inherit;
+}
+.company-layout textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.company-layout button {
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--surface-panel);
+  color: inherit;
+  cursor: pointer;
+}
+.company-layout button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.company-layout p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.company-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.company-documents {
+  max-height: 220px;
+  overflow: auto;
+  margin-bottom: 16px;
+}
+.company-documents label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.company-layout .company-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.company-layout .company-error {
+  color: var(--danger, #d85454);
+}
+.company-thread {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+}
+.company-layout .team-card {
+  margin-top: 16px;
+}
+@media (max-width: 800px) {
+  .company-layout {
+    grid-template-columns: 1fr;
+  }
+}

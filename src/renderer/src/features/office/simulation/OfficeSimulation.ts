@@ -486,7 +486,20 @@ export class OfficeSimulation {
       this.teamInvites.set(key, { ids: [leadId, ...attendeeIds.filter((id) => id !== leadId)], room, working: new Set() });
       this.clearRoom(room);
     }
-    this.teamInvites.get(key)!.working = new Set(working);
+    const invites = this.teamInvites.get(key)!;
+    const wantedIds = [leadId, ...attendeeIds.filter(id => id !== leadId)];
+    const meeting = this.teamMeetings.get(key)!;
+    for (const id of invites.ids.filter(id => !wantedIds.includes(id))) {
+      const agent = this.agents.get(id);
+      if (agent?.meetingId === meeting.id) {
+        agent.meetingId = null;
+        this.cancelPlan(agent);
+        this.setPlan(agent, agent.onTask ? this.taskPlan(agent) : this.deskPlan(agent, agent.rng.range(20, 60)));
+      }
+      meeting.seats.delete(id);
+    }
+    invites.ids = wantedIds;
+    invites.working = new Set(working);
     this.seatInvitees(key);
     return this.inMeeting(this.teamMeetings.get(key)!).length;
   }

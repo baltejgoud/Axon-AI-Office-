@@ -1,4 +1,4 @@
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { runStage } from '../../../../../shared/runtimePresentation';
 import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import { isPlannerCall } from '../tasks';
 import { withOutcomes } from './thread';
 import { WorkSummary } from './WorkSummary';
 import { isWorkCall, onlyWork, threadRuns, workOf } from '../workspace/work';
+import { IconLoader } from '../../../ui';
 
 /**
  * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
@@ -57,15 +58,30 @@ export function Conversation({
   const [nextBefore, setNextBefore] = useState<number>();
   const [historyError, setHistoryError] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const list = useRef<VirtuosoHandle>(null);
+  const [atBottom, setAtBottom] = useState(true);
   useEffect(() => {
     let disposed = false;
     historyEpoch.current++;
     setLoadingHistory(false);
-    setHistory([]); setNextBefore(undefined); setHistoryError('');
-    if (conversation) void window.axon.chatHistoryPage(conversation.id).then(page => {
-      if (!disposed) { setHistory(page.messages); setNextBefore(page.nextBefore); }
-    }).catch(error => { if (!disposed) setHistoryError(String(error)); });
-    return () => { disposed = true; };
+    setHistory([]);
+    setNextBefore(undefined);
+    setHistoryError('');
+    if (conversation)
+      void window.axon
+        .chatHistoryPage(conversation.id)
+        .then((page) => {
+          if (!disposed) {
+            setHistory(page.messages);
+            setNextBefore(page.nextBefore);
+          }
+        })
+        .catch((error) => {
+          if (!disposed) setHistoryError(String(error));
+        });
+    return () => {
+      disposed = true;
+    };
   }, [conversation?.id]);
   const loadEarlier = async () => {
     if (!conversation || nextBefore === undefined || loadingHistory) return;
@@ -74,9 +90,13 @@ export function Conversation({
     try {
       const page = await window.axon.chatHistoryPage(conversation.id, nextBefore);
       if (epoch !== historyEpoch.current) return;
-      setHistory(previous => [...page.messages, ...previous]); setNextBefore(page.nextBefore);
-    } catch (error) { if (epoch === historyEpoch.current) setHistoryError(String(error)); }
-    finally { if (epoch === historyEpoch.current) setLoadingHistory(false); }
+      setHistory((previous) => [...page.messages, ...previous]);
+      setNextBefore(page.nextBefore);
+    } catch (error) {
+      if (epoch === historyEpoch.current) setHistoryError(String(error));
+    } finally {
+      if (epoch === historyEpoch.current) setLoadingHistory(false);
+    }
   };
   const approvals = useApp((s) => s.pendingApprovals);
   // When the current run began: the task you sent goes just before what it produced.
@@ -86,7 +106,13 @@ export function Conversation({
   const messages = useMemo(
     () =>
       conversation
-        ? withOutcomes([...new Map([...history, ...(allMessages ?? []).filter(m => m.conversationId === conversation.id)].map(m => [m.id, m])).values()])
+        ? withOutcomes([
+            ...new Map(
+              [...history, ...(allMessages ?? []).filter((m) => m.conversationId === conversation.id)].map(
+                (m) => [m.id, m]
+              )
+            ).values()
+          ])
         : [],
     [allMessages, conversation, history]
   );
@@ -147,12 +173,20 @@ export function Conversation({
       {(shown.length > 0 || pending > 0) && (
         <section className="office-thread" aria-label={`Conversation with ${agentName}`}>
           <div className="messages">
-            {nextBefore !== undefined && <button disabled={loadingHistory} onClick={() => void loadEarlier()}>{loadingHistory ? 'Loading history...' : 'Load earlier messages'}</button>}
+            {nextBefore !== undefined && (
+              <button disabled={loadingHistory} onClick={() => void loadEarlier()}>
+                {loadingHistory ? 'Loading history...' : 'Load earlier messages'}
+              </button>
+            )}
             {historyError && <p role="alert">{historyError}</p>}
             <Virtuoso
+              key={conversation?.id ?? 'new'}
+              ref={list}
               style={{ height: 'min(58vh, 700px)', minHeight: 240 }}
               data={shown}
               followOutput="auto"
+              atBottomStateChange={setAtBottom}
+              atBottomThreshold={80}
               initialTopMostItemIndex={Math.max(0, shown.length - 1)}
               itemContent={(i, m) => {
                 const steps = summaries.get(i);
@@ -176,7 +210,27 @@ export function Conversation({
                 );
               }}
             />
-            {activeRun && <p role="status">{runStage(activeRun)}</p>}
+            {!atBottom && (
+              <button
+                className="chat-jump"
+                onClick={() =>
+                  list.current?.scrollToIndex({
+                    index: 'LAST',
+                    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                      ? 'auto'
+                      : 'smooth'
+                  })
+                }
+              >
+                Latest messages
+              </button>
+            )}
+            {activeRun && (
+              <div className="chat-run-stage" role="status">
+                <IconLoader className="spin" size={14} />
+                <span>{runStage(activeRun)}</span>
+              </div>
+            )}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>
         </section>

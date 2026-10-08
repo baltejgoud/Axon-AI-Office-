@@ -51,11 +51,13 @@ export interface OpenMeeting {
  */
 export function openMeetings(teams: readonly Team[]): OpenMeeting[] {
   return teams
-    .filter((t) => OPEN.has(t.status))
+    .filter((t) => OPEN.has(t.status) || (t.status === 'failed' && !!t.plan))
     .map((t) => ({
       id: t.id,
       leadId: t.leadId,
-      attendees: t.attendees,
+      attendees: t.plan && !['meeting', 'planned'].includes(t.status)
+        ? t.attendees.filter(id => t.plan!.assignments.some(a => a.ownerId === id && a.status !== 'done'))
+        : t.attendees,
       room: roomOf(t),
       working: (t.plan?.assignments ?? []).filter((a) => a.status === 'working').map((a) => a.ownerId)
     }));
@@ -76,7 +78,7 @@ const TASK_TO_CARD: Record<AssignmentStatus, TaskStatus> = {
  */
 export function teamBoardCards(teams: readonly Team[], room: MeetingRoomId = 'boardroom'): TaskItem[] {
   const open = teams
-    .filter((t) => OPEN.has(t.status) && roomOf(t) === room)
+    .filter((t) => (OPEN.has(t.status) || (t.status === 'failed' && !!t.plan)) && roomOf(t) === room)
     .sort((a, b) => b.updatedAt - a.updatedAt)[0];
   if (!open) return [];
   const card = (id: string, title: string, coworkerId: string, status: TaskStatus): TaskItem => ({

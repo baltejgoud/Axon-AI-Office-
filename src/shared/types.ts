@@ -12,7 +12,7 @@ export type ID = string;
 
 /* ---------------------------------- Providers --------------------------------- */
 
-export type ProviderKind = 'openai-compatible' | 'anthropic' | 'gemini';
+export type ProviderKind = 'openai-compatible' | 'openai-responses' | 'anthropic' | 'gemini';
 
 export interface ModelSpec {
   /** Model identifier sent to the provider API, e.g. "gpt-5", "claude-opus". */
@@ -45,6 +45,37 @@ export interface ProviderConfig {
   createdAt: number;
   /** True when an API key is stored (key material itself never leaves main). */
   hasApiKey: boolean;
+  /** Subscription credentials remain in the main-process OS vault. */
+  auth?: 'chatgpt';
+  accountLabel?: string;
+  /** The Claude Console workspace a multi-workspace API key runs in, sent as `anthropic-workspace-id`. */
+  workspaceId?: string;
+  /** Where the Claude connection's API key belongs, as Anthropic's response headers reported when it was last checked. */
+  claudeConsole?: ClaudeConsoleIdentity;
+}
+
+/** A Claude Console API key's organization and workspace. API keys carry no name or email. */
+export interface ClaudeConsoleIdentity {
+  organizationId?: string;
+  workspaceId?: string;
+  verifiedAt: number;
+}
+
+/** One rate limit from Anthropic's response headers. */
+export interface RateLimit {
+  limit: number;
+  remaining: number;
+  /** RFC 3339 time the limit is fully replenished. */
+  reset?: string;
+}
+
+/** The organization's rate limits as the last Claude request reported them. */
+export interface ClaudeRateLimits {
+  model: string;
+  at: number;
+  requests?: RateLimit;
+  inputTokens?: RateLimit;
+  outputTokens?: RateLimit;
 }
 
 export interface ResolvedModel {
@@ -172,6 +203,8 @@ export interface FileAccessPolicy {
 }
 
 export interface Workspace {
+  /** A company operated through the office's task and report workflow. */
+  company?: boolean;
   id: ID;
   name: string;
   description?: string;
@@ -453,6 +486,8 @@ export interface AgentCompletionReport {
   artifacts: string[]; needsFollowUp: boolean;
 }
 export interface TeamAssignment {
+  /** Missing work from the previous attempt, carried into the next brief. */
+  retryNote?: string;
   completionReport?: AgentCompletionReport;
   profile?: 'fast' | 'standard' | 'deep' | 'coding';
   id: string;
@@ -485,6 +520,8 @@ export interface TeamPlan {
 
 /** A team a lead gathered: the meeting, the plan you approve, the work, and the report. */
 export interface Team {
+  /** Company context shared by the meeting and all task owners. */
+  context?: string;
   id: ID;
   leadId: string;
   /** The lead's conversation the meeting was called from. */

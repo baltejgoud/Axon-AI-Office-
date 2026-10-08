@@ -16,11 +16,13 @@ Add a provider in Settings, enter its API base URL and exact model IDs, and opti
 
 How keys, requests, streaming, tools and storage work end to end: [docs/backend.md](docs/backend.md).
 
+Settings → Accounts also offers official ChatGPT plan sign-in for eligible accounts. Claude connects through a Claude Console API key, billed as API usage to that Console organization; Anthropic offers third-party apps no Claude subscription sign-in. Setup, interface changes, and validation limits: [docs/interface-and-model-accounts.md](docs/interface-and-model-accounts.md).
+
 ## Implemented
 
 - Sandboxed desktop renderer and explicit preload methods.
 - Persistent conversations, title/content search, rename/delete, streamed Markdown and highlighted code, copy, cancellation, document attachments.
-- OpenAI-compatible, Anthropic Messages, and Gemini streaming protocols. Provider enable/disable, endpoint, API key and model management.
+- OpenAI-compatible, OpenAI Responses, Anthropic Messages, and Gemini streaming protocols. Provider enable/disable, endpoint, API key and model management; official ChatGPT account sign-in with account-provided model discovery.
 - Workspaces with system prompt, instructions, default model and selected knowledge sources.
 - Manual assistant profiles with JSON import/export, model and workspace selection. Profiles are data, not executable plugins.
 - PDF/DOCX/text/Markdown/Excel/CSV and individual code-file ingestion; chunking and BM25 search. Workspace retrieval includes source-labelled passages.
@@ -50,7 +52,7 @@ Unit tests use Node's test runner and the installed TypeScript compiler. Protoco
 
 - `D:\Baltej IDE\src\main\index.ts`: lifecycle, window isolation and IPC sender checks.
 - `D:\Baltej IDE\src\main\service.ts`: application operations and the chat/tool loop.
-- `D:\Baltej IDE\src\main\providers.ts`: endpoint policy, SSE parser, three protocol adapters, retries, timeouts, provider error messages, replay of thinking/tool turns, usage capture.
+- `D:\Baltej IDE\src\main\providers.ts`: endpoint policy, SSE parser, four protocol adapters, retries, timeouts, provider error messages, replay of thinking/tool turns, usage capture.
 - `D:\Baltej IDE\src\main\history.ts`: the history each request carries (every tool call paired with its result, trimmed by whole turns).
 - `D:\Baltej IDE\src\main\tools\registry.ts`, `src\main\security\permissions.ts`: built-in tools and the allow/ask/deny policy with approvals.
 - `D:\Baltej IDE\src\main\mcp\client-manager.ts`, `src\main\mcp\oauth.ts`, `src\connectors\catalog.json`: connectors, i.e. MCP servers over Streamable HTTP, stdio and SSE with a browser sign-in; a catalog of 39; their tools join the registry and go to the coworkers they're given to.

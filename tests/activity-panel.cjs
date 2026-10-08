@@ -47,18 +47,56 @@ const server = http.createServer((request, response) => {
 server.listen(0, '127.0.0.1', () => {
   const now = Date.now();
   const conv = (id, agentId, title, at) => ({
-    id, title, workspaceId: null, providerId: 'check', modelId: 'fixture', skillIds: [], roleIds: [],
-    agentId, createdAt: at, updatedAt: at
+    id,
+    title,
+    workspaceId: null,
+    providerId: 'check',
+    modelId: 'fixture',
+    skillIds: [],
+    roleIds: [],
+    agentId,
+    createdAt: at,
+    updatedAt: at
   });
-  const say = (id, conversationId, role, content, ago) => ({ id, conversationId, role, content, createdAt: now - ago });
-  const todo = (id, title, due, extra = {}) => ({ id, kind: 'todo', title, status: 'open', due, createdAt: now, updatedAt: now, ...extra });
+  const say = (id, conversationId, role, content, ago) => ({
+    id,
+    conversationId,
+    role,
+    content,
+    createdAt: now - ago
+  });
+  const todo = (id, title, due, extra = {}) => ({
+    id,
+    kind: 'todo',
+    title,
+    status: 'open',
+    due,
+    createdAt: now,
+    updatedAt: now,
+    ...extra
+  });
   fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
   fs.writeFileSync(
     path.join(profile, 'data/db/platform-v1.json'),
     JSON.stringify({
       version: 1,
-      providers: [{ id: 'check', name: 'Check', kind: 'openai-compatible', baseUrl: `http://127.0.0.1:${server.address().port}/v1`, models: [{ id: 'fixture', displayName: 'Fixture' }], enabled: true, createdAt: now, hasApiKey: false }],
-      workspaces: [], agents: [], documents: [], chunks: [], mcpServers: [],
+      providers: [
+        {
+          id: 'check',
+          name: 'Check',
+          kind: 'openai-compatible',
+          baseUrl: `http://127.0.0.1:${server.address().port}/v1`,
+          models: [{ id: 'fixture', displayName: 'Fixture' }],
+          enabled: true,
+          createdAt: now,
+          hasApiKey: false
+        }
+      ],
+      workspaces: [],
+      agents: [],
+      documents: [],
+      chunks: [],
+      mcpServers: [],
       tasks: [
         todo('t1', 'Call the bank', localDay()),
         todo('t2', 'Send the investor update', `${localDay()}T17:00`),
@@ -71,14 +109,48 @@ server.listen(0, '127.0.0.1', () => {
       ],
       messages: [
         say('r1', 'c-rec', 'user', 'What is on my calendar today?', 70000),
-        say('r2', 'c-rec', 'assistant', 'You have two things today: call the bank, and send the investor update by 17:00. Booking the venue is due in two days.', 68000),
+        say(
+          'r2',
+          'c-rec',
+          'assistant',
+          'You have two things today: call the bank, and send the investor update by 17:00. Booking the venue is due in two days.',
+          68000
+        ),
         say('r3', 'c-rec', 'user', 'Remind me about the investor update an hour before.', 66000),
-        say('r4', 'c-rec', 'assistant', 'Done. I will remind you at 16:00. Anything else you would like me to plan?', 64000),
-        say('d1', 'c-dev', 'user', 'Add filters to the task list: status, priority, and sort by due date.', 40000),
-        say('d2', 'c-dev', 'assistant', 'Filters and due-date sorting are in. I added a `useFilteredTasks` hook, a filter bar above the list, and four tests. Everything passes.', 30000)
+        say(
+          'r4',
+          'c-rec',
+          'assistant',
+          'Done. I will remind you at 16:00. Anything else you would like me to plan?',
+          64000
+        ),
+        say(
+          'd1',
+          'c-dev',
+          'user',
+          'Add filters to the task list: status, priority, and sort by due date.',
+          40000
+        ),
+        say(
+          'd2',
+          'c-dev',
+          'assistant',
+          'Filters and due-date sorting are in. I added a `useFilteredTasks` hook, a filter bar above the list, and four tests. Everything passes.',
+          30000
+        )
       ],
       reception: { briefedOn: localDay() },
-      settings: { theme, autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: true, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
+      settings: {
+        theme,
+        autoTitleConversations: true,
+        defaultTemperature: 0.7,
+        defaultMaxTokens: 4096,
+        streamDeltas: true,
+        allowShellExecution: true,
+        shellAllowlist: [],
+        sendCrashDiagnostics: false,
+        dataDirectoryNote: ''
+      }
     })
   );
   require(path.join(repo, 'out/main/index.js'));
@@ -122,18 +194,31 @@ app.on('web-contents-created', (_, contents) => {
           return { panel: [Math.round(panel.width), Math.round(panel.height)], parts };
         })()`);
       const choose = async (name) => {
-        await evaluate(`(() => { const i = document.querySelector('.office-directory input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(name)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await evaluate(
+          `(() => { const i = document.querySelector('.office-directory input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(name)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`
+        );
         await pause(250);
-        await evaluate(`[...document.querySelectorAll('.office-search-results button')].find((b) => b.querySelector('strong')?.textContent === ${JSON.stringify(name)}).click()`);
-        await waitFor(`document.querySelector('.activity-agent-meta h3')?.textContent === ${JSON.stringify(name)}`, name);
+        await evaluate(
+          `[...document.querySelectorAll('.office-search-results button')].find((b) => b.querySelector('strong')?.textContent === ${JSON.stringify(name)}).click()`
+        );
+        await waitFor(
+          `document.querySelector('.activity-agent-meta h3')?.textContent === ${JSON.stringify(name)}`,
+          name
+        );
+        await evaluate(`document.querySelector('.coworker-actions button')?.click()`);
         await pause(600);
       };
       const clickTab = async (label) => {
-        const found = await evaluate(`(() => { const t = [...document.querySelectorAll('.activity-tabs [role=tab]')].find((b) => b.textContent.startsWith(${JSON.stringify(label)})); t?.click(); return !!t; })()`);
+        const found = await evaluate(
+          `(() => { const t = [...document.querySelectorAll('.activity-tabs [role=tab]')].find((b) => b.textContent.startsWith(${JSON.stringify(label)})); t?.click(); return !!t; })()`
+        );
         await pause(300);
         return found;
       };
-      await waitFor('document.querySelector(".office-person-label") && !document.querySelector(".office-loading")', 'scene');
+      await waitFor(
+        'document.querySelector(".office-person-label") && !document.querySelector(".office-loading")',
+        'scene'
+      );
       await pause(800);
 
       await choose('Receptionist');
@@ -141,10 +226,15 @@ app.on('web-contents-created', (_, contents) => {
       await snap('1-receptionist-chat');
       if (await clickTab('Planner')) await snap('2-receptionist-planner');
       // Sending from the planner goes back to the chat, where the answer arrives.
-      await evaluate(`(() => { const t = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'Thanks'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await evaluate(
+        `(() => { const t = document.querySelector('.composer-textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'Thanks'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
       await pause(80);
       await evaluate('document.querySelector(".composer-btn-send").click()');
-      await waitFor('document.querySelector(".activity-tabs [aria-selected=true]")?.textContent === "Chat"', 'back to the chat');
+      await waitFor(
+        'document.querySelector(".activity-tabs [aria-selected=true]")?.textContent === "Chat"',
+        'back to the chat'
+      );
       await waitFor('document.querySelector(".status-badge.completed")', 'reply');
       await choose('Frontend Developer');
       console.log('frontend', JSON.stringify(await shares()));
@@ -154,20 +244,29 @@ app.on('web-contents-created', (_, contents) => {
       await waitFor('document.querySelector(".activity-profile")', 'profile');
       await pause(200);
       await snap('3b-profile');
-      await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      await evaluate(
+        `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`
+      );
       await waitFor('!document.querySelector(".activity-profile")', 'profile closes on Esc');
       await evaluate('document.querySelector(".context-meter-summary").click()');
       await waitFor('document.querySelector(".context-meter-details")', 'context details');
       await pause(200);
       await snap('3c-context');
-      await evaluate('document.querySelector(".composer-textarea").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))');
-      await waitFor('!document.querySelector(".context-meter-details")', 'context details close on a click outside');
+      await evaluate(
+        'document.querySelector(".composer-textarea").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))'
+      );
+      await waitFor(
+        '!document.querySelector(".context-meter-details")',
+        'context details close on a click outside'
+      );
       await choose('Designer');
       await snap('4-empty');
       await choose('Files Agent');
       await snap('5-files');
       // The panel never scrolls sideways.
-      const spill = await evaluate(`(() => { const p = document.querySelector('.office-activity-panel'); return p.scrollWidth - p.clientWidth; })()`);
+      const spill = await evaluate(
+        `(() => { const p = document.querySelector('.office-activity-panel'); return p.scrollWidth - p.clientWidth; })()`
+      );
       if (spill > 0) throw new Error('The panel scrolls sideways by ' + spill + 'px');
       console.log('Screenshots in', output);
     } catch (error) {

@@ -206,11 +206,35 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
 
   if (look.uniform) dressForWork(look, width, hips, spine, head, add, G);
 
+  // Small garment details are baked into the full rig's joint meshes, with no extra draw calls.
+  if (detail === 'full' && !look.uniform) {
+    if (look.top === 'shirt' || look.top === 'polo' || look.top === 'vest') {
+      const buttons = mat('#e9e5df', { roughness: 0.6 });
+      for (const y of [0.12, 0.23, 0.34])
+        spine.add(part(G.small, buttons, [0.012, 0.012, 0.008], [0, y, 0.126]));
+      spine.add(part(G.box, shirt, [0.065 * width, 0.065, 0.01], [-0.095 * width, 0.3, 0.127]));
+    }
+    if (look.jacket) {
+      for (const side of [-1, 1])
+        spine.add(part(G.box, shirt, [0.065 * width, 0.009, 0.01], [side * 0.12 * width, 0.12, 0.135]));
+    }
+    for (const side of [-1, 1])
+      head.add(
+        part(
+          G.small,
+          mat('#c89078', { roughness: 0.8 }),
+          [0.019, 0.038, 0.012],
+          [side * 0.156, HEAD.y, 0.012]
+        )
+      );
+  }
+
   // Arms
   const arm = (side: 1 | -1): Limb => {
     const shoulder = joint(spine, 0.215 * side * width, 0.4, 0);
     add(shoulder, part(G.limb, upperSleeve, [0.115, UPPER_ARM / 2, 0.115], [0, -UPPER_ARM / 2, 0]));
     const elbow = joint(shoulder, 0, -UPPER_ARM, 0);
+    add(elbow, part(G.mid, lowerSleeve, [0.085, 0.085, 0.085], [0, 0, 0]), false);
     add(elbow, part(G.limb, lowerSleeve, [0.1, FOREARM / 2 - 0.01, 0.1], [0, -FOREARM / 2 + 0.01, 0]));
     if (look.top !== 'tee') {
       // Cuffs: the shirt shows at the wrist under a layer; otherwise a band in the sleeve's own colour.
@@ -225,6 +249,17 @@ export function buildHumanoid(look: Appearance, detail: 'full' | 'low' = 'full')
     }
     const hand = joint(elbow, 0, -FOREARM, 0);
     add(hand, part(G.hand[side], skin, [1, 1, 1], [0, 0, 0]));
+    if (detail === 'full' && side === 1 && !look.uniform) {
+      hand.add(part(G.cylinder, mat('#353b45', { roughness: 0.5 }), [0.058, 0.017, 0.068], [0, 0.008, 0]));
+      hand.add(
+        part(
+          G.box,
+          mat('#aeb8c5', { metalness: 0.45, roughness: 0.35 }),
+          [0.008, 0.024, 0.031],
+          [0.029, 0.008, 0]
+        )
+      );
+    }
     return { root: shoulder, joint: elbow, end: hand };
   };
   const armL = arm(1);

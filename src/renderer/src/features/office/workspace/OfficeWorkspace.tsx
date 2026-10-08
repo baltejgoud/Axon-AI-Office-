@@ -39,9 +39,8 @@ const OFFICE_SIZES = [
 ] as const;
 
 /**
- * The left side: the office, and below it what the selected coworker is working in. The surface
- * opens at 60/40 when they first use a tool; the divider between them drags from 30/70 to 80/20,
- * and the office remembers where it was left for the rest of the session.
+ * A persistent office with a floating work sheet. The sheet opens at 40% height when a coworker
+ * first uses a tool; its top edge resizes between 20% and 70%, without resizing the canvas.
  */
 export function OfficeWorkspace() {
   const root = useRef<HTMLDivElement>(null);
@@ -49,6 +48,7 @@ export function OfficeWorkspace() {
   const [resizing, setResizing] = useState(false);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
   const runtime = useOfficeStore((s) => s.agentRuntime[s.selectedAgentId]);
+  const fullscreen = useOfficeStore((s) => s.workFullscreen);
   const split = useOfficeStore((s) => s.workSplit);
   const choices = useOfficeStore((s) => s.workChoice);
   const focus = useOfficeStore((s) => s.workFocus);
@@ -67,7 +67,14 @@ export function OfficeWorkspace() {
         : [],
     [allMessages, conversation]
   );
-  const work = useMemo(() => workOf(messages), [messages]);
+  const work = useMemo(
+    () =>
+      workOf(
+        messages,
+        Object.values(approvals).filter((request) => request.conversationId === conversation?.id)
+      ),
+    [messages, approvals, conversation?.id]
+  );
 
   // The current run: from its task record while there is one, else from your last message.
   const task = conversation
@@ -102,18 +109,20 @@ export function OfficeWorkspace() {
       project: conversation.projectRoot ?? openProject ?? null
     };
   const shown = last.current;
+  useEffect(() => {
+    if (!open) useOfficeStore.getState().setWorkFullscreen(false);
+  }, [open]);
   // A closed surface takes no clicks or focus while it is out of sight.
   const slot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (slot.current) slot.current.inert = !open;
   }, [open]);
 
-  /** The office's own element, which the split sizes. */
+  /** The persistent viewport, used only for window-size density hints. */
   const office = () => root.current?.querySelector<HTMLElement>(':scope > .office-viewport') ?? null;
-  // The split is set on the office alone (a non-inherited property, see workspace.css): setting
-  // it higher up would restyle every line of code on the surface on each frame of a drag.
+  // The legacy share value now controls only the sheet's top edge.
   useLayoutEffect(() => {
-    office()?.style.setProperty('--office-share', String(split));
+    root.current?.style.setProperty('--sheet-share', String(split));
   }, [split]);
 
   // A shorter office keeps its floor in view: the heading and team strip slim down, then step aside.
@@ -145,6 +154,9 @@ export function OfficeWorkspace() {
   // you aren't typing (a text box keeps Ctrl+Enter for itself, as the commit message does).
   const keys = useRef<(event: globalThis.KeyboardEvent) => void>(() => {});
   keys.current = (event) => {
+    const office = useOfficeStore.getState();
+    if (event.defaultPrevented || office.commandPaletteOpen || office.activityHistoryOpen || office.overlay)
+      return;
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
     if (event.key.toLowerCase() === 'j' && conversation && work.latest) {
       event.preventDefault();
@@ -169,13 +181,12 @@ export function OfficeWorkspace() {
   const shareAt = (y: number) => {
     const box = root.current!.getBoundingClientRect();
     const space = box.height - (divider.current?.offsetHeight ?? 0);
-    return clampWorkSplit(space > 0 ? (y - drag.current!.offset - box.top) / space : split);
+    return clampWorkSplit(space > 0 ? (y - drag.current!.offset - box.top + 20) / space : split);
   };
-  // While dragging, the office and surface are sized straight from the pointer; the store (and
-  // with it the rest of the window) hears the new split once, on release.
+  // Preview the sheet height directly; publish the share to the store once, on release.
   const preview = (share: number) => {
     drag.current!.share = share;
-    office()?.style.setProperty('--office-share', String(share));
+    root.current?.style.setProperty('--sheet-share', String(share));
     divider.current!.setAttribute('aria-valuenow', String(Math.round(share * 100)));
   };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -218,18 +229,21 @@ export function OfficeWorkspace() {
   };
 
   return (
-    <div ref={root} className={`office-workspace${open ? ' has-work' : ''}${resizing ? ' is-resizing' : ''}`}>
+    <div
+      ref={root}
+      className={`office-workspace${open ? ' has-work' : ''}${resizing ? ' is-resizing' : ''}${fullscreen && open ? ' work-fullscreen' : ''}`}
+    >
       <OfficeCanvas work={conversation ? { open, toggle: () => setWork(!open) } : undefined} />
       <div
         ref={divider}
         className="work-divider"
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize the office and the work surface"
+        aria-label="Resize work sheet"
         aria-valuemin={MIN_OFFICE_SHARE * 100}
         aria-valuemax={MAX_OFFICE_SHARE * 100}
         aria-valuenow={Math.round(split * 100)}
-        aria-valuetext={`Office ${Math.round(split * 100)}%, work ${100 - Math.round(split * 100)}%`}
+        aria-valuetext={`Work sheet ${100 - Math.round(split * 100)}%`}
         aria-hidden={!open}
         tabIndex={open ? 0 : -1}
         title="Drag to resize · double-click for 60/40"
@@ -242,7 +256,12 @@ export function OfficeWorkspace() {
       >
         <span className="work-divider-grip" />
       </div>
-      <div ref={slot} className="work-surface-slot" aria-hidden={!open}>
+      <div
+        ref={slot}
+        className="work-surface-slot"
+        data-office-obstacle={open || undefined}
+        aria-hidden={!open}
+      >
         {shown && (
           <WorkSurface
             key={shown.conversationId}

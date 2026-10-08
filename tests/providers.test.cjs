@@ -225,7 +225,9 @@ test('checkModel passes once the provider starts answering, with a tiny request 
 
 test('checkModel fails with the provider\'s own message', async (t) => {
   mockFetch(t, () => new Response(JSON.stringify({ error: { message: 'model: claude-opsu-5 not found' } }), { status: 404 }));
-  await assert.rejects(providers.checkModel(anthropic, 'k', 'claude-opsu-5'), /HTTP 404: model: claude-opsu-5 not found\. Check the endpoint URL and model ID\./);
+  // Anthropic's own endpoint is fixed, so its advice is about the model; other endpoints keep the generic hint.
+  await assert.rejects(providers.checkModel(anthropic, 'k', 'claude-opsu-5'), /HTTP 404: model: claude-opsu-5 not found\. Check the model ID: Anthropic answers 404/);
+  await assert.rejects(providers.checkModel({ ...anthropic, baseUrl: 'https://proxy.example/v1' }, 'k', 'claude-opsu-5'), /HTTP 404: model: claude-opsu-5 not found\. Check the endpoint URL and model ID\./);
 });
 
 test('checkModel fails when the first streamed event is an error', async (t) => {

@@ -188,6 +188,11 @@ export function ConnectorsSection({
                 <div className="settings-item-meta">Used by {usedBy(s.coworkers)}</div>
               </div>
               <div className="settings-item-actions">
+                {CONNECTORS.find((entry) => entry.id === s.catalogId)?.auth === 'oauth-app' && (
+                  <Button size="sm" onClick={() => setOwnApp(CONNECTORS.find((entry) => entry.id === s.catalogId)!)}>
+                    Edit app credentials
+                  </Button>
+                )}
                 <Button size="sm" onClick={() => onManage(s.id)}>
                   Manage
                 </Button>
@@ -263,6 +268,12 @@ export function ConnectorsSection({
                         Use your own app
                       </Button>
                     ) : (
+                      <>
+                      {entry.auth === 'oauth-app' && (
+                        <Button size="sm" disabled={!!waiting} onClick={() => setOwnApp(entry)}>
+                          Edit app credentials
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="primary"
@@ -271,6 +282,7 @@ export function ConnectorsSection({
                       >
                         Connect
                       </Button>
+                      </>
                     )}
                   </div>
                 </article>
@@ -303,7 +315,7 @@ export function ConnectorsSection({
 }
 
 /** Your own OAuth app for a connector this build of Axon has none for. */
-function OwnAppDialog({
+export function OwnAppDialog({
   entry,
   onClose,
   onSaved
@@ -317,6 +329,8 @@ function OwnAppDialog({
   const [error, setError] = useState('');
   const save = async () => {
     if (!clientId.trim()) return setError('Enter the client ID.');
+    if (entry.id === 'hubspot' && /^\d+$/.test(clientId.trim()))
+      return setError('That is a HubSpot account or app ID. Use the Client ID from Development → MCP Connectors.');
     try {
       await window.axon.connectorAppSave(entry.id, clientId, secret);
       await useApp.getState().refresh();
@@ -328,7 +342,9 @@ function OwnAppDialog({
   return (
     <Modal
       title={`Use your own ${entry.name} app`}
-      description={`Register an OAuth app with ${entry.name}, then paste its details. Axon signs in through http://127.0.0.1 on a free port, at /callback.`}
+      description={entry.id === 'hubspot'
+        ? 'In HubSpot Development → MCP Connectors, create a connector with redirect URL http://localhost:6275/callback. Paste its client ID and secret here. Your HubSpot account ID is not the client ID.'
+        : `Register an OAuth app with ${entry.name}, then paste its details. Axon signs in through http://127.0.0.1 on a free port, at /callback.`}
       onClose={onClose}
       onSubmit={() => void save()}
       submitLabel="Save and connect"

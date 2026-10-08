@@ -1,4 +1,5 @@
 import { ACTIVE_RUN_STATUSES } from '../../../../shared/runtime';
+import { PlannerCard } from './shell/PlannerCard';
 import { GlobalWork } from './shell/GlobalWork';
 import './shell/shell.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -36,6 +37,9 @@ import { openMeetings, roomBoardCards } from './team';
 import { roomOf } from '../../../../shared/rooms';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
+import { latestRun, runLifecycle } from './lifecycle';
+import { LifecycleBadge } from './shell/LifecycleBadge';
+import { activeThread } from './activity/thread';
 
 export function OfficeCanvas({
   work
@@ -44,6 +48,8 @@ export function OfficeCanvas({
   work?: { open: boolean; toggle: () => void };
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const pin = useRef<HTMLDivElement>(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const labels = useRef<HTMLDivElement>(null);
   const scene = useRef<OfficeScene | null>(null);
   const [failed, setFailed] = useState(false);
@@ -64,6 +70,9 @@ export function OfficeCanvas({
   }, []);
   const teams = useApp((s) => s.data?.teams);
   const runs = useApp((s) => s.data?.runs);
+  const conversations = useApp((s) => s.data?.conversations);
+  const messages = useApp((s) => s.data?.messages);
+  const approvals = useApp((s) => s.pendingApprovals);
   /** Teams in their rooms, as last sent to the scene. */
   const meeting = useRef(new Set<string>());
   const syncTeams = useCallback((world: OfficeScene, all: readonly Team[]) => {
@@ -86,12 +95,15 @@ export function OfficeCanvas({
   const signClick = useRef<(sign: SignSpec) => void>(() => {});
   const {
     selectedAgentId,
+    coworkerCard,
+    conversationOpen,
+    dockCollapsed,
+    focusMode,
     agentRuntime,
     is3dEnabled,
     focusDepartment,
     flyTo,
     selectAgent,
-    flyToAgent,
     toggle3d,
     openOverlay,
     setFocusDepartment
@@ -123,9 +135,11 @@ export function OfficeCanvas({
         selectAgent(id);
         world.setSelectedAgent(id, true);
       };
+      world.onPinOccluded = () => useOfficeStore.getState().openConversation();
+      world.onEmptyClick = () => useOfficeStore.getState().closeCoworkerCard();
       world.onAgentHover = setHovered;
       world.onViewChange = setView;
-      world.onFilesClick = () => useOfficeStore.getState().flyToAgent('files-agent');
+      world.onFilesClick = () => useOfficeStore.getState().focusOn({ agentId: 'files-agent' });
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.onSignClick = (sign) => signClick.current(sign);
       // A team's board opens its task list; the Today board goes to the receptionist's planner.
@@ -138,7 +152,7 @@ export function OfficeCanvas({
           const open = [...(useApp.getState().data?.teams ?? [])]
             .filter(
               (t) =>
-                ['meeting', 'planned', 'working', 'reporting'].includes(t.status) && roomOf(t) === board.room
+                (['meeting', 'planned', 'working', 'reporting'].includes(t.status) || (t.status === 'failed' && !!t.plan)) && roomOf(t) === board.room
             )
             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
           if (open)
@@ -184,12 +198,6 @@ export function OfficeCanvas({
     // With the Files room open, the Files Agent goes to the cabinets.
     if (selectedAgentId === 'files-agent') scene.current?.sendTo('files-agent', 'cabinet');
   }, [selectedAgentId]);
-
-  // The work surface's divider is held: the office draws cheaply until it is let go.
-  const resizingWork = useOfficeStore((s) => s.resizingWork);
-  useEffect(() => {
-    scene.current?.setLiveResize(resizingWork);
-  }, [resizingWork]);
 
   // Someone asked the office to go to a person (handing over files, clicking the cabinets).
   useEffect(() => {
@@ -238,13 +246,41 @@ export function OfficeCanvas({
     () => (view ? taggedPeople(view.bounds, view.target, statuses, selectedAgentId) : [selectedAgentId]),
     [view, statuses, selectedAgentId]
   );
-  const labelKey = `${tier}|${tagged.join(',')}|${selectedAgentId}|${loading}`;
+  const labelKey = `${view?.target.x.toFixed(1)}|${view?.target.z.toFixed(1)}|${tier}|${tagged.join(',')}|${selectedAgentId}|${loading}`;
   useLayoutEffect(() => {
     scene.current?.setLabels(
       Array.from(labels.current?.querySelectorAll<HTMLElement>('[data-anchor]') ?? [])
     );
   }, [labelKey]);
 
+  useLayoutEffect(() => {
+    scene.current?.setPins(pin.current && coworkerCard && !focusMode ? [pin.current] : []);
+  }, [coworkerCard, selectedAgentId, focusMode, loading, modelsReady, roster]);
+  const selected = OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? OFFICE_AGENTS[0];
+  const thread = activeThread(conversations ?? [], selected.id, agentRuntime[selected.id]);
+  const selectedRun = thread ? latestRun(runs ?? [], selected.id, thread.id) : undefined;
+  const pendingRequest = Object.values(approvals).find((r) => r.conversationId === thread?.id);
+  const selectedStatus = pendingRequest ? 'waiting_for_approval' : selectedRun?.status;
+  const latestResponse = useMemo(
+    () =>
+      [...(messages ?? [])]
+        .reverse()
+        .find(
+          (m) =>
+            m.conversationId === thread?.id &&
+            m.role === 'assistant' &&
+            m.content.trim() &&
+            (!selectedRun || m.createdAt >= selectedRun.startedAt)
+        )?.content,
+    [messages, thread?.id, selectedRun?.startedAt]
+  );
+  const message = (ask = false) => {
+    useOfficeStore.getState().openConversation('chat');
+    if (ask)
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLTextAreaElement>('.conversation-drawer textarea')?.focus()
+      );
+  };
   const viewDistrict: DistrictId = view ? districtAt(view.target) : 'commons';
 
   const chooseAgent = useCallback(
@@ -264,10 +300,19 @@ export function OfficeCanvas({
     setFocusDepartment(name);
     if (frame) scene.current?.focusPoint(frame.point, frame.span);
   };
+  const navigation = useOfficeStore((s) => s.navigationRequest);
+  useEffect(() => {
+    if (!navigation) return;
+    if (navigation.department) chooseDepartment(navigation.department);
+    else if (navigation.overview) {
+      setFocusDepartment(null);
+      scene.current?.overview();
+    }
+  }, [navigation, modelsReady, roster]);
   const chooseRoom = (zone: ZoneId) => {
     setFocusDepartment(null);
     // The Files room opens the folder wall with the Files Agent.
-    if (zone === 'files') flyToAgent('files-agent');
+    if (zone === 'files') useOfficeStore.getState().focusOn({ agentId: 'files-agent' });
     else scene.current?.focusZone(zone);
   };
   signClick.current = (sign) => {
@@ -291,15 +336,99 @@ export function OfficeCanvas({
     };
   }, [focusDepartment, viewDistrict]);
 
+  const coworkerPopover = coworkerCard && !focusMode && (
+    <div
+      ref={pin}
+      data-agent-id={selectedAgentId}
+      className="coworker-popover"
+      role="dialog"
+      aria-label={`${selected.name} coworker card`}
+    >
+      <button
+        className="coworker-close"
+        aria-label="Close coworker card"
+        onClick={() => useOfficeStore.getState().closeCoworkerCard()}
+      >
+        ×
+      </button>
+      <AgentPortrait agent={selected} />
+      <div>
+        <strong>{selected.name}</strong>
+        {selectedStatus ? (
+          <LifecycleBadge status={selectedStatus} />
+        ) : (
+          <span className={`status-badge ${statuses[selected.id]}`}>
+            {statuses[selected.id] === 'idle' ? 'Available' : statuses[selected.id]}
+          </span>
+        )}
+        <p>{selected.role}</p>
+      </div>
+      <div className="coworker-task-detail">
+        <p className="coworker-specialty">{selected.description}</p>
+        {selectedRun && (
+          <p>
+            <strong>
+              {selectedRun.status === 'completed'
+                ? latestResponse
+                  ? 'Latest result'
+                  : 'Latest task'
+                : 'Current task'}
+            </strong>
+            <span>
+              {(selectedRun.status === 'completed' ? latestResponse : selectedRun.error) ||
+                selectedRun.summary ||
+                agentRuntime[selected.id]?.currentTask ||
+                'Conversation task'}
+            </span>
+          </p>
+        )}
+        {!selectedRun && latestResponse && (
+          <p>
+            <strong>Latest result</strong>
+            <span>{latestResponse}</span>
+          </p>
+        )}
+      </div>
+      <div className="coworker-actions">
+        <button
+          onClick={() => {
+            if (pendingRequest && thread) {
+              const office = useOfficeStore.getState();
+              office.closeCoworkerCard();
+              office.focusWork(thread.id, pendingRequest.toolCallId);
+            } else message();
+          }}
+        >
+          {selectedStatus ? runLifecycle(selectedStatus).action : 'Message'}
+        </button>
+        <button onClick={() => message(true)}>Ask a question</button>
+        <button onClick={() => useOfficeStore.getState().openConversation()}>More</button>
+      </div>
+    </div>
+  );
   return (
-    <section className="office-viewport" aria-label="Interactive AI office">
-      <div className="office-topbar">
+    <section
+      className={`office-viewport${focusMode ? ' focus-mode' : ''}${conversationOpen ? ' drawer-open' : ''}`}
+      aria-label="Interactive AI office"
+    >
+      <div className="office-topbar" data-office-obstacle>
         <div className="office-directory">
           <span className="office-directory-mark" aria-hidden="true">
             Axon<span>.</span>
           </span>
           <DepartmentMenu current={focusDepartment} onChoose={chooseFromMenu} />
           <OfficeDirectory onChoose={chooseAgent} />
+          <nav className="top-districts" aria-label="Office districts">
+            <button
+              onClick={() => {
+                setFocusDepartment(null);
+                scene.current?.overview();
+              }}
+            >
+              All
+            </button>
+            <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
+          </nav>
         </div>
         <div className="office-view-controls">
           <WaitingPill />
@@ -314,48 +443,40 @@ export function OfficeCanvas({
               <IconCode size={16} />
             </button>
           )}
-          <AccountButton />
-          <button onClick={() => openOverlay('knowledge')} title="Open library" aria-label="Open library">
-            <IconBook size={16} />
-          </button>
-          <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
-            <IconSettings size={16} />
-          </button>
-          <span className="office-view-divider" aria-hidden="true" />
           <button
-            onClick={() => scene.current?.overview()}
-            title="Whole campus"
-            aria-label="Whole campus"
-            disabled={roster}
+            onClick={() => useOfficeStore.getState().setFocusMode(!focusMode)}
+            aria-pressed={focusMode}
+            aria-label="Focus mode"
           >
             <IconScan size={16} />
           </button>
-          <button
-            onClick={() => {
-              setFocusDepartment(null);
-              scene.current?.resetCamera();
-            }}
-            title="Back to the Commons"
-            aria-label="Reset view"
-            disabled={roster}
-          >
-            <IconRotateCcw size={16} />
-          </button>
-          <button
-            onClick={() => {
-              if (failed) setFailed(false);
-              else toggle3d();
-            }}
-            title={roster ? 'Office view' : 'Team view'}
-            aria-label={roster ? 'Office view' : 'Team view'}
-          >
-            <IconLayoutGrid size={16} />
+          <AccountButton />
+          <details className="office-apps">
+            <summary aria-label="Apps menu">
+              <IconLayoutGrid size={16} />
+            </summary>
+            <div className="office-apps-menu">
+              <button aria-label="Open library" onClick={() => openOverlay('knowledge')}>
+                <IconBook size={16} /> Library
+              </button>
+              <button
+                aria-label={roster ? 'Office view' : 'Team view'}
+                onClick={() => {
+                  if (failed) setFailed(false);
+                  else toggle3d();
+                }}
+              >
+                {roster ? 'Office view' : 'Team view'}
+              </button>
+            </div>
+          </details>
+          <button onClick={() => openOverlay('settings')} title="Settings" aria-label="Office settings">
+            <IconSettings size={16} />
           </button>
         </div>
       </div>
 
-      <nav className="office-navigation" aria-label="Office districts">
-        <DistrictChips active={roster ? null : viewDistrict} onChoose={chooseDistrict} />
+      <div className="office-navigation" data-office-obstacle aria-label="Team status">
         <div className="office-presence">
           <span className="office-presence-dot" />
           <GlobalWork />
@@ -364,7 +485,7 @@ export function OfficeCanvas({
             departments
           </small>
         </div>
-      </nav>
+      </div>
 
       {roster ? (
         <div className="office-roster-fallback">
@@ -395,7 +516,11 @@ export function OfficeCanvas({
                     <span>{agent.department}</span>
                     <span className={`status-badge ${statuses[agent.id] ?? 'idle'}`}>
                       <span className="status-dot-sm" />
-                      {statuses[agent.id] ?? 'idle'}
+                      {statuses[agent.id] === 'idle'
+                        ? 'Available'
+                        : statuses[agent.id] === 'waiting'
+                          ? 'Waiting'
+                          : (statuses[agent.id] ?? 'Available')}
                     </span>
                   </button>
                 ))}
@@ -423,8 +548,13 @@ export function OfficeCanvas({
             statuses={statuses}
             loading={loading}
             onAgent={chooseAgent}
+            bounds={view?.bounds ?? null}
+            target={view?.target ?? { x: 0, z: 0 }}
+            onPlace={(kind, target) =>
+              kind === 'district' ? chooseDistrict(target as DistrictId) : chooseDepartment(target)
+            }
           />
-          {!loading && (
+          {!loading && mapOpen && (
             <Minimap
               view={view?.bounds ?? null}
               working={working}
@@ -432,6 +562,7 @@ export function OfficeCanvas({
               onLook={look}
             />
           )}
+          {coworkerPopover}
           <div className="office-map-hint">
             <IconZoomIn size={13} />
             <span>
@@ -443,12 +574,50 @@ export function OfficeCanvas({
         </div>
       )}
 
-      <TeamStrip
-        title={strip.title}
-        people={strip.people}
-        selectedId={selectedAgentId}
-        onChoose={chooseAgent}
-      />
+      {roster && coworkerPopover}
+      <PlannerCard workOpen={work?.open} />
+      <button
+        className="ask-axon"
+        data-office-obstacle
+        onClick={() => useOfficeStore.getState().setCommandPaletteOpen(true)}
+      >
+        <strong>Ask Axon</strong>
+        <span>Get help or automate work…</span>
+        <kbd>{SHORTCUT_KEY}+K</kbd>
+      </button>
+      <div className="map-controls" data-office-obstacle aria-label="Map controls">
+        <button onClick={() => setMapOpen(!mapOpen)} aria-pressed={mapOpen} aria-label="Toggle minimap">
+          Map
+        </button>
+        <button onClick={() => scene.current?.zoomBy(1 / 1.2)} disabled={roster} aria-label="Zoom out">
+          −
+        </button>
+        <button onClick={() => scene.current?.resetCamera()} disabled={roster} aria-label="Reset view">
+          <IconRotateCcw size={16} />
+        </button>
+        <button onClick={() => scene.current?.zoomBy(1.2)} disabled={roster} aria-label="Zoom in">
+          +
+        </button>
+        <button onClick={() => scene.current?.overview()} disabled={roster} aria-label="Whole campus">
+          <IconScan size={16} />
+        </button>
+      </div>
+      <div className={`coworker-dock${dockCollapsed ? ' collapsed' : ''}`} data-office-obstacle>
+        <button
+          className="dock-toggle"
+          onClick={() => useOfficeStore.getState().setDockCollapsed(!dockCollapsed)}
+          aria-expanded={!dockCollapsed}
+          aria-label="Toggle coworker dock"
+        >
+          {dockCollapsed ? 'Show team' : 'Hide team'}
+        </button>
+        <TeamStrip
+          title={strip.title}
+          people={strip.people}
+          selectedId={selectedAgentId}
+          onChoose={chooseAgent}
+        />
+      </div>
     </section>
   );
 }

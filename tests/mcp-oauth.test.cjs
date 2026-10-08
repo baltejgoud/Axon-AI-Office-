@@ -15,6 +15,22 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const oauth = require('../src/main/mcp/oauth.ts');
 
+test('pre-registered localhost callback returns the code on its configured port', async () => {
+  const { loopbackAuthorize } = require('../src/main/accounts/loopback.ts');
+  const result = await loopbackAuthorize({
+    callback: { host: 'localhost', port: 6275 },
+    state: 'expected-state', signal: new AbortController().signal, timeoutMs: 2000,
+    messages: { failed: 'failed', declined: 'declined', timedOut: 'timeout' },
+    authorizationUrl: redirect => {
+      assert.equal(redirect, 'http://localhost:6275/callback');
+      return `${redirect}?code=verified-code&state=expected-state`;
+    },
+    openExternal: async url => { assert.equal((await fetch(url)).status, 200); }
+  });
+  assert.equal(result.code, 'verified-code');
+  assert.equal(result.redirectUri, 'http://localhost:6275/callback');
+});
+
 /**
  * A resource server and authorization server on one loopback port. Options: header (the 401 names
  * the metadata), prm (protected resource metadata exists), register (a registration endpoint),

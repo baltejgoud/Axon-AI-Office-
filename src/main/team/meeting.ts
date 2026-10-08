@@ -35,6 +35,7 @@ export function meetingSystemPrompt(attendee: Coworker, team: Team): string {
   return [
     attendee.systemPrompt,
     rolesBlock(roleProfiles(attendee.roleIds)),
+    team.context ?? '',
     `${nameOf(team.leadId)} has called a team meeting about this goal:\n${team.goal}\n\nIn the room: ${inTheRoom(team)}.`,
     'From your specialty, in under 200 words: how you would approach your part, what you would own (files or areas), what you need from whom, and the main risk. Do not do the work yet; you may read the project to ground your answer.'
   ]
@@ -50,6 +51,7 @@ export async function draftPlan(team: Team, model: ModelCall): Promise<{ plan: T
   const lead = coworkerById(team.leadId);
   const system = [
     lead?.systemPrompt ?? '',
+    team.context ?? '',
     `You ran a team meeting about this goal:\n${team.goal}\n\nIn the room: ${inTheRoom(team)}.`,
     'Turn what the team said into a plan by calling propose_plan exactly once. Give each task to the attendee best placed for it, in enough detail to start without the meeting. Make a task depend on another only when it needs its result. Give every file to one task; two tasks that could run at the same time must never share a file.'
   ]
@@ -112,7 +114,8 @@ export async function writeReport(team: Team, model: ModelCall): Promise<string>
       model: model.modelId,
       system: [
         lead?.systemPrompt ?? '',
-        'Your team has finished. Report to the user in under 250 words: what was done and by whom, anything left open, and what they should check.'
+        team.context ?? '',
+        'Your team has finished. Write a detailed completion report with: executive summary, each task and owner, actual deliverables and evidence, decisions and rationale, verification performed, unresolved issues and limitations, and recommended next actions for the owner to review. Distinguish drafts from sent messages, researched leads from contacted leads, and supplied claims from verified facts. Never claim external actions happened without tool evidence. Use as much detail as the work requires.'
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -143,8 +146,10 @@ export function taskBrief(team: Team, assignment: TeamAssignment): string {
     .map((a) => `### ${a.title} (${nameOf(a.ownerId)})\n${a.completionReport ? JSON.stringify(a.completionReport) : a.result || '(no hand-off)'}`);
   return [
     `Team goal: ${team.goal}`,
+    team.context ?? '',
     team.plan?.summary ? `The plan: ${team.plan.summary}` : '',
     `Your task (${assignment.id}): ${assignment.title}\n${assignment.brief}`,
+    assignment.retryNote ? `Previous attempt needs correction: ${assignment.retryNote}\nPrevious deliverable: ${assignment.result ?? '(none)'}` : '',
     assignment.files.length ? `Files that are yours to create or change: ${assignment.files.join(', ')}` : '',
     others.length
       ? `The rest of the team (do not edit files someone else owns; ask them with ask_colleague):\n${others

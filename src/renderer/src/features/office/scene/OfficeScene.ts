@@ -26,6 +26,8 @@ import { RACK_LIGHTS } from './room/props';
 import { AutoQuality, qualityPreference, type QualityLevel, type QualityMode } from './render/quality';
 import { applyRenderQuality } from './render/sharpness';
 import { DeskLunches } from './room/lunch';
+import { placeOverlay, overlaps, type OverlayRect } from '../shell/overlayPlacement';
+import { SPATIAL_LABELS } from '../shell/spatialLabels';
 import { StaffLayer } from './staff/StaffLayer';
 import type { StaffAction, StaffId } from './staff/routines';
 
@@ -68,6 +70,9 @@ export interface OfficeDebugHandle {
   staffPoint(id: StaffId): { x: number; y: number } | null;
   /** Who is playing on the Lounge TV, and what it shows. */
   lounge(): { players: number; tv: 'game' | 'saver'; controllersOnConsole: number };
+  collaborations(): { helper: string; host: string }[];
+  help(helperId: string, hostId: string): boolean;
+  endHelp(helperId: string): void;
   seed: number;
 }
 
@@ -87,7 +92,8 @@ export interface OfficeView {
 /** A name tag that follows a person. */
 interface SceneLabel {
   element: HTMLElement;
-  agentId: string;
+  agentId?: string;
+  point?: THREE.Vector3;
 }
 
 /** An invisible box over part of the room that reacts to clicks. */
@@ -125,6 +131,22 @@ const RIG_IDLE_SECONDS = 30;
 export class OfficeScene {
   public readonly scene = new THREE.Scene();
   public readonly renderer: THREE.WebGLRenderer;
+  public onPinOccluded?: () => void;
+  private pinOccluded = false;
+  private readonly collaborations = new Map<string, string>();
+  private readonly collaborationGeometry = new THREE.BufferGeometry();
+  private readonly collaborationMaterial = new THREE.LineBasicMaterial({
+    color: '#3867f6',
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false
+  });
+  private readonly collaborationLines = new THREE.LineSegments(
+    this.collaborationGeometry,
+    this.collaborationMaterial
+  );
+  public onEmptyClick?: () => void;
+  private pins: { element: HTMLElement; agentId: string }[] = [];
   public onAgentClick?: (agentId: string) => void;
   public onAgentHover?: (agentId: string | null) => void;
   public onViewChange?: (view: OfficeView) => void;
@@ -262,6 +284,9 @@ export class OfficeScene {
         setStatus: (agentId, status) => this.updateAgentStatus(agentId, status),
         signs: () => this.signs.info(),
         boards: () => this.boards.info(),
+        help: (helper, host) => this.startHelp(helper, host),
+        endHelp: (helper) => this.endHelp(helper),
+        collaborations: () => [...this.collaborations].map(([helper, host]) => ({ helper, host })),
         setHour: (hour) => {
           this.hourOverride = hour;
           this.applyLighting();
@@ -341,6 +366,8 @@ export class OfficeScene {
       };
     }
 
+    this.collaborationLines.frustumCulled = false;
+    this.scene.add(this.collaborationLines);
     this.initEvents();
     this.applyLighting();
     this.handleResize();
@@ -441,6 +468,15 @@ export class OfficeScene {
     this.cameraRig.overview();
   }
 
+  public zoomBy(factor: number): void {
+    this.cameraRig.zoomAt(factor, 0, 0);
+  }
+
+  public setPins(elements: HTMLElement[]): void {
+    this.pinOccluded = false;
+    this.pins = elements.map((element) => ({ element, agentId: element.dataset.agentId ?? '' }));
+  }
+
   public resetCamera(): void {
     this.cameraRig.reset();
   }
@@ -450,7 +486,11 @@ export class OfficeScene {
     this.labels = elements.flatMap((element): SceneLabel[] => {
       const anchor = element.dataset.anchor ?? '';
       const id = anchor.startsWith('agent:') ? anchor.slice(6) : '';
-      return id && this.crowd.has(id) ? [{ element, agentId: id }] : [];
+      if (id && this.crowd.has(id)) return [{ element, agentId: id }];
+      const place = SPATIAL_LABELS.find((label) => `place:${label.id}` === anchor);
+      return place
+        ? [{ element, point: new THREE.Vector3(place.point.x, place.point.y, place.point.z) }]
+        : [];
     });
   }
 
@@ -466,11 +506,18 @@ export class OfficeScene {
 
   /** A colleague walks over to help someone; false when they can't (see the simulation). */
   public startHelp(helperId: string, hostId: string): boolean {
-    return this.simulation.startHelp(helperId, hostId);
+    const started = this.simulation.startHelp(helperId, hostId);
+    if (this.crowd.has(helperId) && this.crowd.has(hostId) && helperId !== hostId) {
+      this.collaborations.set(helperId, hostId);
+      this.resizeCollaborationLines();
+    }
+    return started;
   }
 
   public endHelp(helperId: string): void {
     this.simulation.endHelp(helperId);
+    this.collaborations.delete(helperId);
+    this.resizeCollaborationLines();
   }
 
   /**
@@ -654,6 +701,7 @@ export class OfficeScene {
         else if (board) this.onBoardClick?.(board);
         else if (this.raycaster.intersectObject(this.filesHotspot, false).length) this.onFilesClick?.();
         else if (this.raycaster.intersectObject(this.libraryHotspot, false).length) this.onLibraryClick?.();
+        else this.onEmptyClick?.();
       }
       canvas.style.cursor = this.hoveredAgentId || this.hoveredSign || this.hoveredBoard ? 'pointer' : 'grab';
     };
@@ -766,6 +814,7 @@ export class OfficeScene {
     this.updateQuality(dt);
     // A size change (the work surface opening, its divider dragged) is drawn in this frame, once.
     this.syncSize();
+    this.updateCollaborationLines();
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.placeLabels();
     this.notifyView(dt);
@@ -854,9 +903,79 @@ export class OfficeScene {
     return character ? character.labelPoint(target) : this.crowd.labelPoint(agentId, target);
   }
 
+  private resizeCollaborationLines(): void {
+    this.collaborationGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(this.collaborations.size * 16 * 6), 3)
+    );
+    this.collaborationLines.visible = this.collaborations.size > 0;
+  }
+
+  /** One batched line layer follows both moving colleagues; removing a help task removes its link. */
+  private updateCollaborationLines(): void {
+    const position = this.collaborationGeometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (!position) return;
+    let index = 0;
+    for (const [helper, host] of this.collaborations) {
+      const a = this.simulation.view(helper),
+        b = this.simulation.view(host);
+      for (let segment = 0; segment < 16; segment++)
+        for (const t of [segment / 16, (segment + 1) / 16]) {
+          position.setXYZ(
+            index++,
+            a && b ? a.position.x + (b.position.x - a.position.x) * t : 0,
+            a && b ? 1.4 + Math.sin(Math.PI * t) * 0.9 : -10,
+            a && b ? a.position.z + (b.position.z - a.position.z) * t : 0
+          );
+        }
+    }
+    position.needsUpdate = true;
+  }
+
   private placeLabels(): void {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
+    const origin = this.container.getBoundingClientRect();
+    const obstacles: OverlayRect[] = Array.from(
+      this.container.closest('.office-container')?.querySelectorAll<HTMLElement>('[data-office-obstacle]') ??
+        []
+    ).flatMap((element) => {
+      const style = getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden' || element.inert) return [];
+      const box = element.getBoundingClientRect();
+      return box.width && box.height
+        ? [{ x: box.left - origin.left, y: box.top - origin.top, w: box.width, h: box.height }]
+        : [];
+    });
+    for (const pin of this.pins) {
+      const point = this.labelPoint(pin.agentId, this.scratch);
+      if (!point) {
+        pin.element.style.visibility = 'hidden';
+        continue;
+      }
+      point.project(this.cameraRig.camera);
+      const x = ((point.x + 1) * width) / 2,
+        y = ((1 - point.y) * height) / 2;
+      const placed = placeOverlay(
+        { x, y },
+        { w: pin.element.offsetWidth, h: pin.element.offsetHeight },
+        { x: 12, y: 12, w: width - 24, h: height - 24 },
+        obstacles
+      );
+      if (!placed) {
+        pin.element.style.visibility = 'hidden';
+        if (!this.pinOccluded) {
+          this.pinOccluded = true;
+          queueMicrotask(() => this.onPinOccluded?.());
+        }
+        continue;
+      }
+      pin.element.dataset.side = placed.y > y ? 'below' : 'above';
+      pin.element.style.left = `${placed.x}px`;
+      pin.element.style.top = `${placed.y}px`;
+      pin.element.style.visibility = 'visible';
+      obstacles.push(placed);
+    }
     const occupied: { x: number; y: number; w: number; h: number }[] = [];
     const ordered = [...this.labels].sort((a, b) => {
       const priority = (label: SceneLabel) => (label.element.getAttribute('aria-pressed') === 'true' ? 0 : 1);
@@ -866,8 +985,12 @@ export class OfficeScene {
       ordered.map((label) => [label, { w: label.element.offsetWidth, h: label.element.offsetHeight }])
     );
     for (const label of ordered) {
-      const point = this.labelPoint(label.agentId, this.scratch);
-      const behavior = this.simulation.view(label.agentId)?.behavior ?? 'idle';
+      const point = label.agentId
+        ? this.labelPoint(label.agentId, this.scratch)
+        : label.point
+          ? this.scratch.copy(label.point)
+          : null;
+      const behavior = label.agentId ? (this.simulation.view(label.agentId)?.behavior ?? 'idle') : 'idle';
       if (label.element.dataset.behavior !== behavior) label.element.dataset.behavior = behavior;
       if (!point) continue;
       const projected = point.project(this.cameraRig.camera);
@@ -882,6 +1005,7 @@ export class OfficeScene {
       const placedX = Math.max(w / 2 + 6, Math.min(width - w / 2 - 6, x));
       let placedY = Math.max(h / 2 + 6, Math.min(height - h / 2 - 6, y));
       const collides = (cy: number) =>
+        obstacles.some((rect) => overlaps({ x: placedX - w / 2, y: cy - h / 2, w, h }, rect, 4)) ||
         occupied.some(
           (rect) =>
             Math.abs(placedX - rect.x) < (w + rect.w) / 2 + 5 && Math.abs(cy - rect.y) < (h + rect.h) / 2 + 4
@@ -896,7 +1020,7 @@ export class OfficeScene {
           break;
         }
       // A label that cannot find room is hidden rather than piled on top of another.
-      if (!free && label.element.getAttribute('aria-pressed') !== 'true') {
+      if (!free) {
         label.element.style.visibility = 'hidden';
         continue;
       }
@@ -960,6 +1084,8 @@ export class OfficeScene {
     this.staff.dispose();
     this.signs.dispose();
     this.boards.dispose();
+    this.collaborationGeometry.dispose();
+    this.collaborationMaterial.dispose();
     for (const spot of [this.filesHotspot, this.libraryHotspot]) {
       spot.geometry.dispose();
       (spot.material as THREE.Material).dispose();

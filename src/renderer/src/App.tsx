@@ -191,13 +191,11 @@ export function App() {
 
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
-      if (event.key === 'k') {
+      if (event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        useOfficeStore.getState().openOverlay(null);
-        setTimeout(
-          () => document.querySelector<HTMLInputElement>('[aria-label="Find a coworker"]')?.focus(),
-          50
-        );
+        const office = useOfficeStore.getState();
+        office.openOverlay(null);
+        office.setCommandPaletteOpen(!office.commandPaletteOpen);
       }
       if (event.key === ',') {
         event.preventDefault();

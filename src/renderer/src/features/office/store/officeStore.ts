@@ -25,7 +25,7 @@ export interface AgentRuntime {
   activities: AgentActivity[];
 }
 
-export type Overlay = 'settings' | 'knowledge';
+export type Overlay = 'settings' | 'knowledge' | 'company';
 
 /** What the coworker's panel shows under their name: the conversation, or one of their tools. */
 export type PanelTab = 'chat' | 'planner' | 'files' | 'updates';
@@ -74,12 +74,12 @@ interface OfficeStoreState {
   /** Goes where a notification, the tray or the Today board points: someone, their thread, the planner. */
   focusOn: (target: FocusTarget) => void;
   /**
-   * The office's share of the left side while a work surface is open below it. Starts at 60/40 and
-   * keeps whatever the user drags it to, for this session, across tabs and coworkers.
+   * Legacy share value for the floating sheet: its height is 1 - workSplit. Starts at 40% height
+   * and remembers resizing across tabs and coworkers without changing the canvas size.
    */
   workSplit: number;
   setWorkSplit: (share: number) => void;
-  /** The divider is being dragged: the office draws more cheaply until it is let go. */
+  /** The sheet's top edge is being dragged. */
   resizingWork: boolean;
   setResizingWork: (resizing: boolean) => void;
   /**
@@ -98,7 +98,42 @@ interface OfficeStoreState {
   /** Messages sent while a conversation's run was going, by conversation, until the run reads them. */
   queued: Record<string, string[]>;
   setQueued: (conversationId: string, messages: string[]) => void;
+
+  // ---------------------------------------------------------------- office-first overlays
+  /** Level 2: the selected coworker's small card, pinned over them in the office. */
+  navigationRequest: { department?: string; overview?: boolean; at: number } | null;
+  navigateOffice: (target: { department?: string; overview?: boolean }) => void;
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+  activityHistoryOpen: boolean;
+  setActivityHistoryOpen: (open: boolean) => void;
+  plannerOpen: boolean;
+  setPlannerOpen: (open: boolean) => void;
+  workFullscreen: boolean;
+  setWorkFullscreen: (fullscreen: boolean) => void;
+  coworkerCard: boolean;
+  /** Level 3: the conversation drawer (the coworker's panel) slid in over the office. */
+  conversationOpen: boolean;
+  /** The coworker strip at the bottom is folded down to its caption. */
+  dockCollapsed: boolean;
+  /** Only the office and the top bar: every other card steps aside. */
+  focusMode: boolean;
+  closeCoworkerCard: () => void;
+  /** Opens the drawer for the selected coworker, on `tab` if given. */
+  openConversation: (tab?: PanelTab) => void;
+  closeConversation: () => void;
+  setDockCollapsed: (collapsed: boolean) => void;
+  setFocusMode: (focus: boolean) => void;
 }
+
+const DOCK_KEY = 'axon.office.dock';
+const readDockCollapsed = () => {
+  try {
+    return localStorage.getItem(DOCK_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+};
 
 const initialRuntime: Record<string, AgentRuntime> = {};
 for (const agent of OFFICE_AGENTS) {
@@ -119,16 +154,48 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   pendingFiles: {},
   flyTo: null,
   teamBoard: null,
-  openTeamBoard: (team) => set({ teamBoard: team }),
+  // A board's task list shows in the drawer; closing the list leaves the drawer to the coworker.
+  openTeamBoard: (team) =>
+    set(team ? { teamBoard: team, conversationOpen: true, coworkerCard: false } : { teamBoard: null }),
   briefing: null,
   setBriefing: (briefing) => set({ briefing }),
   panelTab: 'chat',
   setPanelTab: (tab) => set({ panelTab: tab }),
+  // A notification, the tray, a run or the waiting pill points at a thread: straight to the drawer.
   focusOn: (target) => {
     get().flyToAgent(target.agentId);
     if (target.conversationId) get().setAgentConversation(target.agentId, target.conversationId);
-    if (target.planner) set({ panelTab: 'planner' });
+    set({ conversationOpen: true, coworkerCard: false, ...(target.planner && { panelTab: 'planner' }) });
   },
+  navigationRequest: null,
+  navigateOffice: (target) => set({ navigationRequest: { ...target, at: Date.now() } }),
+  commandPaletteOpen: false,
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  activityHistoryOpen: false,
+  setActivityHistoryOpen: (open) => set({ activityHistoryOpen: open, ...(open && { coworkerCard: false }) }),
+  plannerOpen: false,
+  setPlannerOpen: (open) =>
+    set({ plannerOpen: open, ...(open && { activityHistoryOpen: false, coworkerCard: false }) }),
+  workFullscreen: false,
+  setWorkFullscreen: (fullscreen) =>
+    set({ workFullscreen: fullscreen, ...(fullscreen && { activityHistoryOpen: false }) }),
+  coworkerCard: false,
+  conversationOpen: false,
+  dockCollapsed: readDockCollapsed(),
+  focusMode: false,
+  closeCoworkerCard: () => set({ coworkerCard: false }),
+  openConversation: (tab) =>
+    set({ conversationOpen: true, coworkerCard: false, teamBoard: null, ...(tab && { panelTab: tab }) }),
+  closeConversation: () => set({ conversationOpen: false, teamBoard: null }),
+  setDockCollapsed: (collapsed) => {
+    try {
+      localStorage.setItem(DOCK_KEY, collapsed ? 'collapsed' : 'open');
+    } catch {
+      // Blocked storage: the choice lasts for this session.
+    }
+    set({ dockCollapsed: collapsed });
+  },
+  setFocusMode: (focus) => set({ focusMode: focus, ...(focus && { activityHistoryOpen: false }) }),
   workSplit: DEFAULT_WORK_SPLIT,
   setWorkSplit: (share) => set({ workSplit: clampWorkSplit(share) }),
   resizingWork: false,
@@ -144,12 +211,16 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   queued: {},
   setQueued: (conversationId, messages) => set({ queued: { ...get().queued, [conversationId]: messages } }),
 
+  // Picking someone shows their card; with the drawer already open, the drawer follows them instead.
   selectAgent: (id: string) => {
     const agent = OFFICE_AGENTS.find((a) => a.id === id);
     if (!agent) return;
     set({
       selectedAgentId: id,
+      activityHistoryOpen: false,
+      focusDepartment: get().focusDepartment === agent.department ? get().focusDepartment : null,
       teamBoard: null,
+      coworkerCard: !get().conversationOpen,
       ...(id !== get().selectedAgentId && { panelTab: defaultTab(id) })
     });
   },
@@ -232,7 +303,12 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
 
   toggle3d: () => set({ is3dEnabled: !get().is3dEnabled }),
 
-  openOverlay: (overlay, settingsSection) => set({ overlay, settingsSection: settingsSection ?? null }),
+  openOverlay: (overlay, settingsSection) =>
+    set({
+      overlay,
+      settingsSection: settingsSection ?? null,
+      ...(overlay && { coworkerCard: false, commandPaletteOpen: false })
+    }),
 
   handFiles: (agentId, files) => {
     const current = get().pendingFiles[agentId] ?? [];
@@ -250,8 +326,14 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   flyToAgent: (agentId) =>
     set({
       selectedAgentId: agentId,
+      activityHistoryOpen: false,
+      focusDepartment:
+        get().focusDepartment === OFFICE_AGENTS.find((a) => a.id === agentId)?.department
+          ? get().focusDepartment
+          : null,
       flyTo: { agentId, at: Date.now() },
       teamBoard: null,
+      coworkerCard: !get().conversationOpen,
       ...(agentId !== get().selectedAgentId && { panelTab: defaultTab(agentId) })
     }),
 

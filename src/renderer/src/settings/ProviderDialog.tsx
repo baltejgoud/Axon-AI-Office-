@@ -59,6 +59,8 @@ export const PRESETS: readonly Preset[] = [
     kind: 'anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
     models: ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001'],
+    description:
+      "A Claude Console API key, checked with Anthropic's free model list. Usage is Claude API usage billed to the key's Console organization, not a Claude plan. Settings → Accounts → Claude also shows the key's organization and rate limits.",
     tint: 'anthropic'
   },
   {
@@ -114,7 +116,8 @@ export const PRESETS: readonly Preset[] = [
     kind: 'openai-compatible',
     baseUrl: 'https://openrouter.ai/api/v1',
     models: ['openai/gpt-oss-120b', 'moonshotai/kimi-k3', 'qwen/qwen3.8-max-0902'],
-    description: 'One key for GPT-OSS 120B, Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.',
+    description:
+      'One key for GPT-OSS 120B, Kimi, Qwen, DeepSeek, Llama and hundreds more. Model IDs name their maker.',
     tint: 'openrouter'
   },
   {
@@ -146,6 +149,7 @@ export const PRESETS: readonly Preset[] = [
 
 const PROTOCOLS: Record<ProviderKind, string> = {
   'openai-compatible': 'OpenAI compatible',
+  'openai-responses': 'OpenAI Responses',
   anthropic: 'Anthropic Messages',
   gemini: 'Google Gemini'
 };
@@ -220,6 +224,8 @@ function SetupStatus({ setup, service, isKeyless }: { setup: Setup; service: str
 /** Add or edit a model provider: which service, how to reach it, and which of its models to use. */
 export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; onClose: () => void }) {
   const isNew = !useApp((s) => s.data?.providers.some((p) => p.id === initial.id));
+  /** The Claude connection: its key and endpoint belong to its card in Settings → Accounts. */
+  const managed = Boolean(initial.claudeConsole);
   const [provider, setProvider] = useState(initial);
   const [preset, setPreset] = useState<Preset | undefined>(() => (isNew ? undefined : presetOf(initial)));
   const [key, setKey] = useState('');
@@ -349,10 +355,15 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
             ? 'Connected, but this endpoint lists no chat models. Pull a model in Ollama or add a model ID below.'
             : 'The key works, but this endpoint lists no chat models. Add a model ID below.'
         );
-      const tested = await window.axon.providerTest({ ...target, baseUrl, models: next.map(spec) }, typed);
-      if (run !== runs.current) return null;
-      const working = tested.results.filter((r) => r.ok).map((r) => r.modelId);
-      if (!working.length) return fail(tested.results[0]?.error ?? 'None of the models answered.');
+      // Anthropic lists only models the key can chat with, and listing is free: a listed key needs no
+      // paid test message. Test connection still sends one when asked.
+      let working = next;
+      if (!(target.kind === 'anthropic' && connected.models)) {
+        const tested = await window.axon.providerTest({ ...target, baseUrl, models: next.map(spec) }, typed);
+        if (run !== runs.current) return null;
+        working = tested.results.filter((r) => r.ok).map((r) => r.modelId);
+        if (!working.length) return fail(tested.results[0]?.error ?? 'None of the models answered.');
+      }
       settled.current = JSON.stringify([target.kind, baseUrl, key]);
       if (baseUrl !== target.baseUrl) setProvider((p) => ({ ...p, baseUrl }));
       setModels(working);
@@ -449,7 +460,17 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
         </div>
       )}
 
-      <section className="provider-section">
+      {managed && (
+        <section className="provider-section">
+          <h3 className="provider-section-title">Connection</h3>
+          <p className="provider-note">
+            This is the Claude connection: its API key, workspace and model list are managed in Settings →
+            Accounts → Claude. Here you can set optional prices and budgets for its models.
+          </p>
+        </section>
+      )}
+
+      <section className="provider-section" hidden={managed}>
         <h3 className="provider-section-title">Service</h3>
         <div className="preset-grid" role="radiogroup" aria-label="Service">
           {PRESETS.map((p) => (
@@ -462,7 +483,11 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
               onClick={() => choosePreset(p)}
             >
               <span className={`preset-mark tint-${p.tint}`} aria-hidden="true">
-                <ModelIcon name={p.name} size={18} fallback={p.name === 'Custom' ? <Icon icon={IconPlus} size="sm" /> : p.name.slice(0, 1)} />
+                <ModelIcon
+                  name={p.name}
+                  size={18}
+                  fallback={p.name === 'Custom' ? <Icon icon={IconPlus} size="sm" /> : p.name.slice(0, 1)}
+                />
               </span>
               <span className="preset-name">{p.name}</span>
             </button>
@@ -471,7 +496,7 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
         {preset?.description && <p className="provider-note">{preset.description}</p>}
       </section>
 
-      <section className="provider-section">
+      <section className="provider-section" hidden={managed}>
         <h3 className="provider-section-title">Connection</h3>
         <div className="form-grid">
           <label className="field span-2">
@@ -637,14 +662,44 @@ export function ProviderDialog({ initial, onClose }: { initial: ProviderConfig; 
                         />
                       </td>
                       <td>
-                        <select className="input" aria-label={`Tokenizer for ${id}`} value={typed.tokenizer ?? ''} onChange={e => setDetail(id, 'tokenizer', e.target.value)}>
+                        <select
+                          className="input"
+                          aria-label={`Tokenizer for ${id}`}
+                          value={typed.tokenizer ?? ''}
+                          onChange={(e) => setDetail(id, 'tokenizer', e.target.value)}
+                        >
                           <option value="">Automatic tokenizer</option>
-                          {['o200k_base', 'cl100k_base', 'p50k_base', 'r50k_base', 'bytes'].map(value => <option key={value} value={value}>{value === 'bytes' ? 'Conservative byte estimate' : value}</option>)}
+                          {['o200k_base', 'cl100k_base', 'p50k_base', 'r50k_base', 'bytes'].map((value) => (
+                            <option key={value} value={value}>
+                              {value === 'bytes' ? 'Conservative byte estimate' : value}
+                            </option>
+                          ))}
                         </select>
-                        {(['maxOutputTokens', 'recommendedOutputReserve', 'contextSafetyMargin', 'recentContextTurns'] as const).map(field => <input
-                          key={field} className="input" inputMode="numeric"
-                          aria-label={`${({maxOutputTokens: "Output limit", recommendedOutputReserve: "Response reserve", contextSafetyMargin: "Safety margin", recentContextTurns: "Recent turns"})[field]} for ${id}`} placeholder={({maxOutputTokens: "Output limit", recommendedOutputReserve: "Response reserve", contextSafetyMargin: "Safety margin", recentContextTurns: "Recent turns"})[field]}
-                          value={typed[field] ?? ''} onChange={e => setDetail(id, field, e.target.value)} />)}
+                        {(
+                          [
+                            'maxOutputTokens',
+                            'recommendedOutputReserve',
+                            'contextSafetyMargin',
+                            'recentContextTurns'
+                          ] as const
+                        ).map((field) => (
+                          <input
+                            key={field}
+                            className="input"
+                            inputMode="numeric"
+                            aria-label={`${{ maxOutputTokens: 'Output limit', recommendedOutputReserve: 'Response reserve', contextSafetyMargin: 'Safety margin', recentContextTurns: 'Recent turns' }[field]} for ${id}`}
+                            placeholder={
+                              {
+                                maxOutputTokens: 'Output limit',
+                                recommendedOutputReserve: 'Response reserve',
+                                contextSafetyMargin: 'Safety margin',
+                                recentContextTurns: 'Recent turns'
+                              }[field]
+                            }
+                            value={typed[field] ?? ''}
+                            onChange={(e) => setDetail(id, field, e.target.value)}
+                          />
+                        ))}
                       </td>
                       <td>
                         <input

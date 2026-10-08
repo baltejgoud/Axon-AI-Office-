@@ -18,6 +18,9 @@ import { starters } from './starters';
 import { Planner, PlannerCount } from './Planner';
 import { Briefing } from './Briefing';
 import { ConnectorRow } from './ConnectorRow';
+import { ContextChip } from './ContextChip';
+import { latestRun } from '../lifecycle';
+import { LifecycleBadge } from '../shell/LifecycleBadge';
 
 /** Specialists' descriptions continue a phrase ("the browser-facing code…"); shown alone, they start a sentence. */
 const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -53,6 +56,11 @@ export function ActivityPanel() {
   const runtime = agentRuntime[agent.id];
   const conversations = data?.conversations ?? [];
   const conversation = activeThread(conversations, agent.id, runtime);
+  const run = conversation ? latestRun(data?.runs ?? [], agent.id, conversation.id) : undefined;
+  const pending = useApp((s) => s.pendingApprovals);
+  const runStatus = Object.values(pending).some((r) => r.conversationId === conversation?.id)
+    ? 'waiting_for_approval'
+    : run?.status;
   const threads = agentThreads(conversations, agent.id);
   const messages = data?.messages.filter((m) => m.conversationId === conversation?.id) ?? [];
   const assistant = [...messages].reverse().find((m) => m.role === 'assistant');
@@ -110,11 +118,16 @@ export function ActivityPanel() {
           </h3>
           <p>
             <span className="activity-role">{agent.role}</span>
-            <span className={`status-badge ${status}`} role="status">
-              <span className="status-dot-sm" />
-              {statusLabel}
-            </span>
+            {runStatus ? (
+              <LifecycleBadge status={runStatus} />
+            ) : (
+              <span className={`status-badge ${status}`} role="status">
+                <span className="status-dot-sm" />
+                {statusLabel}
+              </span>
+            )}
           </p>
+          {conversation && <ContextChip conversation={conversation} />}
         </div>
         <div className="activity-hero-actions">
           <ConnectorRow key={agent.id} agent={agent} />

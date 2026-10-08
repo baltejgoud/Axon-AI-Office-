@@ -1,0 +1,163 @@
+/* Shared movement and surface hierarchy for office cards, chat and settings. */
+.office-container {
+  --office-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --office-duration: 240ms;
+}
+.coworker-popover,
+.office-planner-card,
+.office-approval-card,
+.office-command-palette {
+  animation: office-card-enter var(--office-duration) var(--office-ease) both;
+  box-shadow:
+    0 4px 12px color-mix(in srgb, var(--office-ink) 6%, transparent),
+    0 16px 48px color-mix(in srgb, var(--office-ink) 10%, transparent);
+}
+.coworker-actions button,
+.office-container .work-summary-row,
+.team-button,
+.activity-tabs button {
+  transition:
+    background var(--duration-base) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+.coworker-actions button:active,
+.team-button:active {
+  filter: brightness(0.96);
+}
+.conversation-drawer {
+  transition:
+    transform 300ms var(--office-ease),
+    opacity 240ms var(--office-ease),
+    visibility 300ms;
+  opacity: 0;
+}
+.conversation-drawer.is-open {
+  opacity: 1;
+}
+.office-container .conversation-drawer .office-activity-panel {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.office-thread .message {
+  padding-block: var(--space-4);
+}
+.office-thread .message-content {
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+}
+.office-thread .message.user .message-body {
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  background: color-mix(in srgb, var(--office-blue) 8%, var(--office-paper));
+  border: 1px solid color-mix(in srgb, var(--office-blue) 12%, var(--office-border));
+}
+.office-thread .message-actions {
+  opacity: 1;
+}
+.office-thread .messages {
+  position: relative;
+}
+.tool-call-target {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--weight-regular);
+}
+.tool-call-name {
+  min-width: 0;
+  flex: 1;
+}
+.tool-call-summary {
+  gap: var(--space-3);
+}
+.tool-call-item {
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out);
+}
+.tool-call-item[open] {
+  border-color: var(--border-strong);
+}
+.tool-call-body {
+  animation: office-card-enter var(--duration-base) var(--ease-out);
+}
+.work-summary {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--office-ink) 4%, transparent);
+}
+.work-summary-count {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--office-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chat-jump {
+  position: sticky;
+  bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--office-border);
+  border-radius: var(--radius-full);
+  background: var(--office-paper);
+  color: var(--office-ink);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-xs);
+  z-index: 2;
+}
+.chat-run-stage {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: var(--space-3) var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--office-blue);
+  background: color-mix(in srgb, var(--office-blue) 6%, var(--office-paper));
+  font-size: var(--text-sm);
+}
+.office-container .composer-input-wrapper {
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+.office-container .composer-input-wrapper:focus-within {
+  border-color: var(--office-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--office-blue) 10%, transparent);
+}
+.office-thread .message-body,
+.office-container .composer-textarea {
+  font-size: var(--text-sm);
+}
+.office-thread .message-meta,
+.office-thread .message-meta .text-caption {
+  font-size: var(--text-xs);
+}
+@keyframes office-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-container *,
+  .office-container *::before,
+  .office-container *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

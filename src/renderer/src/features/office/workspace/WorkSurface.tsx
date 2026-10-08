@@ -1,6 +1,9 @@
+import { useOfficeStore } from '../store/officeStore';
 import { LiveTerminal } from './LiveTerminal';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
+import { latestRun } from '../lifecycle';
+import { LifecycleBadge } from '../shell/LifecycleBadge';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import {
   IconClose,
@@ -64,8 +67,14 @@ export function WorkSurface({
   focus: { stepId: string; at: number } | null;
   onClose: () => void;
 }) {
+  const fullscreen = useOfficeStore((s) => s.workFullscreen);
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
   const approvals = useApp((s) => s.pendingApprovals);
+  const runs = useApp((s) => s.data?.runs);
+  const run = latestRun(runs ?? [], agentId, conversationId);
+  const lifecycleStatus = Object.values(approvals).some((r) => r.conversationId === conversationId)
+    ? 'waiting_for_approval'
+    : run?.status;
   const requests: Requests = useMemo(
     () => new Map(Object.values(approvals).map((request) => [request.toolCallId, request])),
     [approvals]
@@ -118,6 +127,7 @@ export function WorkSurface({
   return (
     <section className="work-surface" aria-label={`${agent?.name ?? 'Coworker'} at work`}>
       <header className="work-bar">
+        {lifecycleStatus && <LifecycleBadge status={lifecycleStatus} />}
         <div className="work-tabs" role="tablist" aria-label="What they are working in" onKeyDown={onTabKey}>
           {tabs.map(({ kind, label }) => {
             const Icon = TAB_ICONS[kind];
@@ -159,10 +169,18 @@ export function WorkSurface({
           </p>
         )}
         <button
+          className="work-fullscreen-toggle"
+          aria-label={fullscreen ? 'Exit fullscreen work' : 'Fullscreen work'}
+          aria-pressed={fullscreen}
+          onClick={() => useOfficeStore.getState().setWorkFullscreen(!fullscreen)}
+        >
+          {fullscreen ? 'Restore' : 'Expand'}
+        </button>
+        <button
           className="work-close"
           onClick={onClose}
           aria-label="Close the work surface"
-          title={`Close (${SHORTCUT_KEY}+J) · the office takes the full height again`}
+          title={`Close (${SHORTCUT_KEY}+J) · hide work sheet`}
         >
           <IconClose size={14} />
         </button>

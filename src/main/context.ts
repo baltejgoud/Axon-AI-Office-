@@ -25,7 +25,8 @@ export class ContextCapacityError extends Error {
     this.name = 'ContextCapacityError';
   }
 }
-export const isContextOverflow = (error: unknown) => /context[_ -]length[_ -]exceeded|prompt too long|maximum context length|request too large|too many tokens/i.test(String(error) + String((error as { detail?: string })?.detail ?? ''));
+// Anthropic says "prompt is too long: N tokens > M maximum" or "input length and `max_tokens` exceed context limit".
+export const isContextOverflow = (error: unknown) => /context[_ -]length[_ -]exceeded|prompt (is )?too long|exceed context limit|maximum context length|request too large|too many tokens/i.test(String(error) + String((error as { detail?: string })?.detail ?? ''));
 function turns(messages: readonly ChatRequestMessage[]): ChatRequestMessage[][] {
   const groups: ChatRequestMessage[][] = [];
   for (const message of messages) {

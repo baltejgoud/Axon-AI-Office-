@@ -3,14 +3,36 @@ import './office.css';
 import { useEffect } from 'react';
 import { useApp } from '../../state';
 import { OfficeWorkspace } from './workspace/OfficeWorkspace';
-import { ActivityPanel } from './activity/ActivityPanel';
+import { ConversationDrawer } from './shell/ConversationDrawer';
+import './office-first.css';
+import './polish.css';
 import { Overlay } from './shell/Overlay';
 import { useOfficeStore } from './store/officeStore';
 import { SettingsPanel } from '../../Settings';
 import { Knowledge } from '../../Knowledge';
+import { CompanyOperations } from './company/CompanyOperations';
+import { CommandPalette } from './shell/CommandPalette';
+import { ApprovalOverlay } from './shell/ApprovalOverlay';
+import { OfficeNotifications } from './shell/OfficeNotifications';
 
 export function OfficePage() {
   const overlay = useOfficeStore((s) => s.overlay);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      // Menus, editors and dialogs consume Escape first. Close only one office layer.
+      queueMicrotask(() => {
+        if (event.defaultPrevented || useOfficeStore.getState().overlay) return;
+        const office = useOfficeStore.getState();
+        if (office.commandPaletteOpen) office.setCommandPaletteOpen(false);
+        else if (office.workFullscreen) office.setWorkFullscreen(false);
+        else if (office.coworkerCard) office.closeCoworkerCard();
+        else if (office.conversationOpen) office.closeConversation();
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   // People look the way their task records say, including runs started before this window opened.
   const tasks = useApp((s) => s.data?.tasks);
   const runs = useApp((s) => s.data?.runs);
@@ -37,7 +59,15 @@ export function OfficePage() {
   return (
     <div className="office-container">
       <OfficeWorkspace />
-      <ActivityPanel />
+      <ConversationDrawer />
+      <ApprovalOverlay />
+      <OfficeNotifications />
+      <CommandPalette />
+      {overlay === 'company' && (
+        <Overlay title="Company operations" onClose={close} wide>
+          <CompanyOperations />
+        </Overlay>
+      )}
       {overlay === 'settings' && (
         <Overlay title="Settings" onClose={close} wide flush>
           <SettingsPanel />

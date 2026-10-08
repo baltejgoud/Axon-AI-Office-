@@ -37,7 +37,8 @@ export interface TeamRunnerDeps {
   work: (
     team: Team,
     assignment: TeamAssignment,
-    started: (conversationId: string) => void
+    started: (conversationId: string) => void,
+    signal?: AbortSignal
   ) => Promise<WorkOutcome>;
   /** Stops an owner's run. */
   stopWork: (conversationId: string) => void;
@@ -100,6 +101,7 @@ export class TeamRunner {
     providerId: string;
     modelId: string;
     room?: MeetingRoomId;
+    context?: string;
   }): Team {
     const now = this.now();
     const team: Team = {
@@ -210,13 +212,16 @@ export class TeamRunner {
   }
 
   private async runAssignment(team: Team, a: TeamAssignment, running: Set<string>): Promise<void> {
+    const controller = new AbortController();
+    const key = `${team.id}:${a.id}`;
+    this.calls.set(key, controller);
     try {
       const ended = await this.deps.work(team, a, (conversationId) => {
         a.conversationId = conversationId;
         this.touch(team);
         // Stopped while their conversation was being set up: stop it as it starts.
         if (team.status !== 'working') this.deps.stopWork(conversationId);
-      });
+      }, controller.signal);
       a.status = team.status === 'working' ? ended.outcome : 'stopped';
       a.completionReport = ended.report;
       a.result = ended.answer.trim().slice(0, RESULT_LIMIT) || undefined;
@@ -225,6 +230,7 @@ export class TeamRunner {
       a.status = team.status === 'working' ? 'failed' : 'stopped';
       a.note = message(error);
     } finally {
+      if (this.calls.get(key) === controller) this.calls.delete(key);
       running.delete(a.id);
       this.touch(team);
       this.schedule(team);
@@ -239,10 +245,12 @@ export class TeamRunner {
     const controller = new AbortController();
     this.calls.set(team.id, controller);
     try {
-      team.report = (await this.deps.report(team, controller.signal)) || undefined;
+      const report = (await this.deps.report(team, controller.signal)).trim();
+      if (!report) throw new Error('The lead returned an empty report.');
+      team.report = report;
     } catch (error) {
       if (controller.signal.aborted) return;
-      team.note = `The report could not be written: ${message(error)}`;
+      this.fail(team, `The report could not be written: ${message(error)} Retry to write it again; completed tasks will be kept.`);
     } finally {
       if (this.calls.get(team.id) === controller) this.calls.delete(team.id);
     }
@@ -255,11 +263,12 @@ export class TeamRunner {
   /** Stops the meeting, or every owner still working; nothing waiting starts. `note` says why. */
   stop(teamId: string, note = 'Stopped by you.'): void {
     const team = this.get(teamId);
-    if (!OPEN_TEAM.has(team.status)) return;
+    if (!OPEN_TEAM.has(team.status) && !(team.status === 'failed' && team.plan)) return;
     this.calls.get(teamId)?.abort();
     team.status = 'stopped';
     team.note = note;
     for (const a of team.plan?.assignments ?? []) {
+      this.calls.get(`${team.id}:${a.id}`)?.abort();
       if (a.status === 'working' && a.conversationId) this.deps.stopWork(a.conversationId);
       else if (a.status === 'waiting') Object.assign(a, { status: 'stopped', note: 'The team was stopped' });
     }

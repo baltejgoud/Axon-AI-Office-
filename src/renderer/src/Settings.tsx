@@ -18,6 +18,7 @@ import {
   IconPlug,
   IconPlus,
   IconShield,
+  IconSearch,
   IconSparkle,
   IconTrash,
   IconUser,
@@ -63,7 +64,7 @@ type Section =
   | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
   { id: 'accounts', label: 'Accounts', icon: IconUser },
-  { id: 'models', label: 'Models', icon: IconSparkle },
+  { id: 'models', label: 'Models & API keys', icon: IconSparkle },
   { id: 'voice', label: 'Voice typing', icon: IconMic },
   { id: 'usage', label: 'Usage', icon: IconChartBar },
   { id: 'activity', label: 'Activity log', icon: IconHistory },
@@ -107,42 +108,90 @@ export function SettingsPanel() {
   const [mcpServer, setMcpServer] = useState<MCPServerConfig | null>(null);
   /** The connector whose Manage dialog is open. */
   const [managed, setManaged] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const visibleSections = SECTIONS.filter((s) => s.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const selectSection = (id: Section) => {
+    setSection(id);
+    useOfficeStore.setState({ settingsSection: id });
+  };
   const needsSignIn = useApp(
     (s) => s.data?.mcpServers.some((m) => m.enabled && m.status === 'needs-sign-in') ?? false
   );
 
   return (
     <div className="settings">
-      <nav className="settings-nav" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            role="tab"
-            id={`settings-tab-${s.id}`}
-            aria-controls="settings-content"
-            aria-selected={s.id === section}
-            className="settings-nav-item"
-            onClick={() => setSection(s.id)}
-          >
-            <Icon icon={s.icon} size="md" />
-            {s.label}
-            {s.id === 'tools' && needsSignIn && (
-              <span className="settings-nav-dot" title="A connector needs you to sign in" />
-            )}
-          </button>
-        ))}
-      </nav>
+      <div className="settings-sidebar">
+        <div className="settings-sidebar-heading">
+          <Icon icon={IconMonitor} />
+          <strong>Settings</strong>
+        </div>
+        <label className="settings-search">
+          <Icon icon={IconSearch} size="sm" />
+          <input
+            aria-label="Find a settings section"
+            placeholder="Find a setting…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <nav
+          className="settings-nav"
+          role="tablist"
+          aria-orientation="vertical"
+          aria-label="Settings sections"
+          onKeyDown={(e) => {
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+            const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+            const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+            const next =
+              e.key === 'Home'
+                ? 0
+                : e.key === 'End'
+                  ? tabs.length - 1
+                  : (index + (e.key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length;
+            e.preventDefault();
+            tabs[next]?.focus();
+            tabs[next]?.click();
+          }}
+        >
+          {visibleSections.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              id={`settings-tab-${s.id}`}
+              aria-controls="settings-content"
+              aria-selected={s.id === section}
+              className="settings-nav-item"
+              tabIndex={s.id === section || !visibleSections.some((s) => s.id === section) ? 0 : -1}
+              onClick={() => selectSection(s.id)}
+            >
+              <Icon icon={s.icon} size="md" />
+              {s.label}
+              {s.id === 'tools' && needsSignIn && (
+                <span className="settings-nav-dot" title="A connector needs you to sign in" />
+              )}
+            </button>
+          ))}
+        </nav>
+        {!visibleSections.length && <p className="settings-search-empty">No matching sections</p>}
+        <p className="settings-sidebar-note">
+          <Icon icon={IconShield} size="sm" /> Keys protected by your OS
+        </p>
+      </div>
       <div
         className="settings-content"
         id="settings-content"
         role="tabpanel"
         aria-labelledby={`settings-tab-${section}`}
+        tabIndex={0}
         key={section}
       >
-        {section === 'accounts' && <AccountsSection />}
-        {section === 'models' && <ModelsSection onEdit={setProvider} />}
-        {section === 'voice' && <VoiceSection onModels={() => setSection('models')} />}
+        {section === 'accounts' && <AccountsSection onAddProvider={setProvider} />}
+        {section === 'models' && (
+          <ModelsSection onEdit={setProvider} onAccounts={() => selectSection('accounts')} />
+        )}
+        {section === 'voice' && <VoiceSection onModels={() => selectSection('models')} />}
         {section === 'usage' && <UsageSection />}
         {section === 'activity' && <ActivitySection />}
         {section === 'tools' && (
@@ -197,13 +246,19 @@ function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
 
 // ---------------------------------------------------------------- Models
 
-function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
+function ModelsSection({
+  onEdit,
+  onAccounts
+}: {
+  onEdit: (p: ProviderConfig) => void;
+  onAccounts: () => void;
+}) {
   const providers = useApp((s) => s.data!.providers);
   const [settings, save] = useSettings();
   return (
     <div className="settings-page">
       <SectionHeader
-        title="Models"
+        title="Models & API keys"
         description="Connect the AI services your coworkers think with. Bring your own keys: they stay in your system's key store."
         action={
           <Button variant="primary" icon={IconPlus} onClick={() => onEdit(blankProvider())}>
@@ -221,12 +276,15 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
               <div className="settings-item-main">
                 <div className="settings-item-title">
                   {p.name}
-                  {!p.hasApiKey && !/localhost|127\.0\.0\.1/.test(p.baseUrl ?? '') && (
+                  {p.auth === 'chatgpt' && <span className="badge badge-accent">ChatGPT plan</span>}
+                  {p.claudeConsole && <span className="badge">Claude Console API</span>}
+                  {!p.auth && !p.hasApiKey && !/localhost|127\.0\.0\.1/.test(p.baseUrl ?? '') && (
                     <span className="badge badge-warning">No key</span>
                   )}
                 </div>
                 <div className="settings-item-meta">
-                  {protocolLabel(p.kind)} · {p.models.length} model{p.models.length === 1 ? '' : 's'}
+                  {p.accountLabel ?? protocolLabel(p.kind)} · {p.models.length} model
+                  {p.models.length === 1 ? '' : 's'}
                   {p.models.length ? `: ${p.models.map((m) => m.id).join(', ')}` : ''}
                 </div>
               </div>
@@ -241,8 +299,13 @@ function ModelsSection({ onEdit }: { onEdit: (p: ProviderConfig) => void }) {
                     )
                   }
                 />
-                <Button size="sm" variant="ghost" icon={IconCompose} onClick={() => onEdit(p)}>
-                  Edit
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={IconCompose}
+                  onClick={() => (p.auth === 'chatgpt' || p.claudeConsole ? onAccounts() : onEdit(p))}
+                >
+                  {p.auth || p.claudeConsole ? 'Account' : 'Edit'}
                 </Button>
                 <Button
                   variant="ghost"

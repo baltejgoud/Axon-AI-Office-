@@ -20,7 +20,6 @@ function makeService(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-conn-'));
   fs.mkdirSync(path.join(dir, 'db'));
   fs.mkdirSync(path.join(dir, 'backups'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const repo = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
   const secrets = new Map();
   const vault = { has: (id) => secrets.has(id), get: (id) => secrets.get(id) ?? null, set: (id, v) => (v ? secrets.set(id, v) : secrets.delete(id)), remove: (id) => secrets.delete(id) };
@@ -34,7 +33,11 @@ function makeService(t) {
     signIns.push(input);
     return { access: 'at', refresh: 'rt', tokenEndpoint: 'https://x/token', clientId: input.client?.clientId ?? 'dyn', resource: input.serverUrl };
   };
-  t.after(() => service.shutdown());
+  t.after(async () => {
+    service.shutdown();
+    await repo.store.flushAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   return { dir, repo, service, secrets, events, reconnected, signIns };
 }
 
@@ -272,15 +275,17 @@ test('setting up Google from a Gmail card saves the same Google app', async (t) 
   assert.equal((await service.accountsGet()).google.ownApp, true);
 });
 
-test('Axon opens the pages app setup needs, and nothing else', async (t) => {
+test('Axon opens web authorization links but rejects executable and credential-bearing URLs', async (t) => {
   const { service } = makeService(t);
   const opened = [];
   service.connectorAuth.openExternal = async (url) => { opened.push(url); };
   await service.openLink('https://console.cloud.google.com/apis/credentials');
   await service.openLink('https://developers.google.com/workspace/guides/configure-mcp-servers');
   await service.openLink('https://github.com/settings/applications/new');
-  await assert.rejects(service.openLink('https://evil.example/'), /only opens/);
-  assert.equal(opened.length, 3);
+  await service.openLink('https://connect.composio.dev/link/test');
+  for (const url of ['javascript:alert(1)', 'file:///C:/private.txt', 'https://user:secret@example.com/'])
+    await assert.rejects(service.openLink(url), /only opens/);
+  assert.equal(opened.length, 4);
 });
 
 const { pointAtComposio } = require('../src/main/connectors/rube.ts');

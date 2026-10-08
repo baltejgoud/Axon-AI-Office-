@@ -1,4 +1,4 @@
-// The office and the work surface below it: when the surface opens, the 60/40 split and dragging
+// The persistent office and floating work sheet: when the surface opens, the 60/40 split and dragging
 // its divider, the side panel's summary of each run and its rows opening the surface, changes and
 // approvals on the surface, a command's output as it runs, and frame rate while dragging.
 // Build first (npm run build), then: npx electron tests/office-split.cjs [1600x960] [dark]
@@ -52,7 +52,12 @@ const server = http.createServer((request, response) => {
     const last = parsed.messages?.[parsed.messages.length - 1];
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     if (last?.role === 'user' && /notes file/i.test(last.content)) {
-      response.end(toolCall('call_write', 'write_file', { path: 'notes/todo.md', content: '# Todo\n\n- Filters\n- Sorting by due date\n- Tests\n- Docs\n' }));
+      response.end(
+        toolCall('call_write', 'write_file', {
+          path: 'notes/todo.md',
+          content: '# Todo\n\n- Filters\n- Sorting by due date\n- Tests\n- Docs\n'
+        })
+      );
       return;
     }
     // A development server: a tiny page, and the address it serves.
@@ -62,7 +67,7 @@ const server = http.createServer((request, response) => {
     }
     // A coworker whose conversation has no folder of its own reads from the project open in the app.
     if (last?.role === 'user' && /read the notes/i.test(last.content)) {
-      offered = (parsed.tools ?? []).map((tool) => tool.function?.name);
+      if (parsed.tools?.length) offered = parsed.tools.map((tool) => tool.function?.name);
       response.end(toolCall('call_read', 'read_file', { path: 'notes/todo.md' }));
       return;
     }
@@ -123,51 +128,157 @@ const ts = require('typescript');
 require.extensions['.ts'] = (module, file) =>
   module._compile(
     ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        esModuleInterop: true
+      }
     }).outputText,
     file
   );
-const TASK_LIST_CHANGE = require(path.join(repo, 'src/main/tools/diff.ts')).fileChange(TASK_LIST, TASK_LIST_EDITED);
-const numbered = (text) => text.split('\n').map((l, i) => `${i + 1}: ${l}`).join('\n');
-const call = (id, name, args, result, extra = {}) => ({ id, name, arguments: JSON.stringify(args), result, ...extra });
+const TASK_LIST_CHANGE = require(path.join(repo, 'src/main/tools/diff.ts')).fileChange(
+  TASK_LIST,
+  TASK_LIST_EDITED
+);
+const numbered = (text) =>
+  text
+    .split('\n')
+    .map((l, i) => `${i + 1}: ${l}`)
+    .join('\n');
+const call = (id, name, args, result, extra = {}) => ({
+  id,
+  name,
+  arguments: JSON.stringify(args),
+  result,
+  ...extra
+});
 
 server.listen(0, '127.0.0.1', () => {
   const now = Date.now();
   const conv = (id, agentId, title, at, root) => ({
-    id, title, workspaceId: null, providerId: 'check', modelId: 'fixture', skillIds: [], roleIds: [],
-    agentId, projectRoot: root, createdAt: at, updatedAt: at
+    id,
+    title,
+    workspaceId: null,
+    providerId: 'check',
+    modelId: 'fixture',
+    skillIds: [],
+    roleIds: [],
+    agentId,
+    projectRoot: root,
+    createdAt: at,
+    updatedAt: at
   });
   const messages = [
-    { id: 'u1', conversationId: 'c-dev', role: 'user', content: 'Great, that’s done. Now move on to task filters and due-date sorting.', createdAt: now - 60000 },
-    { id: 'a0', conversationId: 'c-dev', role: 'assistant', createdAt: now - 58000, content: 'Sounds good. I’m working on it now.' },
     {
-      id: 'a1', conversationId: 'c-dev', role: 'assistant', createdAt: now - 55000, content: '',
+      id: 'u1',
+      conversationId: 'c-dev',
+      role: 'user',
+      content: 'Great, that’s done. Now move on to task filters and due-date sorting.',
+      createdAt: now - 60000
+    },
+    {
+      id: 'a0',
+      conversationId: 'c-dev',
+      role: 'assistant',
+      createdAt: now - 58000,
+      content: 'Sounds good. I’m working on it now.'
+    },
+    {
+      id: 'a1',
+      conversationId: 'c-dev',
+      role: 'assistant',
+      createdAt: now - 55000,
+      content: '',
       toolCalls: [
-        call('t1', 'list_files', { directory: 'src' }, 'src/components/TaskFilters.tsx\nsrc/components/TaskList.tsx\nsrc/components/TaskRow.tsx\nsrc/pages/Dashboard.tsx\nsrc/services/api.ts\nsrc/types/task.ts'),
+        call(
+          't1',
+          'list_files',
+          { directory: 'src' },
+          'src/components/TaskFilters.tsx\nsrc/components/TaskList.tsx\nsrc/components/TaskRow.tsx\nsrc/pages/Dashboard.tsx\nsrc/services/api.ts\nsrc/types/task.ts'
+        ),
         call('t2', 'read_file', { path: 'src/components/TaskList.tsx' }, numbered(TASK_LIST)),
-        call('t3', 'search_code', { query: 'dueDate' }, "src/types/task.ts:7  dueDate: string;\nsrc/services/api.ts:22  params.set('sort', 'dueDate');"),
-        call('t4', 'read_file', { path: 'src/pages/Dashboard.tsx' }, numbered("import { TaskList } from '../components/TaskList';\n\nexport function Dashboard() {\n  return <TaskList tasks={useTasks()} />;\n}")),
-        call('t5', 'write_file', { path: 'src/components/TaskFilters.tsx', content: TASK_FILTERS }, 'Successfully wrote 1401 characters to src/components/TaskFilters.tsx.', {
-          change: { added: TASK_FILTERS.split('\n').length, removed: 0, created: true }
-        })
+        call(
+          't3',
+          'search_code',
+          { query: 'dueDate' },
+          "src/types/task.ts:7  dueDate: string;\nsrc/services/api.ts:22  params.set('sort', 'dueDate');"
+        ),
+        call(
+          't4',
+          'read_file',
+          { path: 'src/pages/Dashboard.tsx' },
+          numbered(
+            "import { TaskList } from '../components/TaskList';\n\nexport function Dashboard() {\n  return <TaskList tasks={useTasks()} />;\n}"
+          )
+        ),
+        call(
+          't5',
+          'write_file',
+          { path: 'src/components/TaskFilters.tsx', content: TASK_FILTERS },
+          'Successfully wrote 1401 characters to src/components/TaskFilters.tsx.',
+          {
+            change: { added: TASK_FILTERS.split('\n').length, removed: 0, created: true }
+          }
+        )
       ]
     },
     {
-      id: 'a2', conversationId: 'c-dev', role: 'assistant', createdAt: now - 50000, content: '',
+      id: 'a2',
+      conversationId: 'c-dev',
+      role: 'assistant',
+      createdAt: now - 50000,
+      content: '',
       toolCalls: [
-        call('t6', 'run_command', { command: 'npm test -- TaskFilters' }, '> vitest run TaskFilters\n\n ✓ src/components/TaskFilters.test.tsx (4 tests) 38ms\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)'),
-        call('t7', 'write_file', { path: 'src/components/TaskList.tsx', content: TASK_LIST_EDITED }, 'Successfully wrote 402 characters to src/components/TaskList.tsx.', {
-          change: TASK_LIST_CHANGE
-        })
+        call(
+          't6',
+          'run_command',
+          { command: 'npm test -- TaskFilters' },
+          '> vitest run TaskFilters\n\n ✓ src/components/TaskFilters.test.tsx (4 tests) 38ms\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)'
+        ),
+        call(
+          't7',
+          'write_file',
+          { path: 'src/components/TaskList.tsx', content: TASK_LIST_EDITED },
+          'Successfully wrote 402 characters to src/components/TaskList.tsx.',
+          {
+            change: TASK_LIST_CHANGE
+          }
+        )
       ]
     },
-    { id: 'a3', conversationId: 'c-dev', role: 'assistant', createdAt: now - 48000, content: 'Filters and due-date sorting are in, and the tests pass.' },
-    { id: 'u2', conversationId: 'c-back', role: 'user', content: 'Check the API docs page renders.', createdAt: now - 40000 },
     {
-      id: 'b0', conversationId: 'c-back', role: 'assistant', createdAt: now - 39000, content: 'Checking the docs page in the browser.',
+      id: 'a3',
+      conversationId: 'c-dev',
+      role: 'assistant',
+      createdAt: now - 48000,
+      content: 'Filters and due-date sorting are in, and the tests pass.'
+    },
+    {
+      id: 'u2',
+      conversationId: 'c-back',
+      role: 'user',
+      content: 'Check the API docs page renders.',
+      createdAt: now - 40000
+    },
+    {
+      id: 'b0',
+      conversationId: 'c-back',
+      role: 'assistant',
+      createdAt: now - 39000,
+      content: 'Checking the docs page in the browser.',
       toolCalls: [
-        call('b1', 'run_command', { command: 'npm run dev' }, 'VITE v5.4.2  ready in 412 ms\n\n  ➜  Local:   http://localhost:5173/\n[stderr]\n(!) Some chunks are larger than 500 kB after minification.'),
-        call('b2', 'mcp_playwright_browser_navigate', { url: 'http://localhost:5173/docs/api' }, 'Page: Axon API · Tasks\n\nGET /api/tasks\n  Query: status, priority, sort=dueDate\n  Returns: Task[]')
+        call(
+          'b1',
+          'run_command',
+          { command: 'npm run dev' },
+          'VITE v5.4.2  ready in 412 ms\n\n  ➜  Local:   http://localhost:5173/\n[stderr]\n(!) Some chunks are larger than 500 kB after minification.'
+        ),
+        call(
+          'b2',
+          'mcp_playwright_browser_navigate',
+          { url: 'http://localhost:5173/docs/api' },
+          'Page: Axon API · Tasks\n\nGET /api/tasks\n  Query: status, priority, sort=dueDate\n  Returns: Task[]'
+        )
       ]
     }
   ];
@@ -176,15 +287,41 @@ server.listen(0, '127.0.0.1', () => {
     path.join(profile, 'data/db/platform-v1.json'),
     JSON.stringify({
       version: 1,
-      providers: [{ id: 'check', name: 'Check', kind: 'openai-compatible', baseUrl: `http://127.0.0.1:${server.address().port}/v1`, models: [{ id: 'fixture', displayName: 'Fixture' }], enabled: true, createdAt: now, hasApiKey: false }],
-      workspaces: [], agents: [], documents: [], chunks: [], mcpServers: [], tasks: [],
+      providers: [
+        {
+          id: 'check',
+          name: 'Check',
+          kind: 'openai-compatible',
+          baseUrl: `http://127.0.0.1:${server.address().port}/v1`,
+          models: [{ id: 'fixture', displayName: 'Fixture' }],
+          enabled: true,
+          createdAt: now,
+          hasApiKey: false
+        }
+      ],
+      workspaces: [],
+      agents: [],
+      documents: [],
+      chunks: [],
+      mcpServers: [],
+      tasks: [],
       conversations: [
         conv('c-dev', 'frontend-developer', 'Task filters', now - 48000, 'C:/Users/dev/axon-platform'),
         conv('c-back', 'backend-developer', 'API docs', now - 39000, projectRoot)
       ],
       messages,
       reception: { briefedOn: localDay() },
-      settings: { theme, autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true, allowShellExecution: true, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: '' }
+      settings: {
+        theme,
+        autoTitleConversations: true,
+        defaultTemperature: 0.7,
+        defaultMaxTokens: 4096,
+        streamDeltas: true,
+        allowShellExecution: true,
+        shellAllowlist: [],
+        sendCrashDiagnostics: false,
+        dataDirectoryNote: ''
+      }
     })
   );
   require(path.join(repo, 'out/main/index.js'));
@@ -220,19 +357,34 @@ app.on('web-contents-created', (_, contents) => {
         }
         throw new Error('Timed out: ' + label);
       };
-      const snap = async (name) => fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
-      const text = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? null`);
+      const snap = async (name) =>
+        fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
+      const text = (selector) =>
+        evaluate(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? null`);
       const click = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
       const clickText = (selector, pattern) =>
-        evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => ${pattern}.test(e.textContent)).click()`);
+        evaluate(
+          `[...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => ${pattern}.test(e.textContent)).click()`
+        );
       const choosePerson = async (name) => {
-        await evaluate(`(() => { const i = document.querySelector('.office-directory input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, ${JSON.stringify(name)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await evaluate(
+          `(() => { const i = document.querySelector('.office-directory input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, ${JSON.stringify(name)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`
+        );
         await pause(250);
-        await evaluate(`[...document.querySelectorAll('.office-search-results button')].find((b) => b.querySelector('strong')?.textContent === ${JSON.stringify(name)}).click()`);
-        await waitFor(`document.querySelector('.activity-agent-meta h3').textContent === ${JSON.stringify(name)}`, name);
+        await evaluate(
+          `[...document.querySelectorAll('.office-search-results button')].find((b) => b.querySelector('strong')?.textContent === ${JSON.stringify(name)}).click()`
+        );
+        await waitFor(
+          `document.querySelector('.activity-agent-meta h3').textContent === ${JSON.stringify(name)}`,
+          name
+        );
+        await evaluate(`document.querySelector('.coworker-actions button')?.click()`);
         await pause(500);
       };
-      await waitFor('document.querySelector(".office-person-label") && !document.querySelector(".office-loading")', 'scene');
+      await waitFor(
+        'document.querySelector(".office-person-label") && !document.querySelector(".office-loading")',
+        'scene'
+      );
       await pause(900);
       const geometry = () =>
         evaluate(`(() => {
@@ -240,31 +392,64 @@ app.on('web-contents-created', (_, contents) => {
           const office = document.querySelector('.office-viewport').getBoundingClientRect();
           const div = document.querySelector('.work-divider').getBoundingClientRect();
           const panel = document.querySelector('.office-activity-panel').getBoundingClientRect();
+          const sheet = document.querySelector('.work-surface-slot').getBoundingClientRect();
           return { ws: [ws.width, ws.height], office: office.height, divider: [div.top, div.height, div.left + div.width / 2],
-            officeShare: office.height / (ws.height - div.height), widthShare: ws.width / (ws.width + panel.width),
+            officeShare: Number(getComputedStyle(document.querySelector('.office-workspace')).getPropertyValue('--sheet-share')), widthShare: office.width / ws.width,
             valuenow: document.querySelector('.work-divider').getAttribute('aria-valuenow'),
             tab: document.querySelector('.work-tab.active')?.textContent, open: document.querySelector('.office-workspace').classList.contains('has-work'),
             file: document.querySelector('.work-editor-tab.active')?.textContent, now: document.querySelector('.work-now-text')?.textContent,
             cursor: getComputedStyle(document.querySelector('.work-divider')).cursor, size: document.querySelector('.office-workspace').dataset.officeSize,
-            spill: Math.round(Math.max(...[...document.querySelectorAll('.office-viewport > *')].filter((e) => getComputedStyle(e).display !== 'none' && getComputedStyle(e).position !== 'absolute').map((e) => e.getBoundingClientRect().bottom)) - office.bottom) };
+            spill: Math.round(Math.max(office.bottom,...[...document.querySelectorAll('.office-viewport > *')].filter((e) => getComputedStyle(e).display !== 'none' && getComputedStyle(e).position !== 'absolute').map((e) => e.getBoundingClientRect().bottom)) - office.bottom) };
         })()`);
       const full = (g) => !g.open && g.office > g.ws[1] - 3;
 
       // With no project open, a coworker without a folder of their own offers to open one.
       await choosePerson('Full-Stack Developer');
-      check('with no project open, the composer offers to open one', (await text('.composer-folder')) === 'Open a project', await text('.composer-folder'));
+      check(
+        'with no project open, the composer offers to open one',
+        (await text('.composer-folder')) === 'Open a project',
+        await text('.composer-folder')
+      );
       await choosePerson('Frontend Developer');
+      await waitFor(
+        `!!document.querySelector('.work-summary-head')`,
+        'frontend summary visible in the drawer'
+      );
 
       // Older work waits: the frontend developer's last run is over, so the office keeps the height.
       let g = await geometry();
       check('older work does not open the surface by itself', full(g), `${g.office} of ${g.ws[1]}`);
-      check('the office offers to show their work', (await evaluate(`document.querySelector('[aria-label="Work surface"]')?.getAttribute('aria-pressed')`)) === 'false');
+      check(
+        'the office offers to show their work',
+        (await evaluate(
+          `document.querySelector('[aria-label="Work surface"]')?.getAttribute('aria-pressed')`
+        )) === 'false'
+      );
       // The side panel sums up the run instead of listing its tool calls.
-      check('the run is summed up in the side panel', (await text('.work-summary-head')) === 'Changed 2 files, ran 1 command', await text('.work-summary-head'));
-      const rows = await evaluate(`[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent)`);
-      check('files show lines added and removed, and which are new', rows.some((r) => /TaskFilters\.tsx.*\+2\dnew.*Saved/.test(r)) && rows.some((r) => /TaskList\.tsx.*\+2−1.*Saved/.test(r)), rows.join(' | '));
-      check('commands and what was looked at have rows', rows.some((r) => /npm test -- TaskFilters.*Done/.test(r)) && rows.some((r) => /Read 2 files · 1 search · 1 listing/.test(r)), rows.join(' | '));
-      check('raw tool calls are not listed in the thread', (await evaluate(`document.querySelectorAll('.office-thread .message .tool-call-item').length`)) === 0);
+      check(
+        'the run is summed up in the side panel',
+        (await text('.work-summary-head')) === 'Changed 2 files, ran 1 command',
+        await text('.work-summary-head')
+      );
+      const rows = await evaluate(
+        `[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent)`
+      );
+      check(
+        'files show lines added and removed, and which are new',
+        rows.some((r) => /TaskFilters\.tsx.*\+2\dnew.*Saved/.test(r)) &&
+          rows.some((r) => /TaskList\.tsx.*\+2−1.*Saved/.test(r)),
+        rows.join(' | ')
+      );
+      check(
+        'commands and what was looked at have rows',
+        rows.some((r) => /npm test -- TaskFilters.*Done/.test(r)) &&
+          rows.some((r) => /Read 2 files · 1 search · 1 listing/.test(r)),
+        rows.join(' | ')
+      );
+      check(
+        'raw tool calls are not listed in the thread',
+        (await evaluate(`document.querySelectorAll('.office-thread .message .tool-call-item').length`)) === 0
+      );
       await snap('1-summary.png');
 
       // A file row opens the surface on that file's changes, at 60/40.
@@ -272,19 +457,45 @@ app.on('web-contents-created', (_, contents) => {
       await pause(600);
       g = await geometry();
       console.log('OPENED', JSON.stringify(g));
-      check('a file row opens the surface at 60/40', g.open && Math.abs(g.officeShare - 0.6) < 0.01, g.officeShare.toFixed(3));
-      check('left/right is about 60/40', Math.abs(g.widthShare - 0.6) < 0.03, g.widthShare.toFixed(3));
-      check('it shows that file', g.tab?.startsWith('Code') && g.file?.startsWith('TaskList.tsx'), `${g.tab} / ${g.file}`);
-      check('on its changes', (await evaluate(`document.querySelector('.work-segment [aria-pressed="true"]')?.textContent`)) === 'Changes' &&
-        (await evaluate(`document.querySelectorAll('.work-diff-add').length`)) === 2 && (await evaluate(`document.querySelectorAll('.work-diff-del').length`)) === 1);
-      const hunks = await evaluate(`[...document.querySelectorAll('.work-diff-hunk')].map((h) => h.textContent)`);
-      check('with each hunk labelled by its lines', hunks.length > 0 && hunks.every((h) => /^Lines? \d+(–\d+)?$/.test(h)), hunks.join(', '));
+      check(
+        'a file row opens a 40% work sheet',
+        g.open && Math.abs(g.officeShare - 0.6) < 0.01,
+        g.officeShare.toFixed(3)
+      );
+      check(
+        'the canvas keeps the full width behind the drawer',
+        Math.abs(g.widthShare - 1) < 0.01,
+        g.widthShare.toFixed(3)
+      );
+      check(
+        'it shows that file',
+        g.tab?.startsWith('Code') && g.file?.startsWith('TaskList.tsx'),
+        `${g.tab} / ${g.file}`
+      );
+      check(
+        'on its changes',
+        (await evaluate(`document.querySelector('.work-segment [aria-pressed="true"]')?.textContent`)) ===
+          'Changes' &&
+          (await evaluate(`document.querySelectorAll('.work-diff-add').length`)) === 2 &&
+          (await evaluate(`document.querySelectorAll('.work-diff-del').length`)) === 1
+      );
+      const hunks = await evaluate(
+        `[...document.querySelectorAll('.work-diff-hunk')].map((h) => h.textContent)`
+      );
+      check(
+        'with each hunk labelled by its lines',
+        hunks.length > 0 && hunks.every((h) => /^Lines? \d+(–\d+)?$/.test(h)),
+        hunks.join(', ')
+      );
       check('divider cursor is row-resize', g.cursor === 'row-resize', g.cursor);
       check('nothing spills out of the office', g.spill <= 1, `${g.spill}px, size ${g.size}`);
       await snap('2-changes.png');
       await clickText('.work-segment button', /^File$/);
       await pause(200);
-      check('the whole file marks the changed lines', (await evaluate(`document.querySelectorAll('.work-gutter .is-changed').length`)) === 2);
+      check(
+        'the whole file marks the changed lines',
+        (await evaluate(`document.querySelectorAll('.work-gutter .is-changed').length`)) === 2
+      );
       await snap('3-file.png');
 
       // Dragging the divider with the mouse.
@@ -293,7 +504,13 @@ app.on('web-contents-created', (_, contents) => {
         contents.sendInputEvent({ type: 'mouseMove', x, y: fromY });
         contents.sendInputEvent({ type: 'mouseDown', x, y: fromY, button: 'left', clickCount: 1 });
         for (let i = 1; i <= 8; i++) {
-          contents.sendInputEvent({ type: 'mouseMove', x, y: Math.round(fromY + ((toY - fromY) * i) / 8), button: 'left', modifiers: ['leftButtonDown'] });
+          contents.sendInputEvent({
+            type: 'mouseMove',
+            x,
+            y: Math.round(fromY + ((toY - fromY) * i) / 8),
+            button: 'left',
+            modifiers: ['leftButtonDown']
+          });
           await pause(16);
           if (midShot && i === 5) await snap(midShot);
         }
@@ -301,25 +518,41 @@ app.on('web-contents-created', (_, contents) => {
         await pause(150);
       };
       const mid = () => Math.round(g.divider[0] + g.divider[1] / 2);
-      const yFor = (share) => Math.round(g.divider[0] - (g.office - share * (g.ws[1] - g.divider[1])) + g.divider[1] / 2);
+      const yFor = (share) => Math.round((g.ws[1] - g.divider[1]) * share - 20 + g.divider[1] / 2);
       await drag(mid(), yFor(0.45), Math.round(g.divider[2]), '4-mid-drag.png');
       g = await geometry();
-      check('dragging up makes the surface larger (~45/55)', Math.abs(g.officeShare - 0.45) < 0.02, `${g.officeShare.toFixed(3)} valuenow ${g.valuenow}`);
+      check(
+        'dragging up makes the surface larger (~45/55)',
+        Math.abs(g.officeShare - 0.45) < 0.02,
+        `${g.officeShare.toFixed(3)} valuenow ${g.valuenow}`
+      );
       check('nothing spills out at 45%', g.spill <= 1, `${g.spill}px, size ${g.size}`);
       for (const label of ['Terminal', 'Files', 'Code']) {
         await clickText('.work-tab', new RegExp('^' + label));
         await pause(120);
         const after = await geometry();
-        check(`${label} tab keeps the split`, Math.abs(after.officeShare - g.officeShare) < 0.005 && after.tab.startsWith(label), `${after.tab} ${after.officeShare.toFixed(3)}`);
+        check(
+          `${label} tab keeps the split`,
+          Math.abs(after.officeShare - g.officeShare) < 0.005 && after.tab.startsWith(label),
+          `${after.tab} ${after.officeShare.toFixed(3)}`
+        );
       }
       await drag(mid(), 5, Math.round(g.divider[2]));
       g = await geometry();
-      check('cannot drag the office below 30%', Math.abs(g.officeShare - 0.3) < 0.01, g.officeShare.toFixed(3));
+      check(
+        'cannot grow the sheet above 70%',
+        Math.abs(g.officeShare - 0.3) < 0.01,
+        g.officeShare.toFixed(3)
+      );
       check('nothing spills out at 30%', g.spill <= 1, `${g.spill}px, size ${g.size}`);
       await snap('5-min-office.png');
       await drag(mid(), height - 5, Math.round(g.divider[2]));
       g = await geometry();
-      check('cannot drag the office above 80%', Math.abs(g.officeShare - 0.8) < 0.01, g.officeShare.toFixed(3));
+      check(
+        'cannot shrink the sheet below 20%',
+        Math.abs(g.officeShare - 0.8) < 0.01,
+        g.officeShare.toFixed(3)
+      );
       await evaluate(`document.querySelector('.work-divider').focus()`);
       contents.sendInputEvent({ type: 'keyDown', keyCode: 'Up' });
       contents.sendInputEvent({ type: 'keyUp', keyCode: 'Up' });
@@ -329,19 +562,34 @@ app.on('web-contents-created', (_, contents) => {
       await drag(mid(), yFor(0.55), Math.round(g.divider[2]));
       g = await geometry();
       const kept = g.officeShare;
-      check('the tight office keeps a wordmark and its team', g.size?.includes('tight') ? (await evaluate(`getComputedStyle(document.querySelector('.office-directory-mark')).display`)) === 'block' : true, g.size);
+      check(
+        'the tight office keeps a wordmark and its team',
+        g.size?.includes('tight')
+          ? (await evaluate(`getComputedStyle(document.querySelector('.office-directory-mark')).display`)) ===
+              'block'
+          : true,
+        g.size
+      );
 
       // Frame rate while dragging the divider back and forth, against idle just before and after.
       // The office settles its quality for a few seconds after it changes size, so wait that out.
       const frames = () =>
-        evaluate(`new Promise((done) => { let n = 0; const start = performance.now(); const tick = () => { n++; if (performance.now() - start < 2000) requestAnimationFrame(tick); else done(Math.round(n / ((performance.now() - start) / 1000))); }; requestAnimationFrame(tick); })`);
+        evaluate(
+          `new Promise((done) => { let n = 0; const start = performance.now(); const tick = () => { n++; if (performance.now() - start < 2000) requestAnimationFrame(tick); else done(Math.round(n / ((performance.now() - start) / 1000))); }; requestAnimationFrame(tick); })`
+        );
       const dragFrames = async () => {
         const counting = frames();
         const x = Math.round(g.divider[2]);
         contents.sendInputEvent({ type: 'mouseMove', x, y: mid() });
         contents.sendInputEvent({ type: 'mouseDown', x, y: mid(), button: 'left', clickCount: 1 });
         for (let i = 0; i < 120; i++) {
-          contents.sendInputEvent({ type: 'mouseMove', x, y: mid() + Math.round(60 * Math.sin(i / 8)), button: 'left', modifiers: ['leftButtonDown'] });
+          contents.sendInputEvent({
+            type: 'mouseMove',
+            x,
+            y: mid() + Math.round(60 * Math.sin(i / 8)),
+            button: 'left',
+            modifiers: ['leftButtonDown']
+          });
           await pause(16);
         }
         const fps = await counting;
@@ -361,31 +609,53 @@ app.on('web-contents-created', (_, contents) => {
       // A drag keeps 70–85% of the idle frame rate; it kept 40–65% before the office drew cheaply
       // while its divider is held. Single readings swing with power and background load (see the
       // office-desktop check), so this guards against that old cost coming back, not small changes.
-      check('dragging keeps most of the frame rate', dragging >= idle * 0.65, `idle ${idleBefore}/${idleAfter} fps, dragging ${dragging} fps`);
+      check(
+        'dragging keeps most of the frame rate',
+        dragging >= idle * 0.65,
+        `idle ${idleBefore}/${idleAfter} fps, dragging ${dragging} fps`
+      );
 
       // A command row goes to the terminal, without moving the divider.
       await clickText('.work-summary-row', /npm test/);
       await pause(300);
       let after = await geometry();
-      check('a command row shows the terminal', after.tab?.startsWith('Terminal') && Math.abs(after.officeShare - kept) < 0.01, `${after.tab} ${after.officeShare.toFixed(3)}`);
+      check(
+        'a command row shows the terminal',
+        after.tab?.startsWith('Terminal') && Math.abs(after.officeShare - kept) < 0.01,
+        `${after.tab} ${after.officeShare.toFixed(3)}`
+      );
 
       // Someone else: the surface follows who is selected.
-      await evaluate(`[...document.querySelectorAll('.office-team-people button')].find((b) => !/Frontend|Backend/.test(b.title)).click()`);
+      await evaluate(
+        `[...document.querySelectorAll('.office-team-people button')].find((b) => !/Frontend|Backend/.test(b.title)).click()`
+      );
       await pause(500);
       check('a coworker without work: the office takes the height', full(await geometry()));
       await choosePerson('Backend Developer');
       g = await geometry();
       check('older work of another coworker waits too', full(g));
-      check('a mixed run says what it did', (await text('.work-summary-head')) === 'Ran 1 command, viewed 1 page', await text('.work-summary-head'));
+      check(
+        'a mixed run says what it did',
+        (await text('.work-summary-head')) === 'Ran 1 command, viewed 1 page',
+        await text('.work-summary-head')
+      );
       await click('[aria-label="Work surface"]');
       await pause(500);
       g = await geometry();
-      check('opened by hand, at the kept split, on their latest step', g.open && Math.abs(g.officeShare - kept) < 0.01 && g.tab?.startsWith('Browser'), `${g.officeShare.toFixed(3)} ${g.tab} · ${g.now}`);
+      check(
+        'opened by hand, at the kept split, on their latest step',
+        g.open && Math.abs(g.officeShare - kept) < 0.01 && g.tab?.startsWith('Browser'),
+        `${g.officeShare.toFixed(3)} ${g.tab} · ${g.now}`
+      );
       await snap('6-browser.png');
       await click('.work-close');
       await pause(450);
       g = await geometry();
-      check('closing gives the office the height again', full(g), `open ${g.open}, office ${Math.round(g.office)} of ${Math.round(g.ws[1])}`);
+      check(
+        'closing gives the office the height again',
+        full(g),
+        `open ${g.open}, office ${Math.round(g.office)} of ${Math.round(g.ws[1])}`
+      );
       // Ctrl+J shows and hides it.
       const ctrl = async (keyCode) => {
         contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] });
@@ -399,89 +669,210 @@ app.on('web-contents-created', (_, contents) => {
 
       // A live run: they propose a change, you approve it on the surface; then a command, run from there.
       await evaluate('window.axon.projectChoose()');
-      await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please update the notes file.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await evaluate(
+        `(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please update the notes file.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
       await pause(100);
-      await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
+      await evaluate(
+        `document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`
+      );
       await waitFor(`document.querySelector('.work-file-path .work-approve')`, 'the proposal on the surface');
       await pause(700);
       g = await geometry();
-      check('a live run opens the surface by itself, even after it was closed', g.open && Math.abs(g.officeShare - kept) < 0.01, g.officeShare.toFixed(3));
-      check('on the proposed change', g.tab?.startsWith('Code') && g.file?.startsWith('todo.md') && (await text('.work-file-note')) === 'Proposed change', `${g.tab} ${g.file} ${await text('.work-file-note')}`);
-      const liveRow = await evaluate(`[...document.querySelectorAll('.work-summary.is-live .work-summary-row')].map((r) => r.textContent).join(' | ')`);
-      check('the side panel says it is waiting for you, and by how much', (await text('.work-summary.is-live .work-summary-head')) === 'Working on 1 file…' && /todo\.md.*\+2−1.*Waiting for your OK/.test(liveRow) && !/npm run dev/.test(liveRow), liveRow);
+      check(
+        'a live run opens the surface by itself, even after it was closed',
+        g.open && Math.abs(g.officeShare - kept) < 0.01,
+        g.officeShare.toFixed(3)
+      );
+      check(
+        'on the proposed change',
+        g.tab?.startsWith('Code') &&
+          g.file?.startsWith('todo.md') &&
+          (await text('.work-file-note')) === 'Proposed change',
+        `${g.tab} ${g.file} ${await text('.work-file-note')}`
+      );
+      const liveRow = await evaluate(
+        `[...document.querySelectorAll('.work-summary.is-live .work-summary-row')].map((r) => r.textContent).join(' | ')`
+      );
+      check(
+        'the side panel says it is waiting for you, and by how much',
+        (await text('.work-summary.is-live .work-summary-head')) === 'Working on 1 file…' &&
+          /todo\.md.*\+2−1.*Waiting for your OK/.test(liveRow) &&
+          !/npm run dev/.test(liveRow),
+        liveRow
+      );
       await snap('7-proposal.png');
       // Away from them, the office says someone is waiting, and takes you back.
-      check('the office says someone is waiting', (await text('.office-waiting')) === '1 needs your OK', await text('.office-waiting'));
-      await evaluate(`[...document.querySelectorAll('.office-team-people button')].find((b) => !/Frontend|Backend/.test(b.title)).click()`);
+      check(
+        'the office says someone is waiting',
+        (await text('.office-waiting')) === '1 needs your OK',
+        await text('.office-waiting')
+      );
+      await evaluate(
+        `[...document.querySelectorAll('.office-team-people button')].find((b) => !/Frontend|Backend/.test(b.title)).click()`
+      );
       await pause(400);
-      check('still waiting while you look at someone else', (await text('.office-waiting')) === '1 needs your OK' && full(await geometry()));
+      check(
+        'still waiting while you look at someone else',
+        (await text('.office-waiting')) === '1 needs your OK' && full(await geometry())
+      );
       await snap('7b-waiting-pill.png');
       await click('.office-waiting');
-      await waitFor(`document.querySelector('.activity-agent-meta h3').textContent === 'Backend Developer' && document.querySelector('.work-file-path .work-approve')`, 'back at the proposal');
+      await waitFor(
+        `document.querySelector('.activity-agent-meta h3').textContent === 'Backend Developer' && document.querySelector('.work-file-path .work-approve')`,
+        'back at the proposal'
+      );
       await pause(600);
       check('the pill takes you back to the step that waits', (await geometry()).open);
-      check('you can always allow it, and see what that covers', (await evaluate(`document.querySelector('.work-file-path .work-always')?.title`)) === 'Save files without asking again this session');
+      check(
+        'you can always allow it, and see what that covers',
+        (await evaluate(`document.querySelector('.work-file-path .work-always')?.title`)) ===
+          'Save files without asking again this session'
+      );
       // Ctrl+Enter approves, but not while you are typing.
       await evaluate(`document.querySelector('.activity-composer textarea').focus()`);
       await ctrl('Return');
-      check('Ctrl+Enter in a text box leaves the approval alone', Boolean(await evaluate(`document.querySelector('.work-file-path .work-approve')`)));
+      check(
+        'Ctrl+Enter in a text box leaves the approval alone',
+        Boolean(await evaluate(`document.querySelector('.work-file-path .work-approve')`))
+      );
       await evaluate('document.activeElement.blur()');
       await ctrl('Return');
-      await waitFor(`document.querySelector('.work-term-note .work-approve')`, 'the command waiting on the surface');
+      await waitFor(
+        `[...document.querySelectorAll('.office-approval-card')].some(card=>card.textContent.includes('run_command'))`,
+        'the command waiting on the surface'
+      );
       await pause(1000);
       g = await geometry();
-      check('the next step brings the terminal forward', g.tab?.startsWith('Terminal'), `${g.tab} · ${g.now}`);
-      check('the file was written as proposed', fs.readFileSync(path.join(project, 'notes', 'todo.md'), 'utf8').includes('- Docs'));
-      await click('.work-term-note .work-approve');
-      await waitFor(`/line 1/.test(document.querySelector('.work-terminal').textContent) && document.querySelector('.work-term-cursor')`, 'output while it runs');
-      const partial = await text('.work-terminal');
-      check('the terminal shows output while the command runs', /line 1/.test(partial) && !/line 5/.test(partial), partial.slice(-80));
-      check('only the current step shows as generating', (await evaluate(`document.querySelectorAll('.office-thread .message-status').length`)) <= 1);
+      check(
+        'the next step brings the terminal forward',
+        g.tab?.startsWith('Terminal'),
+        `${g.tab} · ${g.now}`
+      );
+      check(
+        'the file was written as proposed',
+        fs.readFileSync(path.join(project, 'notes', 'todo.md'), 'utf8').includes('- Docs')
+      );
+      await evaluate(
+        `[...document.querySelectorAll('.office-approval-actions button')].find(b=>b.textContent==='Approve').click()`
+      );
+      await waitFor(
+        `window.axon.terminalList('c-back').then(items=>items.some(session=>session.running && /line 1/.test(session.output)))`,
+        'output while it runs'
+      );
+      const partial = await evaluate(
+        `window.axon.terminalList('c-back').then(items=>items.map(session=>session.output).join('\\n'))`
+      );
+      check(
+        'the terminal shows output while the command runs',
+        /line 1/.test(partial) && !/line 5/.test(partial),
+        partial.slice(-80)
+      );
+      check(
+        'only the current step shows as generating',
+        (await evaluate(`document.querySelectorAll('.office-thread .message-status').length`)) <= 1
+      );
       await snap('8-running.png');
-      await waitFor(`/line 5/.test(document.querySelector('.work-terminal').textContent) && !document.querySelector('.work-term-cursor')`, 'the command to finish');
-      await waitFor(`document.querySelector('.work-summary:last-of-type .work-summary-head')?.textContent === 'Changed 1 file, ran 1 command'`, 'the run summed up');
+      await waitFor(
+        `window.axon.terminalList('c-back').then(items=>items.some(session=>!session.running && /line 5/.test(session.output)))`,
+        'the command to finish'
+      );
+      await waitFor(
+        `[...document.querySelectorAll('.work-summary-head')].at(-1)?.textContent === 'Changed 1 file, ran 1 command'`,
+        'the run summed up'
+      );
       const done = await evaluate(`[...document.querySelectorAll('.work-summary')].at(-1).textContent`);
-      check('the run is summed up when it ends', /todo\.md.*\+2−1.*Saved/.test(done) && /node -e.*Done/.test(done), done);
+      check(
+        'the run is summed up when it ends',
+        /todo\.md.*\+2−1.*Saved/.test(done) && /node -e.*Done/.test(done),
+        done
+      );
       g = await geometry();
       check('the surface stays while you watch them finish', g.open);
       await snap('9-done.png');
-      await evaluate(`[...document.querySelectorAll('.office-team-people button')].find((b) => !/Backend/.test(b.title)).click()`);
+      await evaluate(
+        `[...document.querySelectorAll('.office-team-people button')].find((b) => !/Backend/.test(b.title)).click()`
+      );
       await pause(400);
       await choosePerson('Backend Developer');
       check('coming back after the run: it waits again', full(await geometry()));
 
       // A coworker with no conversation yet works in the project open in the app.
       await choosePerson('Full-Stack Developer');
-      check('the composer says where they work', (await text('.composer-folder')) === 'axon-platform', await text('.composer-folder'));
-      await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please read the notes.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      check(
+        'the composer says where they work',
+        (await text('.composer-folder')) === 'axon-platform',
+        await text('.composer-folder')
+      );
+      await evaluate(
+        `(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please read the notes.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
       await pause(100);
-      await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
-      await waitFor(`document.querySelector('.work-editor-tab.active')?.textContent.startsWith('todo.md')`, 'their read on the surface');
-      check('they are offered the file tools', Boolean(offered?.includes('read_file') && offered.includes('write_file')), String(offered));
-      check('and read the file from the open project', (await text('.work-code-text')).includes('Sorting by due date'));
-      check('the explorer names the open project', (await text('.work-explorer-title')) === 'axon-platform', await text('.work-explorer-title'));
+      await evaluate(
+        `document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`
+      );
+      await waitFor(
+        `document.querySelector('.work-editor-tab.active')?.textContent.startsWith('todo.md')`,
+        'their read on the surface'
+      );
+      check(
+        'they are offered the file tools',
+        Boolean(offered?.includes('read_file') && offered.includes('write_file')),
+        String(offered)
+      );
+      check(
+        'and read the file from the open project',
+        (await text('.work-code-text')).includes('Sorting by due date')
+      );
+      check(
+        'the explorer names the open project',
+        (await text('.work-explorer-title')) === 'axon-platform',
+        await text('.work-explorer-title')
+      );
       await snap('10-open-project.png');
 
       // A development server, previewed live on the surface, and stopped from there.
-      await evaluate(`(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please start the dev server.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await evaluate(
+        `(() => { const t = document.querySelector('.activity-composer textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Please start the dev server.'); t.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
       await pause(100);
-      await evaluate(`document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
-      await waitFor(`document.querySelector('.work-term-note .work-approve')?.textContent === 'Start'`, 'the server waiting for your OK');
-      await click('.work-term-note .work-approve');
+      await evaluate(
+        `document.querySelector('.activity-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`
+      );
+      await waitFor(
+        `[...document.querySelectorAll('.office-approval-card')].some(card=>card.textContent.includes('start_process'))`,
+        'the server waiting for your OK'
+      );
+      await evaluate(
+        `[...document.querySelectorAll('.office-approval-actions button')].find(b=>b.textContent==='Approve').click()`
+      );
       await waitFor(`document.querySelector('.work-preview-frame')`, 'the preview');
       await pause(1500);
       g = await geometry();
       const src = await evaluate(`document.querySelector('.work-preview-frame').src`);
-      check('the surface follows to the preview of the page it serves', g.tab?.startsWith('Preview') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(src), `${g.tab} ${src}`);
+      check(
+        'the surface follows to the preview of the page it serves',
+        g.tab?.startsWith('Preview') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(src),
+        `${g.tab} ${src}`
+      );
       const frame = contents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('http://127.0.0.1'));
       const shown = frame ? await frame.executeJavaScript('document.body.innerText') : null;
       check('the page shows in the frame', shown === 'Axon preview works', String(shown));
-      check('the frame is sandboxed', (await evaluate(`document.querySelector('.work-preview-frame').getAttribute('sandbox')`)) === 'allow-scripts allow-forms allow-same-origin');
-      const serving = await evaluate(`[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent).find((t) => /node -e/.test(t)) ?? ''`);
+      check(
+        'the frame is sandboxed',
+        (await evaluate(`document.querySelector('.work-preview-frame').getAttribute('sandbox')`)) ===
+          'allow-scripts allow-forms allow-same-origin'
+      );
+      const serving = await evaluate(
+        `[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent).find((t) => /node -e/.test(t)) ?? ''`
+      );
       check('the side panel says it is serving', /Serving 127\.0\.0\.1:\d+\//.test(serving), serving);
       await snap('11-preview.png');
       await click('.work-browser-bar .work-term-stop');
-      await waitFor(`!document.querySelector('.work-preview-frame') && /stopped/.test(document.querySelector('.work-page')?.textContent ?? '')`, 'the stopped server');
+      await waitFor(
+        `!document.querySelector('.work-preview-frame') && /stopped/.test(document.querySelector('.work-page')?.textContent ?? '')`,
+        'the stopped server'
+      );
       check('Stop ends it and says so', true);
       await snap('12-stopped.png');
     } catch (error) {

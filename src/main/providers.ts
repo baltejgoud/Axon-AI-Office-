@@ -1,13 +1,17 @@
-import type { ProviderConfig, ChatRequest, ChatRequestMessage, ChatUsage, ToolCall, StreamDelta, ProviderReplay, ModelSpec } from '../shared/types';
+import type { ProviderConfig, ChatRequest, ChatRequestMessage, ChatUsage, ToolCall, StreamDelta, ProviderReplay, ModelSpec, ClaudeRateLimits } from '../shared/types';
+import { catalogModelLimits, publishedOpenAILimits } from './model-limits';
+import { CLAUDE_PROVIDER_ID, rateLimitsOf } from './accounts/claude';
 
 export function endpoint(provider: ProviderConfig): URL {
-  const defaults = { 'openai-compatible': 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com/v1', gemini: 'https://generativelanguage.googleapis.com/v1beta' };
+  const defaults = { 'openai-compatible': 'https://api.openai.com/v1', 'openai-responses': 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com/v1', gemini: 'https://generativelanguage.googleapis.com/v1beta' };
   const url = new URL(provider.baseUrl || defaults[provider.kind]);
   if (url.username || url.password || url.search || url.hash) throw new Error('Endpoint cannot contain credentials, a query, or a fragment.');
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Use HTTPS, or HTTP on localhost only.');
   // A pasted request URL (".../v1/chat/completions") still names the service: keep the base it sits under.
-  const request = provider.kind === 'anthropic' ? /\/messages\/?$/ : provider.kind === 'openai-compatible' ? /\/chat\/completions\/?$/ : null;
+  const request = provider.kind === 'anthropic' ? /\/messages\/?$/ : provider.kind === 'openai-compatible' ? /\/chat\/completions\/?$/ : provider.kind === 'openai-responses' ? /\/responses\/?$/ : null;
   if (request) url.pathname = url.pathname.replace(request, '');
+  if (provider.auth === 'chatgpt' && (provider.kind !== 'openai-responses' || url.href.replace(/\/$/, '') !== 'https://api.openai.com/v1'))
+    throw new Error('ChatGPT account credentials can only be used with the official OpenAI Responses endpoint.');
   return url;
 }
 
@@ -126,9 +130,30 @@ export interface StreamChatResult extends ChatUsage {
 
 /** A provider's HTTP failure, with the provider's own explanation when it gave one. */
 export class ProviderError extends Error {
-  constructor(readonly status: number, readonly detail: string) {
-    super(`Provider returned HTTP ${status}${detail ? `: ${/[.!?]$/.test(detail) ? detail : `${detail}.`}` : '.'} ${hint(status)}`);
+  constructor(readonly status: number, readonly detail: string, advice = hint(status), readonly requestId?: string) {
+    super(`Provider returned HTTP ${status}${detail ? `: ${/[.!?]$/.test(detail) ? detail : `${detail}.`}` : '.'} ${advice}${requestId ? ` (Request ID ${requestId})` : ''}`);
   }
+}
+
+/**
+ * What to do about a failure at Anthropic's own API, where usage is billed to the key's Claude Console
+ * organization: credits, spend limits and tier caps are Console settings, never Claude plan limits.
+ */
+function anthropicAdvice(provider: ProviderConfig, status: number, detail: string, code: string): string {
+  const keys = provider.id === CLAUDE_PROVIDER_ID ? 'Settings → Accounts → Claude' : 'Settings → Models & API keys';
+  if (/credit balance is too low/i.test(detail))
+    return 'Add credits in Claude Console → Settings → Billing. Monthly API credits from a linked Max or Team plan appear there too; Claude plan usage limits do not apply to API keys.';
+  if (/reached your specified (workspace )?API usage limits/i.test(detail))
+    return 'A spend limit set in Claude Console stopped this request. Raise it under Settings → Billing (or the workspace\'s limits), or wait until it resets.';
+  if (code === 'enforced_spend_limit_reached')
+    return 'The organization reached its usage tier\'s monthly spend cap. Access resumes next month, or request a higher tier in Claude Console → Rate limits.';
+  if (status === 401) return `Anthropic did not accept the API key; it may be mistyped, disabled, deleted or expired. Replace it in ${keys}.`;
+  if (status === 403) return 'The key\'s organization or workspace is not allowed to do this. Check its access in Claude Console.';
+  if (status === 404) return `Check the model ID: Anthropic answers 404 for a model that does not exist or is not available to the key's organization. Refresh the models in ${keys}.`;
+  if (status === 413) return 'The request is larger than the API accepts. Remove large attachments or start a new conversation.';
+  if (status === 429) return 'Rate limited by the organization\'s usage tier. Try again shortly; Claude Console → Rate limits shows the limits.';
+  if (status === 529) return 'Anthropic is temporarily overloaded; try again.';
+  return hint(status);
 }
 
 function hint(status: number): string {
@@ -170,8 +195,24 @@ function describe(value: unknown): string {
   return '';
 }
 
-export async function providerError(response: Response, key: string | null): Promise<ProviderError> {
-  return new ProviderError(response.status, clean(errorDetail(await readCapped(response, 16_000)), key));
+export async function providerError(response: Response, key: string | null, provider?: ProviderConfig): Promise<ProviderError> {
+  const body = await readCapped(response, 16_000);
+  const detail = clean(errorDetail(body), key);
+  if (!provider || provider.kind !== 'anthropic' || endpoint(provider).hostname !== 'api.anthropic.com')
+    return new ProviderError(response.status, detail);
+  let code = '';
+  try { code = String(JSON.parse(body)?.error?.details?.error_code ?? ''); } catch { /* Not JSON. */ }
+  const requestId = response.headers.get('request-id') ?? '';
+  return new ProviderError(response.status, detail, anthropicAdvice(provider, response.status, detail, code), /^[\w-]{1,100}$/.test(requestId) ? requestId : undefined);
+}
+
+/** The organization's limits as each provider's last Claude request reported them. */
+const claudeLimits = new Map<string, ClaudeRateLimits>();
+export function lastRateLimits(providerId: string): ClaudeRateLimits | null {
+  return claudeLimits.get(providerId) ?? null;
+}
+export function forgetRateLimits(providerId: string): void {
+  claudeLimits.delete(providerId);
 }
 
 /** Reads at most `limit` characters of a body, then lets the rest go. */
@@ -273,15 +314,41 @@ function openAiMessages(request: ChatRequest): unknown[] {
   ];
 }
 
+/** Stateless Responses history, including exact reasoning items while a tool round is open. */
+export function responsesInput(messages: ChatRequestMessage[]): unknown[] {
+  return messages.flatMap((m): unknown[] => {
+    if (m.role === 'tool') return [{ type: 'function_call_output', call_id: m.toolCallId, output: m.content }];
+    if (m.role === 'assistant' && m.replay?.kind === 'openai-responses') return m.replay.content;
+    const content: unknown[] = m.content ? [{ role: m.role === 'system' ? 'developer' : m.role, content: m.content }] : [];
+    if (m.role === 'assistant') content.push(...(m.toolCalls ?? []).map((tc) => ({ type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments })));
+    return content;
+  });
+}
+
 function buildRequest(provider: ProviderConfig, key: string | null, request: ChatRequest): { url: string; headers: Record<string, string>; payload: Record<string, unknown> } {
   const base = endpoint(provider).href.replace(/\/$/, '');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const temperature = request.temperature !== undefined ? { temperature: request.temperature } : {};
   const tools = request.tools?.length ? request.tools : undefined;
 
+  if (provider.kind === 'openai-responses') {
+    if (key) headers.Authorization = `Bearer ${key}`;
+    const functions = tools?.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false }));
+    return { url: `${base}/responses`, headers, payload: {
+      model: request.model, input: responsesInput(request.messages),
+      ...(request.system ? { instructions: request.system } : {}),
+      stream: true, store: false, include: ['reasoning.encrypted_content'],
+      // ChatGPT plan usage currently rejects token limits and sampling parameters.
+      ...(!provider.auth ? { max_output_tokens: request.maxTokens, ...temperature } : {}),
+      ...(functions ? { tools: provider.auth ? [{ type: 'namespace', name: 'axon', description: 'Tools Axon executes locally for the user.', tools: functions }] : functions } : {})
+    } };
+  }
+
   if (provider.kind === 'anthropic') {
     headers['x-api-key'] = key || '';
     headers['anthropic-version'] = '2023-06-01';
+    // A Claude Console key that spans several workspaces names the one each request runs in.
+    if (provider.workspaceId) headers['anthropic-workspace-id'] = provider.workspaceId;
     return { url: `${base}/messages`, headers, payload: {
       model: request.model,
       max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
@@ -334,7 +401,7 @@ async function open(provider: ProviderConfig, key: string | null, request: ChatR
   let response = await post(url, headers, payload, signal, request.signal);
   // One field at a time: a server may refuse two (a fixed temperature and the older limit name).
   for (let fallback = 0; response.status === 400 && fallback < 3; fallback++) {
-    const error = await providerError(response, key);
+    const error = await providerError(response, key, provider);
     const detail = error.detail.toLowerCase();
     const renamable = provider.kind === 'openai-compatible' ? LIMIT_NAMES : [];
     const field = [...OPTIONAL_FIELDS, ...renamable].find(name => name in payload && detail.includes(name));
@@ -344,7 +411,11 @@ async function open(provider: ProviderConfig, key: string | null, request: ChatR
     withoutRefused(payload, fields);
     response = await post(url, headers, payload, signal, request.signal);
   }
-  if (!response.ok) throw await providerError(response, key);
+  if (!response.ok) throw await providerError(response, key, provider);
+  if (provider.kind === 'anthropic') {
+    const limits = rateLimitsOf(response.headers, request.model);
+    if (limits) claudeLimits.set(provider.id, limits);
+  }
   if (!response.body) throw new Error('Provider returned no response body.');
   return response.body;
 }
@@ -384,7 +455,8 @@ export function contextModel(provider: ProviderConfig, id: string): ModelSpec | 
   const manual = provider.models.find(model => model.id === id);
   const metadata = discoveredLimits.get(metadataKey(provider, id));
   if (!manual && !metadata) return undefined;
-  return { id, displayName: id, ...metadata, ...manual,
+  const published = endpoint(provider).hostname === 'api.openai.com' ? publishedOpenAILimits(id) : {};
+  return { id, displayName: id, ...published, ...metadata, ...manual,
     ...(metadata?.contextWindow ? { contextWindow: Math.min(manual?.contextWindow ?? metadata.contextWindow, metadata.contextWindow) } : {}),
     ...(metadata?.maxOutputTokens ? { maxOutputTokens: Math.min(manual?.maxOutputTokens ?? metadata.maxOutputTokens, metadata.maxOutputTokens) } : {}) };
 }
@@ -392,12 +464,12 @@ export function contextModel(provider: ProviderConfig, id: string): ModelSpec | 
 export function ingestModelLimits(provider: ProviderConfig, body: unknown): void {
   const list = Array.isArray(body) ? body : (body as any)?.data ?? (body as any)?.models;
   if (!Array.isArray(list)) return;
-  const valid = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 1024 && value <= 100_000_000 ? value : undefined;
   for (const item of list) {
-    const id = typeof item?.id === 'string' ? item.id : typeof item?.name === 'string' ? item.name.replace(/^models\//, '') : null;
+    const id = typeof item?.id === 'string' ? item.id : typeof item?.slug === 'string' ? item.slug : typeof item?.name === 'string' ? item.name.replace(/^models\//, '') : null;
     if (!id) continue;
-    const contextWindow = valid(item.context_length ?? item.context_window ?? item.inputTokenLimit);
-    const maxOutputTokens = valid(item.top_provider?.max_completion_tokens ?? item.max_output_tokens ?? item.outputTokenLimit);
+    // Anthropic's model list names its limits max_input_tokens and max_tokens.
+    const { contextWindow, maxOutputTokens } = catalogModelLimits(provider.kind === 'anthropic'
+      ? { context_window: item.max_input_tokens, max_output_tokens: item.max_tokens } : item);
     if (contextWindow || maxOutputTokens) discoveredLimits.set(metadataKey(provider, id), {
       ...(contextWindow ? { contextWindow } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}) });
   }
@@ -410,6 +482,7 @@ export async function listModels(provider: ProviderConfig, key: string | null, s
   if (provider.kind === 'anthropic') {
     headers['x-api-key'] = key || '';
     headers['anthropic-version'] = '2023-06-01';
+    if (provider.workspaceId) headers['anthropic-workspace-id'] = provider.workspaceId;
     url += '?limit=1000';
   } else if (provider.kind === 'gemini') {
     headers['x-goog-api-key'] = key || '';
@@ -422,16 +495,21 @@ export async function listModels(provider: ProviderConfig, key: string | null, s
     if (error instanceof TypeError && !signal?.aborted) throw unreachable(url);
     throw error;
   }
-  if (!response.ok) throw await providerError(response, key);
+  if (!response.ok) throw await providerError(response, key, provider);
   let body: { data?: unknown; models?: unknown } | unknown[] | null = null;
   try { body = JSON.parse(await readCapped(response, 8_000_000)); } catch { /* Not a list. */ }
   const ids = modelIdsOf(provider, body);
   ingestModelLimits(provider, body);
   if (!ids) throw new Error('The endpoint did not return a model list. Type the model IDs from your provider\'s documentation.');
-  return [...new Set(ids)].sort();
+  return provider.auth === 'chatgpt' ? [...new Set(ids)] : [...new Set(ids)].sort();
 }
 
 function modelIdsOf(provider: ProviderConfig, body: unknown): string[] | null {
+  if (provider.auth === 'chatgpt') {
+    const models = (body as { models?: unknown })?.models;
+    if (!Array.isArray(models)) return null;
+    return models.filter((m) => m?.visibility === 'list' && typeof m?.slug === 'string').map((m) => m.slug);
+  }
   if (provider.kind === 'gemini') {
     const models = (body as { models?: unknown })?.models;
     if (!Array.isArray(models)) return null;
@@ -468,6 +546,7 @@ export async function streamChat(
   const toolJson = new Map<number, string>();
   /** Gemini parts in order, kept whole for replay. */
   const parts: Record<string, unknown>[] = [];
+  let responsesComplete = false;
 
   const readUsage = (prompt?: unknown, completion?: unknown, cached?: unknown): void => {
     if (typeof prompt === 'number' || typeof completion === 'number')
@@ -477,6 +556,19 @@ export async function streamChat(
         promptTokens: typeof prompt === 'number' ? prompt : usage.promptTokens,
         completionTokens: typeof completion === 'number' ? completion : usage.completionTokens
       };
+  };
+  /**
+   * Anthropic reports cache reads and cache writes apart from input_tokens (the tokens after the last
+   * cache breakpoint); the prompt is their sum. message_delta repeats the counts it has, cumulatively.
+   */
+  const claudeInput = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+  const readClaudeUsage = (reported: Record<string, unknown> | undefined): void => {
+    if (!reported || typeof reported !== 'object') return;
+    let counted = false;
+    for (const field of Object.keys(claudeInput) as (keyof typeof claudeInput)[])
+      if (typeof reported[field] === 'number') { claudeInput[field] = reported[field] as number; counted = true; }
+    const prompt = claudeInput.input_tokens + claudeInput.cache_creation_input_tokens + claudeInput.cache_read_input_tokens;
+    readUsage(counted ? prompt : undefined, reported.output_tokens, counted ? claudeInput.cache_read_input_tokens : undefined);
   };
   const text = (value: string, index?: number): void => {
     received = true;
@@ -497,11 +589,33 @@ export async function streamChat(
       const event = JSON.parse(raw);
       throwIfError(event, key);
 
-      if (provider.kind === 'anthropic') {
-        if (event.type === 'message_start') readUsage(event.message?.usage?.input_tokens, undefined, event.message?.usage?.cache_read_input_tokens);
+      if (provider.kind === 'openai-responses') {
+        if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') text(event.delta);
+        if (event.type === 'response.reasoning_summary_text.delta' && typeof event.delta === 'string') {
+          received = true; emit('', { type: 'thought', text: event.delta });
+        }
+        if (event.type === 'response.refusal.delta') refusedAnswer = true;
+        if (event.type === 'response.output_item.done' && event.item) blocks.set(event.output_index ?? blocks.size, event.item);
+        if (event.type === 'response.failed') throw new Error(`The provider reported an error: ${clean(event.response?.error?.message ?? 'Response failed.', key)}`);
+        if (event.type === 'response.completed' || event.type === 'response.incomplete') {
+          responsesComplete = true;
+          truncated = event.type === 'response.incomplete';
+          readUsage(event.response?.usage?.input_tokens, event.response?.usage?.output_tokens, event.response?.usage?.input_tokens_details?.cached_tokens);
+          if (Array.isArray(event.response?.output)) {
+            blocks.clear(); event.response.output.forEach((item: Record<string, unknown>, i: number) => blocks.set(i, item));
+          }
+          for (const item of blocks.values()) if (item.type === 'function_call') {
+            received = true;
+            const tc: ToolCall = { id: String(item.call_id), name: String(item.name), arguments: String(item.arguments ?? '{}') };
+            toolCalls.push(tc); emit('', { type: 'tool_call', ...tc });
+          }
+        }
+      } else if (provider.kind === 'anthropic') {
+        if (event.type === 'message_start') readClaudeUsage({ ...event.message?.usage, output_tokens: undefined });
         if (event.type === 'message_delta') {
-          readUsage(undefined, event.usage?.output_tokens);
-          if (event.delta?.stop_reason === 'max_tokens') truncated = true;
+          readClaudeUsage(event.usage);
+          // A full context window ends the answer early, as the output limit does.
+          if (event.delta?.stop_reason === 'max_tokens' || event.delta?.stop_reason === 'model_context_window_exceeded') truncated = true;
           if (event.delta?.stop_reason === 'refusal') refusedAnswer = true;
         }
         const index = event.index ?? 0;
@@ -603,6 +717,8 @@ export async function streamChat(
     emit('', { type: 'tool_call', id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments });
   }
 
+  if (provider.kind === 'openai-responses' && !responsesComplete) throw new Error('The provider disconnected before completing the response. Try again.');
+
   if (!received) {
     if (refusedAnswer) throw new Error('The model declined this request.');
     throw new Error('Provider returned no response. This model may require unsupported parameters or content types.');
@@ -616,6 +732,7 @@ export async function streamChat(
 
 /** What a tool round must send back unchanged: Anthropic blocks with signatures, Gemini parts, OpenAI-style reasoning. */
 function replayOf(provider: ProviderConfig, blocks: Map<number, Record<string, unknown>>, parts: Record<string, unknown>[], reasoning: string): ProviderReplay | undefined {
+  if (provider.kind === 'openai-responses') return { kind: 'openai-responses', content: [...blocks.entries()].sort(([a], [b]) => a - b).map(([, item]) => item) };
   if (provider.kind === 'anthropic') {
     const content = [...blocks.entries()].sort(([a], [b]) => a - b).map(([, block]) => block)
       // Empty text is invalid, and a thinking block is only valid with its signature.
@@ -657,7 +774,10 @@ async function post(url: string, headers: Record<string, string>, payload: Recor
       // the others finish, so wait for them instead of failing. A 402 without that wording is a real shortfall.
       const crowded = response.status === 402 && attempt < CROWDED_ATTEMPTS
         && /in-flight/i.test(errorDetail(await readCapped(response.clone(), 4_000)));
-      if (!crowded && (attempt >= ATTEMPTS || !RETRY_STATUSES.includes(response.status))) return response;
+      // Anthropic's monthly spend cap is a 429 without retry-after; retrying fails until next month.
+      const capped = response.status === 429 && !response.headers.has('retry-after')
+        && /enforced_spend_limit_reached/.test(await readCapped(response.clone(), 4_000));
+      if (capped || (!crowded && (attempt >= ATTEMPTS || !RETRY_STATUSES.includes(response.status)))) return response;
       await response.body?.cancel();
       const retryAfter = Number(response.headers.get('retry-after'));
       await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 30) * 1000

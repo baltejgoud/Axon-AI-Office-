@@ -43,7 +43,7 @@ export function PlannerCount() {
  * The receptionist's planner, a tab beside her conversation: your to-dos by day, and what the team
  * is working on today. Tick, rename, reschedule or delete a to-do right here, or ask her.
  */
-export function Planner() {
+export function Planner({ compact = false }: { compact?: boolean }) {
   const tasks = useApp((s) => s.data?.tasks ?? EMPTY);
   const [doneOpen, setDoneOpen] = useState(false);
   const [error, setError] = useState('');
@@ -66,7 +66,7 @@ export function Planner() {
   return (
     <section className="planner" aria-label="Planner">
       <div className="planner-body">
-        <AddRow onAdd={(input) => run(() => window.axon.taskAdd(input))} />
+        <AddRow today={compact} onAdd={(input) => run(() => window.axon.taskAdd(input))} />
         {error && (
           <p className="planner-error" role="alert">
             {error}
@@ -79,9 +79,9 @@ export function Planner() {
           </p>
         )}
         <Group title="Today" tasks={groups.today} now={now} run={run} />
-        <Group title="This week" tasks={groups.week} now={now} run={run} />
-        <Group title="Later" tasks={groups.later} now={now} run={run} />
-        {groups.done.length > 0 && (
+        {!compact && <Group title="This week" tasks={groups.week} now={now} run={run} />}
+        {!compact && <Group title="Later" tasks={groups.later} now={now} run={run} />}
+        {!compact && groups.done.length > 0 && (
           <section className="planner-group">
             <button
               className="planner-group-toggle"
@@ -105,13 +105,24 @@ export function Planner() {
   );
 }
 
-function AddRow({ onAdd }: { onAdd: (input: { title: string; due?: string }) => Promise<boolean> }) {
+function AddRow({
+  onAdd,
+  today = false
+}: {
+  today?: boolean;
+  onAdd: (input: { title: string; due?: string }) => Promise<boolean>;
+}) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim()) return;
-    if (await onAdd({ title: title.trim(), ...(date ? { due: date } : {}) })) {
+    if (
+      await onAdd({
+        title: title.trim(),
+        ...(date ? { due: date } : today ? { due: dayKey(new Date()) } : {})
+      })
+    ) {
       setTitle('');
       setDate('');
     }
@@ -304,8 +315,7 @@ function WorkRow({ task }: { task: TaskItem }) {
   const open = () => {
     if (!person) return;
     const store = useOfficeStore.getState();
-    store.flyToAgent(person.id);
-    if (task.conversationId) store.setAgentConversation(person.id, task.conversationId);
+    store.focusOn({ agentId: person.id, conversationId: task.conversationId });
   };
   return (
     <li className={`planner-row work status-${task.status}`}>

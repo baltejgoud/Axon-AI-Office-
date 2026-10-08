@@ -5,8 +5,9 @@ import rehypeHighlight from 'rehype-highlight';
 import type { Message, ToolCall } from '../../../shared/types';
 import { perform, useApp } from '../state';
 import { timeAgo } from '../format';
-import { Button, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
+import { Button, IconCheck, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
 import { CodeBlock } from './CodeBlock';
+import { toolPresentation } from './workPresentation';
 
 /** What the user typed, without the attachment and file-context blocks appended for the model. */
 export function visibleUserText(content: string): string {
@@ -16,40 +17,78 @@ export function visibleUserText(content: string): string {
 /** The standard card for a tool call: its name and state, opening to its arguments and result. */
 export function ToolCallDetails({ call: tc, conversationId }: { call: ToolCall; conversationId?: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [fullOutput, setFullOutput] = useState<{ content: string; nextOffset?: number; total: number } | null>(null);
+  const [fullOutput, setFullOutput] = useState<{
+    content: string;
+    nextOffset?: number;
+    total: number;
+  } | null>(null);
+  const presentation = toolPresentation(tc);
   const loadOutput = async () => {
-    const id = conversationId ?? useApp.getState().data?.messages.find(m => tc.outputArtifactId ? m.toolOutputId === tc.outputArtifactId : m.toolCallId === tc.id)?.conversationId;
+    const id =
+      conversationId ??
+      useApp
+        .getState()
+        .data?.messages.find((m) =>
+          tc.outputArtifactId ? m.toolOutputId === tc.outputArtifactId : m.toolCallId === tc.id
+        )?.conversationId;
     if (!id) return;
-    const next = await window.axon.readToolArtifact(id, tc.outputArtifactId ?? tc.id, fullOutput?.nextOffset ?? 0);
+    const next = await window.axon.readToolArtifact(
+      id,
+      tc.outputArtifactId ?? tc.id,
+      fullOutput?.nextOffset ?? 0
+    );
     setFullOutput(next);
   };
   return (
-    <details className="tool-call-item" onToggle={e => setExpanded(e.currentTarget.open)}>
+    <details className="tool-call-item" onToggle={(e) => setExpanded(e.currentTarget.open)}>
       <summary className="tool-call-summary">
         <span className="tool-call-name">
           <IconTerminal size={14} />
-          <strong>{tc.name}</strong>
+          <strong title={tc.name}>{presentation.label}</strong>
+          {presentation.target && (
+            <span className="tool-call-target" title={presentation.target}>
+              {presentation.target}
+            </span>
+          )}
         </span>
-        <span className={`tool-call-status ${tc.error ? 'failed' : tc.result ? 'completed' : 'running'}`}>
-          {tc.error ? 'Failed' : tc.result ? 'Completed' : 'Running…'}
+        <span className={`tool-call-status ${presentation.status}`}>
+          {presentation.status === 'failed'
+            ? 'Failed'
+            : presentation.status === 'completed'
+              ? 'Completed'
+              : 'Running…'}
         </span>
       </summary>
-      {expanded && <div className="tool-call-body">
-        <div className="tool-call-label">Arguments</div>
-        <pre className="tool-call-pre">{tc.arguments}</pre>
-        {tc.result && (
-          <>
-            <div className="tool-call-label">Result</div>
-            <pre className="tool-call-pre scrollable">{tc.result}</pre>
-          </>
-        )}
-        {tc.outputArtifactId && <>
-          <button onClick={() => void perform(loadOutput)}>{fullOutput ? fullOutput.nextOffset === undefined ? 'Read from start' : 'Next output page' : 'View full saved output'}</button>
-          {fullOutput && <pre className="tool-call-pre scrollable">{fullOutput.content}</pre>}
-          {fullOutput && <small>{fullOutput.nextOffset ?? fullOutput.total} / {fullOutput.total} characters</small>}
-        </>}
-        {tc.error && <div className="tool-call-error">{tc.error}</div>}
-      </div>}
+      {expanded && (
+        <div className="tool-call-body">
+          <div className="tool-call-label">Arguments</div>
+          <pre className="tool-call-pre">{tc.arguments}</pre>
+          {tc.result !== undefined && (
+            <>
+              <div className="tool-call-label">Result</div>
+              <pre className="tool-call-pre scrollable">{tc.result}</pre>
+            </>
+          )}
+          {tc.outputArtifactId && (
+            <>
+              <button onClick={() => void perform(loadOutput)}>
+                {fullOutput
+                  ? fullOutput.nextOffset === undefined
+                    ? 'Read from start'
+                    : 'Next output page'
+                  : 'View full saved output'}
+              </button>
+              {fullOutput && <pre className="tool-call-pre scrollable">{fullOutput.content}</pre>}
+              {fullOutput && (
+                <small>
+                  {fullOutput.nextOffset ?? fullOutput.total} / {fullOutput.total} characters
+                </small>
+              )}
+            </>
+          )}
+          {tc.error && <div className="tool-call-error">{tc.error}</div>}
+        </div>
+      )}
     </details>
   );
 }
@@ -71,6 +110,7 @@ export function MessageView({
   renderToolCall?: (call: ToolCall) => ReactNode;
 }) {
   const [thoughtOpen, setThoughtOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
   const calls = (m.toolCalls ?? [])
     .map((call) => ({ call, custom: renderToolCall?.(call) }))
@@ -93,13 +133,17 @@ export function MessageView({
                 <span />
                 <span />
               </span>
-              Generating
+              {m.toolCalls?.some((call) => toolPresentation(call).status === 'running')
+                ? 'Working'
+                : m.thought && !m.content
+                  ? 'Thinking'
+                  : 'Writing'}
             </span>
           )}
         </div>
         {m.thought && (
-          <details className="thought-block" onToggle={e => setThoughtOpen(e.currentTarget.open)}>
-            <summary>Thought process</summary>
+          <details className="thought-block" onToggle={(e) => setThoughtOpen(e.currentTarget.open)}>
+            <summary>Reasoning summary</summary>
             {thoughtOpen && <div className="thought-content">{m.thought}</div>}
           </details>
         )}
@@ -120,7 +164,22 @@ export function MessageView({
             rehypePlugins={[rehypeHighlight]}
             components={{
               img: ({ alt }) => <span>[Image: {alt}]</span>,
-              a: ({ children }) => <span className="message-link">{children}</span>,
+              a: ({ href, children }) =>
+                href && /^https?:\/\//i.test(href) ? (
+                  <a
+                    className="message-link"
+                    href={href}
+                    title={href}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void perform(() => window.axon.openLink(href));
+                    }}
+                  >
+                    {children}
+                  </a>
+                ) : (
+                  <span className="message-link">{children}</span>
+                ),
               pre: ({ children }) => <CodeBlock>{children}</CodeBlock>
             }}
           >
@@ -137,12 +196,15 @@ export function MessageView({
               <Button
                 variant="ghost"
                 size="sm"
-                icon={IconCopy}
+                icon={copied ? IconCheck : IconCopy}
                 onClick={() =>
-                  void perform(() => navigator.clipboard.writeText(m.content), 'Copied to clipboard')
+                  void perform(async () => {
+                    await navigator.clipboard.writeText(m.content);
+                    setCopied(true);
+                  })
                 }
               >
-                Copy
+                {copied ? 'Copied' : 'Copy'}
               </Button>
             )}
             {actions}

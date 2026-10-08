@@ -53,7 +53,10 @@ export function WorkSummary({
       : requests.has(step.id)
         ? { label: 'Waiting for your OK', tone: 'waiting' }
         : step.state === 'running'
-          ? { label: step.name === 'write_file' || step.name === 'edit_file' ? 'Saving…' : 'Running…', tone: 'running' }
+          ? {
+              label: step.name === 'write_file' || step.name === 'edit_file' ? 'Saving…' : 'Running…',
+              tone: 'running'
+            }
           : step.state === 'failed'
             ? { label: failed, tone: 'failed' }
             : { label: done, tone: 'done' };
@@ -76,6 +79,9 @@ export function WorkSummary({
       <header className="work-summary-head">
         <span className="work-summary-dot" />
         <strong>{title}</strong>
+        <span className="work-summary-count">
+          {steps.filter((s) => s.state === 'done').length} / {steps.length} steps
+        </span>
       </header>
       <div className="work-summary-rows">
         {files.map((file) => {
@@ -166,7 +172,7 @@ export function WorkSummary({
         <summary>{`All ${plural(steps.length, 'step')}`}</summary>
         <div className="tool-calls">
           {steps.map((step) => (
-            <ToolCallDetails key={step.id} call={step.call} />
+            <ToolCallDetails key={step.id} call={step.call} conversationId={conversationId} />
           ))}
         </div>
       </details>

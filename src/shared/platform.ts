@@ -1,5 +1,6 @@
 import type { AgentRun, AgentMessage, TerminalSession } from './runtime';
 import type {
+  ClaudeRateLimits,
   ProviderConfig,
   Conversation,
   Message,
@@ -92,6 +93,15 @@ export interface ProviderConnectResult {
   models: string[] | null;
   savedKeyWithheld: boolean;
 }
+/** Settings → Accounts → Claude: a Claude Console API key and, for a key that spans workspaces, the workspace to run in. */
+export interface ClaudeConnectInput {
+  key: string;
+  workspaceId?: string;
+}
+export type ClaudeConnectResult =
+  | { ok: true; models: number; organizationChanged: boolean }
+  /** The key spans several workspaces, or the workspace was refused: ask which one. */
+  | { ok: false; needsWorkspace: true; message: string };
 /** Tokens replies reported, and what they cost at the prices you set. */
 export interface UsageTotals {
   promptTokens: number;
@@ -245,6 +255,18 @@ export interface PlatformAPI {
   officeStart(): Promise<{ briefing: Briefing | null; focus: FocusTarget | null }>;
   /** Who is signed in, which sign-ins this build offers, and the installed Git. */
   accountsGet(): Promise<AccountsState>;
+  chatgptSignIn(): Promise<void>;
+  chatgptCancel(): Promise<void>;
+  chatgptSignOut(): Promise<{ remoteRevoked: boolean }>;
+  chatgptRefreshModels(): Promise<void>;
+  /** Claude with a Claude Console API key, checked with Anthropic's free model list: no message is sent. */
+  claudeConnect(input: ClaudeConnectInput): Promise<ClaudeConnectResult>;
+  claudeCancel(): Promise<void>;
+  claudeRefreshModels(): Promise<void>;
+  /** Forgets the key. It keeps working until it is disabled or deleted in Claude Console. */
+  claudeDisconnect(): Promise<void>;
+  /** The organization's rate limits as the last Claude request reported them. */
+  claudeLimits(): Promise<ClaudeRateLimits | null>;
   /** Opens github.com/login/device and returns the code to type there. */
   githubSignInStart(): Promise<DeviceCode>;
   /** Resolves once the code is approved on github.com. */

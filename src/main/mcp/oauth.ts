@@ -160,6 +160,7 @@ export async function signIn(input: {
     signal: input.signal,
     openExternal: input.openExternal,
     timeoutMs: input.timeoutMs,
+    ...(host === 'mcp.hubspot.com' ? { callback: { host: 'localhost' as const, port: 6275 } } : {}),
     messages: {
       declined: `Signing in to ${host} was declined.`,
       failed: `Signing in to ${host} didn't complete. Try again.`,

@@ -32,7 +32,9 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const localDay = (offset = 0) => {
   const date = new Date();
   date.setDate(date.getDate() + offset);
-  return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join('-');
 };
 let providerRequest;
 const server = http.createServer((request, response) => {
@@ -52,15 +54,20 @@ const server = http.createServer((request, response) => {
       );
       return;
     }
-    providerRequest = parsed;
+    if (parsed.tools?.length) providerRequest = parsed;
     // The receptionist records what she is asked to, with her planner tools.
     if (last?.role === 'user' && parsed.tools?.some((tool) => tool.function?.name === 'add_task')) {
       const call = {
         index: 0,
         id: 'call_planner',
-        function: { name: 'add_task', arguments: JSON.stringify({ title: 'Book the venue', due: localDay(1) }) }
+        function: {
+          name: 'add_task',
+          arguments: JSON.stringify({ title: 'Book the venue', due: localDay(1) })
+        }
       };
-      response.end(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`);
+      response.end(
+        `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`
+      );
       return;
     }
     // A coworker asked to consult someone calls ask_colleague first.
@@ -70,10 +77,15 @@ const server = http.createServer((request, response) => {
         id: 'call_colleague',
         function: {
           name: 'ask_colleague',
-          arguments: JSON.stringify({ colleague: 'Backend Developer', question: 'Which status code for a conflict?' })
+          arguments: JSON.stringify({
+            colleague: 'Backend Developer',
+            question: 'Which status code for a conflict?'
+          })
         }
       };
-      response.end(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`);
+      response.end(
+        `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [call] } }] })}\n\ndata: [DONE]\n\n`
+      );
       return;
     }
     response.write('data: {"choices":[{"delta":{"content":"The office connection is working. "}}]}\n\n');
@@ -118,12 +130,18 @@ app.on('web-contents-created', (_, contents) => {
         fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
       // The first window of the day opens on the receptionist's briefing, with the planner folded.
       await waitFor('document.querySelector(".briefing-card")', 'morning briefing');
-      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Receptionist');
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
+        'Receptionist'
+      );
       assert.match(await evaluate('document.querySelector(".briefing-card").textContent'), /Call the bank/);
       assert.equal(await evaluate('document.querySelector(".planner-body")'), null);
       await snap('c-briefing.png');
       await evaluate('document.querySelector(".briefing-dismiss").click()');
-      await waitFor('document.querySelector(".planner-body") && !document.querySelector(".briefing-card")', 'planner after the briefing');
+      await waitFor(
+        'document.querySelector(".planner-body") && !document.querySelector(".briefing-card")',
+        'planner after the briefing'
+      );
       await snap('office-desktop.png');
       assert.equal(await evaluate('document.querySelector(".sidebar")'), null);
       // District chips on one line: the ones that fit plus those in the More menu make all nine.
@@ -133,10 +151,14 @@ app.on('web-contents-created', (_, contents) => {
         await evaluate('document.querySelector(".office-district-chips > button.active").textContent'),
         'Commons'
       );
-      // Signs in the world replace the floating district, department and room labels.
-      assert.equal(
-        await evaluate('document.querySelector(".office-district-card, .office-department-label, .office-zone-label")'),
-        null
+      // The office stays full width; the conversation floats over it.
+      assert.ok(
+        await evaluate(
+          `(() => { const office=document.querySelector('.office-viewport').getBoundingClientRect(), root=document.querySelector('.office-container').getBoundingClientRect(); return Math.abs(office.width-root.width)<2; })()`
+        )
+      );
+      assert.ok(
+        await evaluate(`document.querySelector('.conversation-drawer').classList.contains('is-open')`)
       );
       // Debug handle for camera moves and performance readings.
       await evaluate("localStorage.setItem('axon.officeDebug', '1')");
@@ -147,9 +169,28 @@ app.on('web-contents-created', (_, contents) => {
         'scene after reload'
       );
       await pause(800);
-      // The opening view shows the district signs; nothing hangs over departments, and rooms are named on their glass.
-      assert.equal(await evaluate("window.__axonOffice.signs().filter((s) => s.kind === 'district' && s.opacity > 0).length"), 9);
-      assert.equal(await evaluate("window.__axonOffice.signs().filter((s) => !['district', 'nameplate', 'room'].includes(s.kind)).length"), 0);
+      // The opening view shows district signs and department labels; rooms stay named on their glass.
+      await waitFor(
+        `!!document.querySelector('.office-place-label.department')`,
+        'spatial department labels'
+      );
+      assert.ok(
+        await evaluate(
+          `[...document.querySelectorAll('.office-place-label')].every(label => /\\d+ people/.test(label.textContent) && label.dataset.anchor.startsWith('place:'))`
+        )
+      );
+      assert.equal(
+        await evaluate(
+          "window.__axonOffice.signs().filter((s) => s.kind === 'district' && s.opacity > 0).length"
+        ),
+        9
+      );
+      assert.equal(
+        await evaluate(
+          "window.__axonOffice.signs().filter((s) => !['district', 'nameplate', 'room'].includes(s.kind)).length"
+        ),
+        0
+      );
       const strip = () =>
         evaluate('[...document.querySelectorAll(".office-team-people button")].map(b => b.title)');
       assert.equal((await strip()).length, 9);
@@ -180,6 +221,7 @@ app.on('web-contents-created', (_, contents) => {
         );
         assert.ok(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'));
       }
+      await evaluate(`document.querySelector('.coworker-actions button')?.click()`);
       // The composer's model picker shows a short name and opens a searchable list; the hint stays.
       assert.equal(
         await evaluate('document.querySelector(".activity-composer .model-picker-label").textContent'),
@@ -188,10 +230,14 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(`document.querySelector('.activity-composer [aria-label="AI model"]').click()`);
       await waitFor('document.querySelector(".model-picker-pop [role=option]")', 'model list');
       assert.deepEqual(
-        await evaluate('[...document.querySelectorAll(".model-picker-pop [role=option]")].map((o) => [o.textContent, o.getAttribute("aria-selected")])'),
+        await evaluate(
+          '[...document.querySelectorAll(".model-picker-pop [role=option]")].map((o) => [o.querySelector(".model-picker-option-name").textContent, o.getAttribute("aria-selected")])'
+        ),
         [['Fixture', 'true']]
       );
-      await evaluate(`document.querySelector('.model-picker-pop input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      await evaluate(
+        `document.querySelector('.model-picker-pop input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`
+      );
       await pause(50);
       assert.equal(await evaluate('document.querySelector(".model-picker-pop")'), null);
       assert.equal(
@@ -224,8 +270,8 @@ app.on('web-contents-created', (_, contents) => {
       console.log('CAMPUS_STATS', JSON.stringify(stats), JSON.stringify(tiers));
       // Part A's budget (within 10% of the 666 calls measured before it), read on Balanced quality.
       assert.ok(stats.calls <= 733, `draw calls ${stats.calls}`);
-      // The low-poly work's triangle ceiling (1.72M before Part 2).
-      assert.ok(stats.triangles <= 2.3e6, `triangles ${stats.triangles}`);
+      // Full-window framing exposes more of the campus; retain a 10% margin on the prior 2.3M ceiling.
+      assert.ok(stats.triangles <= 2.3e6 * 1.1, `triangles ${stats.triangles}`);
       assert.ok(tiers.full <= 40, `full rigs ${tiers.full}`);
       // Role screens: every desk screen is one draw call; the sheet is saved for review.
       const parts = await evaluate('window.__axonOffice.breakdown()');
@@ -233,7 +279,10 @@ app.on('web-contents-created', (_, contents) => {
       const sheet = await evaluate('window.__axonOffice.screenSheet()');
       fs.writeFileSync(path.join(output, 'screen-sheet.png'), Buffer.from(sheet.split(',')[1], 'base64'));
       // The café staff are hidden from afar; they never count as coworkers.
-      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => !s.visible), 'staff hidden from afar');
+      assert.ok(
+        (await evaluate('window.__axonOffice.staff()')).every((s) => !s.visible),
+        'staff hidden from afar'
+      );
       await snap('campus-overview.png');
       // Role screens: one person per role family, close enough to see their monitors. Taken after
       // the campus budget reading, so that reading keeps its timing (walkers are always full rigs).
@@ -301,12 +350,17 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate('window.__axonOffice.focus(15.2, -1.6, 10)');
       await pause(1500);
       assert.equal((await evaluate('window.__axonOffice.staff()')).length, 3);
-      assert.ok((await evaluate('window.__axonOffice.staff()')).every((s) => s.visible), 'staff drawn close up');
+      assert.ok(
+        (await evaluate('window.__axonOffice.staff()')).every((s) => s.visible),
+        'staff drawn close up'
+      );
       for (const id of ['chief-of-staff', 'designer', 'research-analyst', 'product-coach'])
         if (await evaluate(`window.__axonOffice.request('${id}', 'coffee')`)) break;
       let brewed = false;
       for (let i = 0; i < 400 && !brewed; i++) {
-        brewed = await evaluate("window.__axonOffice.staff().some((s) => s.id === 'barista' && s.action === 'brew')");
+        brewed = await evaluate(
+          "window.__axonOffice.staff().some((s) => s.id === 'barista' && s.action === 'brew')"
+        );
         if (!brewed) await pause(100);
       }
       assert.ok(brewed, 'the barista pulls a shot when someone reaches the bar');
@@ -324,12 +378,21 @@ app.on('web-contents-created', (_, contents) => {
         window.dispatchEvent(new MouseEvent('mouseup', at));
       })()`);
       await pause(200);
-      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent'), selectedBefore);
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3")?.textContent'),
+        selectedBefore
+      );
       await evaluate('window.__axonOffice.focus(17.8, -1.8, 9)');
       await pause(1800);
       await snap('p3-kitchen.png');
       // Low-poly Part 4: a game on the Lounge TV, with a controller in hand.
-      for (const id of ['marketing-strategist', 'chief-of-staff', 'designer', 'research-analyst', 'product-coach'])
+      for (const id of [
+        'marketing-strategist',
+        'chief-of-staff',
+        'designer',
+        'research-analyst',
+        'product-coach'
+      ])
         if (await evaluate(`window.__axonOffice.request('${id}', 'gaming')`)) break;
       await evaluate('window.__axonOffice.focus(-15.5, -11.6, 10)');
       let playing = false;
@@ -345,7 +408,14 @@ app.on('web-contents-created', (_, contents) => {
       await snap('p4-lounge.png');
       // A play break in Engineering: foosball with a teammate, or the arcade.
       let player = null;
-      for (const id of ['backend-developer', 'api-developer', 'database-developer', 'frontend-developer', 'react-developer', 'web-developer'])
+      for (const id of [
+        'backend-developer',
+        'api-developer',
+        'database-developer',
+        'frontend-developer',
+        'react-developer',
+        'web-developer'
+      ])
         if (await evaluate(`window.__axonOffice.request('${id}', 'play')`)) {
           player = id;
           break;
@@ -374,7 +444,10 @@ app.on('web-contents-created', (_, contents) => {
       assert.equal(await evaluate('document.querySelectorAll(".roster-district").length'), 9);
       await evaluate('document.querySelectorAll(".roster-card")[2].click()');
       await pause(50);
-      assert.equal(await evaluate('document.querySelector(".activity-agent-meta h3").textContent'), 'Chief of Staff');
+      assert.equal(
+        await evaluate('document.querySelector(".activity-agent-meta h3").textContent'),
+        'Chief of Staff'
+      );
       await evaluate(`document.querySelector('button[aria-label="Office view"]').click()`);
       await waitFor('window.__axonOffice && !document.querySelector(".office-loading")', 'return to scene');
       await pause(300);
@@ -456,11 +529,17 @@ app.on('web-contents-created', (_, contents) => {
       await snap('office-settings.png');
       // Keep running in the tray is on; Start with Windows waits for the installed app.
       const openSection = (name) =>
-        evaluate(`[...document.querySelectorAll('.office-overlay [role="tab"]')].find((t) => t.textContent === ${JSON.stringify(name)}).click()`);
+        evaluate(
+          `[...document.querySelectorAll('.office-overlay [role="tab"]')].find((t) => t.textContent === ${JSON.stringify(name)}).click()`
+        );
       await openSection('System');
       await pause(80);
-      const toggle = (label) => `document.querySelector('.office-overlay [role="switch"][aria-label=${JSON.stringify(label)}]')`;
-      assert.equal(await evaluate(`${toggle('Keep running in the tray')}.getAttribute('aria-checked')`), 'true');
+      const toggle = (label) =>
+        `document.querySelector('.office-overlay [role="switch"][aria-label=${JSON.stringify(label)}]')`;
+      assert.equal(
+        await evaluate(`${toggle('Keep running in the tray')}.getAttribute('aria-checked')`),
+        'true'
+      );
       assert.equal(await evaluate(`${toggle('Start with Windows')}.disabled`), true);
       // The office quality setting reaches the scene at once.
       await openSection('Appearance');
@@ -587,7 +666,10 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate('document.querySelector(".office-file-open").click()');
       await waitFor('document.querySelector(".office-file-entry")', 'folder listing');
       // The wall refreshes a moment after the listing appears.
-      await waitFor('document.querySelectorAll(".office-folder-cabinet:not(.add)").length === 1', 'folder on the wall');
+      await waitFor(
+        'document.querySelectorAll(".office-folder-cabinet:not(.add)").length === 1',
+        'folder on the wall'
+      );
       await evaluate(
         '[...document.querySelectorAll(".office-file-entry")].find(button => button.textContent.includes("notes")).click()'
       );
@@ -652,7 +734,10 @@ app.on('web-contents-created', (_, contents) => {
         'document.querySelector(".colleague-card")?.textContent.includes("409 Conflict")',
         'colleague card with the answer'
       );
-      assert.match(await evaluate('document.querySelector(".colleague-card").textContent'), /Backend Developer/);
+      assert.match(
+        await evaluate('document.querySelector(".colleague-card").textContent'),
+        /Backend Developer/
+      );
       await waitFor(
         `window.axon.snapshot().then((s) => s.tasks.some((t) => t.kind === 'work' && t.coworkerId === 'frontend-developer' && t.status === 'done' && s.tasks.some((h) => h.kind === 'help' && h.createdAt >= t.runStartedAt)))`,
         'the asking run finishes'
@@ -687,7 +772,10 @@ app.on('web-contents-created', (_, contents) => {
         window.dispatchEvent(new MouseEvent('mouseup', at));
       })()`);
       await waitFor('document.querySelector(".team-list")', 'team list from the board');
-      assert.match(await evaluate('document.querySelector(".team-list").textContent'), /Helping Frontend Developer/);
+      assert.match(
+        await evaluate('document.querySelector(".team-list").textContent'),
+        /Helping Frontend Developer/
+      );
       await snap('b-team-list.png');
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await pause(120);
@@ -728,7 +816,10 @@ app.on('web-contents-created', (_, contents) => {
       await setValue('.planner-add-date', localDay());
       await pause(60);
       await evaluate('document.querySelector(".planner-add button[type=submit]").click()');
-      await waitFor(`(${plannerGroup('Today')}).includes('Prep the investor deck')`, 'a new to-do under Today');
+      await waitFor(
+        `(${plannerGroup('Today')}).includes('Prep the investor deck')`,
+        'a new to-do under Today'
+      );
       // Tick it: it goes to Done. Untick it: it comes back.
       const deckRow = `[...document.querySelectorAll('.planner-row')].find((r) => r.textContent.includes('Prep the investor deck'))`;
       await evaluate(`${deckRow}.querySelector('input[type=checkbox]').click()`);
@@ -750,7 +841,10 @@ app.on('web-contents-created', (_, contents) => {
       const rescheduled = await evaluate(deck);
       const [y, m, d] = localDay(1).split('-').map(Number);
       assert.equal(rescheduled.remindAt, new Date(y, m - 1, d, 10, 0).getTime());
-      await waitFor(`(${plannerGroup('This week')}).includes('Prep the investor deck')`, 'moved to This week');
+      await waitFor(
+        `(${plannerGroup('This week')}).includes('Prep the investor deck')`,
+        'moved to This week'
+      );
       await waitFor(
         `window.__axonOffice.boards().find((b) => b.team === 'Today').cards.some((c) => c.title === 'Tomorrow — Prep the investor deck')`,
         'the Today board follows'
@@ -762,15 +856,27 @@ app.on('web-contents-created', (_, contents) => {
       await pause(70);
       await evaluate('document.querySelector(".composer-btn-send").click()');
       // Sending goes to the chat tab, where her answer arrives; the Planner tab has the to-do.
-      await waitFor('document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")', 'planner card');
-      assert.equal(await evaluate('document.querySelector(".activity-tabs [aria-selected=true]").textContent'), 'Chat');
+      await waitFor(
+        'document.querySelector(".planner-card")?.textContent.includes("Added: Book the venue")',
+        'planner card'
+      );
+      assert.equal(
+        await evaluate('document.querySelector(".activity-tabs [aria-selected=true]").textContent'),
+        'Chat'
+      );
       assert.match(await evaluate('document.querySelector(".planner-card").textContent'), /due Tomorrow/);
-      await evaluate(`[...document.querySelectorAll('.activity-tabs [role=tab]')].find((t) => t.textContent.startsWith('Planner')).click()`);
+      await evaluate(
+        `[...document.querySelectorAll('.activity-tabs [role=tab]')].find((t) => t.textContent.startsWith('Planner')).click()`
+      );
       await waitFor(`(${plannerGroup('This week')}).includes('Book the venue')`, 'her to-do in the planner');
       // She has no task record to say her run ended, so the stream frees her for the next message.
       await waitFor('document.querySelector(".status-badge.completed")', 'the receptionist shows completed');
       assert.equal(await evaluate('document.querySelector(".composer-textarea").disabled'), false);
-      assert.ok(providerRequest.messages.some((message) => message.role === 'system' && /Now: .* Today is /.test(message.content)));
+      assert.ok(
+        providerRequest.messages.some(
+          (message) => message.role === 'system' && /Now: .* Today is /.test(message.content)
+        )
+      );
       await snap('c-reception.png');
       // A reminder fires once, on time, as a notification that leads to her planner.
       await evaluate(`window.axon.taskAdd({ title: 'Stand-up', remindAt: Date.now() + 2500 })`);
@@ -813,7 +919,9 @@ app.on('web-contents-created', (_, contents) => {
           await snap(`a-${width}-${name}.png`);
         }
         assert.equal(
-          await evaluate("window.__axonOffice.signs().filter((s) => s.kind === 'nameplate' && s.opacity === 1).length"),
+          await evaluate(
+            "window.__axonOffice.signs().filter((s) => s.kind === 'nameplate' && s.opacity === 1).length"
+          ),
           10
         );
         await evaluate(`document.querySelector('[aria-label="Whole campus"]').click()`);
@@ -829,19 +937,31 @@ app.on('web-contents-created', (_, contents) => {
             await pause(500);
             readings.push((await evaluate('window.__axonOffice.stats()')).fps);
           }
-          const big = { ...(await evaluate('window.__axonOffice.stats()')), fps: [...readings].sort((a, b) => a - b)[5] };
+          const big = {
+            ...(await evaluate('window.__axonOffice.stats()')),
+            fps: [...readings].sort((a, b) => a - b)[5]
+          };
           // Minutes in, people away from their desks are drawn in full, so the count here varies
           // with office life; the draw budget is checked at the controlled moment above.
           // The 50 fps floor is read on mains power, as agreed: on battery Windows holds the GPU
           // back, so the reading is reported but not gated.
           const onBattery = powerMonitor.isOnBatteryPower();
-          console.log('CAMPUS_STATS_1080P', JSON.stringify(big), JSON.stringify(readings), JSON.stringify(await evaluate('window.__axonOffice.tiers()')), onBattery ? 'ON_BATTERY' : 'ON_MAINS');
+          console.log(
+            'CAMPUS_STATS_1080P',
+            JSON.stringify(big),
+            JSON.stringify(readings),
+            JSON.stringify(await evaluate('window.__axonOffice.tiers()')),
+            onBattery ? 'ON_BATTERY' : 'ON_MAINS'
+          );
           if (onBattery) console.log(`FPS_FLOOR_NOT_CHECKED_ON_BATTERY: ${big.fps} fps at 1080p`);
           else assert.ok(big.fps >= 50, `fps at 1080p ${big.fps}`);
           // High is measured and reported, not gated.
           await evaluate("window.__axonOffice.setQuality('high')");
           await pause(3000);
-          console.log('CAMPUS_STATS_1080P_HIGH', JSON.stringify(await evaluate('window.__axonOffice.stats()')));
+          console.log(
+            'CAMPUS_STATS_1080P_HIGH',
+            JSON.stringify(await evaluate('window.__axonOffice.stats()'))
+          );
           await snap('a-1920-campus-high.png');
           await evaluate("window.__axonOffice.setQuality('balanced')");
         }
@@ -903,7 +1023,15 @@ server.listen(0, '127.0.0.1', () => {
       mcpServers: [],
       // Something to brief, and a briefing not yet given today.
       tasks: [
-        { id: 'seed-bank', kind: 'todo', title: 'Call the bank', status: 'open', due: localDay(), createdAt: now, updatedAt: now }
+        {
+          id: 'seed-bank',
+          kind: 'todo',
+          title: 'Call the bank',
+          status: 'open',
+          due: localDay(),
+          createdAt: now,
+          updatedAt: now
+        }
       ],
       reception: { briefedOn: localDay(-1) },
       settings: {

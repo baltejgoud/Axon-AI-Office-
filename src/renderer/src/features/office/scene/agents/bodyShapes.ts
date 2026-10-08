@@ -182,7 +182,7 @@ function build(detail: 'full' | 'low'): BodyShapes {
       ].map(([r, y]) => [r / 0.176, y] as [number, number]),
       radial
     ),
-    head: full ? headShape(20, 14) : headShape(12, 8),
+    head: full ? headShape(24, 14) : headShape(12, 8),
     hand: { 1: handShape(1, small, digit, full), [-1]: handShape(-1, small, digit, full) } as Record<
       1 | -1,
       THREE.BufferGeometry
