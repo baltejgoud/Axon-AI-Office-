@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Appearance, HairStyle, Top } from '../agents/appearance';
 import { SOLE, applyPose, buildHumanoid } from '../agents/HumanoidRig';
 import { computePose } from '../agents/poses';
+import { OFFICE_AGENTS } from '../../data/officeAgents';
+import { districtById } from '../../campus/districts';
 
 /** Seat height the crowd pose is baked at; office chairs sit here. */
 const SEAT_HEIGHT = 0.5;
@@ -181,6 +183,7 @@ export class CrowdRenderer {
   private readonly groups: Group[] = [];
   private readonly hits: THREE.InstancedMesh;
   private readonly blobs: THREE.InstancedMesh;
+  private readonly rings: THREE.InstancedMesh;
   private readonly hidden = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly scratch = new THREE.Matrix4();
   private readonly lift = new THREE.Matrix4();
@@ -292,14 +295,46 @@ export class CrowdRenderer {
       people.length
     );
     this.blobs.renderOrder = 1;
+    // One floor marker per person, shared across both rendering tiers.
+    this.rings = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.39, 0.46, 12).rotateX(-Math.PI / 2).translate(0, 0.025, 0),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+        // Rugs are pulled forward in the depth test; the marker must stay above them too.
+        polygonOffset: true,
+        polygonOffsetFactor: -5,
+        polygonOffsetUnits: -5
+      }),
+      people.length
+    );
+    this.rings.name = 'crowd-district-rings';
+    this.rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.rings.frustumCulled = false;
+    this.rings.renderOrder = 2;
     people.forEach((person, i) => {
       const flat = new THREE.Matrix4().makeTranslation(person.seat.x, 0, person.seat.z);
       this.hits.setMatrixAt(i, flat);
       this.blobs.setMatrixAt(i, flat);
+      this.rings.setMatrixAt(i, flat);
+      const agent = OFFICE_AGENTS.find((a) => a.id === person.id);
+      this.rings.setColorAt(
+        i,
+        new THREE.Color(agent ? districtById(agent.district).color : person.look.accent)
+      );
     });
     this.hits.computeBoundingSphere();
     this.blobs.computeBoundingSphere();
-    this.object.add(this.blobs, this.hits);
+    this.object.add(this.blobs, this.hits, this.rings);
+  }
+
+  /** Full characters walk away from their baked seats; their marker stays on the floor. */
+  setMarkerPosition(id: string, x: number, z: number): void {
+    const person = this.index.get(id);
+    if (person === undefined) return;
+    this.rings.setMatrixAt(person, this.scratch.makeTranslation(x, 0, z));
+    this.rings.instanceMatrix.needsUpdate = true;
   }
 
   has(id: string): boolean {
@@ -321,6 +356,7 @@ export class CrowdRenderer {
       : this.hidden;
     this.hits.setMatrixAt(person, flat);
     this.blobs.setMatrixAt(person, flat);
+    if (visible) this.setMarkerPosition(id, this.people[person].seat.x, this.people[person].seat.z);
     this.hits.instanceMatrix.needsUpdate = true;
     this.blobs.instanceMatrix.needsUpdate = true;
     this.dirty = true;
@@ -365,7 +401,7 @@ export class CrowdRenderer {
       (group.mesh.material as THREE.Material).dispose();
       group.mesh.dispose();
     }
-    for (const mesh of [this.hits, this.blobs]) {
+    for (const mesh of [this.hits, this.blobs, this.rings]) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
       mesh.dispose();

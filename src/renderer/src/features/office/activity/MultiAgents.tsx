@@ -9,6 +9,8 @@ import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
 import type { AgentActivity } from '../store/officeStore';
 import { runLifecycle } from '../lifecycle';
 import { plural } from '../../../format';
+import { ColleagueSummary } from '../ColleagueSummary';
+import { OFFICE_AGENTS } from '../data/officeAgents';
 const name = (id: string) => coworkerById(id)?.name ?? id;
 export function MultiAgents({
   conversationId,
@@ -65,12 +67,14 @@ export function MultiAgents({
         <p>{team ? `Lead: ${name(team.leadId)} · ${team.status}` : 'Live execution state'}</p>
         <p className="multi-agents-counts">
           {/* Counted in the badges' own words; states with nobody in them are left out. */}
-          {[...shown.reduce((counts, run) => {
-            const state = runLifecycle(run.status);
-            const entry = counts.get(state.label) ?? { tone: state.tone, n: 0 };
-            counts.set(state.label, { ...entry, n: entry.n + 1 });
-            return counts;
-          }, new Map<string, { tone: string; n: number }>())].map(([label, { tone, n }]) => (
+          {[
+            ...shown.reduce((counts, run) => {
+              const state = runLifecycle(run.status);
+              const entry = counts.get(state.label) ?? { tone: state.tone, n: 0 };
+              counts.set(state.label, { ...entry, n: entry.n + 1 });
+              return counts;
+            }, new Map<string, { tone: string; n: number }>())
+          ].map(([label, { tone, n }]) => (
             <span key={label} className={`multi-agents-count is-${tone}`}>
               {n} {label.toLowerCase()}
             </span>
@@ -105,9 +109,16 @@ export function MultiAgents({
             const run = shown.filter((r) => r.taskId === a.id).at(-1);
             return (
               <article key={a.id}>
-                <strong>{name(a.ownerId)}</strong>
+                {OFFICE_AGENTS.find((agent) => agent.id === a.ownerId) ? (
+                  <ColleagueSummary
+                    agent={OFFICE_AGENTS.find((agent) => agent.id === a.ownerId)!}
+                    run={run}
+                  />
+                ) : (
+                  <strong>{name(a.ownerId)}</strong>
+                )}
                 <p>{a.title}</p>
-                <span>{run?.status.replaceAll('_', ' ') ?? a.status}</span>
+                {!run && <span>{a.status}</span>}
                 {a.dependsOn.length > 0 && (
                   <p>
                     Depends on:{' '}
@@ -116,7 +127,13 @@ export function MultiAgents({
                       .join(', ')}
                   </p>
                 )}
-                {run?.context && <p>{Math.ceil(run.context.inputTokens / 1000)}K / {Math.ceil(run.context.contextWindow / 1000)}K context · {run.context.compactionPerformed ? 'Optimizing' : 'Healthy'}</p>}
+                {run?.context && (
+                  <p>
+                    {Math.ceil(run.context.inputTokens / 1000)}K /{' '}
+                    {Math.ceil(run.context.contextWindow / 1000)}K context ·{' '}
+                    {run.context.compactionPerformed ? 'Optimizing' : 'Healthy'}
+                  </p>
+                )}
                 {run?.activeTool && <p>{run.activeTool.replaceAll('_', ' ')}</p>}
                 {a.note && <p>{a.note}</p>}
                 {a.conversationId && (
@@ -137,10 +154,19 @@ export function MultiAgents({
             .slice(-20)
             .map((r) => (
               <article key={r.runId}>
-                <strong>{name(r.agentId)}</strong>
+                {OFFICE_AGENTS.find((agent) => agent.id === r.agentId) ? (
+                  <ColleagueSummary agent={OFFICE_AGENTS.find((agent) => agent.id === r.agentId)!} run={r} />
+                ) : (
+                  <strong>{name(r.agentId)}</strong>
+                )}
                 <p>{r.summary}</p>
                 <span>{runStage(r)}</span>
-                {r.context && <p>{Math.ceil(r.context.inputTokens / 1000)}K / {Math.ceil(r.context.contextWindow / 1000)}K context</p>}
+                {r.context && (
+                  <p>
+                    {Math.ceil(r.context.inputTokens / 1000)}K / {Math.ceil(r.context.contextWindow / 1000)}K
+                    context
+                  </p>
+                )}
                 <p>{r.activeTool?.replaceAll('_', ' ')}</p>
                 <small>{Math.round(((r.completedAt ?? Date.now()) - r.startedAt) / 1000)}s</small>
                 {r.error && <p>{r.error}</p>}

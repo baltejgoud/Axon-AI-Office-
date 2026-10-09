@@ -1269,6 +1269,37 @@ test('the activity log is listed and exported over IPC', async (t) => {
 });
 
 /** A chat in a project folder whose model writes `file` once; the write is approved. */
+test('Allow for this task covers a second write, but the next run asks again', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder);
+  await service.project.choose(folder);
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  let calls = 0;
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    calls++;
+    if ([1, 2, 4].includes(calls)) return { toolCalls: [{ id: `write-${calls}`, name: 'write_file', arguments: JSON.stringify({ path: `${calls}.txt`, content: `write ${calls}` }) }] };
+    onChunk('The files are saved.');
+    return { toolCalls: [] };
+  });
+  const firstRun = service.chatSend(chat.id, 'Save two files', []);
+  const first = await waitFor(() => events.find((e) => e.approvalRequired)?.approvalRequired, 'first write approval');
+  await service.toolApprove({ requestId: first.id, approved: true, allowForTask: true });
+  await firstRun;
+  assert.equal(events.filter((e) => e.approvalRequired).length, 1);
+  assert.equal(fs.readFileSync(path.join(folder, '2.txt'), 'utf8'), 'write 2');
+  const nextRun = service.chatSend(chat.id, 'Save another file', []);
+  const next = await waitFor(() => events.filter((e) => e.approvalRequired)[1]?.approvalRequired, 'next run approval');
+  assert.notEqual(next.id, first.id);
+  assert.equal(fs.existsSync(path.join(folder, '4.txt')), false);
+  await service.toolApprove({ requestId: next.id, approved: true });
+  await nextRun;
+  assert.equal(fs.readFileSync(path.join(folder, '4.txt'), 'utf8'), 'write 4');
+});
+
 const writeOnce = async (t, file, content) => {
   const events = [];
   const made = makeService((event) => events.push(event));

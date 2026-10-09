@@ -358,7 +358,7 @@ app.on('web-contents-created', (_, contents) => {
         throw new Error('Timed out: ' + label);
       };
       const snap = async (name) =>
-        fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
+        fs.writeFileSync(path.join(output, theme === 'dark' ? name.replace('.png', '-dark.png') : name), (await contents.capturePage()).toPNG());
       const text = (selector) =>
         evaluate(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? null`);
       const click = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
@@ -691,6 +691,12 @@ app.on('web-contents-created', (_, contents) => {
           (await text('.work-file-note')) === 'Proposed change',
         `${g.tab} ${g.file} ${await text('.work-file-note')}`
       );
+      // The full approval diff can push this virtualized summary above the viewport.
+      for (let i = 0; i < 8 && !(await evaluate(`document.querySelector('.work-summary.is-live')`)); i++) {
+        await evaluate(`document.querySelector('.activity-tabpanel-chat').scrollBy({ top: -160 })`);
+        await pause(150);
+      }
+      await waitFor(`document.querySelector('.work-summary.is-live')`, 'the live summary in the thread viewport');
       const liveRow = await evaluate(
         `[...document.querySelectorAll('.work-summary.is-live .work-summary-row')].map((r) => r.textContent).join(' | ')`
       );

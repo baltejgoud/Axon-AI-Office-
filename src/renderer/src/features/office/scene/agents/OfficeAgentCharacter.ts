@@ -8,7 +8,7 @@ import { appearanceFor } from './appearance';
 import { HAND_GRIP, applyPose, buildHumanoid, type HumanoidRig } from './HumanoidRig';
 import { WALK_STRIDE, computePose, easePose, neutralPose, type Pose } from './poses';
 
-const ringGeometry = new THREE.RingGeometry(0.36, 0.43, 56);
+const ringGeometry = new THREE.RingGeometry(0.36, 0.43, 12);
 const haloGeometry = new THREE.CircleGeometry(0.43, 40);
 const hitGeometry = new THREE.BoxGeometry(0.62, 1.8, 0.62);
 const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });

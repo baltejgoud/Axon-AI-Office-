@@ -20,6 +20,34 @@ const agents = require('../src/renderer/src/features/office/data/officeAgents.ts
 
 const specialists = agents.OFFICE_AGENTS.filter((a) => a.district !== 'commons');
 
+test('district rings stay on the floor across crowd and full-character handoffs', () => {
+  const THREE = require('three');
+  const { CrowdRenderer } = require('../src/renderer/src/features/office/scene/people/CrowdRenderer.ts');
+  const { districtById } = require('../src/renderer/src/features/office/campus/districts.ts');
+  const people = agents.OFFICE_AGENTS.slice(0, 2).map((agent, i) => ({ id: agent.id, look: appearance.appearanceFor(agent.id), seat: { x: i * 3, z: 4, facing: 0 } }));
+  const crowd = new CrowdRenderer(people);
+  try {
+    const rings = crowd.object.getObjectByName('crowd-district-rings');
+    assert.ok(rings.isInstancedMesh);
+    assert.equal(rings.count, 2);
+    assert.equal(rings.geometry.index.count / 3, 24);
+    assert.equal(rings.castShadow, false);
+    const color = new THREE.Color();
+    rings.getColorAt(0, color);
+    assert.equal(color.getHexString(), new THREE.Color(districtById(agents.OFFICE_AGENTS[0].district).color).getHexString());
+    crowd.setVisible(people[0].id, false);
+    crowd.setMarkerPosition(people[0].id, 12, -7);
+    crowd.update(5, true);
+    const matrix = new THREE.Matrix4();
+    rings.getMatrixAt(0, matrix);
+    assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(matrix).toArray(), [12, 0, -7]);
+    assert.equal(matrix.determinant(), 1, 'full-tier marker remains visible');
+    crowd.setVisible(people[0].id, true);
+    rings.getMatrixAt(0, matrix);
+    assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(matrix).toArray(), [0, 0, 4]);
+  } finally { crowd.dispose(); }
+});
+
 test('the same id always gets the same look', () => {
   const a = appearance.generateAppearance('frontend-developer', 'engineering', '#2f5bd3');
   const b = appearance.generateAppearance('frontend-developer', 'engineering', '#2f5bd3');

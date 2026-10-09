@@ -17,6 +17,7 @@ import { isWorkCall, onlyWork, threadRuns, workOf } from '../workspace/work';
 import { IconBell, IconCaretDown, IconLoader } from '../../../ui';
 import { elapsed } from '../../../format';
 import type { AgentRun } from '../../../../../shared/runtime';
+import { sections, worthReading } from '../../../chat/reading';
 
 /**
  * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
@@ -180,6 +181,26 @@ export function Conversation({
     return at < 0 ? [...messages, optimistic] : [...messages.slice(0, at), optimistic, ...messages.slice(at)];
   }, [messages, pendingTask, conversation?.id, runStartedAt]);
   const pending = Object.values(approvals).filter((r) => r.conversationId === conversation?.id).length;
+  const longReply = shown.findLast((m) => m.role === 'assistant' && worthReading(m.content));
+  const contents = useMemo(() => sections(longReply?.content ?? ''), [longReply?.content]);
+  const jumpToSection = (id: string) => {
+    if (!longReply || !scrollParent) return;
+    follow.current = false;
+    list.current?.scrollToIndex({ index: shown.indexOf(longReply), align: 'start' });
+    // Virtualized replies mount after the list moves to their item.
+    let attempts = 0;
+    const findHeading = () => {
+      if (!scrollParent.isConnected) return;
+      const message = scrollParent.querySelector(`[data-message-id="${CSS.escape(longReply.id)}"]`);
+      const heading = message?.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+      if (heading) {
+        scrollParent.scrollBy({
+          top: heading.getBoundingClientRect().top - scrollParent.getBoundingClientRect().top - 12
+        });
+      } else if (++attempts < 30) requestAnimationFrame(findHeading);
+    };
+    requestAnimationFrame(findHeading);
+  };
   // Each run's work, summed up after its last message.
   const summaries = useMemo(
     () =>
@@ -216,6 +237,22 @@ export function Conversation({
 
   return (
     <>
+      {visible &&
+        contents.length > 1 &&
+        jumpSlot &&
+        createPortal(
+          <details className="thread-scrub">
+            <summary>Reply sections ({contents.length})</summary>
+            <nav aria-label="Reply sections">
+              {contents.map((section) => (
+                <button key={section.id} title={section.title} onClick={() => jumpToSection(section.id)}>
+                  {section.title}
+                </button>
+              ))}
+            </nav>
+          </details>,
+          jumpSlot
+        )}
       {(shown.length > 0 || pending > 0) && (
         <section className="office-thread" aria-label={`Conversation with ${agentName}`}>
           <div className="messages">
@@ -226,40 +263,40 @@ export function Conversation({
             )}
             {historyError && <p role="alert">{historyError}</p>}
             {scrollParent && (
-            <Virtuoso
-              key={conversation?.id ?? 'new'}
-              ref={list}
-              customScrollParent={scrollParent}
-              data={shown}
-              computeItemKey={(_, m) => m.id}
-              followOutput="auto"
-              atBottomStateChange={setAtBottom}
-              atBottomThreshold={80}
-              initialTopMostItemIndex={Math.max(0, shown.length - 1)}
-              itemContent={(i, m) => {
-                const steps = summaries.get(i);
-                return (
-                  <Fragment key={m.id}>
-                    {!onlyWork(m) && (
-                      <MessageView
-                        message={m}
-                        authorName={agentName}
-                        renderToolCall={(call) => officeToolCard(call, m.createdAt)}
-                        onContinue={i === lastEnd && !live ? onContinue : undefined}
-                        folder={conversation?.projectRoot}
-                      />
-                    )}
-                    {steps && conversation && (
-                      <WorkSummary
-                        conversationId={conversation.id}
-                        steps={steps}
-                        live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
-                      />
-                    )}
-                  </Fragment>
-                );
-              }}
-            />
+              <Virtuoso
+                key={conversation?.id ?? 'new'}
+                ref={list}
+                customScrollParent={scrollParent}
+                data={shown}
+                computeItemKey={(_, m) => m.id}
+                followOutput="auto"
+                atBottomStateChange={setAtBottom}
+                atBottomThreshold={80}
+                initialTopMostItemIndex={Math.max(0, shown.length - 1)}
+                itemContent={(i, m) => {
+                  const steps = summaries.get(i);
+                  return (
+                    <Fragment key={m.id}>
+                      {!onlyWork(m) && (
+                        <MessageView
+                          message={m}
+                          authorName={agentName}
+                          renderToolCall={(call) => officeToolCard(call, m.createdAt)}
+                          onContinue={i === lastEnd && !live ? onContinue : undefined}
+                          folder={conversation?.projectRoot}
+                        />
+                      )}
+                      {steps && conversation && (
+                        <WorkSummary
+                          conversationId={conversation.id}
+                          steps={steps}
+                          live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
+                        />
+                      )}
+                    </Fragment>
+                  );
+                }}
+              />
             )}
             {!atBottom &&
               jumpSlot &&

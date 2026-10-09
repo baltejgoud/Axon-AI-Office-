@@ -8,7 +8,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 process.env.AXON_QUIET_NOTIFICATIONS = '1';
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -19,6 +19,9 @@ const output = path.join(repo, 'test-results/reading');
 fs.mkdirSync(output, { recursive: true });
 const profile = fs.mkdtempSync(path.join(output, 'profile-'));
 app.setPath('userData', profile);
+const project = path.join(profile, 'approval-project');
+fs.mkdirSync(project);
+dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
 app.on('quit', () => {
   try {
     fs.rmSync(profile, { recursive: true, force: true });
@@ -67,9 +70,15 @@ const longAsk =
   'Assume one SDR, one social media manager and me as the founder. Our budget for month one is around ₹30,000.';
 
 const server = http.createServer((request, response) => {
-  request.resume();
+  let body = '';
+  request.on('data', (chunk) => { body += chunk; });
   request.on('end', () => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const last = JSON.parse(body).messages?.at(-1);
+    if (last?.role === 'user' && /approval fixture/.test(last.content)) {
+      response.end(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'approval-write', function: { name: 'write_file', arguments: JSON.stringify({ path: 'approved.md', content: '# Approved\n\nThe fixture write was approved.' }) } }] } }] })}\n\ndata: [DONE]\n\n`);
+      return;
+    }
     response.end('data: {"choices":[{"delta":{"content":"Done."}}]}\n\ndata: [DONE]\n\n');
   });
 });
@@ -213,16 +222,59 @@ app.on('web-contents-created', (_, contents) => {
       if (scrollers.length > 1) problems.push(`${scrollers.length} nested scroll areas: ${scrollers.join(', ')}`);
 
       // How far one wheel tick moves the long reply.
-      const point = await evaluate(`(() => { const r = document.querySelector('.office-thread .message.assistant .message-content').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(Math.max(r.top, 0) + 120) }; })()`);
-      const scrolled = () => evaluate(`(() => [...document.querySelectorAll('.office-activity-panel *')].filter((e) => e.scrollTop > 0).map((e) => e.scrollTop).reduce((a, b) => a + b, 0))()`);
+      // Start away from either edge and target the visible scroll viewport, not an offscreen reply.
+      await evaluate(`document.querySelector('.activity-tabpanel-chat').scrollTop = 900`);
+      await pause(700);
+      const point = await evaluate(`(() => { const r = document.querySelector('.activity-tabpanel-chat').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const scrolled = () => evaluate(`document.querySelector('.activity-tabpanel-chat').scrollTop`);
+      contents.sendInputEvent({ type: 'mouseMove', ...point });
       const before = await scrolled();
+      const tickDistances = [];
       for (let i = 0; i < 3; i++) {
+        const tickStart = await scrolled();
         contents.sendInputEvent({ type: 'mouseWheel', x: point.x, y: point.y, deltaX: 0, deltaY: 120, wheelTicksY: -1, canScroll: true });
-        await pause(120);
+        await pause(250);
+        tickDistances.push(tickStart - await scrolled());
       }
       await pause(400);
       const after = await scrolled();
       console.log('three wheel ticks up moved', before - after, 'px');
+      console.log('per tick:', tickDistances);
+      if (tickDistances.some((px) => px < 80)) problems.push(`wheel ticks moved only ${tickDistances.join(', ')}px`);
+
+      contents.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1 });
+      contents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
+      await pause(100);
+      if (!(await evaluate(`document.activeElement === document.querySelector('.activity-tabpanel-chat')`))) problems.push('clicking the thread did not focus its scroll area');
+      if (await evaluate(`document.querySelector('.activity-tabpanel-chat').matches(':focus-visible')`)) problems.push('mouse focus shows a keyboard focus ring');
+      const key = (keyCode) => {
+        contents.sendInputEvent({ type: 'keyDown', keyCode });
+        contents.sendInputEvent({ type: 'keyUp', keyCode });
+      };
+      key('Home');
+      await pause(200);
+      if (await scrolled() > 2) problems.push('Home did not reach the start');
+      key('PageDown');
+      await pause(200);
+      if (await scrolled() < 80) problems.push('Page Down did not move the thread');
+      const beforeSpace = await scrolled();
+      key('Space');
+      await pause(200);
+      if (await scrolled() - beforeSpace < 80) problems.push('Space did not move the thread');
+      key('End');
+      await pause(200);
+      const remaining = await evaluate(`(() => { const s = document.querySelector('.activity-tabpanel-chat'); return s.scrollHeight - s.clientHeight - s.scrollTop; })()`);
+      if (remaining > 2) problems.push('End did not reach the latest reply');
+
+      await evaluate(`document.querySelector('.thread-scrub summary').click()`);
+      await waitFor(`document.querySelector('.thread-scrub[open] nav')?.getBoundingClientRect().height > 0`, 'reply navigator opens');
+      await pause(150);
+      await snap('12-reply-navigator');
+      await evaluate(`[...document.querySelectorAll('.thread-scrub nav button')].find((b) => b.textContent === 'Email sequence').click()`);
+      await pause(600);
+      const headingVisible = await evaluate(`(() => { const s = document.querySelector('.activity-tabpanel-chat').getBoundingClientRect(); const h = document.querySelector('[data-message-id="m2"] #rv-email-sequence')?.getBoundingClientRect(); return h && h.top >= s.top && h.bottom <= s.bottom; })()`);
+      if (!headingVisible) problems.push('reply navigator did not reach Email sequence');
+      await evaluate(`document.querySelector('.thread-scrub').open = false`);
 
       // Placeholders keep their braces.
       const braces = await evaluate(`document.querySelector('.office-thread').innerText.includes('{observation}')`);
@@ -282,6 +334,31 @@ app.on('web-contents-created', (_, contents) => {
       if (!/kimi/i.test(picked ?? '')) problems.push(`Enter after typing picked "${picked}", not Kimi`);
       if (await evaluate(`!!document.querySelector('.settings-nav, .settings-panel, [aria-label="Settings"]')`))
         problems.push('Enter in the model search opened Settings');
+
+      // A real request from the service, shown in the thread rather than only on the work surface.
+      await evaluate('window.axon.projectChoose()');
+      await evaluate(`(() => { void window.axon.chatSend('c-plan', 'Run the approval fixture', []); })()`);
+      await waitFor(`document.querySelector('.pending-approvals .approval-card')`, 'in-thread approval');
+      await evaluate(`document.querySelector('.work-close')?.click()`);
+      await evaluate(`document.querySelector('.activity-tabpanel-chat').scrollTop = document.querySelector('.activity-tabpanel-chat').scrollHeight`);
+      await pause(400);
+      await snap('11-in-thread-approval');
+      const preview = await evaluate(`(() => { const p = document.querySelector('.pending-approvals .approval-preview-diff'); return { height: p?.getBoundingClientRect().height ?? 0, text: p?.textContent ?? '' }; })()`);
+      if (preview.height < 50 || !preview.text.includes('The fixture write was approved.')) problems.push('the in-thread approval hides its proposed file content');
+      if (!(await evaluate(`document.querySelector('.pending-approvals').innerText.includes('Allow for this task')`))) problems.push('approval has no task grant');
+      await evaluate(`document.querySelector('.activity-composer textarea').focus()`);
+      const approveKey = () => {
+        contents.sendInputEvent({ type: 'keyDown', keyCode: 'Return', modifiers: ['control'] });
+        contents.sendInputEvent({ type: 'keyUp', keyCode: 'Return', modifiers: ['control'] });
+      };
+      approveKey();
+      await pause(300);
+      if (!(await evaluate(`!!document.querySelector('.pending-approvals .approval-card')`))) problems.push('Ctrl+Enter approved while typing');
+      await evaluate(`document.querySelector('.activity-tabpanel-chat').focus()`);
+      approveKey();
+      await waitFor(`!document.querySelector('.pending-approvals .approval-card')`, 'Ctrl+Enter approves from the thread');
+      await waitFor(`window.axon.snapshot().then((s) => !s.runs.some((r) => r.conversationId === 'c-plan' && ['working', 'starting', 'waiting_for_approval'].includes(r.status)))`, 'approved run finishes');
+      if (!fs.existsSync(path.join(project, 'approved.md'))) problems.push('approved write did not reach disk');
 
       // Another coworker's new conversation: the model carried over is marked as inherited.
       await evaluate(

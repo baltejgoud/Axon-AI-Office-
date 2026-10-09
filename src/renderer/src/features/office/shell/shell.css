@@ -1,5 +1,119 @@
 /* Office chrome: district chips, department menu, zoom-tier labels, minimap, roster by district. */
 
+.colleague-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+}
+.colleague-summary-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.colleague-summary-body > strong,
+.colleague-summary-body > small {
+  overflow-wrap: anywhere;
+}
+.colleague-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.colleague-model {
+  font-size: 10px;
+  color: var(--office-muted);
+  border: 1px solid var(--office-border);
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+.colleague-result-preview,
+.result-shelf-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: var(--office-muted);
+  white-space: pre-wrap;
+}
+.coworker-popover > .colleague-summary {
+  grid-column: 1 / -1;
+}
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.result-actions > p {
+  flex-basis: 100%;
+  order: -1;
+  margin: 4px 0;
+}
+.result-actions > button {
+  border: 1px solid var(--office-border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+}
+.activity-tabpanel-chat:focus:not(:focus-visible) {
+  outline: none;
+}
+.activity-tabpanel-chat:focus-visible {
+  outline: 2px solid var(--office-border);
+  outline-offset: -2px;
+}
+.thread-scrub {
+  position: relative;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--office-muted);
+}
+.thread-scrub summary {
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.thread-scrub nav {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  z-index: 5;
+  width: 240px;
+  max-width: 80vw;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--office-paper);
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+.thread-scrub nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 4px;
+}
+.thread-scrub nav button:hover {
+  background: var(--office-soft);
+}
+.thread-scrub:not([open]) nav {
+  display: none;
+}
+
 .office-district-chips {
   position: relative;
   display: flex;

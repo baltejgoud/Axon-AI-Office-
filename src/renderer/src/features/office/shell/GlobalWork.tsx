@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useApp } from '../../../state';
+import { perform, useApp } from '../../../state';
+import { wholeConversation, replyFileName } from '../../../chat/transcript';
+import type { Message } from '../../../../../shared/types';
+import type { AgentRun } from '../../../../../shared/runtime';
+import { useReading } from '../../../chat/reading';
 import { useOfficeStore } from '../store/officeStore';
 import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
 import { coworkerById } from '../../../../../shared/coworkers';
@@ -31,9 +35,13 @@ const readCollapsed = () => {
  */
 export function GlobalWork() {
   const runs = useApp((s) => s.data?.runs);
+  const teams = useApp((s) => s.data?.teams);
   const open = useOfficeStore((s) => s.activityHistoryOpen);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const active = (runs ?? []).filter((r) => ACTIVE_RUN_STATUSES.has(r.status));
+  const team = teams?.findLast((t) => ['meeting', 'planned', 'working', 'reporting'].includes(t.status));
+  const multiTarget =
+    active.at(-1) ?? (team ? { agentId: team.leadId, conversationId: team.conversationId } : undefined);
   const fold = () => {
     setCollapsed(!collapsed);
     try {
@@ -63,14 +71,31 @@ export function GlobalWork() {
           >
             Activity & results
           </button>
-          <button className="office-history-link office-company-link" onClick={() => useOfficeStore.getState().openOverlay('company')}>
+          <button
+            className="office-history-link office-company-link"
+            onClick={() => useOfficeStore.getState().openOverlay('company')}
+          >
             Company operations
           </button>
         </>
       )}
+      {multiTarget && (
+        <button
+          className="office-history-link"
+          onClick={() => {
+            const office = useOfficeStore.getState();
+            office.focusOn(multiTarget, { fly: false });
+            office.openConversation('updates');
+          }}
+        >
+          Multi Agents
+        </button>
+      )}
       <button
         className="global-work-fold"
-        aria-label={collapsed ? 'Show Activity & results and Company operations' : 'Fold the rail to the team status'}
+        aria-label={
+          collapsed ? 'Show Activity & results and Company operations' : 'Fold the rail to the team status'
+        }
         title={collapsed ? 'Show more' : 'Fold'}
         aria-expanded={!collapsed}
         onClick={fold}
@@ -158,20 +183,14 @@ function ActivityHistory() {
       </div>
       <div className="history-results">
         {results.slice(0, limit).map((run) => (
-          <button
+          <article
             className="history-run"
             key={run.runId}
-            disabled={!conversations?.some((c) => c.id === run.conversationId) || !coworkerById(run.agentId)}
             title={
               !conversations?.some((c) => c.id === run.conversationId)
                 ? 'This conversation is no longer available'
                 : undefined
             }
-            onClick={() => {
-              const office = useOfficeStore.getState();
-              office.focusOn({ agentId: run.agentId, conversationId: run.conversationId });
-              close();
-            }}
           >
             <span className="history-run-heading">
               <strong>{name(run.agentId)}</strong>
@@ -193,7 +212,25 @@ function ActivityHistory() {
                   : 'Conversation unavailable'}
               </span>
             </span>
-          </button>
+            <div className="result-actions">
+              <button
+                disabled={
+                  !conversations?.some((c) => c.id === run.conversationId) || !coworkerById(run.agentId)
+                }
+                onClick={() => {
+                  useOfficeStore
+                    .getState()
+                    .focusOn({ agentId: run.agentId, conversationId: run.conversationId });
+                  close();
+                }}
+              >
+                Open
+              </button>
+              {run.completedAt && conversations?.some((c) => c.id === run.conversationId) && (
+                <SavedResult run={run} />
+              )}
+            </div>
+          </article>
         ))}
         {!results.length && (
           <p className="history-empty">
@@ -209,5 +246,71 @@ function ActivityHistory() {
         )}
       </div>
     </section>
+  );
+}
+
+function SavedResult({ run }: { run: AgentRun }) {
+  const [reply, setReply] = useState<Message>();
+  const folder = useApp((s) => s.data?.conversations.find((c) => c.id === run.conversationId)?.projectRoot);
+  useEffect(() => {
+    let disposed = false;
+    void wholeConversation(run.conversationId)
+      .then((messages) => {
+        if (!disposed)
+          setReply(
+            messages.findLast(
+              (m) =>
+                m.role === 'assistant' &&
+                !m.streaming &&
+                m.content &&
+                m.createdAt >= run.startedAt &&
+                m.createdAt <= run.completedAt!
+            )
+          );
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+    };
+  }, [run.runId, run.completedAt]);
+  return (
+    <>
+      {reply && <p className="result-shelf-preview">{reply.content}</p>}
+      {reply && (
+        <button
+          onClick={() => {
+            useReading.getState().read({ message: reply, authorName: name(run.agentId), folder });
+          }}
+        >
+          Read result
+        </button>
+      )}
+      <button
+        disabled={!reply}
+        onClick={() =>
+          void perform(async () => {
+            await navigator.clipboard.writeText(reply!.content);
+            useApp.getState().pushToast('Result copied');
+          })
+        }
+      >
+        Copy
+      </button>
+      <button
+        disabled={!reply}
+        onClick={() =>
+          void perform(async () => {
+            const saved = await window.axon.documentSave(
+              replyFileName(reply!.content, `${name(run.agentId)} result`),
+              reply!.content,
+              folder
+            );
+            if (saved) useApp.getState().pushToast(`Saved to ${saved}`);
+          })
+        }
+      >
+        Save as file
+      </button>
+    </>
   );
 }

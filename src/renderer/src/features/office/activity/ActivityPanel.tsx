@@ -124,7 +124,11 @@ export function ActivityPanel() {
 
   // The same words as the map, the activity list and the badges: one status language everywhere.
   const statusLabel =
-    status === 'waiting' ? 'Needs you' : status === 'error' ? 'Failed' : status[0].toUpperCase() + status.slice(1);
+    status === 'waiting'
+      ? 'Needs you'
+      : status === 'error'
+        ? 'Failed'
+        : status[0].toUpperCase() + status.slice(1);
   return (
     <aside className="office-activity-panel" aria-label="Selected coworker activity">
       <header className="activity-agent-hero">
@@ -213,11 +217,13 @@ export function ActivityPanel() {
               },
               {
                 key: 'width',
-                label: drawer.width < WIDE_PANEL ? 'Wide panel, for reading' : 'Narrow panel, to see the office',
+                label:
+                  drawer.width < WIDE_PANEL ? 'Wide panel, for reading' : 'Narrow panel, to see the office',
                 icon: <IconLayoutGrid size={15} />,
                 onSelect: () =>
                   useOfficeStore.getState().setDrawer({
-                    width: drawer.width < WIDE_PANEL ? Math.min(WIDE_PANEL, window.innerWidth - 160) : NARROW_PANEL
+                    width:
+                      drawer.width < WIDE_PANEL ? Math.min(WIDE_PANEL, window.innerWidth - 160) : NARROW_PANEL
                   })
               },
               ...(libraryResident
@@ -345,6 +351,41 @@ function TabPanel({
       role={labelled ? 'tabpanel' : undefined}
       aria-labelledby={labelled ? `activity-tab-${id}` : undefined}
       hidden={hidden}
+      tabIndex={id === 'chat' ? 0 : undefined}
+      onPointerDown={
+        id === 'chat'
+          ? (event) => {
+              if (
+                event.target instanceof Element &&
+                !event.target.closest('button, a, input, textarea, select, [contenteditable="true"]')
+              )
+                event.currentTarget.focus({ preventScroll: true });
+            }
+          : undefined
+      }
+      onKeyDown={
+        id === 'chat'
+          ? (event) => {
+              if (event.target !== event.currentTarget || event.ctrlKey || event.metaKey || event.altKey)
+                return;
+              const scroller = event.currentTarget;
+              const page = scroller.clientHeight * 0.85;
+              const delta =
+                event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)
+                  ? page
+                  : event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)
+                    ? -page
+                    : null;
+              if (delta !== null) {
+                event.preventDefault();
+                scroller.scrollBy({ top: delta });
+              } else if (event.key === 'Home' || event.key === 'End') {
+                event.preventDefault();
+                scroller.scrollTo({ top: event.key === 'Home' ? 0 : scroller.scrollHeight });
+              }
+            }
+          : undefined
+      }
     >
       {children}
     </div>

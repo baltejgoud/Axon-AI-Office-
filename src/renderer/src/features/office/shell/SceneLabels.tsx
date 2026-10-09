@@ -41,7 +41,14 @@ export function taggedPeople(
       return { id: agent.id, first, d: Math.hypot(p.x - target.x, p.z - target.z) };
     })
     .sort((a, b) => a.first - b.first || a.d - b.d);
-  return inView.slice(0, MAX_TAGS).map((entry) => entry.id);
+  // Selection changes before the camera reaches the new desk; keep its tag mounted throughout.
+  return [
+    selectedId,
+    ...inView
+      .filter((entry) => entry.id !== selectedId)
+      .slice(0, MAX_TAGS - 1)
+      .map((entry) => entry.id)
+  ];
 }
 
 export interface SceneLabelsProps {
@@ -71,17 +78,28 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
   const thread = useApp((s) => activeThread(s.data?.conversations ?? [], selectedId, runtime));
   const lastRun = useApp((s) => (thread ? latestRun(s.data?.runs ?? [], selectedId, thread.id) : undefined));
   const lastReply = useApp((s) =>
-    thread ? s.data?.messages.findLast((m) => m.conversationId === thread.id && m.role === 'assistant') : undefined
+    thread
+      ? s.data?.messages.findLast((m) => m.conversationId === thread.id && m.role === 'assistant')
+      : undefined
   );
   const selectedLabel = (status: AgentStatus) =>
     (status === 'idle' && endedLabel(lastRun, lastReply)) || STATUS_LABELS[status];
   return (
     <div ref={ref} className={`office-scene-labels tier-${tier} ${loading ? 'is-loading' : ''}`}>
-      {tier !== 'near' && visibleSpatialLabels(tier === 'far' ? 'district' : 'department', bounds, target).map(label => <button
-        key={label.id} data-anchor={`place:${label.id}`} className={`office-place-label ${label.kind}`} style={{ '--place-color': label.color } as CSSProperties}
-        onClick={() => onPlace(label.kind, label.target)} aria-label={`Go to ${label.title}, ${plural(label.people, 'person', 'people')}`}>
-        <strong>{label.title}</strong><small>{plural(label.people, 'person', 'people')}</small>
-      </button>)}
+      {tier !== 'near' &&
+        visibleSpatialLabels(tier === 'far' ? 'district' : 'department', bounds, target).map((label) => (
+          <button
+            key={label.id}
+            data-anchor={`place:${label.id}`}
+            className={`office-place-label ${label.kind}`}
+            style={{ '--place-color': label.color } as CSSProperties}
+            onClick={() => onPlace(label.kind, label.target)}
+            aria-label={`Go to ${label.title}, ${plural(label.people, 'person', 'people')}`}
+          >
+            <strong>{label.title}</strong>
+            <small>{plural(label.people, 'person', 'people')}</small>
+          </button>
+        ))}
       {tags.map((id) => {
         const agent = AGENTS.get(id);
         if (!agent) return null;

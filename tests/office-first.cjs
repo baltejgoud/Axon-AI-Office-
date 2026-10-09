@@ -1,6 +1,6 @@
 // Build first, then npx electron tests/office-first.cjs [dark] [900x700].
 process.env.AXON_QUIET_NOTIFICATIONS = '1';
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 const fs = require('node:fs');
@@ -13,6 +13,8 @@ const profile = fs.mkdtempSync(path.join(output, 'profile-'));
 app.setPath('userData', profile);
 fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maximized: false }));
 const project = path.join(profile, 'project');
+const savedResult = path.join(profile, 'saved-result.md');
+dialog.showSaveDialog = async () => ({ canceled: false, filePath: savedResult });
 fs.mkdirSync(path.join(project, 'notes'), { recursive: true });
 const theme = process.argv.includes('dark') ? 'dark' : 'light';
 const [width, height] = (process.argv.find((a) => /^\d+x\d+$/.test(a)) ?? '1600x960').split('x').map(Number);
@@ -133,7 +135,7 @@ app.on('browser-window-created', (_, win) => {
       );
       assert.ok(
         await run(
-          `[...document.querySelectorAll('.history-run')].find(b=>b.textContent.includes('Removed conversation fixture'))?.disabled`
+          `[...document.querySelectorAll('.history-run')].find(b=>b.textContent.includes('Removed conversation fixture'))?.querySelector('.result-actions button')?.disabled`
         ),
         'deleted conversation cannot open a different thread'
       );
@@ -378,7 +380,23 @@ app.on('browser-window-created', (_, win) => {
       await wait(`!!document.querySelector('.global-work-panel')`, 'notification opens saved history');
       await set('.global-work-panel input', 'archived');
       await wait(`document.querySelectorAll('.history-run').length===1`, 'saved archived result remains');
-      await click('.history-run');
+      await wait(`document.querySelector('.result-shelf-preview')?.textContent.includes('Archived result remains available.')`, 'shelf shows the saved final reply');
+      // The offscreen window cannot own the system clipboard; capture the native-boundary payload.
+      await run(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copiedResult = text; } } })`);
+      await run(`[...document.querySelectorAll('.result-actions button')].find(b => b.textContent === 'Copy').click()`);
+      await wait(`window.__copiedResult === 'Archived result remains available.'`, 'shelf copies the complete result');
+      await run(`[...document.querySelectorAll('.result-actions button')].find(b => b.textContent === 'Save as file').click()`);
+      for (let i = 0; i < 30; i++) {
+        if (fs.existsSync(savedResult) && fs.readFileSync(savedResult, 'utf8') === 'Archived result remains available.') break;
+        await pause(100);
+      }
+      assert.equal(fs.readFileSync(savedResult, 'utf8'), 'Archived result remains available.');
+      await snap('result-shelf');
+      await run(`[...document.querySelectorAll('.result-actions button')].find(b => b.textContent === 'Read result').click()`);
+      await wait(`document.querySelector('.reading-view')?.textContent.includes('Archived result remains available.')`, 'shelf opens the exact final reply');
+      await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      await wait(`!document.querySelector('.reading-view')`, 'close saved result reader');
+      await click('.history-run .result-actions button');
       await wait(
         `document.querySelector('.conversation-drawer').textContent.includes('Archived result remains available.')`,
         'history opens exact archived conversation'

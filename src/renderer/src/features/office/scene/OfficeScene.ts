@@ -639,6 +639,7 @@ export class OfficeScene {
         ? { height: this.room.seatHeight(view.poiId), lounging: LOUNGE_SEATS.has(view.poiId) }
         : null;
     character.update(view, dt, this.elapsed, seat, this.cameraRig.yawTowardViewer, this.reducedMotion);
+    this.crowd.setMarkerPosition(character.agentId, view.position.x, view.position.z);
   }
 
   // ---------------------------------------------------------------- input
@@ -1008,6 +1009,20 @@ export class OfficeScene {
       pin.element.style.visibility = 'visible';
       obstacles.push(placed);
     }
+    // Nearby heads are obstacles too, even when their own name tags are hidden.
+    const heads =
+      this.cameraRig.metresPerPixel() >= 0.06
+        ? []
+        : OFFICE_AGENTS.flatMap((agent) => {
+            const point = this.labelPoint(agent.id, this.scratch);
+            if (!point) return [];
+            point.y -= 0.3;
+            point.project(this.cameraRig.camera);
+            const x = ((point.x + 1) * width) / 2;
+            const y = ((1 - point.y) * height) / 2;
+            if (point.z < -1 || point.z > 1 || x < 0 || x > width || y < 0 || y > height) return [];
+            return [{ id: agent.id, x: x - 12, y: y - 14, w: 24, h: 28 }];
+          });
     const occupied: { x: number; y: number; w: number; h: number }[] = [];
     const ordered = [...this.labels].sort((a, b) => {
       const priority = (label: SceneLabel) => (label.element.getAttribute('aria-pressed') === 'true' ? 0 : 1);
@@ -1030,13 +1045,17 @@ export class OfficeScene {
       const y = ((1 - projected.y) * height) / 2;
       const { w, h } = dimensions.get(label)!;
       const onScreen = x > 0 && x < width && y > 0 && y < height;
-      if (!onScreen) {
+      if (!onScreen && label.element.getAttribute('aria-pressed') !== 'true') {
         label.element.style.visibility = 'hidden';
         continue;
       }
       const placedX = Math.max(w / 2 + 6, Math.min(width - w / 2 - 6, x));
       let placedY = Math.max(h / 2 + 6, Math.min(height - h / 2 - 6, y));
       const collides = (cy: number) =>
+        heads.some(
+          (rect) =>
+            rect.id !== label.agentId && overlaps({ x: placedX - w / 2, y: cy - h / 2, w, h }, rect, 4)
+        ) ||
         obstacles.some((rect) => overlaps({ x: placedX - w / 2, y: cy - h / 2, w, h }, rect, 4)) ||
         occupied.some(
           (rect) =>
@@ -1044,7 +1063,7 @@ export class OfficeScene {
         );
       let free = !collides(placedY);
       if (!free)
-        for (const offset of [-28, 28, -56, 56]) {
+        for (const offset of [-28, 28, -56, 56, -84, 84, -112, 112]) {
           const candidateY = placedY + offset;
           if (candidateY < h / 2 || candidateY > height - h / 2 || collides(candidateY)) continue;
           placedY = candidateY;
@@ -1052,7 +1071,7 @@ export class OfficeScene {
           break;
         }
       // A label that cannot find room is hidden rather than piled on top of another.
-      if (!free) {
+      if (!free && label.element.getAttribute('aria-pressed') !== 'true') {
         label.element.style.visibility = 'hidden';
         continue;
       }

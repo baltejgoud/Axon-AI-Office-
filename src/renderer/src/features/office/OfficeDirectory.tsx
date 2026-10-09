@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
 import { IconSearch, IconClose } from '../../ui';
-import { districtById } from './campus/districts';
 import { OFFICE_AGENTS } from './data/officeAgents';
-import { AgentPortrait } from './AgentPortrait';
+import { ColleagueSummary } from './ColleagueSummary';
 import { searchCoworkers } from './shell/search';
 
 /** "Find a person or specialty…": type a name or a skill, pick someone, and the camera goes to them. */
@@ -74,13 +73,7 @@ export function OfficeDirectory({ onChoose }: { onChoose: (id: string) => void }
               onMouseEnter={() => setSelected(index)}
               onClick={() => choose(agent.id)}
             >
-              <AgentPortrait agent={agent} />
-              <span>
-                <strong>{agent.name}</strong>
-                <small>
-                  {agent.department} · {districtById(agent.district).name}
-                </small>
-              </span>
+              <ColleagueSummary agent={agent} />
             </button>
           ))}
           {!matches.length && <p>Try a role such as frontend, analyst, security or files.</p>}

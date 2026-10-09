@@ -123,14 +123,13 @@ export function MessageView({
   const readable = copyable && worthReading(m.content);
   const shownText = m.role === 'user' ? visibleUserText(m.content) : m.content;
   const foldable =
-    m.role === 'user' &&
-    (shownText.length > FOLD_AT.chars || shownText.split('\n').length > FOLD_AT.lines);
+    m.role === 'user' && (shownText.length > FOLD_AT.chars || shownText.split('\n').length > FOLD_AT.lines);
   const folded = foldable && !unfolded;
   const calls = (m.toolCalls ?? [])
     .map((call) => ({ call, custom: renderToolCall?.(call) }))
     .filter(({ custom }) => custom !== false);
   return (
-    <article className={`message ${m.role}${m.streaming ? ' streaming' : ''}`}>
+    <article data-message-id={m.id} className={`message ${m.role}${m.streaming ? ' streaming' : ''}`}>
       <div className="message-avatar">
         {m.role === 'user' ? <IconUser size={15} /> : <IconSparkle size={14} />}
       </div>
@@ -173,14 +172,19 @@ export function MessageView({
           </div>
         )}
         <div className={`message-content${folded ? ' folded' : ''}`}>
-          <MessageMarkdown>
+          <MessageMarkdown headingIds>
             {m.role === 'user'
               ? shownText
               : m.content || (m.streaming ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
           </MessageMarkdown>
         </div>
         {foldable && (
-          <button type="button" className="message-fold" aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
+          <button
+            type="button"
+            className="message-fold"
+            aria-expanded={unfolded}
+            onClick={() => setUnfolded(!unfolded)}
+          >
             {unfolded ? 'Show less' : 'Show more'}
           </button>
         )}

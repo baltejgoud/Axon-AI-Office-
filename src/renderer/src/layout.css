@@ -1115,6 +1115,9 @@
   border-radius: var(--radius-sm);
 }
 .approval-preview-diff .work-diff {
+  /* The thread sizes this preview from its rows; the work surface's size containment would hide it. */
+  contain: layout paint style;
+  background: var(--work-code-bg, #0b1426);
   max-height: 320px;
   overflow: auto;
 }

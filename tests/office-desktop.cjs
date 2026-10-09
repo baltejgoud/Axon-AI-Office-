@@ -28,6 +28,7 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixtureFolde
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const [initialWidth, initialHeight] = (process.argv.find((a) => /^\d+x\d+$/.test(a)) ?? '1536x816').split('x').map(Number);
 /** A local calendar day, 'YYYY-MM-DD', `offset` days from today. */
 const localDay = (offset = 0) => {
   const date = new Date();
@@ -108,7 +109,7 @@ app.on('browser-window-created', (_, win) => {
     win.showInactive();
   };
   win.webContents.setBackgroundThrottling(false);
-  win.setContentSize(1600, 960);
+  win.setContentSize(initialWidth, initialHeight);
 });
 app.on('web-contents-created', (_, contents) => {
   contents.once('did-finish-load', async () => {
@@ -570,7 +571,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(80);
       assert.equal(await evaluate('document.querySelector(".office-overlay")'), null);
       assert.equal(await evaluate('typeof window.require'), 'undefined');
-      win.setContentSize(1600, 960);
+      win.setContentSize(initialWidth, initialHeight);
       await pause(400);
       await snap('office-response.png');
       await evaluate("document.documentElement.dataset.theme = 'dark'");
@@ -653,7 +654,7 @@ app.on('web-contents-created', (_, contents) => {
           `search selects ${role}`
         );
         await waitFor(
-          `document.querySelector('.office-person-label.selected strong')?.textContent === ${JSON.stringify(role)}`,
+          `document.querySelector('.office-person-label.selected strong')?.textContent === ${JSON.stringify(role)} && (${tagFits})`,
           `tag for ${role}`
         );
         await pause(1500);
@@ -763,6 +764,13 @@ app.on('web-contents-created', (_, contents) => {
       await pause(1800);
       await snap('b-board-closeup.png');
       const board = await evaluate(`window.__axonOffice.boardPoint('Backend & APIs')`);
+      const beforeBoardView = await evaluate('window.__axonOffice.view()');
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.office-canvas-container canvas');
+        const r = canvas.getBoundingClientRect();
+        canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: r.left + ${board.x}, clientY: r.top + ${board.y}, bubbles: true }));
+      })()`);
+      await waitFor(`document.querySelector('.office-hover-tip:not([hidden])')?.textContent.includes('Backend')`, 'board hover label');
       await evaluate(`(() => {
         const canvas = document.querySelector('.office-canvas-container canvas');
         const r = canvas.getBoundingClientRect();
@@ -772,6 +780,11 @@ app.on('web-contents-created', (_, contents) => {
         window.dispatchEvent(new MouseEvent('mouseup', at));
       })()`);
       await waitFor('document.querySelector(".team-list")', 'team list from the board');
+      await pause(500);
+      const afterBoardView = await evaluate('window.__axonOffice.view()');
+      assert.ok(Math.abs(beforeBoardView.target.x - afterBoardView.target.x) < 0.1 && Math.abs(beforeBoardView.target.z - afterBoardView.target.z) < 0.1, 'board click keeps the camera target');
+      const boardOverflow = await evaluate(`(() => { const list = document.querySelector('.team-list'); return list.scrollWidth - list.clientWidth; })()`);
+      assert.ok(boardOverflow <= 1, `Team tasks scrolls sideways by ${boardOverflow}px`);
       assert.match(
         await evaluate('document.querySelector(".team-list").textContent'),
         /Helping Frontend Developer/
@@ -892,7 +905,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(350);
       assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth'), false);
       await snap('office-narrow.png');
-      win.setContentSize(1600, 960);
+      win.setContentSize(initialWidth, initialHeight);
       await pause(350);
       await snap('office-specialist-closeup.png');
       await evaluate(`document.querySelector('[aria-label="Reset view"]').click()`);
@@ -970,7 +983,7 @@ app.on('web-contents-created', (_, contents) => {
       await pause(200);
       await snap('a-1366-dark.png');
       await evaluate("document.documentElement.dataset.theme = 'light'");
-      win.setContentSize(1600, 960);
+      win.setContentSize(initialWidth, initialHeight);
       await pause(400);
       // WebGL loss should preserve access to all coworker actions.
       await evaluate(

@@ -21,6 +21,7 @@ import { useOfficeStore } from './store/officeStore';
 import { OFFICE_AGENTS, type AgentStatus } from './data/officeAgents';
 import { DISTRICTS, districtById, type DistrictId } from './campus/districts';
 import { AgentPortrait } from './AgentPortrait';
+import { ColleagueSummary } from './ColleagueSummary';
 import { OfficeDirectory } from './OfficeDirectory';
 import { DistrictChips } from './shell/DistrictChips';
 import { AccountButton } from './shell/AccountButton';
@@ -41,7 +42,6 @@ import { roomOf } from '../../../../shared/rooms';
 import { TASK_BOARDS } from './campus/boards';
 import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 import { latestRun, runLifecycle } from './lifecycle';
-import { LifecycleBadge } from './shell/LifecycleBadge';
 import { activeThread } from './activity/thread';
 import type { Team as BoardTeam } from './tasks';
 import { departmentHere } from './shell/spatialLabels';
@@ -61,7 +61,8 @@ const openTeamIn = (room: string) =>
   [...(useApp.getState().data?.teams ?? [])]
     .filter(
       (t) =>
-        (['meeting', 'planned', 'working', 'reporting'].includes(t.status) || (t.status === 'failed' && !!t.plan)) &&
+        (['meeting', 'planned', 'working', 'reporting'].includes(t.status) ||
+          (t.status === 'failed' && !!t.plan)) &&
         roomOf(t) === room
     )
     .sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -193,11 +194,7 @@ export function OfficeCanvas({
       world.onTargetHover = (target, x, y) => {
         const tip = hoverTip.current;
         if (!tip) return;
-        const text = !target
-          ? ''
-          : 'sign' in target
-            ? `Go to ${target.sign.title}`
-            : boardHint(target.board);
+        const text = !target ? '' : 'sign' in target ? `Go to ${target.sign.title}` : boardHint(target.board);
         tip.hidden = !text;
         if (!text) return;
         tip.textContent = text;
@@ -210,7 +207,9 @@ export function OfficeCanvas({
       world.onBoardClick = (team) => {
         const board = TASK_BOARDS.find((b) => b.team === team);
         if (board?.kind === 'today')
-          return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true }, { fly: false });
+          return useOfficeStore
+            .getState()
+            .focusOn({ agentId: RECEPTIONIST_ID, planner: true }, { fly: false });
         // A meeting room's board: the lead's conversation with the team in that room.
         if (board?.room) {
           const open = openTeamIn(board.room);
@@ -416,18 +415,7 @@ export function OfficeCanvas({
       >
         ×
       </button>
-      <AgentPortrait agent={selected} />
-      <div>
-        <strong>{selected.name}</strong>
-        {selectedStatus ? (
-          <LifecycleBadge status={selectedStatus} />
-        ) : (
-          <span className={`status-badge ${statuses[selected.id]}`}>
-            {statuses[selected.id] === 'idle' ? 'Available' : statuses[selected.id]}
-          </span>
-        )}
-        <p>{selected.role}</p>
-      </div>
+      <ColleagueSummary agent={selected} run={selectedRun} />
       <div className="coworker-task-detail">
         <p className="coworker-specialty">{selected.description}</p>
         {selectedRun && (

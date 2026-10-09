@@ -19,6 +19,7 @@ fs.writeFileSync(path.join(profile, 'window-state.json'), JSON.stringify({ maxim
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const theme = process.argv.includes('dark') ? 'dark' : 'light';
 const localDay = () => {
   const d = new Date();
   return [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
@@ -99,7 +100,7 @@ app.on('web-contents-created', (_, contents) => {
         }
         throw new Error('Timed out: ' + label);
       };
-      const snap = async (name) => fs.writeFileSync(path.join(output, name), (await contents.capturePage()).toPNG());
+      const snap = async (name) => fs.writeFileSync(path.join(output, theme === 'dark' ? name.replace('.png', '-dark.png') : name), (await contents.capturePage()).toPNG());
       await waitFor('document.querySelector(".office-person-label") && !document.querySelector(".office-loading")', 'the office');
       await evaluate("localStorage.setItem('axon.officeDebug', '1')");
       contents.reload();
@@ -156,6 +157,14 @@ app.on('web-contents-created', (_, contents) => {
       assert.match(await evaluate('document.querySelector(".team-card").textContent'), /Plan ready for you/);
       await pause(400);
       await snap('2-plan.png');
+      await evaluate(`[...document.querySelectorAll('.global-work .office-history-link')].find((b) => b.textContent.trim() === 'Multi Agents').click()`);
+      await waitFor(`document.querySelector('.multi-agents .multi-task-graph .colleague-summary')`, 'Multi Agents from the office rail');
+      await waitFor(`document.querySelector('.conversation-drawer.is-open') && !document.querySelector('.conversation-drawer').inert`, 'Multi Agents drawer is visible');
+      await pause(450);
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('.multi-agents .multi-task-graph .colleague-summary-body > strong')].slice(0, 3).map((e) => e.textContent)`), ['Backend Developer', 'Frontend Developer', 'QA Engineer'], 'shared colleague cards for all planned tasks, before the lead run');
+      await snap('2b-multi-agents.png');
+      await evaluate(`document.querySelector('#activity-tab-chat').click()`);
+      await waitFor(`document.querySelector('.activity-tabpanel-chat:not([hidden]) .team-card.is-planned')`, 'return to the plan');
 
       // While the plan waits, the team stays in the room.
       assert.ok(await evaluate(seated), 'the team waits for the plan in Room 1');
@@ -254,7 +263,7 @@ server.listen(0, '127.0.0.1', () => {
       ],
       reception: { briefedOn: localDay() },
       settings: {
-        theme: 'light', autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true,
+        theme, autoTitleConversations: true, defaultTemperature: 0.7, defaultMaxTokens: 4096, streamDeltas: true,
         allowShellExecution: false, shellAllowlist: [], sendCrashDiagnostics: false, dataDirectoryNote: ''
       }
     })
