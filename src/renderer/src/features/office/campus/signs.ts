@@ -2,6 +2,7 @@ import { OFFICE_AGENTS } from '../data/officeAgents';
 import { HOME_DESKS, poiById } from '../simulation/layout';
 import { DISTRICTS, districtById } from './districts';
 import { MEETING_ROOMS, type MeetingRoomId } from './commons';
+import { plural } from '../../../format';
 
 /**
  * Every sign in the office, as data: a pylon at the front of each district, a nameplate on each
@@ -77,7 +78,7 @@ const districtSigns: SignSpec[] = DISTRICTS.map((district) => ({
   kind: 'district',
   target: district.id,
   title: district.short,
-  subtitle: `${headcount[district.id] ?? 0} people`,
+  subtitle: plural(headcount[district.id] ?? 0, 'person', 'people'),
   color: district.color,
   x: district.sign.x,
   y: 2.6,

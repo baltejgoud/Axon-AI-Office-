@@ -160,6 +160,46 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* What a model is set up for, from your own settings: profiles, context size, images, no tools. */
+.model-picker-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-left: auto;
+  padding-left: var(--space-2);
+}
+.model-picker-tag {
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: var(--weight-medium);
+  line-height: 17px;
+  white-space: nowrap;
+}
+.model-picker-tag.warn {
+  border-color: color-mix(in srgb, var(--warning-text) 45%, transparent);
+  color: var(--warning-text);
+}
+.model-picker-option-icon + .model-picker-option-copy {
+  flex: 1;
+}
+.model-picker-option > svg:not(.model-picker-option-icon) {
+  margin-left: var(--space-1);
+}
+/* "inherited": the choice carried over from another conversation. */
+.model-picker-note {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: var(--weight-medium);
+  line-height: 17px;
+}
 .model-picker-empty {
   display: flex;
   flex-direction: column;

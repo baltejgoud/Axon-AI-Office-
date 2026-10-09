@@ -6,14 +6,44 @@ import { coworkerById } from '../../../../../shared/coworkers';
 import { historyRuns, runLifecycle, type HistoryFilter } from '../lifecycle';
 import { LifecycleBadge } from './LifecycleBadge';
 import { useEscape } from '../../../ui/escape';
+import { plural } from '../../../format';
+import { IconChevronLeft } from '../../../ui';
+
+/** The left chevron, turned: "show more" on a folded rail. */
+const IconChevronRight = ({ size }: { size: number }) => (
+  <IconChevronLeft size={size} style={{ transform: 'rotate(180deg)' }} />
+);
 
 const name = (id: string) => coworkerById(id)?.name ?? id;
+/** Whether the rail shows only the team's status, kept on this computer. */
+const RAIL_KEY = 'axon.railCollapsed';
+const readCollapsed = () => {
+  try {
+    return localStorage.getItem(RAIL_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * One slim rail over the office: how the team is doing, with Activity & results and Company
+ * operations beside it. It folds down to the status alone.
+ */
 export function GlobalWork() {
   const runs = useApp((s) => s.data?.runs);
   const open = useOfficeStore((s) => s.activityHistoryOpen);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const active = (runs ?? []).filter((r) => ACTIVE_RUN_STATUSES.has(r.status));
+  const fold = () => {
+    setCollapsed(!collapsed);
+    try {
+      localStorage.setItem(RAIL_KEY, collapsed ? '0' : '1');
+    } catch {
+      // Folded for this session only.
+    }
+  };
   return (
-    <div className="global-work">
+    <div className={`global-work${collapsed ? ' collapsed' : ''}`}>
       <button
         className="office-presence-main"
         aria-expanded={open}
@@ -22,17 +52,30 @@ export function GlobalWork() {
         onClick={() => useOfficeStore.getState().setActivityHistoryOpen(!open)}
       >
         {active.length
-          ? `${new Set(active.map((r) => r.agentId)).size} coworkers active`
+          ? `${plural(new Set(active.map((r) => r.agentId)).size, 'coworker')} active`
           : 'Your team is ready'}
       </button>
+      {!collapsed && (
+        <>
+          <button
+            className="office-history-link"
+            onClick={() => useOfficeStore.getState().setActivityHistoryOpen(!open)}
+          >
+            Activity & results
+          </button>
+          <button className="office-history-link office-company-link" onClick={() => useOfficeStore.getState().openOverlay('company')}>
+            Company operations
+          </button>
+        </>
+      )}
       <button
-        className="office-history-link"
-        onClick={() => useOfficeStore.getState().setActivityHistoryOpen(!open)}
+        className="global-work-fold"
+        aria-label={collapsed ? 'Show Activity & results and Company operations' : 'Fold the rail to the team status'}
+        title={collapsed ? 'Show more' : 'Fold'}
+        aria-expanded={!collapsed}
+        onClick={fold}
       >
-        Activity & results
-      </button>
-      <button className="office-history-link office-company-link" onClick={() => useOfficeStore.getState().openOverlay('company')}>
-        Company operations
+        {collapsed ? <IconChevronRight size={14} /> : <IconChevronLeft size={14} />}
       </button>
       {open && <ActivityHistory />}
     </div>

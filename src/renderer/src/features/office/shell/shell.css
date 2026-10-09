@@ -65,13 +65,33 @@
   background: var(--office-paper);
   border-color: var(--office-border);
 }
+/* The district in view: a quiet chip with a thin underline in its colour, never a coloured outline
+   (a red or orange ring reads as an error). A ring shows only for keyboard focus. */
 .office-district-chips button.active {
   color: var(--office-ink);
   background: var(--office-paper);
-  border-color: color-mix(in srgb, var(--district-color) 45%, var(--office-border));
+  border-color: var(--office-border);
   box-shadow:
     0 3px 10px #223d700d,
     inset 0 -2px 0 var(--district-color);
+}
+.office-district-chips button:focus {
+  outline: none;
+}
+.office-district-chips button:focus-visible {
+  outline: 2px solid var(--office-blue);
+  outline-offset: 1px;
+}
+/* More, when the district in view is one of its own: a dot in that district's colour. */
+.office-chip-more > button.active {
+  box-shadow: 0 3px 10px #223d700d;
+}
+.office-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--district-color);
+  flex: none;
 }
 
 /* Go to department… */

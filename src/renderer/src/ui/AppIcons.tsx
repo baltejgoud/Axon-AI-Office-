@@ -297,6 +297,29 @@ export function IconLock({ size = 14, strokeWidth = 1.5, className = '', ...prop
   );
 }
 
+/** Open padlock, from Tabler Icons (MIT) */
+export function IconUnlock({ size = 14, strokeWidth = 1.5, className = '', ...props }: AppIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6" />
+      <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
+      <path d="M8 11v-5a4 4 0 0 1 8 0" />
+    </svg>
+  );
+}
+
 /** Horizontal dots menu, from Tabler Icons (MIT) */
 export function IconDotsHorizontal({ size = 16, className = '', ...props }: AppIconProps) {
   return (

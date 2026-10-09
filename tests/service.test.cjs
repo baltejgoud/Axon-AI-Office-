@@ -1464,3 +1464,96 @@ test('background semantic checkpoint rejects stale results and classifies change
   assert.ok(chat.memory.facts.some(f => f.text === 'Monday launch'));
   assert.ok(!chat.memory.facts.some(f => f.text === 'Friday launch'));
 });
+
+test('a run that reaches its step limit asks once for a final answer and is marked stopped early', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service);
+  let steps = 0;
+  let wrapUp;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    const last = req.messages.at(-1);
+    if (last?.role === 'user' && /step limit/i.test(last.content)) {
+      wrapUp = req;
+      onChunk('Here is what I found so far.');
+      return { toolCalls: [] };
+    }
+    if (req.messages.some((m) => m.content === 'Research the market')) {
+      steps++;
+      return { toolCalls: [{ id: `call-${steps}`, name: 'no_such_tool', arguments: JSON.stringify({ n: steps }) }] };
+    }
+    return {};
+  });
+  await service.chatSend(chat.id, 'Research the market', []);
+  assert.equal(steps, 20);
+  assert.ok(wrapUp, 'the model was asked for a final answer');
+  const last = repo.conversationMessages(chat.id).findLast((m) => m.role === 'assistant');
+  assert.equal(last.content, 'Here is what I found so far.');
+  assert.equal(last.incomplete, 'step-limit');
+  assert.match(last.notice, /20-step limit/);
+  assert.equal(last.error, undefined);
+  assert.equal(repo.state.tasks.find((task) => task.conversationId === chat.id).status, 'attention');
+});
+
+test('a run that ends with no reply, or only says what it will do, is marked stopped early', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service);
+  let reply = '';
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (reply && req.messages.at(-1)?.role === 'user') onChunk(reply);
+    return { toolCalls: [] };
+  });
+  const lastReply = () => repo.conversationMessages(chat.id).findLast((m) => m.role === 'assistant');
+
+  reply = '';
+  await service.chatSend(chat.id, 'Write the plan', []);
+  assert.equal(lastReply().incomplete, 'no-answer');
+  assert.match(lastReply().notice, /without a reply/);
+
+  reply = "I'll outline the ideal customer profile per vertical and check the guidance.";
+  await service.chatSend(chat.id, 'Write the plan', []);
+  assert.equal(lastReply().incomplete, 'preamble');
+
+  reply = 'Here is the plan:\n\n1. Pick three verticals.\n2. Write the sequence.';
+  await service.chatSend(chat.id, 'Write the plan', []);
+  assert.equal(lastReply().incomplete, undefined);
+  assert.equal(lastReply().notice, undefined);
+  assert.equal(repo.state.tasks.find((task) => task.conversationId === chat.id).status, 'done');
+});
+
+test('"Notify me when done" sends one desktop notice when the run ends, leading back to the coworker', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const notices = [];
+  service.attachShell({ notify: (notice) => notices.push(notice), windowVisible: () => true, applySettings() {} });
+  const chat = await coworkerChat(service);
+  // Nothing is running: there is nothing to wait for.
+  assert.equal(await service.chatNotifyWhenDone(chat.id, true), false);
+  let release;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (!req.messages.some((m) => m.content === 'Draft the launch email')) return {};
+    await new Promise((resolve) => (release = resolve));
+    onChunk('Here is the launch email.');
+    return { toolCalls: [] };
+  });
+  const sent = service.chatSend(chat.id, 'Draft the launch email', []);
+  while (!release) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(await service.chatNotifyWhenDone(chat.id, true), true);
+  release();
+  await sent;
+  assert.equal(notices.length, 1);
+  assert.match(notices[0].title, /is done$/);
+  assert.equal(notices[0].body, 'Here is the launch email.');
+  assert.deepEqual(notices[0].target, { agentId: 'backend-developer', conversationId: chat.id });
+  // It was for that run only.
+  mockModel(t, async (_p, _k, _req, onChunk) => {
+    onChunk('Again.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Once more', []);
+  assert.equal(notices.length, 1);
+});

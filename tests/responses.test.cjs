@@ -33,6 +33,24 @@ test('Responses sends plan-compatible fields and captures text, reasoning, tools
   assert.ok(deltas.some((d) => d.type === 'thought')); assert.ok(deltas.some((d) => d.type === 'text'));
 });
 
+test('Responses keeps streamed tool calls when the completed event lists no output (ChatGPT plan)', async (t) => {
+  const oldFetch = global.fetch; t.after(() => global.fetch = oldFetch);
+  const reasoning = { type: 'reasoning', id: 'r1', encrypted_content: 'opaque' };
+  const call = { type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'read_file', arguments: '{"path":"guide.md"}', namespace: 'axon' };
+  const completed = { type: 'response.completed', response: { output: [], usage: { input_tokens: 10, output_tokens: 5 } } };
+  const items = [{ type: 'response.output_item.done', output_index: 0, item: reasoning }, { type: 'response.output_item.done', output_index: 1, item: call }];
+  const request = { model: 'm', messages: [{ role: 'user', content: 'Plan it' }], tools: [{ name: 'read_file', description: 'Read', parameters: { type: 'object', properties: {} } }] };
+  // A tool call with no text before it: this used to fail as "Provider returned no response".
+  global.fetch = async () => stream([...items, completed]);
+  const bare = await streamChat(provider, 'token', request, () => {});
+  assert.equal(bare.toolCalls?.[0]?.name, 'read_file');
+  assert.deepEqual(bare.replay.content, [reasoning, call]);
+  // A line of preamble, then the call: this used to end the turn with only the preamble.
+  global.fetch = async () => stream([{ type: 'response.output_text.delta', delta: "I'll check the guidance." }, ...items, completed]);
+  const preamble = await streamChat(provider, 'token', request, () => {});
+  assert.equal(preamble.toolCalls?.[0]?.id, 'call-1');
+});
+
 test('Responses fails if the stream disconnects or reports a terminal error', async (t) => {
   const oldFetch = global.fetch; t.after(() => global.fetch = oldFetch);
   global.fetch = async () => stream([{ type: 'response.output_text.delta', delta: 'partial' }]);

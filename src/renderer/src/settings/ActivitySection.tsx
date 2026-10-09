@@ -18,6 +18,7 @@ const TONE: Record<AuditEntry['decision'], string> = {
   allowed: 'ok',
   approved: 'ok',
   'approved-session': 'ok',
+  'approved-task': 'ok',
   reverted: 'you',
   rejected: 'bad',
   denied: 'bad',

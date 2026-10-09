@@ -62,9 +62,19 @@ export const labelTier = (view: Bounds | null): LabelTier => {
   return width > 90 ? 'far' : width > 30 ? 'middle' : 'near';
 };
 
-/** A name short enough for a tag: "Backend Developer" becomes "Backend", but "AI Engineer" stays whole. */
+/** Past this many characters a tag is cut off, so long names take their usual short form. */
+const TAG_CHARS = 20;
+
+/**
+ * A name short enough for a tag: "Backend Developer" becomes "Backend", but "AI Engineer" stays whole.
+ * A long name with its own abbreviation uses it ("Sales Development Representative (SDR)" is "SDR"),
+ * and "Development" is "Dev" in one that is still long. The full name is on the tag's hover.
+ */
 export const shortName = (name: string) => {
+  const abbreviation = name.match(/ \(([A-Z]{2,})\)$/)?.[1];
   const base = name.replace(/ \([A-Z]+\)$/, '').replace(/^Chief (\w+) Officer$/, 'Chief $1');
+  if (abbreviation && base.length > TAG_CHARS) return abbreviation;
   const trimmed = base.replace(/ (Developer|Engineer|Manager|Specialist)$/, '');
-  return trimmed.length >= 4 ? trimmed : base;
+  const short = trimmed.length >= 4 ? trimmed : base;
+  return short.length > TAG_CHARS + 4 ? short.replace(/\bDevelopment\b/, 'Dev') : short;
 };

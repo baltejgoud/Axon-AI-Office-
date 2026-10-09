@@ -112,6 +112,11 @@ export class SignLayer {
 
   /** The clickable sign under the pointer, if any. */
   pick(raycaster: THREE.Raycaster): SignSpec | null {
+    return this.pickHit(raycaster)?.sign ?? null;
+  }
+
+  /** The clickable sign under the pointer and how far along the ray it is, to weigh against a board. */
+  pickHit(raycaster: THREE.Raycaster): { distance: number; sign: SignSpec } | null {
     let best: { distance: number; sign: SignSpec } | null = null;
     for (const layer of this.layers) {
       if (!PICKABLE.has(layer.kind) || !layer.mesh.visible) continue;
@@ -120,7 +125,7 @@ export class SignLayer {
       if (best && best.distance <= hit.distance) continue;
       best = { distance: hit.distance, sign: layer.signs[Math.floor(hit.faceIndex / (QUADS * 2))] };
     }
-    return best?.sign ?? null;
+    return best;
   }
 
   /** Where a sign's face appears on screen, in CSS pixels (for automated checks). */

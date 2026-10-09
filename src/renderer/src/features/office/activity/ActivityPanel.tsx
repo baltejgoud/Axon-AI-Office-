@@ -1,10 +1,22 @@
 import { MultiAgents } from './MultiAgents';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FilesPanel } from './FilesPanel';
-import { IconBook, IconCompose, IconDotsHorizontal, IconSparkle } from '../../../ui';
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconBook,
+  IconCompose,
+  IconCopy,
+  IconDotsHorizontal,
+  IconDownload,
+  IconLayoutGrid,
+  IconSparkle
+} from '../../../ui';
 import { defaultTab, useOfficeStore, type AgentActivity, type PanelTab } from '../store/officeStore';
 import { OFFICE_AGENTS, type OfficeAgent } from '../data/officeAgents';
-import { useApp } from '../../../state';
+import { perform, useApp } from '../../../state';
+import { transcriptMarkdown, wholeConversation } from '../../../chat/transcript';
+import type { Conversation as Thread } from '../../../../../shared/types';
 import { timeAgo } from '../../../format';
 import { AgentComposer } from './AgentComposer';
 import { TeamList } from './TeamList';
@@ -21,6 +33,14 @@ import { ConnectorRow } from './ConnectorRow';
 import { ContextChip } from './ContextChip';
 import { latestRun } from '../lifecycle';
 import { LifecycleBadge } from '../shell/LifecycleBadge';
+
+/** The panel's two presets, besides dragging its edge: wide to read in, narrow to watch the office. */
+const WIDE_PANEL = 720;
+const NARROW_PANEL = 400;
+
+/** The whole conversation as Markdown: every message, not only those on screen. */
+const transcriptOf = async (thread: Thread, agentName: string) =>
+  transcriptMarkdown(await wholeConversation(thread.id), { title: thread.title, agentName });
 
 /** Specialists' descriptions continue a phrase ("the browser-facing code…"); shown alone, they start a sentence. */
 const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -40,6 +60,9 @@ const TAB_LABEL: Record<PanelTab, string> = {
 export function ActivityPanel() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const drawer = useOfficeStore((s) => s.drawer);
+  const [chatScroller, setChatScroller] = useState<HTMLDivElement | null>(null);
+  const [jumpSlot, setJumpSlot] = useState<HTMLDivElement | null>(null);
   const data = useApp((s) => s.data);
   const {
     selectedAgentId,
@@ -70,6 +93,8 @@ export function ActivityPanel() {
         ? 'error'
         : 'completed'
       : (runtime?.status ?? 'idle');
+  // A run that ended without its answer never reads as completed.
+  const stoppedEarly = Boolean(assistant?.incomplete && !assistant.streaming);
   const streaming = status === 'working';
   const activities = runtime?.activities ?? [];
   const libraryResident = LIBRARY_RESIDENTS.includes(agent.id);
@@ -97,7 +122,9 @@ export function ActivityPanel() {
       </aside>
     );
 
-  const statusLabel = status === 'waiting' ? 'Waiting for input' : status[0].toUpperCase() + status.slice(1);
+  // The same words as the map, the activity list and the badges: one status language everywhere.
+  const statusLabel =
+    status === 'waiting' ? 'Needs you' : status === 'error' ? 'Failed' : status[0].toUpperCase() + status.slice(1);
   return (
     <aside className="office-activity-panel" aria-label="Selected coworker activity">
       <header className="activity-agent-hero">
@@ -119,7 +146,9 @@ export function ActivityPanel() {
           <p>
             <span className="activity-role">{agent.role}</span>
             {runStatus ? (
-              <LifecycleBadge status={runStatus} />
+              <LifecycleBadge status={runStatus} stoppedEarly={stoppedEarly} />
+            ) : stoppedEarly && status === 'completed' ? (
+              <LifecycleBadge status="completed" stoppedEarly />
             ) : (
               <span className={`status-badge ${status}`} role="status">
                 <span className="status-dot-sm" />
@@ -146,6 +175,50 @@ export function ActivityPanel() {
                       startFresh(agent.id);
                   })();
                 }
+              },
+              ...(conversation
+                ? [
+                    {
+                      key: 'copy-thread',
+                      label: 'Copy whole conversation',
+                      icon: <IconCopy size={15} />,
+                      onSelect: () =>
+                        void perform(async () => {
+                          await navigator.clipboard.writeText(await transcriptOf(conversation, agent.name));
+                          useApp.getState().pushToast('Conversation copied');
+                        })
+                    },
+                    {
+                      key: 'save-thread',
+                      label: 'Save conversation as file…',
+                      icon: <IconDownload size={15} />,
+                      onSelect: () =>
+                        void perform(async () => {
+                          const path = await window.axon.documentSave(
+                            `${agent.name} - ${conversation.title}`,
+                            await transcriptOf(conversation, agent.name),
+                            conversation.projectRoot
+                          );
+                          if (path) useApp.getState().pushToast(`Saved to ${path}`);
+                        })
+                    }
+                  ]
+                : []),
+              {
+                key: 'dock',
+                label: drawer.side === 'right' ? 'Move panel to the left' : 'Move panel to the right',
+                icon: drawer.side === 'right' ? <IconArrowLeft size={15} /> : <IconArrowRight size={15} />,
+                onSelect: () =>
+                  useOfficeStore.getState().setDrawer({ side: drawer.side === 'right' ? 'left' : 'right' })
+              },
+              {
+                key: 'width',
+                label: drawer.width < WIDE_PANEL ? 'Wide panel, for reading' : 'Narrow panel, to see the office',
+                icon: <IconLayoutGrid size={15} />,
+                onSelect: () =>
+                  useOfficeStore.getState().setDrawer({
+                    width: drawer.width < WIDE_PANEL ? Math.min(WIDE_PANEL, window.innerWidth - 160) : NARROW_PANEL
+                  })
               },
               ...(libraryResident
                 ? [
@@ -194,7 +267,7 @@ export function ActivityPanel() {
         </TabPanel>
       )}
       {/* The chat stays mounted behind other tabs, so its scroll and streaming carry on. */}
-      <TabPanel id="chat" hidden={tab !== 'chat'} labelled={tabs.length > 1}>
+      <TabPanel id="chat" hidden={tab !== 'chat'} labelled={tabs.length > 1} scrollRef={setChatScroller}>
         {reception && briefing && <Briefing briefing={briefing} />}
         {!conversation && !(reception && briefing) && (
           <div className="activity-empty">
@@ -224,8 +297,16 @@ export function ActivityPanel() {
           pendingTask={streaming || status === 'waiting' ? runtime?.currentTask : undefined}
           working={streaming || status === 'waiting'}
           shown={tab === 'chat'}
+          onContinue={() =>
+            useOfficeStore
+              .getState()
+              .compose(agent.id, 'Continue where you left off and finish the answer.', true)
+          }
+          scrollParent={chatScroller}
+          jumpSlot={jumpSlot}
         />
       </TabPanel>
+      <div className="chat-jump-row" ref={setJumpSlot} hidden={tab !== 'chat'} />
       {tab === 'planner' && (
         <TabPanel id="planner">
           <Planner />
@@ -245,16 +326,20 @@ function TabPanel({
   id,
   hidden = false,
   labelled = true,
+  scrollRef,
   children
 }: {
   id: PanelTab;
   hidden?: boolean;
   /** Only when there are tabs to be labelled by. */
   labelled?: boolean;
+  /** The panel's scroll area, for content that scrolls with it (the thread). */
+  scrollRef?: (element: HTMLDivElement | null) => void;
   children: ReactNode;
 }) {
   return (
     <div
+      ref={scrollRef}
       className={`activity-body activity-tabpanel-${id}`}
       id={`activity-panel-${id}`}
       role={labelled ? 'tabpanel' : undefined}
@@ -366,6 +451,7 @@ function ConversationMenu({
   const render = (item: MenuItem) => (
     <button
       key={item.key}
+      data-action={item.key}
       role="menuitem"
       disabled={item.disabled}
       aria-current={item.current || undefined}

@@ -1,4 +1,5 @@
 import type { AgentRun, RunStatus } from '../../../../shared/runtime';
+import type { Message } from '../../../../shared/types';
 
 export type LifecycleTone = 'queued' | 'working' | 'attention' | 'completed' | 'failed' | 'stopped';
 export interface Lifecycle {
@@ -7,8 +8,13 @@ export interface Lifecycle {
   action: string;
 }
 
-/** Keep the meaning of a run consistent wherever work is shown. */
-export function runLifecycle(status: RunStatus): Lifecycle {
+/**
+ * Keep the meaning of a run consistent wherever work is shown. `stoppedEarly`: the run ended without
+ * the answer it owes (step limit, no reply), so it is not shown as completed.
+ */
+export function runLifecycle(status: RunStatus, stoppedEarly = false): Lifecycle {
+  if (status === 'completed' && stoppedEarly)
+    return { label: 'Stopped early', tone: 'attention', action: 'Continue' };
   switch (status) {
     case 'planned':
     case 'queued':
@@ -35,6 +41,16 @@ export function runLifecycle(status: RunStatus): Lifecycle {
     case 'interrupted':
       return { label: 'Interrupted', tone: 'attention', action: 'Resume conversation' };
   }
+}
+
+/**
+ * How a coworker's last task ended, in the badges' words, for when they are idle: from its run, or
+ * from its last reply when there is no run record. Null with nothing to say.
+ */
+export function endedLabel(run: AgentRun | undefined, reply: Message | undefined): string | null {
+  if (run) return runLifecycle(run.status, Boolean(reply?.incomplete)).label;
+  if (reply && !reply.streaming) return reply.incomplete ? 'Stopped early' : reply.error ? 'Failed' : 'Completed';
+  return null;
 }
 
 export function latestRun(

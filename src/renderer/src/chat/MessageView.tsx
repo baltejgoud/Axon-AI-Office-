@@ -1,13 +1,14 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import type { Message, ToolCall } from '../../../shared/types';
 import { perform, useApp } from '../state';
 import { timeAgo } from '../format';
-import { Button, IconCheck, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
-import { CodeBlock } from './CodeBlock';
+import { Button, IconBook, IconCheck, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
 import { toolPresentation } from './workPresentation';
+import { MessageMarkdown } from './MessageMarkdown';
+import { useReading, worthReading } from './reading';
+
+/** Messages of yours longer than this start folded, with Show more. */
+const FOLD_AT = { chars: 600, lines: 8 };
 
 /** What the user typed, without the attachment and file-context blocks appended for the model. */
 export function visibleUserText(content: string): string {
@@ -98,11 +99,17 @@ export function MessageView({
   message: m,
   authorName = 'Axon',
   actions,
-  renderToolCall
+  renderToolCall,
+  onContinue,
+  folder
 }: {
   message: Message;
   authorName?: string;
   actions?: ReactNode;
+  /** For a reply that stopped early: asks them to carry on. */
+  onContinue?: () => void;
+  /** The conversation's project folder: where saving a reply starts. */
+  folder?: string | null;
   /**
    * A card of its own for some tool calls; return nothing to use the standard one, or false to
    * leave the call out (it is shown somewhere else).
@@ -111,7 +118,14 @@ export function MessageView({
 }) {
   const [thoughtOpen, setThoughtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [unfolded, setUnfolded] = useState(false);
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
+  const readable = copyable && worthReading(m.content);
+  const shownText = m.role === 'user' ? visibleUserText(m.content) : m.content;
+  const foldable =
+    m.role === 'user' &&
+    (shownText.length > FOLD_AT.chars || shownText.split('\n').length > FOLD_AT.lines);
+  const folded = foldable && !unfolded;
   const calls = (m.toolCalls ?? [])
     .map((call) => ({ call, custom: renderToolCall?.(call) }))
     .filter(({ custom }) => custom !== false);
@@ -158,40 +172,46 @@ export function MessageView({
             )}
           </div>
         )}
-        <div className="message-content">
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={{
-              img: ({ alt }) => <span>[Image: {alt}]</span>,
-              a: ({ href, children }) =>
-                href && /^https?:\/\//i.test(href) ? (
-                  <a
-                    className="message-link"
-                    href={href}
-                    title={href}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      void perform(() => window.axon.openLink(href));
-                    }}
-                  >
-                    {children}
-                  </a>
-                ) : (
-                  <span className="message-link">{children}</span>
-                ),
-              pre: ({ children }) => <CodeBlock>{children}</CodeBlock>
-            }}
-          >
+        <div className={`message-content${folded ? ' folded' : ''}`}>
+          <MessageMarkdown>
             {m.role === 'user'
-              ? visibleUserText(m.content)
+              ? shownText
               : m.content || (m.streaming ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
-          </Markdown>
+          </MessageMarkdown>
         </div>
-        {m.notice && <p className="message-notice">{m.notice}</p>}
+        {foldable && (
+          <button type="button" className="message-fold" aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
+            {unfolded ? 'Show less' : 'Show more'}
+          </button>
+        )}
+        {m.notice && (
+          <p className={`message-notice${m.incomplete ? ' stopped-early' : ''}`}>
+            <span>
+              {m.incomplete && <strong>Stopped early · </strong>}
+              {m.notice}
+            </span>
+            {m.incomplete && onContinue && (
+              <Button variant="secondary" size="sm" onClick={onContinue}>
+                Continue
+              </Button>
+            )}
+          </p>
+        )}
         {m.error && <p className="message-error">{m.error}</p>}
         {(actions || copyable) && (
           <div className="message-actions">
+            {readable && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={IconBook}
+                data-action="read"
+                title="Read in a wide view, with contents"
+                onClick={() => useReading.getState().read({ message: m, authorName, folder })}
+              >
+                Read
+              </Button>
+            )}
             {copyable && (
               <Button
                 variant="ghost"

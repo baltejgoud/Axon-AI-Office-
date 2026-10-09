@@ -164,6 +164,11 @@ export interface Message {
   streaming?: boolean;
   /** A note about the run itself, e.g. connectors left out for too many tools. */
   notice?: string;
+  /**
+   * The run ended without the answer it owes: it ran out of steps, said nothing, or only said what
+   * it would do. Shown as "Stopped early" with a way to continue, never as completed.
+   */
+  incomplete?: 'step-limit' | 'no-answer' | 'preamble';
   /** Who sent a message on your side when it wasn't you, e.g. a team brief from the Chief of Staff. */
   from?: string;
 }
@@ -457,6 +462,8 @@ export interface ToolApprovalDecision {
   requestId: string;
   approved: boolean;
   alwaysAllowSession?: boolean;
+  /** Allow this tool again without asking, in this conversation, until its current run ends. */
+  allowForTask?: boolean;
 }
 
 /* ----------------------------------- Tasks ------------------------------------ */

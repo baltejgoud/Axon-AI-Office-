@@ -428,8 +428,8 @@ app.on('web-contents-created', (_, contents) => {
       // The side panel sums up the run instead of listing its tool calls.
       check(
         'the run is summed up in the side panel',
-        (await text('.work-summary-head')) === 'Changed 2 files, ran 1 command',
-        await text('.work-summary-head')
+        (await text('.work-summary-head strong')) === 'Changed 2 files, ran 1 command',
+        await text('.work-summary-head strong')
       );
       const rows = await evaluate(
         `[...document.querySelectorAll('.work-summary-row')].map((r) => r.textContent)`
@@ -636,8 +636,8 @@ app.on('web-contents-created', (_, contents) => {
       check('older work of another coworker waits too', full(g));
       check(
         'a mixed run says what it did',
-        (await text('.work-summary-head')) === 'Ran 1 command, viewed 1 page',
-        await text('.work-summary-head')
+        (await text('.work-summary-head strong')) === 'Ran 1 command, viewed 1 page',
+        await text('.work-summary-head strong')
       );
       await click('[aria-label="Work surface"]');
       await pause(500);
@@ -696,7 +696,7 @@ app.on('web-contents-created', (_, contents) => {
       );
       check(
         'the side panel says it is waiting for you, and by how much',
-        (await text('.work-summary.is-live .work-summary-head')) === 'Working on 1 file…' &&
+        (await text('.work-summary.is-live .work-summary-head strong')) === 'Working on 1 file…' &&
           /todo\.md.*\+2−1.*Waiting for your OK/.test(liveRow) &&
           !/npm run dev/.test(liveRow),
         liveRow
@@ -778,7 +778,7 @@ app.on('web-contents-created', (_, contents) => {
         'the command to finish'
       );
       await waitFor(
-        `[...document.querySelectorAll('.work-summary-head')].at(-1)?.textContent === 'Changed 1 file, ran 1 command'`,
+        `[...document.querySelectorAll('.work-summary-head strong')].at(-1)?.textContent === 'Changed 1 file, ran 1 command'`,
         'the run summed up'
       );
       const done = await evaluate(`[...document.querySelectorAll('.work-summary')].at(-1).textContent`);

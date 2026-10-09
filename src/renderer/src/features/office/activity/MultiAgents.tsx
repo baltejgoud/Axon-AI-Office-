@@ -7,6 +7,8 @@ import { useOfficeStore } from '../store/officeStore';
 import { coworkerById } from '../../../../../shared/coworkers';
 import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
 import type { AgentActivity } from '../store/officeStore';
+import { runLifecycle } from '../lifecycle';
+import { plural } from '../../../format';
 const name = (id: string) => coworkerById(id)?.name ?? id;
 export function MultiAgents({
   conversationId,
@@ -61,16 +63,25 @@ export function MultiAgents({
       <header>
         <h3>{team?.goal ?? 'Coworker work'}</h3>
         <p>{team ? `Lead: ${name(team.leadId)} · ${team.status}` : 'Live execution state'}</p>
-        <p>
-          {active.length} active · {shown.filter((r) => r.status.startsWith('waiting')).length} waiting ·{' '}
-          {shown.filter((r) => r.status === 'failed' || r.status === 'blocked').length} need attention ·{' '}
-          {shown.filter((r) => r.status === 'completed').length} completed
+        <p className="multi-agents-counts">
+          {/* Counted in the badges' own words; states with nobody in them are left out. */}
+          {[...shown.reduce((counts, run) => {
+            const state = runLifecycle(run.status);
+            const entry = counts.get(state.label) ?? { tone: state.tone, n: 0 };
+            counts.set(state.label, { ...entry, n: entry.n + 1 });
+            return counts;
+          }, new Map<string, { tone: string; n: number }>())].map(([label, { tone, n }]) => (
+            <span key={label} className={`multi-agents-count is-${tone}`}>
+              {n} {label.toLowerCase()}
+            </span>
+          ))}
+          {shown.length === 0 && <span>No runs yet</span>}
         </p>
         {assignmentCount > 0 && (
           <>
             <progress value={completed} max={assignmentCount} />
             <small>
-              {completed} / {assignmentCount} tasks completed
+              {completed} of {plural(assignmentCount, 'task')} completed
             </small>
           </>
         )}
@@ -193,8 +204,8 @@ export function MultiAgents({
         <article>
           <strong>Team completed</strong>
           <p>
-            {new Set(team.plan?.assignments.map((a) => a.ownerId)).size} coworkers participated · {completed}{' '}
-            tasks completed
+            {plural(new Set(team.plan?.assignments.map((a) => a.ownerId)).size, 'coworker')} took part ·{' '}
+            {plural(completed, 'task')} completed
           </p>
           <p>{team.report}</p>
         </article>

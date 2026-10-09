@@ -20,6 +20,7 @@ import { AccountAppDialog } from './AccountAppDialog';
 import { ClaudeCard } from './ClaudeAccount';
 import { ModelIcon } from './ModelIcon';
 import { PRESETS } from './ProviderDialog';
+import { plural } from '../format';
 
 /** Settings → Accounts: GitHub for your repositories, Google for who you are, and the Git they both need. */
 export function AccountsSection({ onAddProvider }: { onAddProvider: (provider: ProviderConfig) => void }) {
@@ -531,7 +532,7 @@ function ConnectGmail() {
             await useApp.getState().refresh();
             const server = useApp.getState().data?.mcpServers.find((m) => m.catalogId === 'gmail');
             if (server?.status === 'connected')
-              pushToast(`Gmail connected · ${server.tools?.length ?? 0} tools`);
+              pushToast(`Gmail connected · ${plural(server.tools?.length ?? 0, 'tool')}`);
             else if (server)
               setError(server.error || 'Gmail did not connect. Try again from Settings → Connectors.');
           } catch (err) {

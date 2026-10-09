@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useApp, perform } from './state';
 import { AxonLogo, Button, IconClose, ToastStack } from './ui';
 import { OfficePage } from './features/office/OfficePage';
+import { ReadingHost } from './chat/ReadingView';
 import { useOfficeStore } from './features/office/store/officeStore';
 import { RECEPTIONIST_ID } from '../../shared/coworkers';
 
@@ -244,6 +245,7 @@ export function App() {
         )}
         <OfficePage />
       </main>
+      <ReadingHost />
       <ToastStack />
     </div>
   );

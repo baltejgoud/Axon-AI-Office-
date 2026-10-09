@@ -195,6 +195,19 @@ export const TRUNCATED =
 /** Shown when a thinking model (Kimi, Qwen or DeepSeek reasoning) spends the whole limit before it answers. */
 export const TRUNCATED_THINKING =
   'The model used the whole max-token limit thinking and stopped before it answered. Raise Max tokens in Settings to give it more room.';
+/** Asked of a run that used all its steps: one last reply, written from what it has. */
+const wrapUpPrompt = (steps: number) =>
+  `You have used all ${steps} steps this task allows (the step limit), so no more tools will run. Write your final answer now from what you have found so far, and say plainly what is still unfinished.`;
+/** A whole reply that only announces work ("I'll outline… and check the guidance.") and does none. */
+const onlyAnnounces = (content: string) => {
+  const reply = content.trim();
+  return (
+    reply.length > 0 &&
+    reply.length < 240 &&
+    !reply.includes('\n') &&
+    /^(?:(?:ok(?:ay)?|sure|great|got it)[,!.]?\s+)?(?:i['’]ll|i will|i['’]m going to|i am going to|let me|first,? i['’]ll)\s+(?!know\b|be here\b)/i.test(reply)
+  );
+};
 /** The largest max-tokens setting: current models stream answers up to 128K tokens. */
 const MAX_OUTPUT_TOKENS = 128000;
 
@@ -279,6 +292,8 @@ export class Service {
   readonly messageBus: AgentMessageBus;
   readonly providerRuntime = new ProviderRuntimeManager();
   private runs = new Map<string, AbortController>();
+  /** Conversations whose run you asked to hear about when it ends ("Notify me when done"). */
+  private notifyWhenDone = new Set<string>();
   private attachments = new Map<string, { name: string; text: string }>();
   private readonly parsers: ParsePool;
   private tickTimer: NodeJS.Timeout | null = null;
@@ -993,6 +1008,21 @@ export class Service {
     await this.audit.flush();
     await writeFile(file.filePath, JSON.stringify(this.audit.all(), null, 2));
     return true;
+  }
+  /** Saves a reply or a conversation as Markdown where you choose (in its project folder to start); null when you cancel. */
+  async documentSave(name: string, content: string, folder?: string | null): Promise<string | null> {
+    const base = text(name, 200).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Axon reply';
+    const where = typeof folder === 'string' && folder ? text(folder, 4000) : app.getPath('documents');
+    const file = await dialog.showSaveDialog({
+      defaultPath: join(where, /\.(md|txt)$/i.test(base) ? base : `${base}.md`),
+      filters: [
+        { name: 'Markdown', extensions: ['md'] },
+        { name: 'Text', extensions: ['txt'] }
+      ]
+    });
+    if (file.canceled || !file.filePath) return null;
+    await writeFile(file.filePath, text(content, 5_000_000));
+    return file.filePath;
   }
   /**
    * Undoes a coworker's saved write: puts back the version it replaced, or deletes a file it created.
@@ -1852,7 +1882,8 @@ export class Service {
         streaming: true,
         done: false
       });
-      const ran = decision === 'allowed' || decision === 'approved' || decision === 'approved-session';
+      const ran =
+        decision === 'allowed' || decision === 'approved' || decision === 'approved-session' || decision === 'approved-task';
       this.audit.record({
         conversationId: id,
         actor,
@@ -1866,6 +1897,41 @@ export class Service {
       });
     };
     let step = 0;
+    /** The model ended the run itself, rather than running out of steps. */
+    let finished = false;
+    /** Any step of this run called a tool. */
+    let worked = false;
+    const onDelta: Parameters<typeof streamChat>[3] = (deltaText, delta) => {
+      if (activeAssistant.content.length > 500000) {
+        controller.abort();
+        throw new Error('Response exceeds local size limit.');
+      }
+      if (delta?.type === 'thought') {
+        activeAssistant.thought = (activeAssistant.thought || '') + delta.text;
+        this.emit({
+          channel: 'chat',
+          conversationId: id,
+          messageId: activeAssistant.id,
+          thoughtDelta: delta.text,
+          thoughtSoFar: activeAssistant.thought,
+          contentSoFar: activeAssistant.content,
+          streaming: true,
+          done: false
+        });
+      } else if (deltaText) {
+        activeAssistant.content += deltaText;
+        this.emit({
+          channel: 'chat',
+          conversationId: id,
+          messageId: activeAssistant.id,
+          delta: deltaText,
+          contentSoFar: activeAssistant.content,
+          thoughtSoFar: activeAssistant.thought,
+          streaming: true,
+          done: false
+        });
+      }
+    };
 
     try {
       await this.repo.save();
@@ -1896,37 +1962,7 @@ export class Service {
             temperature: this.state.settings.defaultTemperature,
             signal: controller.signal
           },
-          (deltaText, delta) => {
-            if (activeAssistant.content.length > 500000) {
-              controller.abort();
-              throw new Error('Response exceeds local size limit.');
-            }
-            if (delta?.type === 'thought') {
-              activeAssistant.thought = (activeAssistant.thought || '') + delta.text;
-              this.emit({
-                channel: 'chat',
-                conversationId: id,
-                messageId: activeAssistant.id,
-                thoughtDelta: delta.text,
-                thoughtSoFar: activeAssistant.thought,
-                contentSoFar: activeAssistant.content,
-                streaming: true,
-                done: false
-              });
-            } else if (deltaText) {
-              activeAssistant.content += deltaText;
-              this.emit({
-                channel: 'chat',
-                conversationId: id,
-                messageId: activeAssistant.id,
-                delta: deltaText,
-                contentSoFar: activeAssistant.content,
-                thoughtSoFar: activeAssistant.thought,
-                streaming: true,
-                done: false
-              });
-            }
-          }
+          onDelta
         );
 
         activeAssistant.usage = {
@@ -1939,8 +1975,10 @@ export class Service {
           if (usage.truncated)
             activeAssistant.error =
               !activeAssistant.content.trim() && activeAssistant.thought ? TRUNCATED_THINKING : TRUNCATED;
+          finished = true;
           break; // Turn complete
         }
+        worked = true;
 
         // The provider's own turn goes back with the results: thinking signatures must travel with their calls.
         requests.push({
@@ -2069,7 +2107,7 @@ export class Service {
             continue;
           }
 
-          const check = this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope);
+          const check = this.permissions.check({ toolName: tc.name, args: parsedArgs, conversationId: id }, scope);
           if (check.action === 'deny') {
             answer(
               tc,
@@ -2146,7 +2184,7 @@ export class Service {
               });
               break;
             }
-            if (ended !== 'approved' && ended !== 'approved-session') {
+            if (ended !== 'approved' && ended !== 'approved-session' && ended !== 'approved-task') {
               answer(
                 tc,
                 {
@@ -2206,7 +2244,7 @@ export class Service {
           )
             await this.keepCheckpoint(id, tc, parsedArgs, result, runProject.root!);
           const notes = [
-            check.bySession ? 'Allowed for this session' : '',
+            check.bySession ? 'Allowed for this session' : check.byTask ? 'Allowed for this task' : '',
             FILE_SAVERS.has(tc.name) && result.change && result.change.undo !== 'kept'
               ? "Can't be undone"
               : ''
@@ -2259,6 +2297,44 @@ export class Service {
         this.repo.appendMessages(activeAssistant);
         await this.repo.save();
       }
+      const stoppedEarly = (kind: NonNullable<Message['incomplete']>, note: string) => {
+        activeAssistant.incomplete = kind;
+        activeAssistant.notice = activeAssistant.notice ? `${activeAssistant.notice} ${note}` : note;
+      };
+      if (!finished && !controller.signal.aborted) {
+        // Out of steps: one more call, whose tool calls never run, for the answer the run owes.
+        requests.push({ role: 'user', content: wrapUpPrompt(maxSteps) });
+        try {
+          const usage = await this.stream(
+            provider,
+            key,
+            {
+              model: chat.modelId,
+              messages: requests,
+              system,
+              contextSections,
+              tools: availableTools.length > 0 ? availableTools : undefined,
+              maxTokens,
+              temperature: this.state.settings.defaultTemperature,
+              signal: controller.signal
+            },
+            onDelta
+          );
+          activeAssistant.usage = { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens };
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+        }
+        stoppedEarly(
+          'step-limit',
+          activeAssistant.content.trim()
+            ? `Reached the ${maxSteps}-step limit, so this answer is written from what was found so far.`
+            : `Stopped at the ${maxSteps}-step limit with no final answer.`
+        );
+      } else if (!controller.signal.aborted && !activeAssistant.error) {
+        if (!activeAssistant.content.trim()) stoppedEarly('no-answer', 'This turn ended without a reply.');
+        else if (!worked && onlyAnnounces(activeAssistant.content))
+          stoppedEarly('preamble', 'This reply only says what it will do; the work itself did not happen.');
+      }
     } catch (error) {
       activeAssistant.error = controller.signal.aborted ? 'Generation stopped.' : providerProblem(error);
       if (
@@ -2271,6 +2347,8 @@ export class Service {
       activeAssistant.streaming = false;
       this.scheduleSemanticCheckpoint(chat);
       this.runs.delete(id);
+      // "Allow for this task" ends with the task.
+      this.permissions.endTask(id);
       const stopped = controller.signal.aborted;
       if (stopped) activeAssistant.error ??= 'Generation stopped.';
       this.supervisor.finish(
@@ -2278,7 +2356,26 @@ export class Service {
         stopped ? 'canceled' : activeAssistant.error ? 'failed' : 'completed',
         activeAssistant.error
       );
-      this.tracker.runEnded(id, { stopped, error: stopped ? undefined : activeAssistant.error });
+      this.tracker.runEnded(id, {
+        stopped,
+        error: stopped ? undefined : activeAssistant.error,
+        incomplete: activeAssistant.incomplete ? activeAssistant.notice : undefined
+      });
+      if (this.notifyWhenDone.delete(id)) {
+        const who = coworkerById(chat.agentId);
+        const ended = stopped
+          ? 'stopped'
+          : activeAssistant.error
+            ? 'ran into a problem'
+            : activeAssistant.incomplete
+              ? 'stopped early'
+              : 'is done';
+        this.shell?.notify({
+          title: `${who?.name ?? 'Axon'} ${ended}`,
+          body: (activeAssistant.error ?? activeAssistant.notice ?? activeAssistant.content).trim().slice(0, 140) || chat.title,
+          target: { agentId: who?.id ?? chat.agentId ?? RECEPTIONIST_ID, conversationId: id }
+        });
+      }
       await this.repo.save();
       this.emit({
         channel: 'chat',
@@ -2993,6 +3090,13 @@ export class Service {
     }
   }
 
+  /** "Notify me when done": a desktop notice when this conversation's current run ends, however it ends. */
+  chatNotifyWhenDone(id: string, on: boolean): boolean {
+    if (!this.state.conversations.some((c) => c.id === id)) throw new Error('Unknown conversation');
+    if (on && this.runs.has(id)) this.notifyWhenDone.add(id);
+    else this.notifyWhenDone.delete(id);
+    return this.notifyWhenDone.has(id);
+  }
   chatStop(id: string): void {
     this.queued.delete(id);
     this.runs.get(id)?.abort();

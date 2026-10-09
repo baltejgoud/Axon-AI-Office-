@@ -178,9 +178,15 @@ export class BoardLayer {
 
   /** The team whose board is under the pointer. */
   pick(raycaster: THREE.Raycaster): Team | null {
+    return this.pickHit(raycaster)?.team ?? null;
+  }
+
+  /** The board under the pointer and how far along the ray it is, to weigh against a sign. */
+  pickHit(raycaster: THREE.Raycaster): { distance: number; team: Team } | null {
     const hit = raycaster.intersectObject(this.object, false)[0];
     if (!hit || hit.faceIndex == null) return null;
-    return this.placed[Math.floor(hit.faceIndex / 2)]?.board.team ?? null;
+    const team = this.placed[Math.floor(hit.faceIndex / 2)]?.board.team;
+    return team ? { distance: hit.distance, team } : null;
   }
 
   /** Where a team's board appears on screen, in canvas pixels (for automated checks). */

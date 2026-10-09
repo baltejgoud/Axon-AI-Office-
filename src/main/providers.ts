@@ -601,7 +601,8 @@ export async function streamChat(
           responsesComplete = true;
           truncated = event.type === 'response.incomplete';
           readUsage(event.response?.usage?.input_tokens, event.response?.usage?.output_tokens, event.response?.usage?.input_tokens_details?.cached_tokens);
-          if (Array.isArray(event.response?.output)) {
+          // The ChatGPT plan's completed event can list no output; the items streamed before it then stand.
+          if (Array.isArray(event.response?.output) && event.response.output.length) {
             blocks.clear(); event.response.output.forEach((item: Record<string, unknown>, i: number) => blocks.set(i, item));
           }
           for (const item of blocks.values()) if (item.type === 'function_call') {

@@ -1,6 +1,6 @@
 import { ACTIVE_RUN_STATUSES } from '../../../../shared/runtime';
 import './office.css';
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useApp } from '../../state';
 import { OfficeWorkspace } from './workspace/OfficeWorkspace';
 import { ConversationDrawer } from './shell/ConversationDrawer';
@@ -20,15 +20,17 @@ export function OfficePage() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      // Menus, editors and dialogs consume Escape first. Close only one office layer.
-      queueMicrotask(() => {
+      // Menus, editors and dialogs consume Escape first. Close only one office layer. The check waits
+      // for the whole key event: with a real key press a microtask would run before a layer's own
+      // listener had marked the key as used, and close the conversation under it too.
+      setTimeout(() => {
         if (event.defaultPrevented || useOfficeStore.getState().overlay) return;
         const office = useOfficeStore.getState();
         if (office.commandPaletteOpen) office.setCommandPaletteOpen(false);
         else if (office.workFullscreen) office.setWorkFullscreen(false);
         else if (office.coworkerCard) office.closeCoworkerCard();
         else if (office.conversationOpen) office.closeConversation();
-      });
+      }, 0);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -56,8 +58,14 @@ export function OfficePage() {
       }
   }, [tasks, runs]);
   const close = () => useOfficeStore.getState().openOverlay(null);
+  // The panel's width and side, for everything that makes room for it.
+  const drawer = useOfficeStore((s) => s.drawer);
   return (
-    <div className="office-container">
+    <div
+      className="office-container"
+      data-drawer-side={drawer.side}
+      style={{ '--drawer-width': `${drawer.width}px` } as CSSProperties}
+    >
       <OfficeWorkspace />
       <ConversationDrawer />
       <ApprovalOverlay />

@@ -158,6 +158,13 @@ export class OfficeScene {
   public onSignClick?: (sign: SignSpec) => void;
   /** A team's task board was clicked. */
   public onBoardClick?: (team: Team) => void;
+  /**
+   * The pointer is over a sign or a board (or neither), at this point in the window: for a short
+   * label by the pointer that says what a click there does.
+   */
+  public onTargetHover?: (target: { sign: SignSpec } | { board: Team } | null, x: number, y: number) => void;
+  /** Drags and the wheel leave the camera where it is; clicks still select. Flights you ask for still fly. */
+  private cameraLocked = false;
 
   private readonly cameraRig = new OfficeCameraRig();
   private readonly simulation: OfficeSimulation;
@@ -652,6 +659,28 @@ export class OfficeScene {
     return (hit?.userData.agentId as string | undefined) ?? this.crowd.pick(this.raycaster);
   }
 
+  /** Lock or free the camera for drags and the wheel. */
+  setCameraLocked(locked: boolean): void {
+    this.cameraLocked = locked;
+    if (locked) this.dragging = false;
+  }
+
+  /**
+   * What a click here reaches: a person first; otherwise the sign or the board, whichever is nearer
+   * along the ray (a sign hanging beside a board no longer wins just for being a sign).
+   */
+  private targetAtPointer(): { agentId: string | null; sign: SignSpec | null; board: Team | null } {
+    const agentId = this.agentAtPointer();
+    if (agentId) return { agentId, sign: null, board: null };
+    const sign = this.signs.pickHit(this.raycaster);
+    const board = this.boards.pickHit(this.raycaster);
+    if (sign && board)
+      return sign.distance <= board.distance
+        ? { agentId: null, sign: sign.sign, board: null }
+        : { agentId: null, sign: null, board: board.team };
+    return { agentId: null, sign: sign?.sign ?? null, board: board?.team ?? null };
+  }
+
   /** People come first, then signs, then boards: whatever is in front reacts. */
   private setHovered(agentId: string | null, signId: string | null = null, board: Team | null = null): void {
     if (signId !== this.hoveredSign) {
@@ -672,13 +701,14 @@ export class OfficeScene {
     const onMove = (event: MouseEvent) => {
       this.updatePointer(event);
       if (this.dragging) {
-        this.cameraRig.pan(event.clientX - this.lastPointer.x, event.clientY - this.lastPointer.y);
+        if (!this.cameraLocked)
+          this.cameraRig.pan(event.clientX - this.lastPointer.x, event.clientY - this.lastPointer.y);
         this.lastPointer = { x: event.clientX, y: event.clientY };
         return;
       }
-      const agentId = this.agentAtPointer();
-      const signId = agentId ? null : (this.signs.pick(this.raycaster)?.id ?? null);
-      this.setHovered(agentId, signId, agentId || signId ? null : this.boards.pick(this.raycaster));
+      const { agentId, sign, board } = this.targetAtPointer();
+      this.setHovered(agentId, sign?.id ?? null, board);
+      this.onTargetHover?.(sign ? { sign } : board ? { board } : null, event.clientX, event.clientY);
     };
     const onDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
@@ -693,9 +723,7 @@ export class OfficeScene {
       const moved = Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > 4;
       this.updatePointer(event);
       if (!moved) {
-        const agentId = this.agentAtPointer();
-        const sign = agentId ? null : this.signs.pick(this.raycaster);
-        const board = agentId || sign ? null : this.boards.pick(this.raycaster);
+        const { agentId, sign, board } = this.targetAtPointer();
         if (agentId) this.onAgentClick?.(agentId);
         else if (sign) this.onSignClick?.(sign);
         else if (board) this.onBoardClick?.(board);
@@ -707,10 +735,14 @@ export class OfficeScene {
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      if (this.cameraLocked) return;
       this.updatePointer(event);
       this.cameraRig.zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, this.pointer.x, this.pointer.y);
     };
-    const onLeave = () => this.setHovered(null);
+    const onLeave = () => {
+      this.setHovered(null);
+      this.onTargetHover?.(null, 0, 0);
+    };
     const onLightingChange = () => this.applyLighting();
     window.addEventListener('axon-office-lighting', onLightingChange);
     const onQualityChange = () => {

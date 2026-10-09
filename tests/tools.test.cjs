@@ -130,6 +130,30 @@ test('PermissionManager enforces allow/ask/deny and session grants', async () =>
   assert.equal(manager.check({ toolName: 'write_file', args: { path: '/mock/root/b.ts' } }).action, 'allow');
 });
 
+test('"Allow for this task" lets that tool run without asking in that conversation, until its run ends', async () => {
+  const manager = new PermissionManager(['/mock/root'], true, { write_file: 'ask' });
+  const write = (conversationId, file = '/mock/root/b.ts') => manager.check({ toolName: 'write_file', args: { path: file }, conversationId });
+  const { request, outcome } = manager.createApprovalRequest({
+    conversationId: 'c1',
+    messageId: 'm1',
+    toolCallId: 't1',
+    toolName: 'write_file',
+    args: { path: '/mock/root/b.ts' }
+  });
+  manager.resolveApproval({ requestId: request.id, approved: true, allowForTask: true });
+  assert.equal(await outcome, 'approved-task');
+  assert.equal(write('c1').action, 'allow');
+  assert.equal(write('c1').byTask, true);
+  // Another conversation, and the app as a whole, still ask.
+  assert.equal(write('c2').action, 'ask');
+  assert.equal(manager.check({ toolName: 'write_file', args: { path: '/mock/root/b.ts' } }).action, 'ask');
+  // It never turns a refusal into an allow.
+  assert.equal(write('c1', '/outside/b.ts').action, 'deny');
+  // The run is over: the next one asks again.
+  manager.endTask('c1');
+  assert.equal(write('c1').action, 'ask');
+});
+
 test('streamChat parses OpenAI tool_calls stream delta', async () => {
   const savedFetch = global.fetch;
   try {

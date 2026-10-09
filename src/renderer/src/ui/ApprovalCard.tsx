@@ -3,24 +3,37 @@ import type { ToolApprovalRequest } from '../../../shared/types';
 import { Button, IconCheck, IconClose, IconShieldAlert, IconTerminal } from './index';
 import { DiffLines } from './DiffLines';
 import { diffRows, diffStats } from '../features/office/workspace/work';
+import { toolPresentation } from '../chat/workPresentation';
 
+const SHORTCUT = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
+
+/**
+ * A tool waiting for your OK, in one line first (what and where), then the change or command to
+ * look at. Approve once, approve for the rest of this task, or reject; Ctrl+Enter approves.
+ */
 export function ApprovalCard({
   request,
   onDecision
 }: {
   request: ToolApprovalRequest;
-  onDecision: (approved: boolean, alwaysAllowSession?: boolean) => void;
+  onDecision: (approved: boolean, grant?: 'task' | 'session') => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
 
-  const handle = (approved: boolean, always = false) => {
+  const handle = (approved: boolean, grant?: 'task' | 'session') => {
     setSubmitting(true);
-    onDecision(approved, always);
+    onDecision(approved, grant);
   };
 
   const preview = request.preview;
   const path = preview?.path ?? String(request.arguments.path ?? '');
   const stats = preview?.type === 'diff' ? diffStats(preview.content) : null;
+  const shown = toolPresentation({ id: request.toolCallId, name: request.toolName, arguments: JSON.stringify(request.arguments) });
+  const summary = stats
+    ? stats.created
+      ? `Create ${path} · ${stats.added} line${stats.added === 1 ? '' : 's'}`
+      : `Save ${path} · +${stats.added} −${stats.removed}`
+    : `${shown.label}${shown.target ? ` · ${shown.target}` : ''}`;
 
   return (
     <div className="approval-card">
@@ -29,38 +42,11 @@ export function ApprovalCard({
           <span className="approval-icon">
             <IconShieldAlert size={16} />
           </span>
-          <strong>Tool execution approval required</strong>
+          <strong>Needs your OK</strong>
+          <span className="approval-summary" title={summary}>
+            {summary}
+          </span>
         </div>
-        <span className="badge badge-accent">{request.toolName}</span>
-      </div>
-
-      <div className="approval-description">
-        {stats ? (
-          stats.created ? (
-            <>
-              Create <code>{path}</code>: {stats.added} line{stats.added === 1 ? '' : 's'}.
-            </>
-          ) : (
-            <>
-              Save changes to <code>{path}</code>: {stats.added} added, {stats.removed} removed.
-            </>
-          )
-        ) : (
-          <>
-            The assistant is requesting permission to execute <code>{request.toolName}</code>
-            {request.arguments.path ? (
-              <>
-                {' '}
-                on file <code>{String(request.arguments.path)}</code>
-              </>
-            ) : request.arguments.command ? (
-              <>
-                <span>Review the command below before approving.</span>
-              </>
-            ) : null}
-            .
-          </>
-        )}
       </div>
 
       {preview?.type === 'diff' && (
@@ -70,34 +56,45 @@ export function ApprovalCard({
       )}
 
       {preview?.type === 'command' && (
-        <details className="approval-preview-cmd">
-          <summary>Command · requires your permission</summary>
-          <IconTerminal size={14} />
+        <details className="approval-preview-cmd" open>
+          <summary>
+            <IconTerminal size={14} /> Command
+          </summary>
           <pre style={{ maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{preview.content}</pre>
         </details>
       )}
 
       <div className="approval-actions">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={IconClose}
+        <button
+          type="button"
+          className="approval-session"
           disabled={submitting}
-          onClick={() => handle(false)}
+          title="Don’t ask again until Axon restarts"
+          onClick={() => handle(true, 'session')}
         >
+          Always allow this session
+        </button>
+        <Button variant="ghost" size="sm" icon={IconClose} disabled={submitting} onClick={() => handle(false)}>
           Reject
         </Button>
-        <Button variant="secondary" size="sm" disabled={submitting} onClick={() => handle(true, true)}>
-          Always allow this session
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={submitting}
+          title="Don’t ask again for this tool until this task is done"
+          onClick={() => handle(true, 'task')}
+        >
+          Allow for this task
         </Button>
         <Button
           variant="primary"
           size="sm"
           icon={IconCheck}
           disabled={submitting}
-          onClick={() => handle(true, false)}
+          title={`Approve (${SHORTCUT}+Enter)`}
+          onClick={() => handle(true)}
         >
-          Approve
+          Approve <kbd className="approval-kbd">{SHORTCUT}+Enter</kbd>
         </Button>
       </div>
     </div>

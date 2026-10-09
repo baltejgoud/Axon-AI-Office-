@@ -47,23 +47,43 @@
   border-radius: 10px;
   padding: 10px;
 }
+/* One slim rail: the team's status, with Activity & results and Company operations beside it. */
 .office-container .office-navigation {
   position: absolute;
-  top: 105px;
+  top: 100px;
   left: 24px;
   z-index: 7;
-  padding: 18px 20px;
+  padding: 4px 4px 4px 14px;
   background: var(--office-paper);
-  border-radius: 18px;
-  box-shadow: var(--office-shadow);
+  border: 1px solid var(--office-border);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px #14264212;
 }
 .office-container .office-presence {
-  flex-wrap: wrap;
-  max-width: 290px;
+  flex-wrap: nowrap;
+  max-width: none;
 }
-.office-container .office-presence small {
-  width: 100%;
-  margin-left: 13px;
+.office-container .global-work {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.office-container .global-work .office-presence-main {
+  padding: 4px 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.office-container .global-work-fold {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--office-muted);
+}
+.office-container .global-work-fold:hover {
+  background: var(--office-soft);
+  color: var(--office-ink);
 }
 .office-container .office-roster-fallback {
   position: absolute;
@@ -77,6 +97,36 @@
   transform: translateX(-50%);
   z-index: 7;
   max-width: min(680px, 60%);
+}
+/* With the panel open, the team strip takes the room between the corner controls and the panel, and
+   narrows to fit it: never under the panel, the map hint, Ask Axon or the map controls. */
+.office-container:has(.conversation-drawer.is-open) .coworker-dock {
+  --panel-room: calc(min(var(--drawer-width, 480px), 100% - 32px) + 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: none;
+  transform: none;
+}
+.office-container:has(.conversation-drawer.is-open) .coworker-dock .office-team-dock {
+  max-width: 100%;
+  min-width: 0;
+}
+/* Narrowed, the people scroll sideways rather than being cut off. */
+.office-container:has(.conversation-drawer.is-open) .coworker-dock .office-team-people {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.office-container[data-drawer-side='right']:has(.conversation-drawer.is-open) .coworker-dock {
+  left: 400px;
+  right: calc(var(--panel-room) + 8px);
+}
+.office-container[data-drawer-side='left']:has(.conversation-drawer.is-open) .coworker-dock {
+  left: calc(var(--panel-room) + 232px);
+  right: 300px;
+}
+.office-container[data-drawer-side='left']:has(.conversation-drawer.is-open) .office-map-hint {
+  display: none;
 }
 .office-container .office-team-dock {
   margin: 0;
@@ -125,7 +175,6 @@
 .office-container .office-map-hint {
   bottom: 28px;
   left: 24px;
-  max-width: 220px;
 }
 .coworker-popover {
   position: absolute;
@@ -181,7 +230,8 @@
   right: 16px;
   top: 100px;
   bottom: 16px;
-  width: min(480px, calc(100% - 32px));
+  /* Its width is yours: dragged at its inner edge, kept across restarts (--drawer-width on the office). */
+  width: min(var(--drawer-width, 480px), calc(100% - 32px));
   z-index: 20;
   display: flex;
   transform: translateX(calc(100% + 24px));
@@ -200,6 +250,63 @@
   min-width: 0;
   max-width: none;
   box-shadow: 0 12px 45px #14264226;
+}
+/* Docked left: it slides in from the left, and the cards there move over to make room. */
+.conversation-drawer.dock-left {
+  right: auto;
+  left: 16px;
+  transform: translateX(calc(-100% - 24px));
+}
+.conversation-drawer.dock-left.is-open {
+  transform: translateX(0);
+}
+.office-container[data-drawer-side='left']:has(.conversation-drawer.is-open)
+  :is(.office-navigation, .ask-axon, .office-map-hint, .office-breadcrumb) {
+  left: calc(min(var(--drawer-width, 480px), 100% - 32px) + 32px);
+}
+.conversation-drawer.is-resizing {
+  transition: none;
+  user-select: none;
+}
+/* The grip on the panel's inner edge: drag to resize, arrow keys too, double-click to reset. */
+.drawer-resize {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: -7px;
+  z-index: 3;
+  width: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.conversation-drawer.dock-left .drawer-resize {
+  left: auto;
+  right: -7px;
+}
+.drawer-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 4px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 4px;
+  background: var(--office-border);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.conversation-drawer:hover .drawer-resize::after {
+  opacity: 1;
+}
+.drawer-resize:hover::after,
+.drawer-resize:focus-visible::after,
+.conversation-drawer.is-resizing .drawer-resize::after {
+  opacity: 1;
+  background: var(--office-blue);
+}
+.drawer-resize:focus-visible {
+  outline: none;
 }
 .drawer-close {
   position: absolute;
@@ -315,11 +422,14 @@
   gap: 8px;
   padding: 8px;
 }
+/* Search keeps a useful width and no more; the district chips get the rest of the bar, and only the
+   ones that still don't fit go into More (below 1200px they hide and the department menu does it). */
 .office-container .office-find-person {
-  min-width: 240px;
+  flex: 0 1 320px;
+  min-width: 200px;
 }
 .top-districts {
-  max-width: 48vw;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .top-districts > .office-district-chips {
@@ -394,40 +504,90 @@
   color: var(--office-blue);
   font-size: 12px;
 }
+/* Close up: the district and department in view, flat on screen, each a way back to its overview. */
+/* Under the team rail at the left, out of the middle of the scene where people's tags go. */
+.office-breadcrumb {
+  position: absolute;
+  top: 146px;
+  left: 24px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--office-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--office-paper) 92%, transparent);
+  box-shadow: 0 4px 16px #14264212;
+  backdrop-filter: blur(6px);
+  color: var(--office-muted);
+  font-size: 12px;
+}
+.office-breadcrumb button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--office-ink);
+  font: inherit;
+  font-weight: 600;
+}
+.office-breadcrumb button:last-child {
+  font-weight: 500;
+}
+.office-breadcrumb button:hover {
+  background: var(--office-soft);
+}
+.focus-mode .office-breadcrumb {
+  display: none;
+}
+/* What a click on the sign or board under the pointer does, beside the pointer. */
+.office-hover-tip {
+  position: absolute;
+  z-index: 8;
+  max-width: 260px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--office-ink);
+  color: var(--office-paper);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px #16233b33;
+}
+.office-hover-tip[hidden] {
+  display: none;
+}
+/* Ask Axon: one slim line, its shortcut beside it. */
 .ask-axon {
   position: absolute;
   bottom: 24px;
   left: 24px;
   z-index: 7;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 5px 12px;
-  text-align: left;
-  padding: 14px 18px;
-  min-width: 230px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
   border: 1px solid var(--office-border);
-  border-radius: 18px;
+  border-radius: 999px;
   background: var(--office-paper);
   color: var(--office-ink);
-  box-shadow: var(--office-shadow);
+  box-shadow: 0 4px 16px #14264212;
+  font-size: 12.5px;
 }
-.ask-axon span {
-  color: var(--office-muted);
-  font-size: 11px;
-  grid-column: 1;
+.ask-axon > svg {
+  color: var(--office-blue);
 }
 .ask-axon kbd {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  align-self: center;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--office-muted);
   background: var(--office-soft);
-  padding: 6px;
-  border-radius: 6px;
+  padding: 4px 7px;
+  border-radius: 999px;
 }
 .office-container .office-map-hint {
-  bottom: 110px;
+  bottom: 70px;
 }
 .focus-mode .ask-axon {
   display: none;
@@ -699,7 +859,13 @@
 .office-container:has(.conversation-drawer.is-open)
   .office-workspace:not(.work-fullscreen)
   .work-surface-slot {
-  right: min(512px, 40%);
+  right: calc(min(var(--drawer-width, 480px), 100% - 32px) + 32px);
+}
+.office-container[data-drawer-side='left']:has(.conversation-drawer.is-open)
+  .office-workspace:not(.work-fullscreen)
+  :is(.work-surface-slot, .work-divider) {
+  right: 24px;
+  left: calc(min(var(--drawer-width, 480px), 100% - 32px) + 32px);
 }
 .office-container:has(.work-fullscreen) .conversation-drawer {
   visibility: hidden;
@@ -746,8 +912,10 @@
 .office-container:has(.has-work) .office-notifications {
   display: none;
 }
-.office-container:has(.conversation-drawer.is-open) .office-workspace:not(.work-fullscreen) .work-divider {
-  right: min(512px, 40%);
+.office-container[data-drawer-side='right']:has(.conversation-drawer.is-open)
+  .office-workspace:not(.work-fullscreen)
+  .work-divider {
+  right: calc(min(var(--drawer-width, 480px), 100% - 32px) + 32px);
 }
 .office-container {
   overflow: clip;
@@ -827,16 +995,22 @@
   color: var(--office-ink);
 }
 .office-container .office-history-link {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 5px 9px;
+  border-radius: 999px;
   color: var(--office-blue);
-  font-size: 10px;
-  margin-top: 4px;
-  padding: 0;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.office-container .office-history-link:hover {
+  background: var(--office-soft);
 }
 .office-container .global-work-panel {
   left: -20px;
   right: auto;
-  top: 60px;
+  top: 44px;
   width: min(420px, calc(100vw - 80px));
   max-height: calc(100vh - 280px);
   display: flex;

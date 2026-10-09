@@ -77,16 +77,32 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
   const summaryCost = cost.priced
     ? `${cost.estimating > 0 ? '~' : ''}${formatUsd(cost.actual + cost.estimating)}`
     : tokens > 0
-      ? `${formatTokens(tokens)} tokens`
+      ? `${formatTokens(tokens)} used`
       : null;
   const detailsId = `context-meter-${conversation.id}`;
+  // What each number is, on hover: the first is the model's window now, the second the whole conversation so far.
+  const explained = [
+    !usage
+      ? 'Measuring how full the context is.'
+      : usage.tokenBasis
+        ? `Context: ${formatTokens(usage.tokenBasis.usedTokens)} of this model's ${formatTokens(usage.tokenBasis.windowTokens)}-token window is in use (${percent}%).`
+        : `Context: ${percent}% of this model's window is in use.`,
+    cost.priced
+      ? `Cost: ${formatUsd(cost.actual + cost.estimating)} for this conversation so far.`
+      : tokens > 0
+        ? `Used: ${formatTokens(tokens)} tokens sent and received across this whole conversation (${formatTokens(cost.promptTokens)} in, ${formatTokens(cost.completionTokens)} out).`
+        : '',
+    'Click for details.'
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   return (
     <div className={`context-meter tone-${meterTone(pct)}`} ref={root}>
       <button
         type="button"
         className="context-meter-summary"
-        title="Context and cost"
+        title={explained}
         aria-expanded={open}
         aria-controls={detailsId}
         onClick={() => setOpen(!open)}
@@ -163,7 +179,8 @@ export function ContextMeter({ conversation }: { conversation: Conversation }) {
             )}
             {tokens > 0 && (
               <p>
-                {formatTokens(cost.promptTokens)} tokens in, {formatTokens(cost.completionTokens)} out.
+                This conversation so far: {formatTokens(cost.promptTokens)} tokens in,{' '}
+                {formatTokens(cost.completionTokens)} out.
               </p>
             )}
             {!hasPrice(model) && (

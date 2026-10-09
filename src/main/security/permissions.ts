@@ -11,10 +11,12 @@ export interface CheckResult {
   reason?: string;
   /** A session grant allowed it ("Always allow this session"). */
   bySession?: boolean;
+  /** A grant for the conversation's current run allowed it ("Allow for this task"). */
+  byTask?: boolean;
 }
 
 /** How an approval request ended. */
-export type ApprovalOutcome = 'approved' | 'approved-session' | 'rejected' | 'timed-out' | 'withdrawn';
+export type ApprovalOutcome = 'approved' | 'approved-session' | 'approved-task' | 'rejected' | 'timed-out' | 'withdrawn';
 
 /** What one run may touch: its folders, and whether shell commands are on. */
 export interface PermissionScope {
@@ -34,9 +36,14 @@ const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
 export const FILE_SAVERS = new Set(['write_file', 'edit_file']);
 /** The name a tool's session grant is kept under. */
 const grantName = (toolName: string) => (FILE_SAVERS.has(toolName) ? 'write_file' : toolName);
+/** What a grant for this call covers: the exact call for commands, else the tool. */
+const grantKey = (toolName: string, args: unknown) =>
+  EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${grantName(toolName)}:*`;
 
 export class PermissionManager {
   private readonly sessionGrants = new Set<string>();
+  /** "Allow for this task": grants for one conversation's current run, by conversation, gone when it ends. */
+  private readonly taskGrants = new Map<string, Set<string>>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   /** How a connector's tool is treated; null for tools that aren't a connector's. */
   private connectorRule: ((toolName: string) => McpToolPolicy | null) | null = null;
@@ -66,7 +73,15 @@ export class PermissionManager {
   }
 
   /** Checks one call. `scope` is the run's own folders and shell setting; without it the manager's defaults apply. */
-  check(req: { toolName: string; args: Record<string, any> }, scope?: PermissionScope): CheckResult {
+  check(req: { toolName: string; args: Record<string, any>; conversationId?: string }, scope?: PermissionScope): CheckResult {
+    const result = this.decide(req, scope);
+    // A grant for this task only answers a question; it never turns a refusal into an allow.
+    if (result.action === 'ask' && req.conversationId && this.taskGrants.get(req.conversationId)?.has(grantKey(req.toolName, req.args)))
+      return { action: 'allow', byTask: true };
+    return result;
+  }
+
+  private decide(req: { toolName: string; args: Record<string, any> }, scope?: PermissionScope): CheckResult {
     const { toolName, args } = req;
     const roots = scope?.roots ?? this.roots;
     const allowShell = scope?.allowShell ?? this.allowShell;
@@ -144,7 +159,7 @@ export class PermissionManager {
     const outcome = new Promise<ApprovalOutcome>((resolve) => {
       settle = resolve;
     });
-    const promise = outcome.then((ended) => ended === 'approved' || ended === 'approved-session');
+    const promise = outcome.then((ended) => ended === 'approved' || ended === 'approved-session' || ended === 'approved-task');
 
     // 5-minute timeout on user approvals; a waiting approval never keeps the app from quitting.
     const timer = setTimeout(() => {
@@ -164,7 +179,13 @@ export class PermissionManager {
 
   resolveApproval(decision: ToolApprovalDecision): boolean {
     return this.settle(decision.requestId,
-      !decision.approved ? 'rejected' : decision.alwaysAllowSession ? 'approved-session' : 'approved');
+      !decision.approved
+        ? 'rejected'
+        : decision.alwaysAllowSession
+          ? 'approved-session'
+          : decision.allowForTask
+            ? 'approved-task'
+            : 'approved');
   }
 
   /** The run that asked has stopped: the request is answered as withdrawn and leaves the pending list. */
@@ -179,14 +200,26 @@ export class PermissionManager {
     this.pendingApprovals.delete(requestId);
     if (outcome === 'approved-session') {
       const { toolName, arguments: args } = pending.request;
-      this.sessionGrants.add(EXACT_GRANTS.has(toolName) ? `${toolName}:${JSON.stringify(args)}` : `${grantName(toolName)}:*`);
+      this.sessionGrants.add(grantKey(toolName, args));
+    }
+    if (outcome === 'approved-task') {
+      const { toolName, arguments: args, conversationId } = pending.request;
+      const grants = this.taskGrants.get(conversationId) ?? new Set<string>();
+      grants.add(grantKey(toolName, args));
+      this.taskGrants.set(conversationId, grants);
     }
     pending.resolve(outcome);
     return true;
   }
 
+  /** A conversation's run has ended: what was allowed for that task asks again next time. */
+  endTask(conversationId: string): void {
+    this.taskGrants.delete(conversationId);
+  }
+
   clearSession() {
     this.sessionGrants.clear();
+    this.taskGrants.clear();
     for (const pending of this.pendingApprovals.values()) {
       clearTimeout(pending.timer);
       pending.resolve('withdrawn');

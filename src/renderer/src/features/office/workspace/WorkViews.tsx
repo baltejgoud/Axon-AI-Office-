@@ -296,11 +296,18 @@ function Decision({ request, approve }: { request: ToolApprovalRequest; approve:
       : `Use ${toolLabel(request.toolName)} without asking again this session`;
   return (
     <span className="work-decision">
-      <button className="work-always" onClick={() => decideApproval(request, true, true)} title={always}>
+      <button className="work-always" onClick={() => decideApproval(request, true, 'session')} title={always}>
         Always allow
       </button>
       <button className="work-reject" onClick={() => decideApproval(request, false)}>
         Reject
+      </button>
+      <button
+        className="work-always"
+        onClick={() => decideApproval(request, true, 'task')}
+        title={`Don’t ask again for ${toolLabel(request.toolName)} until this task is done`}
+      >
+        Allow for this task
       </button>
       <button
         className="work-approve"

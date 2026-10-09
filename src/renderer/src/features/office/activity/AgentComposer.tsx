@@ -42,12 +42,16 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     el.style.height = `${Math.min(el.scrollHeight, MAX_BOX)}px`;
   }, [input]);
 
-  // A suggestion picked in the empty chat lands in the box, ready to send or to add to.
+  // A suggestion picked in the empty chat lands in the box, ready to send or to add to; Continue sends.
   const request = useOfficeStore((s) => s.composeRequest);
   useEffect(() => {
     if (!request || request.agentId !== agentId) return;
-    setInput(request.text);
     useOfficeStore.getState().clearCompose();
+    if (request.send) {
+      void handleSend(request.text);
+      return;
+    }
+    setInput(request.text);
     requestAnimationFrame(() => {
       box.current?.focus();
       box.current?.setSelectionRange(request.text.length, request.text.length);
@@ -68,14 +72,28 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const libraryResident = LIBRARY_RESIDENTS.includes(agentId);
   // Where they work: their conversation's own folder, else the project open in the app.
   const folder = conversation?.projectRoot ?? data?.projectRoot ?? null;
-  const needsModel = !conversation && !model;
+  // A new conversation starts with the model this coworker used last; failing that, the one you used last
+  // anywhere, marked as inherited so it is never a surprise.
+  const enabledModels = (data?.providers ?? [])
+    .filter((p) => p.enabled)
+    .flatMap((p) => p.models.map((m) => `${p.id}::${m.id}`));
+  const remembered = useOfficeStore((s) => s.agentModels[agentId]);
+  const ownModel = remembered && enabledModels.includes(remembered) ? remembered : '';
+  const startModel = ownModel || model;
+  const lastPick = useOfficeStore((s) => s.lastPick);
+  const inheritedFrom =
+    !conversation && !ownModel && lastPick && lastPick.agentId !== agentId && lastPick.model === model
+      ? (OFFICE_AGENTS.find((a) => a.id === lastPick.agentId)?.name ?? 'another coworker')
+      : null;
+  const needsModel = !conversation && !startModel;
   // The receptionist keeps the planner with tools; a model marked as having none can't.
-  const chosen = conversation ? `${conversation.providerId}::${conversation.modelId}` : model;
+  const chosen = conversation ? `${conversation.providerId}::${conversation.modelId}` : startModel;
   const [chosenProvider, ...chosenModel] = chosen.split('::');
-  const noTools =
-    agentId === RECEPTIONIST_ID &&
-    data?.providers.find((p) => p.id === chosenProvider)?.models.find((m) => m.id === chosenModel.join('::'))
-      ?.supportsTools === false;
+  // A model marked as having no tools: said before you send, not after the run fails.
+  const chosenSpec = data?.providers
+    .find((p) => p.id === chosenProvider)
+    ?.models.find((m) => m.id === chosenModel.join('::'));
+  const noTools = chosenSpec?.supportsTools === false;
 
   // Voice typing: the words land at the cursor, to read over before sending.
   const engine = data ? chosenEngine(data.providers, data.settings.voice) : null;
@@ -193,8 +211,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     }
   };
 
-  const handleSend = async () => {
-    const textToSend = input.trim();
+  const handleSend = async (text = input) => {
+    const textToSend = text.trim();
     if (!textToSend || !agent) return;
     if (running) {
       if (conversation) await handleQueue(textToSend);
@@ -220,7 +238,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       if (!convId) {
         const enabledProviders = data?.providers.filter((p) => p.enabled) || [];
         const chosenModel =
-          model ||
+          startModel ||
           (enabledProviders[0]?.models[0]
             ? `${enabledProviders[0].id}::${enabledProviders[0].models[0].id}`
             : '');
@@ -252,9 +270,13 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         await useApp.getState().refresh();
       }
 
-      const attachIds = attachments.map((a) => a.id);
-      setInput('');
-      setAttachments([]);
+      // A Continue leaves what you were writing, and its attachments, in the box.
+      const fromBox = text === input;
+      const attachIds = fromBox ? attachments.map((a) => a.id) : [];
+      if (fromBox) {
+        setInput('');
+        setAttachments([]);
+      }
 
       pushActivity(agentId, {
         type: 'streaming',
@@ -300,7 +322,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     <div className="activity-composer">
       {noTools && (
         <p className="composer-notice" role="note">
-          This model can’t use tools, so I can’t keep your planner. Pick another model.
+          {agentId === RECEPTIONIST_ID
+            ? 'This model can’t use tools, so I can’t keep your planner. Pick another model.'
+            : `${chosenSpec?.displayName || 'This model'} can’t use tools, so ${agent?.name ?? 'they'} can only answer from what you write here: no files, searches or connectors. Pick another model for that.`}
         </p>
       )}
       {handed.length > 0 && (
@@ -389,11 +413,20 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           />
 
           <ModelPicker
-            value={conversation ? `${conversation.providerId}::${conversation.modelId}` : model}
+            value={chosen}
             disabled={isBusy}
             title={conversation ? 'Change the model for the next message' : 'Model for this conversation'}
+            note={
+              inheritedFrom
+                ? {
+                    text: 'inherited',
+                    title: `Carried over from ${inheritedFrom}. Pick a model to keep one for ${agent?.name ?? 'this coworker'}.`
+                  }
+                : undefined
+            }
             onChange={(value) => {
               patch({ model: value });
+              useOfficeStore.getState().setAgentModel(agentId, value);
               if (!conversation) return;
               const [providerId, ...modelParts] = value.split('::');
               void window.axon
@@ -403,7 +436,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                   patch({ error: error instanceof Error ? error.message : 'Could not change the model.' })
                 );
             }}
-            onManage={() => useOfficeStore.getState().openOverlay('settings')}
+            onManage={() => useOfficeStore.getState().openOverlay('settings', 'models')}
           />
 
           {agentId !== RECEPTIONIST_ID && <FolderPicker folder={folder} disabled={isBusy} />}

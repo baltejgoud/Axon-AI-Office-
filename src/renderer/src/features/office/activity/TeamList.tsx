@@ -13,10 +13,11 @@ import { teamList, type Team } from '../tasks';
 
 const DONE_SHOWN = 20;
 const EMPTY: TaskItem[] = [];
+/** The badges' words, as everywhere else in the office. */
 const STATUS_LABEL: Record<TaskItem['status'], string> = {
-  attention: 'Needs attention',
+  attention: 'Needs you',
   working: 'Working',
-  done: 'Done',
+  done: 'Completed',
   open: 'To do'
 };
 
@@ -57,9 +58,9 @@ export function TeamList({ team }: { team: Team }) {
             No tasks yet. Give someone on this team a task and it shows up here.
           </p>
         )}
-        <Group title="Needs attention" tasks={groups.attention} onOpen={open} />
+        <Group title="Needs you" tasks={groups.attention} onOpen={open} />
         <Group title="Working" tasks={groups.working} onOpen={open} />
-        <Group title="Done" tasks={done} onOpen={open} />
+        <Group title="Completed" tasks={done} onOpen={open} />
         {groups.done.length > DONE_SHOWN && !more && (
           <button className="team-list-more" onClick={() => setMore(true)}>
             Show more ({groups.done.length - DONE_SHOWN})

@@ -206,6 +206,8 @@ export interface PlatformAPI {
   chatDelete(id: string): Promise<void>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;
   chatStop(id: string): Promise<void>;
+  /** "Notify me when done" for the conversation's current run; whether it is on now. */
+  chatNotifyWhenDone(id: string, on: boolean): Promise<boolean>;
   /** The context meter for a conversation before anything is sent; null for an unknown conversation. */
   getContextUsage(conversationId: string): Promise<ContextUsage | null>;
   /** Settings → Usage: every reply's reported usage, added up; dollars only for models with prices. */
@@ -218,6 +220,11 @@ export interface PlatformAPI {
   auditList(query: AuditQuery): Promise<AuditEntry[]>;
   /** Saves the activity log where you choose; false when cancelled. */
   auditExport(): Promise<boolean>;
+  /**
+   * Saves text (a reply, a whole conversation) as a Markdown file where you choose, starting in
+   * `folder` when given; the saved path, or null when cancelled.
+   */
+  documentSave(name: string, content: string, folder?: string | null): Promise<string | null>;
   /** Undoes a coworker's saved write after asking; rejects with "Undo cancelled." on Cancel. */
   revertChange(toolCallId: string): Promise<void>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;

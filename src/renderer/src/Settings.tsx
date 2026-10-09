@@ -115,7 +115,7 @@ export function SettingsPanel() {
     useOfficeStore.setState({ settingsSection: id });
   };
   const needsSignIn = useApp(
-    (s) => s.data?.mcpServers.some((m) => m.enabled && m.status === 'needs-sign-in') ?? false
+    (s) => s.data?.mcpServers.filter((m) => m.enabled && m.status === 'needs-sign-in').length ?? 0
   );
 
   return (
@@ -168,8 +168,13 @@ export function SettingsPanel() {
             >
               <Icon icon={s.icon} size="md" />
               {s.label}
-              {s.id === 'tools' && needsSignIn && (
-                <span className="settings-nav-dot" title="A connector needs you to sign in" />
+              {s.id === 'tools' && needsSignIn > 0 && (
+                <span
+                  className="settings-nav-dot"
+                  role="img"
+                  aria-label={`${needsSignIn === 1 ? 'A connector needs' : `${needsSignIn} connectors need`} you to sign in again`}
+                  title={`${needsSignIn === 1 ? 'A connector needs' : `${needsSignIn} connectors need`} you to sign in again. Nothing is broken.`}
+                />
               )}
             </button>
           ))}
@@ -566,16 +571,41 @@ const QUALITIES = [
   { value: 'high', label: 'High' },
   { value: 'balanced', label: 'Balanced' }
 ] as const;
+/** Each choice described as it is chosen, so the words under a setting always match it. */
+const THEME_HINT: Record<(typeof THEMES)[number]['value'], string> = {
+  light: 'Always light, whatever your computer is set to.',
+  dark: 'Always dark, whatever your computer is set to.',
+  system: 'Follows your computer: light or dark as Windows is set, and changes with it.'
+};
+const QUALITY_HINT: Record<QualityMode, string> = {
+  auto: 'Starts sharp and switches to Balanced if the office runs slowly.',
+  high: 'Draws the office sharper, with finer shadows. Best on mains power.',
+  balanced: 'Lighter on the graphics card, for older or battery-powered computers.'
+};
+const PANEL_SIDES = [
+  { value: 'left', label: 'Left' },
+  { value: 'right', label: 'Right' }
+] as const;
+const PANEL_WIDTHS = [
+  { value: '400', label: 'Narrow' },
+  { value: '480', label: 'Standard' },
+  { value: '720', label: 'Wide' }
+] as const;
 
 function AppearanceSection() {
   const [settings, save] = useSettings();
   const [followClock, setFollowClock] = useState(followsTimeOfDay);
   const [quality, setQuality] = useState<QualityMode>(qualityPreference);
+  const drawer = useOfficeStore((s) => s.drawer);
+  // The preset nearest the width you dragged to.
+  const panelWidth = PANEL_WIDTHS.reduce((best, option) =>
+    Math.abs(Number(option.value) - drawer.width) < Math.abs(Number(best.value) - drawer.width) ? option : best
+  ).value;
   return (
     <div className="settings-page">
       <SectionHeader title="Appearance" description="How Axon and the office look." />
       <SettingsGroup title="App">
-        <SettingRow label="Theme" hint="System follows your computer's light or dark mode.">
+        <SettingRow label="Theme" hint={THEME_HINT[settings.theme as keyof typeof THEME_HINT] ?? THEME_HINT.system}>
           <Segmented
             label="Theme"
             value={settings.theme}
@@ -598,10 +628,7 @@ function AppearanceSection() {
             }}
           />
         </SettingRow>
-        <SettingRow
-          label="Quality"
-          hint="High draws the office sharper, with finer shadows. Auto switches to Balanced if the office runs slowly."
-        >
+        <SettingRow label="Quality" hint={QUALITY_HINT[quality]}>
           <Segmented
             label="Office quality"
             value={quality}
@@ -610,6 +637,30 @@ function AppearanceSection() {
               setQuality(mode);
               setQualityPreference(mode);
             }}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="Conversation panel">
+        <SettingRow
+          label="Side"
+          hint={`On the ${drawer.side} of the office. Also in the panel's ⋯ menu.`}
+        >
+          <Segmented
+            label="Panel side"
+            value={drawer.side}
+            options={PANEL_SIDES}
+            onChange={(side) => useOfficeStore.getState().setDrawer({ side })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Width"
+          hint={`${drawer.width}px now. Drag the panel's inner edge for any width; double-click it to reset.`}
+        >
+          <Segmented
+            label="Panel width"
+            value={panelWidth}
+            options={PANEL_WIDTHS}
+            onChange={(width) => useOfficeStore.getState().setDrawer({ width: Number(width) })}
           />
         </SettingRow>
       </SettingsGroup>

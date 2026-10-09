@@ -72,7 +72,7 @@ interface OfficeStoreState {
   panelTab: PanelTab;
   setPanelTab: (tab: PanelTab) => void;
   /** Goes where a notification, the tray or the Today board points: someone, their thread, the planner. */
-  focusOn: (target: FocusTarget) => void;
+  focusOn: (target: FocusTarget, options?: { fly?: boolean }) => void;
   /**
    * Legacy share value for the floating sheet: its height is 1 - workSplit. Starts at 40% height
    * and remembers resizing across tabs and coworkers without changing the canvas size.
@@ -91,9 +91,20 @@ interface OfficeStoreState {
   /** Something asked the work surface to show one step: a file or command in the side panel. */
   workFocus: { conversationId: string; stepId: string; at: number } | null;
   focusWork: (conversationId: string, stepId: string) => void;
-  /** A suggestion was picked in an empty chat: its text for that coworker's message box, until the box takes it. */
-  composeRequest: { agentId: string; text: string } | null;
-  compose: (agentId: string, text: string) => void;
+  /**
+   * A suggestion was picked in an empty chat: its text for that coworker's message box, until the box
+   * takes it. With `send`, the box sends it at once (Continue on a run that stopped early).
+   */
+  composeRequest: { agentId: string; text: string; send?: boolean } | null;
+  compose: (agentId: string, text: string, send?: boolean) => void;
+  /** The model each coworker last used (`providerId::modelId`): their next conversation starts with it. */
+  agentModels: Record<string, string>;
+  /** The conversation panel: its width in CSS pixels and the side it docks to, kept across restarts. */
+  drawer: { width: number; side: 'left' | 'right' };
+  setDrawer: (drawer: Partial<{ width: number; side: 'left' | 'right' }>) => void;
+  /** The last model you picked this session, and for whom: what another coworker's new conversation carries over. */
+  lastPick: { agentId: string; model: string } | null;
+  setAgentModel: (agentId: string, model: string) => void;
   clearCompose: () => void;
   /** Messages sent while a conversation's run was going, by conversation, until the run reads them. */
   queued: Record<string, string[]>;
@@ -143,6 +154,33 @@ for (const agent of OFFICE_AGENTS) {
   };
 }
 
+/** Each coworker's last model, kept on this computer across restarts. */
+const AGENT_MODELS_KEY = 'axon.agentModels';
+function readAgentModels(): Record<string, string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AGENT_MODELS_KEY) ?? '{}');
+    return saved && typeof saved === 'object' && !Array.isArray(saved)
+      ? Object.fromEntries(Object.entries(saved).filter(([, v]) => typeof v === 'string')) as Record<string, string>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The conversation panel's size: 480 by default, from narrow (360) to wide (960). */
+export const DRAWER_WIDTH = { initial: 480, min: 360, max: 960 };
+const DRAWER_KEY = 'axon.drawer';
+export const clampDrawerWidth = (width: number) =>
+  Math.round(Math.min(DRAWER_WIDTH.max, Math.max(DRAWER_WIDTH.min, Number.isFinite(width) ? width : DRAWER_WIDTH.initial)));
+function readDrawer(): { width: number; side: 'left' | 'right' } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAWER_KEY) ?? '{}');
+    return { width: clampDrawerWidth(Number(saved.width ?? DRAWER_WIDTH.initial)), side: saved.side === 'left' ? 'left' : 'right' };
+  } catch {
+    return { width: DRAWER_WIDTH.initial, side: 'right' };
+  }
+}
+
 export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   focusDepartment: null,
   setFocusDepartment: (department) => set({ focusDepartment: department }),
@@ -162,8 +200,10 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   panelTab: 'chat',
   setPanelTab: (tab) => set({ panelTab: tab }),
   // A notification, the tray, a run or the waiting pill points at a thread: straight to the drawer.
-  focusOn: (target) => {
-    get().flyToAgent(target.agentId);
+  focusOn: (target, { fly = true } = {}) => {
+    // Without the flight (a board clicked), the person is chosen and the camera stays where it is.
+    if (fly) get().flyToAgent(target.agentId);
+    else get().selectAgent(target.agentId);
     if (target.conversationId) get().setAgentConversation(target.agentId, target.conversationId);
     set({ conversationOpen: true, coworkerCard: false, ...(target.planner && { panelTab: 'planner' }) });
   },
@@ -206,7 +246,29 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   workFocus: null,
   focusWork: (conversationId, stepId) => set({ workFocus: { conversationId, stepId, at: Date.now() } }),
   composeRequest: null,
-  compose: (agentId, text) => set({ composeRequest: { agentId, text } }),
+  compose: (agentId, text, send) => set({ composeRequest: { agentId, text, send } }),
+  agentModels: readAgentModels(),
+  drawer: readDrawer(),
+  setDrawer: (change) => {
+    const next = { ...get().drawer, ...change };
+    const drawer = { side: next.side === 'left' ? ('left' as const) : ('right' as const), width: clampDrawerWidth(next.width) };
+    set({ drawer });
+    try {
+      localStorage.setItem(DRAWER_KEY, JSON.stringify(drawer));
+    } catch {
+      // Kept for this session only.
+    }
+  },
+  lastPick: null,
+  setAgentModel: (agentId, model) => {
+    const agentModels = { ...get().agentModels, [agentId]: model };
+    set({ agentModels, lastPick: { agentId, model } });
+    try {
+      localStorage.setItem(AGENT_MODELS_KEY, JSON.stringify(agentModels));
+    } catch {
+      // Kept for this session only.
+    }
+  },
   clearCompose: () => set({ composeRequest: null }),
   queued: {},
   setQueued: (conversationId, messages) => set({ queued: { ...get().queued, [conversationId]: messages } }),

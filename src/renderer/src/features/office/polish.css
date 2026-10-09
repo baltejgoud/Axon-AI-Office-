@@ -98,12 +98,10 @@
   white-space: nowrap;
 }
 .chat-jump {
-  position: sticky;
-  bottom: var(--space-2);
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: var(--space-2) auto;
+  margin: 0 auto;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--office-border);
   border-radius: var(--radius-full);
@@ -123,6 +121,71 @@
   color: var(--office-blue);
   background: color-mix(in srgb, var(--office-blue) 6%, var(--office-paper));
   font-size: var(--text-sm);
+}
+.chat-run-stage > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-run-elapsed {
+  color: var(--office-muted);
+  font-variant-numeric: tabular-nums;
+}
+.chat-run-notify {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--office-blue) 25%, var(--office-border));
+  border-radius: var(--radius-full);
+  background: var(--office-paper);
+  color: var(--office-blue);
+  font: inherit;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chat-run-notify[aria-pressed='true'] {
+  border-color: var(--office-blue);
+  background: var(--office-blue);
+  color: #fff;
+}
+/* Multi Agents: runs counted in the badges' own words and colours. */
+.multi-agents-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.multi-agents-count {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--office-soft);
+  color: var(--office-muted);
+  font-size: var(--text-xs);
+}
+.multi-agents-count.is-working,
+.multi-agents-count.is-queued {
+  color: var(--office-blue);
+}
+.multi-agents-count.is-attention {
+  color: #b45309;
+}
+.multi-agents-count.is-failed {
+  color: #b91c1c;
+}
+.multi-agents-count.is-completed {
+  color: #15803d;
+}
+[data-theme='dark'] .multi-agents-count.is-attention {
+  color: #fcd34d;
+}
+[data-theme='dark'] .multi-agents-count.is-failed {
+  color: #fca5a5;
+}
+[data-theme='dark'] .multi-agents-count.is-completed {
+  color: #86efac;
 }
 .office-container .composer-input-wrapper {
   transition:

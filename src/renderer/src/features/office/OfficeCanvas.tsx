@@ -9,7 +9,10 @@ import {
   IconBook,
   IconRotateCcw,
   IconScan,
+  IconLock,
   IconSettings,
+  IconSparkle,
+  IconUnlock,
   IconZoomIn
 } from '../../ui';
 import { OfficeScene, type OfficeView } from './scene/OfficeScene';
@@ -40,6 +43,40 @@ import { RECEPTIONIST_ID } from '../../../../shared/coworkers';
 import { latestRun, runLifecycle } from './lifecycle';
 import { LifecycleBadge } from './shell/LifecycleBadge';
 import { activeThread } from './activity/thread';
+import type { Team as BoardTeam } from './tasks';
+import { departmentHere } from './shell/spatialLabels';
+
+/** Whether the camera stays put for drags and the wheel, kept on this computer. */
+const CAMERA_LOCK_KEY = 'axon.cameraLocked';
+const readCameraLocked = () => {
+  try {
+    return localStorage.getItem(CAMERA_LOCK_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** The team meeting or working in a room now, newest first: what its board opens. */
+const openTeamIn = (room: string) =>
+  [...(useApp.getState().data?.teams ?? [])]
+    .filter(
+      (t) =>
+        (['meeting', 'planned', 'working', 'reporting'].includes(t.status) || (t.status === 'failed' && !!t.plan)) &&
+        roomOf(t) === room
+    )
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
+/** What clicking a board does, in a few words, for the label by the pointer. */
+function boardHint(team: BoardTeam): string {
+  const board = TASK_BOARDS.find((b) => b.team === team);
+  if (!board) return '';
+  if (board.kind === 'today') return 'Today: open the planner';
+  if (board.room) {
+    if (openTeamIn(board.room)) return `${board.title}: open the team’s conversation`;
+    if (board.kind === 'meeting') return `${board.title}: no meeting here now`;
+  }
+  return `${board.title}: open team tasks`;
+}
 
 export function OfficeCanvas({
   work
@@ -93,6 +130,16 @@ export function OfficeCanvas({
   }, []);
   /** The latest sign handler; the scene is created once and calls through this. */
   const signClick = useRef<(sign: SignSpec) => void>(() => {});
+  const hoverTip = useRef<HTMLDivElement>(null);
+  const [cameraLocked, lockCamera] = useState(readCameraLocked);
+  const setCameraLocked = (locked: boolean) => {
+    lockCamera(locked);
+    try {
+      localStorage.setItem(CAMERA_LOCK_KEY, locked ? '1' : '0');
+    } catch {
+      // Locked for this session only.
+    }
+  };
   const {
     selectedAgentId,
     coworkerCard,
@@ -142,23 +189,35 @@ export function OfficeCanvas({
       world.onFilesClick = () => useOfficeStore.getState().focusOn({ agentId: 'files-agent' });
       world.onLibraryClick = () => useOfficeStore.getState().openOverlay('knowledge');
       world.onSignClick = (sign) => signClick.current(sign);
-      // A team's board opens its task list; the Today board goes to the receptionist's planner.
+      // A short label by the pointer: what a click on this sign or board does, before you click.
+      world.onTargetHover = (target, x, y) => {
+        const tip = hoverTip.current;
+        if (!tip) return;
+        const text = !target
+          ? ''
+          : 'sign' in target
+            ? `Go to ${target.sign.title}`
+            : boardHint(target.board);
+        tip.hidden = !text;
+        if (!text) return;
+        tip.textContent = text;
+        const box = tip.parentElement!.getBoundingClientRect();
+        tip.style.left = `${x - box.left + 14}px`;
+        tip.style.top = `${y - box.top + 18}px`;
+      };
+      // A team's board opens its task list; the Today board goes to the receptionist's planner. A
+      // board never moves the camera: what it opens comes up beside you.
       world.onBoardClick = (team) => {
         const board = TASK_BOARDS.find((b) => b.team === team);
         if (board?.kind === 'today')
-          return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true });
+          return useOfficeStore.getState().focusOn({ agentId: RECEPTIONIST_ID, planner: true }, { fly: false });
         // A meeting room's board: the lead's conversation with the team in that room.
         if (board?.room) {
-          const open = [...(useApp.getState().data?.teams ?? [])]
-            .filter(
-              (t) =>
-                (['meeting', 'planned', 'working', 'reporting'].includes(t.status) || (t.status === 'failed' && !!t.plan)) && roomOf(t) === board.room
-            )
-            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          const open = openTeamIn(board.room);
           if (open)
             return useOfficeStore
               .getState()
-              .focusOn({ agentId: open.leadId, conversationId: open.conversationId });
+              .focusOn({ agentId: open.leadId, conversationId: open.conversationId }, { fly: false });
           if (board.kind === 'meeting') return;
         }
         useOfficeStore.getState().openTeamBoard(team);
@@ -187,6 +246,11 @@ export function OfficeCanvas({
       scene.current = null;
     };
   }, [roster, modelsReady, selectAgent, syncHelp, syncTeams]);
+
+  // The camera lock holds for the scene as it is now, and for one made again (after the roster).
+  useEffect(() => {
+    scene.current?.setCameraLocked(cameraLocked);
+  }, [cameraLocked, loading, roster]);
 
   useEffect(() => {
     scene.current?.setSelectedAgent(selectedAgentId);
@@ -282,6 +346,7 @@ export function OfficeCanvas({
       );
   };
   const viewDistrict: DistrictId = view ? districtAt(view.target) : 'commons';
+  const here = view ? departmentHere(viewDistrict, view.target) : undefined;
 
   const chooseAgent = useCallback(
     (id: string) => {
@@ -477,13 +542,12 @@ export function OfficeCanvas({
       </div>
 
       <div className="office-navigation" data-office-obstacle aria-label="Team status">
-        <div className="office-presence">
+        <div
+          className="office-presence"
+          title={`${OFFICE_AGENTS.length} coworkers · ${DISTRICTS.reduce((n, d) => n + d.departments.length, 0)} departments`}
+        >
           <span className="office-presence-dot" />
           <GlobalWork />
-          <small>
-            {OFFICE_AGENTS.length} coworkers · {DISTRICTS.reduce((n, d) => n + d.departments.length, 0)}{' '}
-            departments
-          </small>
         </div>
       </div>
 
@@ -563,6 +627,19 @@ export function OfficeCanvas({
             />
           )}
           {coworkerPopover}
+          <div ref={hoverTip} className="office-hover-tip" role="tooltip" hidden />
+          {/* Close up, the floor's own labels tilt and hide behind furniture: where you are, on screen. */}
+          {!loading && view && tier === 'near' && (
+            <nav className="office-breadcrumb" aria-label="Where you are" data-office-obstacle>
+              <button onClick={() => chooseDistrict(viewDistrict)}>{districtById(viewDistrict).name}</button>
+              {here && (
+                <>
+                  <span aria-hidden="true">›</span>
+                  <button onClick={() => chooseDepartment(here.target)}>{here.title}</button>
+                </>
+              )}
+            </nav>
+          )}
           <div className="office-map-hint">
             <IconZoomIn size={13} />
             <span>
@@ -579,15 +656,29 @@ export function OfficeCanvas({
       <button
         className="ask-axon"
         data-office-obstacle
+        title="Get help or automate work"
         onClick={() => useOfficeStore.getState().setCommandPaletteOpen(true)}
       >
+        <IconSparkle size={14} />
         <strong>Ask Axon</strong>
-        <span>Get help or automate work…</span>
         <kbd>{SHORTCUT_KEY}+K</kbd>
       </button>
       <div className="map-controls" data-office-obstacle aria-label="Map controls">
         <button onClick={() => setMapOpen(!mapOpen)} aria-pressed={mapOpen} aria-label="Toggle minimap">
           Map
+        </button>
+        <button
+          onClick={() => setCameraLocked(!cameraLocked)}
+          disabled={roster}
+          aria-pressed={cameraLocked}
+          aria-label={cameraLocked ? 'Unlock the camera' : 'Lock the camera'}
+          title={
+            cameraLocked
+              ? 'Camera locked: drags and the wheel leave the view where it is. Click to unlock.'
+              : 'Lock the camera, so drags and the wheel don’t move the view'
+          }
+        >
+          {cameraLocked ? <IconLock size={15} /> : <IconUnlock size={15} />}
         </button>
         <button onClick={() => scene.current?.zoomBy(1 / 1.2)} disabled={roster} aria-label="Zoom out">
           −

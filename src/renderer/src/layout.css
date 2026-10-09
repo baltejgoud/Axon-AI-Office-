@@ -854,12 +854,23 @@
   padding: 0;
   background: transparent;
 }
-.message-body :not(pre) > code {
+.message-body :not(pre) > code,
+.reading-article :not(pre) > code {
   padding: 1px var(--space-1);
   background: var(--surface-hover);
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.92em;
+}
+/* A template's merge fields ({first_name}): exactly as written, marked as fields to fill. */
+.message-body code.merge-field,
+.reading-article code.merge-field {
+  --field: var(--field-color, var(--accent-text));
+  padding: 0 5px;
+  border: 1px dashed color-mix(in srgb, var(--field) 50%, transparent);
+  background: color-mix(in srgb, var(--field) 9%, transparent);
+  color: var(--field);
+  white-space: nowrap;
 }
 .message-body table {
   display: block;
@@ -892,6 +903,23 @@
   margin-top: var(--space-2);
   color: var(--text-secondary);
   font-size: var(--text-sm);
+}
+/* A run that ended without its answer: said plainly, with the way to carry on beside it. */
+.message-notice.stopped-early {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--warning-text) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning-text) 10%, transparent);
+  color: var(--text-primary);
+}
+.message-notice.stopped-early > span {
+  flex: 1;
+}
+.message-notice.stopped-early strong {
+  color: var(--warning-text);
 }
 .message-actions {
   display: flex;
@@ -1057,7 +1085,19 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   font-weight: var(--weight-semibold);
+}
+/* What and where, in one line beside the title. */
+.approval-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .approval-icon {
   display: flex;
@@ -1091,10 +1131,7 @@
   cursor: pointer;
 }
 .approval-preview-cmd {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: var(--surface-code);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1102,11 +1139,45 @@
   font-size: var(--text-sm);
   color: var(--accent-text);
 }
+.approval-preview-cmd summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.approval-preview-cmd pre {
+  margin: var(--space-2) 0 0;
+}
 .approval-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
   justify-content: flex-end;
   margin-top: var(--space-1);
+}
+/* The broadest grant, set apart as a quiet link at the far left. */
+.approval-session {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.approval-kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.2);
+  font-family: inherit;
+  font-size: 10.5px;
 }
 
 /* ---------- Composer ---------- */

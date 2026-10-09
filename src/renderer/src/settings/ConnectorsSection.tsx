@@ -13,6 +13,7 @@ import { SettingsGroup } from './controls';
 import { ServiceIcon } from './ServiceIcon';
 import { connectorLogo } from './connectorLogos';
 import './connectors.css';
+import { plural } from '../format';
 
 export const errorText = (err: unknown) =>
   err instanceof Error
@@ -55,18 +56,18 @@ export function ConnectorMark({
   );
 }
 
-/** "Connected · 12 tools", "Needs sign-in", "Couldn't connect: …". */
+/** "Connected · 12 tools", "Needs sign-in", "Error: …": the same words as the legend above the list. */
 export function statusText(server: MCPServerConfig): string {
   if (!server.enabled) return 'Off';
   switch (server.status) {
     case 'connected':
-      return `Connected · ${server.tools?.length ?? 0} tools`;
+      return `Connected · ${plural(server.tools?.length ?? 0, 'tool')}`;
     case 'connecting':
       return 'Connecting…';
     case 'needs-sign-in':
       return 'Needs sign-in';
     case 'error':
-      return `Couldn't connect${server.error ? `: ${server.error}` : ''}`;
+      return `Error${server.error ? `: ${server.error}` : ''}`;
     default:
       return 'Not connected';
   }
@@ -146,8 +147,25 @@ export function ConnectorsSection({
       await useApp.getState().refresh();
       const server = useApp.getState().data?.mcpServers.find((s) => s.catalogId === entry.id);
       if (server?.status === 'connected')
-        pushToast(`${entry.name} connected · ${server.tools?.length ?? 0} tools`);
+        pushToast(`${entry.name} connected · ${plural(server.tools?.length ?? 0, 'tool')}`);
       else if (server) pushToast(`${entry.name}: ${statusText(server)}`, 'error');
+    } catch (err) {
+      const message = errorText(err);
+      if (!/cancelled/i.test(message)) setError(message);
+    } finally {
+      setWaiting(null);
+    }
+  };
+
+  /** Sign in again, or try a connector that couldn't connect, straight from its row. */
+  const fix = async (server: MCPServerConfig) => {
+    setError('');
+    setWaiting(server.id);
+    try {
+      await window.axon.connectorReconnect(server.id);
+      await useApp.getState().refresh();
+      const now = useApp.getState().data?.mcpServers.find((s) => s.id === server.id);
+      if (now?.status === 'connected') pushToast(`${server.name} connected · ${plural(now.tools?.length ?? 0, 'tool')}`);
     } catch (err) {
       const message = errorText(err);
       if (!/cancelled/i.test(message)) setError(message);
@@ -177,6 +195,12 @@ export function ConnectorsSection({
       )}
       {servers.length > 0 && (
         <SettingsGroup title="Connected">
+          {/* What each status means, once, in the same words as the badges. */}
+          <p className="connector-legend">
+            <span className="badge badge-accent">Connected</span> ready to use
+            <span className="badge badge-warning">Needs sign-in</span> nothing is broken: sign in again to use it
+            <span className="badge badge-danger">Error</span> Axon couldn’t reach it: try again
+          </p>
           {servers.map((s) => (
             <div className="settings-item" key={s.id}>
               <ConnectorMark name={s.name} catalogId={s.catalogId} />
@@ -188,6 +212,17 @@ export function ConnectorsSection({
                 <div className="settings-item-meta">Used by {usedBy(s.coworkers)}</div>
               </div>
               <div className="settings-item-actions">
+                {/* The fix, one click away, beside the problem. */}
+                {s.enabled && (s.status === 'needs-sign-in' || s.status === 'error') && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={waiting === s.id}
+                    onClick={() => void fix(s)}
+                  >
+                    {waiting === s.id ? 'Waiting…' : s.status === 'needs-sign-in' ? 'Sign in' : 'Try again'}
+                  </Button>
+                )}
                 {CONNECTORS.find((entry) => entry.id === s.catalogId)?.auth === 'oauth-app' && (
                   <Button size="sm" onClick={() => setOwnApp(CONNECTORS.find((entry) => entry.id === s.catalogId)!)}>
                     Edit app credentials

@@ -5,12 +5,18 @@ import { HOME_DESKS, poiById } from '../simulation/layout';
 import type { Vec2 } from '../simulation/types';
 import { shortName, type LabelTier } from './framing';
 import { visibleSpatialLabels } from './spatialLabels';
+import { plural } from '../../../format';
+import { useApp } from '../../../state';
+import { endedLabel, latestRun } from '../lifecycle';
+import { activeThread } from '../activity/thread';
+import { useOfficeStore } from '../store/officeStore';
+/** The same words as the coworker's panel and the activity list: one status language everywhere. */
 const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: 'Idle',
   working: 'Working',
   waiting: 'Waiting',
-  completed: 'Done',
-  error: 'Needs attention'
+  completed: 'Completed',
+  error: 'Failed'
 };
 const AGENTS = new Map(OFFICE_AGENTS.map((agent) => [agent.id, agent]));
 const HOME = new Map(OFFICE_AGENTS.map((agent) => [agent.id, poiById(HOME_DESKS[agent.id]).position]));
@@ -60,12 +66,21 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
   ref
 ) {
   const tags = tier === 'near' ? people : people.filter((id) => id === selectedId);
+  // Between tasks, the selected person's tag says how their last task ended, as their panel does.
+  const runtime = useOfficeStore((s) => s.agentRuntime[selectedId]);
+  const thread = useApp((s) => activeThread(s.data?.conversations ?? [], selectedId, runtime));
+  const lastRun = useApp((s) => (thread ? latestRun(s.data?.runs ?? [], selectedId, thread.id) : undefined));
+  const lastReply = useApp((s) =>
+    thread ? s.data?.messages.findLast((m) => m.conversationId === thread.id && m.role === 'assistant') : undefined
+  );
+  const selectedLabel = (status: AgentStatus) =>
+    (status === 'idle' && endedLabel(lastRun, lastReply)) || STATUS_LABELS[status];
   return (
     <div ref={ref} className={`office-scene-labels tier-${tier} ${loading ? 'is-loading' : ''}`}>
       {tier !== 'near' && visibleSpatialLabels(tier === 'far' ? 'district' : 'department', bounds, target).map(label => <button
         key={label.id} data-anchor={`place:${label.id}`} className={`office-place-label ${label.kind}`} style={{ '--place-color': label.color } as CSSProperties}
-        onClick={() => onPlace(label.kind, label.target)} aria-label={`Go to ${label.title}, ${label.people} people`}>
-        <strong>{label.title}</strong><small>{label.people} people</small>
+        onClick={() => onPlace(label.kind, label.target)} aria-label={`Go to ${label.title}, ${plural(label.people, 'person', 'people')}`}>
+        <strong>{label.title}</strong><small>{plural(label.people, 'person', 'people')}</small>
       </button>)}
       {tags.map((id) => {
         const agent = AGENTS.get(id);
@@ -79,6 +94,7 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
             className={`office-person-label ${selected ? 'selected' : ''}`}
             style={{ '--agent-color': districtById(agent.district).color } as CSSProperties}
             onClick={() => onAgent(id)}
+            title={agent.role === agent.name ? agent.name : `${agent.name} · ${agent.role}`}
             aria-label={`Select ${agent.name}, ${status}`}
             aria-pressed={selected}
           >
@@ -86,7 +102,7 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
             {selected ? (
               <span className="person-label-detail">
                 <strong>{agent.name}</strong>
-                <small>{STATUS_LABELS[status]}</small>
+                <small>{selectedLabel(status)}</small>
               </span>
             ) : (
               <span className="person-label-name">{shortName(agent.name)}</span>

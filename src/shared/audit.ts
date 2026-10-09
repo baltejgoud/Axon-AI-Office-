@@ -6,6 +6,8 @@ export type AuditDecision =
   | 'approved'
   /** You approved it and allowed it for the rest of the session. */
   | 'approved-session'
+  /** You approved it and allowed it for the rest of this task (the conversation's current run). */
+  | 'approved-task'
   | 'rejected'
   /** Nobody answered within 5 minutes. */
   | 'timed-out'
@@ -55,7 +57,7 @@ export interface AuditQuery {
   limit?: number;
 }
 
-const ASKED = new Set<AuditDecision>(['approved', 'approved-session', 'rejected', 'timed-out', 'withdrawn']);
+const ASKED = new Set<AuditDecision>(['approved', 'approved-session', 'approved-task', 'rejected', 'timed-out', 'withdrawn']);
 const REFUSED = new Set<AuditDecision>(['denied', 'rejected', 'timed-out', 'skipped']);
 
 /** The Activity log's filters. They overlap on purpose: a rejection was both asked and refused. */
@@ -71,6 +73,7 @@ export const DECISION_WORDS: Record<AuditDecision, string> = {
   allowed: 'Allowed',
   approved: 'You approved',
   'approved-session': 'You approved for the session',
+  'approved-task': 'You approved for this task',
   rejected: 'You rejected',
   'timed-out': 'No answer in time',
   withdrawn: 'Withdrawn: the run stopped',

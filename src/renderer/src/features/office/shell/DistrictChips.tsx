@@ -110,7 +110,9 @@ export function DistrictChips({
         {DISTRICT_ORDER.map((id) => (
           <Chip key={id} id={id} active={false} />
         ))}
+        {/* Measured with its dot, which shows when the district in view is inside. */}
         <button tabIndex={-1}>
+          <span className="office-chip-dot" />
           More <IconCaretDown size={14} />
         </button>
       </div>
@@ -123,6 +125,7 @@ export function DistrictChips({
             className={hiddenActive ? 'active' : ''}
             aria-haspopup="menu"
             aria-expanded={open}
+            title={hiddenActive ? `${districtById(active!).name} is in here` : 'More districts'}
             style={
               hiddenActive
                 ? ({ '--district-color': districtById(active!).color } as CSSProperties)
@@ -130,6 +133,7 @@ export function DistrictChips({
             }
             onClick={() => setOpen(!open)}
           >
+            {hiddenActive && <span className="office-chip-dot" aria-hidden="true" />}
             More <IconCaretDown size={14} />
           </button>
           {open && (

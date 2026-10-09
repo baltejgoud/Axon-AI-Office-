@@ -2,8 +2,9 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { runStage } from '../../../../../shared/runtimePresentation';
 import { ACTIVE_RUN_STATUSES } from '../../../../../shared/runtime';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Conversation as Thread, Message, ToolCall } from '../../../../../shared/types';
-import { useApp } from '../../../state';
+import { perform, useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
@@ -13,7 +14,9 @@ import { isPlannerCall } from '../tasks';
 import { withOutcomes } from './thread';
 import { WorkSummary } from './WorkSummary';
 import { isWorkCall, onlyWork, threadRuns, workOf } from '../workspace/work';
-import { IconLoader } from '../../../ui';
+import { IconBell, IconCaretDown, IconLoader } from '../../../ui';
+import { elapsed } from '../../../format';
+import type { AgentRun } from '../../../../../shared/runtime';
 
 /**
  * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
@@ -32,16 +35,59 @@ const officeToolCard = (call: ToolCall, at: number) =>
     false
   ) : null;
 
+/**
+ * What the run is doing, and for how long, with a way to walk away: "Notify me when done" sends a
+ * desktop notice when it ends, however it ends.
+ */
+function RunStage({ run, conversationId }: { run: AgentRun; conversationId: string }) {
+  const [, tick] = useState(0);
+  const [notify, setNotify] = useState(false);
+  useEffect(() => {
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="chat-run-stage" role="status">
+      <IconLoader className="spin" size={14} />
+      <span>{runStage(run)}</span>
+      <span className="chat-run-elapsed" aria-label="Time so far">
+        {elapsed(run.startedAt)}
+      </span>
+      <button
+        type="button"
+        className="chat-run-notify"
+        aria-pressed={notify}
+        title={notify ? 'You’ll get a notice when this ends' : 'Get a desktop notice when this ends'}
+        onClick={() =>
+          void perform(async () => setNotify(await window.axon.chatNotifyWhenDone(conversationId, !notify)))
+        }
+      >
+        <IconBell size={13} />
+        {notify ? 'Will notify you' : 'Notify me when done'}
+      </button>
+    </div>
+  );
+}
+
 /** The whole thread with the selected coworker, following new output unless the user scrolled up. */
 export function Conversation({
   agentName,
   conversation,
   pendingTask,
   working,
-  shown: visible = true
+  shown: visible = true,
+  onContinue,
+  scrollParent,
+  jumpSlot
 }: {
   agentName: string;
   conversation: Thread | undefined;
+  /** Asks them to carry on after a reply that stopped early. */
+  onContinue?: () => void;
+  /** The panel's scroll area: the thread scrolls with it, so there is one scrollbar, not two. */
+  scrollParent: HTMLElement | null;
+  /** Where "Latest messages" goes: a row of its own under the thread, never over its last lines. */
+  jumpSlot: HTMLElement | null;
   /** A task that was just sent; shown until the saved thread includes it. */
   pendingTask?: string;
   /** The coworker is working on this thread now. */
@@ -179,11 +225,13 @@ export function Conversation({
               </button>
             )}
             {historyError && <p role="alert">{historyError}</p>}
+            {scrollParent && (
             <Virtuoso
               key={conversation?.id ?? 'new'}
               ref={list}
-              style={{ height: 'min(58vh, 700px)', minHeight: 240 }}
+              customScrollParent={scrollParent}
               data={shown}
+              computeItemKey={(_, m) => m.id}
               followOutput="auto"
               atBottomStateChange={setAtBottom}
               atBottomThreshold={80}
@@ -197,6 +245,8 @@ export function Conversation({
                         message={m}
                         authorName={agentName}
                         renderToolCall={(call) => officeToolCard(call, m.createdAt)}
+                        onContinue={i === lastEnd && !live ? onContinue : undefined}
+                        folder={conversation?.projectRoot}
                       />
                     )}
                     {steps && conversation && (
@@ -210,27 +260,26 @@ export function Conversation({
                 );
               }}
             />
-            {!atBottom && (
-              <button
-                className="chat-jump"
-                onClick={() =>
-                  list.current?.scrollToIndex({
-                    index: 'LAST',
-                    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-                      ? 'auto'
-                      : 'smooth'
-                  })
-                }
-              >
-                Latest messages
-              </button>
             )}
-            {activeRun && (
-              <div className="chat-run-stage" role="status">
-                <IconLoader className="spin" size={14} />
-                <span>{runStage(activeRun)}</span>
-              </div>
-            )}
+            {!atBottom &&
+              jumpSlot &&
+              createPortal(
+                <button
+                  type="button"
+                  className="chat-jump"
+                  onClick={() => {
+                    follow.current = true;
+                    list.current?.scrollToIndex({ index: 'LAST', align: 'end' });
+                    // Then past the list: an approval or the run's progress may sit under it.
+                    requestAnimationFrame(() => end.current?.scrollIntoView({ block: 'end' }));
+                  }}
+                >
+                  <IconCaretDown size={13} />
+                  Latest messages
+                </button>,
+                jumpSlot
+              )}
+            {activeRun && conversation && <RunStage run={activeRun} conversationId={conversation.id} />}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>
         </section>

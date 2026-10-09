@@ -73,6 +73,12 @@ export function ApprovalOverlay() {
                 {stats ? 'Review diff' : 'Review work'}
               </button>
               <button onClick={() => decideApproval(request, false)}>Reject</button>
+              <button
+                title="Don’t ask again for this tool until this task is done"
+                onClick={() => decideApproval(request, true, 'task')}
+              >
+                For this task
+              </button>
               <button onClick={() => decideApproval(request, true)}>Approve</button>
             </div>
           </article>

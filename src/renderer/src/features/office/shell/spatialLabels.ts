@@ -24,6 +24,7 @@ export const SPATIAL_LABELS = DISTRICTS.flatMap((district) => [
             kind: 'department' as const,
             target: department,
             title: department,
+            district: district.id,
             color: district.color,
             people: OFFICE_AGENTS.filter((a) => a.department === department).length,
             point: { x: item.x, y: 2.4, z: item.z }
@@ -32,6 +33,17 @@ export const SPATIAL_LABELS = DISTRICTS.flatMap((district) => [
       : [];
   })
 ]);
+/**
+ * The department you are looking at, close up: the nearest one of the district in view to the middle
+ * of the view. For the breadcrumb that stays readable when the floor's own labels tilt and hide.
+ */
+export function departmentHere(district: string, target: Vec2) {
+  return SPATIAL_LABELS.filter((label) => label.kind === 'department' && label.district === district).sort(
+    (a, b) =>
+      Math.hypot(a.point.x - target.x, a.point.z - target.z) - Math.hypot(b.point.x - target.x, b.point.z - target.z)
+  )[0];
+}
+
 export function visibleSpatialLabels(
   kind: 'district' | 'department',
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null,

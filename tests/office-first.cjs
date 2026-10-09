@@ -231,7 +231,7 @@ app.on('browser-window-created', (_, win) => {
       }
       await wait(`!document.querySelector('.conversation-drawer').inert`, 'drawer');
       assert.ok(await run(`!document.querySelector('.office-planner-card')`), 'planner hides behind drawer');
-      await wait(`!!document.querySelector('.drawer-context-chip')`, 'context chip');
+      await wait(`!!document.querySelector('.context-meter-summary')`, 'context meter');
       await set('.composer-textarea', 'Keep this draft', 'HTMLTextAreaElement');
       await pause(100);
       await click('.drawer-close');

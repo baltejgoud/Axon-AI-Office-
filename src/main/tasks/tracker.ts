@@ -64,11 +64,13 @@ export class TaskTracker {
     if (task?.note === APPROVAL) this.store.update(task.id, { status: 'working', note: undefined });
   }
 
-  runEnded(conversationId: string, outcome: { error?: string; stopped?: boolean }): void {
+  runEnded(conversationId: string, outcome: { error?: string; stopped?: boolean; incomplete?: string }): void {
     const task = this.work(conversationId);
     if (!task) return;
     if (outcome.stopped) this.store.update(task.id, { status: 'done', note: 'Stopped', doneAt: this.now() });
     else if (outcome.error) this.store.update(task.id, { status: 'attention', note: outcome.error });
+    // Ended without the answer it owes (step limit, no reply): it needs a look, not a tick.
+    else if (outcome.incomplete) this.store.update(task.id, { status: 'attention', note: outcome.incomplete });
     else this.store.update(task.id, { status: 'done', note: undefined, doneAt: this.now() });
   }
 
