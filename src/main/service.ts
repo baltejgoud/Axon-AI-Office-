@@ -11,6 +11,7 @@ import type {
   BackupSummary,
   ClaudeConnectInput,
   ClaudeConnectResult,
+  ConversationHit,
   PlatformAPI,
   PlatformState,
   ProviderConnectResult,
@@ -63,6 +64,7 @@ import {
   streamChat
 } from './providers';
 import { search } from './knowledge';
+import { searchConversations } from './conversation-search';
 import { scanFolder } from './folderScan';
 import { ParsePool } from './parse-pool';
 import { catalog, hasSkill, skillBodies } from './skills';
@@ -75,7 +77,7 @@ import { requestHistory, requestSize } from './history';
 import { ToolOutputStore, ContextTelemetry } from './context-artifacts';
 import { ContextBudgetPlanner, ContextCapacityError, countTokens, checkpoint, redactContext, isContextOverflow, MEMORY_TOOLS, searchConversation, toolExcerpt, selectTools, DISCOVER_TOOLS } from './context';
 import { type ContextUsage } from '../shared/context-usage';
-import { modelOf, runEstimateTokens } from '../shared/cost';
+import { costOf, formatUsd, modelOf, runEstimateTokens } from '../shared/cost';
 import { buildUsageReport } from './usage-report';
 import { AuditLog } from './audit/log';
 import { Checkpoints, hashText } from './audit/checkpoints';
@@ -166,9 +168,13 @@ const noToolSupport = (message: string) =>
 /** What the service needs from the desktop around it: notifications, the window, sign-in start. */
 export interface ShellPort {
   notify(notice: Notice): void;
-  windowVisible(): boolean;
+  /** The person is looking at Axon: its window is shown and is the one in front. */
+  windowFocused(): boolean;
   applySettings(settings: Settings): void;
 }
+
+/** The highest spending limit per task Settings takes, in dollars. */
+export const MAX_TASK_SPEND = 1000;
 
 /** Settings' Test connection: the time each model gets, and how many models it checks. Tests shorten the time. */
 export const PROVIDER_TEST = { timeoutMs: 30_000, maxModels: 10 };
@@ -428,7 +434,7 @@ export class Service {
       report: (team, signal) => writeReport(team, this.teamModel(team, signal)),
       finished: (team) => {
         const lead = coworkerById(team.leadId);
-        if (lead && this.shell && !this.shell.windowVisible())
+        if (lead && this.shell && !this.shell.windowFocused())
           this.shell.notify({
             title: `${lead.name}: the team is done`,
             body: team.goal.slice(0, 120),
@@ -929,6 +935,14 @@ export class Service {
       (!Number.isInteger(s.teamConcurrency) || s.teamConcurrency < 1 || s.teamConcurrency > 8)
     )
       throw new Error('Team concurrency must be between 1 and 8.');
+    if (
+      s.taskSpendLimit !== undefined &&
+      (typeof s.taskSpendLimit !== 'number' ||
+        !Number.isFinite(s.taskSpendLimit) ||
+        s.taskSpendLimit < 0 ||
+        s.taskSpendLimit > MAX_TASK_SPEND)
+    )
+      throw new Error(`The spending limit per task must be between $0 and $${MAX_TASK_SPEND}.`);
     if (s.modelProfiles)
       for (const [profile, selection] of Object.entries(s.modelProfiles)) {
         if (
@@ -949,7 +963,9 @@ export class Service {
       keepInTray: s.keepInTray !== false,
       startWithWindows: Boolean(s.startWithWindows),
       voice: cleanVoice(s.voice),
-      quickReplies: s.quickReplies !== false
+      quickReplies: s.quickReplies !== false,
+      taskSpendLimit: s.taskSpendLimit ? Math.round(s.taskSpendLimit * 100) / 100 : undefined,
+      welcomeDone: s.welcomeDone === true || undefined
     };
     await this.repo.save();
     this.shell?.applySettings(this.state.settings);
@@ -1079,6 +1095,100 @@ export class Service {
     });
     await this.checkpoints.remove(point.toolCallId);
     await this.repo.save();
+  }
+
+  /**
+   * "Undo all": every file a task changed goes back to how it was before the task, after one
+   * confirmation. A file saved twice gets its version from before the first save. Changes that can't
+   * be undone any more (pruned, or no copy kept) are left as they are and counted.
+   */
+  async revertChanges(toolCallIds: string[]): Promise<{ undone: number; skipped: number }> {
+    if (!Array.isArray(toolCallIds) || !toolCallIds.length || toolCallIds.length > 500)
+      throw new Error('Nothing to undo.');
+    const ids = [...new Set(toolCallIds.map((id) => text(id, 200)))];
+    const points = (await Promise.all(ids.map((id) => this.checkpoints.get(id)))).filter(
+      (point): point is NonNullable<typeof point> => !!point && !(point.existed && point.before === undefined)
+    );
+    let skipped = ids.length - points.length;
+    if (!points.length) throw new Error("These changes can't be undone any more.");
+    const roots = new Set(points.map((point) => resolve(point.root)));
+    if (roots.size > 1) throw new Error('These changes were made in different folders; undo them one at a time.');
+    if (!this.project.root || resolve(this.project.root) !== [...roots][0])
+      throw new Error(`Open ${points[0].root} to undo these changes.`);
+    // Per file: the first save holds the version to put back; the last says what the task left there.
+    const byPath = new Map<string, { first: (typeof points)[number]; last: (typeof points)[number]; all: typeof points }>();
+    for (const point of [...points].sort((a, b) => a.savedAt - b.savedAt)) {
+      const entry = byPath.get(point.path);
+      if (entry) {
+        entry.last = point;
+        entry.all.push(point);
+      } else byPath.set(point.path, { first: point, last: point, all: [point] });
+    }
+    const files = await Promise.all(
+      [...byPath.values()].map(async (entry) => {
+        let current: string | null = null;
+        try {
+          current = await this.project.read(entry.first.path);
+        } catch {
+          current = null;
+        }
+        const changedSince = current === null ? entry.last.existed : hashText(current) !== entry.last.afterHash;
+        return { ...entry, current, changedSince };
+      })
+    );
+    const chat = this.state.conversations.find((c) => c.id === points[0].conversationId);
+    const who = coworkerById(chat?.agentId)?.name ?? 'the assistant';
+    const listed = files.slice(0, 8).map((f) => `• ${f.first.path}${f.first.existed ? '' : ' (new file, deleted)'}`);
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      message: `Undo all of ${who}'s changes from this task?`,
+      detail: [
+        files.length === 1
+          ? '1 file goes back to how it was before the task:'
+          : `${files.length} files go back to how they were before the task:`,
+        [...listed, ...(files.length > 8 ? [`…and ${files.length - 8} more`] : [])].join('\n'),
+        files.some((f) => f.changedSince)
+          ? 'Some of these files have changed since: undoing replaces those later edits too.'
+          : '',
+        skipped ? `${skipped} change${skipped === 1 ? " can't" : "s can't"} be undone any more and stay as they are.` : ''
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      buttons: ['Cancel', 'Undo all'],
+      defaultId: 0,
+      cancelId: 0
+    });
+    if (choice.response !== 1) throw new Error('Undo cancelled.');
+    let undone = 0;
+    for (const file of files) {
+      try {
+        if (file.first.existed) await this.project.write(file.first.path, file.first.before!);
+        else if (file.current !== null) await this.project.remove(file.first.path);
+      } catch {
+        skipped += file.all.length;
+        continue;
+      }
+      for (const point of file.all) {
+        const call = this.repo
+          .conversationMessages(point.conversationId)
+          .find((m) => m.toolCalls?.some((c) => c.id === point.toolCallId))
+          ?.toolCalls?.find((c) => c.id === point.toolCallId);
+        if (call?.change) call.change.revertedAt = Date.now();
+        this.audit.record({
+          conversationId: point.conversationId,
+          actor: { kind: 'you', name: 'You' },
+          tool: 'write_file',
+          subject: point.path,
+          decision: 'reverted',
+          toolCallId: point.toolCallId,
+          detail: 'Undo all: put back the version from before the task.'
+        });
+        await this.checkpoints.remove(point.toolCallId);
+        undone++;
+      }
+    }
+    await this.repo.save();
+    return { undone, skipped };
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
@@ -1506,17 +1616,24 @@ export class Service {
     chat.title = text(title, 200).trim() || 'Untitled';
     await this.repo.save();
   }
-  async chatDelete(id: string): Promise<void> {
-    if (!(await this.conversationClose(id))) return;
+  /** Ctrl+K: past conversations whose title or one message has every word of the query. */
+  chatSearch(query: string): ConversationHit[] {
+    return searchConversations(this.state.conversations, this.repo.searchSource(), text(query, 200));
+  }
+  /** Deletes a conversation and its messages; false when it was kept (you cancelled, or its work carries on). */
+  async chatDelete(id: string): Promise<boolean> {
+    if (!(await this.conversationClose(id))) return false;
     // Keeping work in the background also keeps the conversation that owns its history.
     if (
       this.supervisor.active(id).length ||
       this.state.teams.some((t) => t.conversationId === id && OPEN_TEAM.has(t.status))
     )
-      return;
+      return false;
     this.state.conversations = this.state.conversations.filter((c) => c.id !== id);
     this.repo.deleteMessages(id);
+    this.notifyWhenDone.delete(id);
     await this.repo.save();
+    return true;
   }
   /**
    * What a run of this conversation starts from: its history, connectors, folders and system prompt.
@@ -1897,6 +2014,12 @@ export class Service {
       });
     };
     let step = 0;
+    /** Your spending limit per task, and what this run has cost so far (replies on priced models only). */
+    const spendLimit = this.state.settings.taskSpendLimit || 0;
+    const runModel = modelOf(this.state.providers, provider.id, chat.modelId);
+    let spent = 0;
+    /** The run reached the limit, so no further call went out. */
+    let overBudget = false;
     /** The model ended the run itself, rather than running out of steps. */
     let finished = false;
     /** Any step of this run called a tool. */
@@ -1937,6 +2060,11 @@ export class Service {
       await this.repo.save();
 
       while (step < maxSteps) {
+        // At the limit: no next call. You continue it, and the continued run starts a fresh limit.
+        if (spendLimit > 0 && spent >= spendLimit) {
+          overBudget = true;
+          break;
+        }
         step++;
         this.emit({
           channel: 'chat',
@@ -1969,6 +2097,7 @@ export class Service {
           promptTokens: usage.promptTokens,
           completionTokens: usage.completionTokens
         };
+        spent += costOf(activeAssistant.usage, runModel) ?? 0;
         activeAssistant.toolCalls = usage.toolCalls;
 
         if (!usage.toolCalls || usage.toolCalls.length === 0) {
@@ -2157,9 +2286,9 @@ export class Service {
             });
             this.supervisor.update(supervised.runId, { status: 'waiting_for_approval', activeTool: tc.name });
             this.tracker.approvalPending(id);
-            // Nobody is looking: say who is waiting, and take them straight there.
+            // Nobody is looking (Axon hidden, minimized, or behind another app): say who is waiting, and take them there.
             const asking = coworkerById(chat.agentId);
-            if (asking && this.shell && !this.shell.windowVisible())
+            if (asking && this.shell && !this.shell.windowFocused())
               this.shell.notify({
                 title: `${asking.name} needs your approval`,
                 body: `To use ${tc.name.replace(/_/g, ' ')}.`,
@@ -2185,17 +2314,7 @@ export class Service {
               break;
             }
             if (ended !== 'approved' && ended !== 'approved-session' && ended !== 'approved-task') {
-              answer(
-                tc,
-                {
-                  content:
-                    ended === 'timed-out'
-                      ? 'Nobody answered within 5 minutes, so it was not run.'
-                      : 'Tool execution was rejected by the user.',
-                  isError: true
-                },
-                ended
-              );
+              answer(tc, { content: 'Tool execution was rejected by the user.', isError: true }, ended);
               continue;
             }
             decision = ended;
@@ -2301,7 +2420,12 @@ export class Service {
         activeAssistant.incomplete = kind;
         activeAssistant.notice = activeAssistant.notice ? `${activeAssistant.notice} ${note}` : note;
       };
-      if (!finished && !controller.signal.aborted) {
+      if (overBudget && !controller.signal.aborted) {
+        stoppedEarly(
+          'spend-limit',
+          `Paused at your ${formatUsd(spendLimit)} spending limit for one task (this task cost ${formatUsd(spent)}). Continue to let it carry on, or change the limit in Settings → Usage.`
+        );
+      } else if (!finished && !controller.signal.aborted) {
         // Out of steps: one more call, whose tool calls never run, for the answer the run owes.
         requests.push({ role: 'user', content: wrapUpPrompt(maxSteps) });
         try {

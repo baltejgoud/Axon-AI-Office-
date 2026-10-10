@@ -518,7 +518,7 @@ test('starting a background process asks first, like a command; reading and stop
   );
 });
 
-test('an approval says how it ended: approved, for the session, rejected, withdrawn, or timed out', async (t) => {
+test('an approval says how it ended (approved, for the session, rejected, withdrawn) and never times out', async (t) => {
   const manager = new PermissionManager([], false);
   const ask = () =>
     manager.createApprovalRequest({
@@ -542,11 +542,13 @@ test('an approval says how it ended: approved, for the session, rejected, withdr
   const d = ask();
   manager.withdraw(d.request.id);
   assert.equal(await d.outcome, 'withdrawn');
+  // Someone who stepped away for hours still finds the request waiting.
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const e = ask();
-  t.mock.timers.tick(300_000);
-  assert.equal(await e.outcome, 'timed-out');
-  assert.equal(await e.promise, false);
+  t.mock.timers.tick(24 * 60 * 60_000);
+  assert.deepEqual(manager.pending().map((request) => request.id), [e.request.id]);
+  manager.resolveApproval({ requestId: e.request.id, approved: true });
+  assert.equal(await e.outcome, 'approved');
   // b allowed write_file for the session: the next one is allowed, and says why.
   assert.deepEqual(manager.check({ toolName: 'write_file', args: { path: 'z' } }), {
     action: 'allow',

@@ -1,9 +1,60 @@
 import { useEffect, useState } from 'react';
 import type { UsageReport, UsageRow, UsageTotals } from '../../../shared/platform';
-import { formatTokens, formatUsd } from '../../../shared/cost';
+import { formatTokens, formatUsd, hasPrice } from '../../../shared/cost';
 import { dayLabel } from '../../../shared/planner';
 import { Button, IconRefresh } from '../ui';
-import { SettingsGroup } from './controls';
+import { perform, useApp } from '../state';
+import { NumberSetting, SettingRow, SettingsGroup, Switch } from './controls';
+
+/** Where a new limit starts, in dollars. */
+const DEFAULT_TASK_LIMIT = 1;
+
+/**
+ * A spending limit for one task: when a run has cost this much, it pauses before its next step and
+ * shows Continue. Only replies on priced models can be measured, so it says when none are.
+ */
+function SpendLimit() {
+  const settings = useApp((s) => s.data!.settings);
+  const priced = useApp((s) => s.data!.providers.some((p) => p.enabled && p.models.some(hasPrice)));
+  const save = (taskSpendLimit: number) =>
+    void perform(() => window.axon.settingsSave({ ...settings, taskSpendLimit }));
+  const limit = settings.taskSpendLimit ?? 0;
+  return (
+    <SettingsGroup title="Spending limit">
+      <SettingRow
+        label="Pause a task at a spending limit"
+        hint="When one task you give a coworker has cost this much, it pauses before its next step and asks you to continue."
+      >
+        <Switch
+          checked={limit > 0}
+          label="Pause a task at a spending limit"
+          onChange={(on) => save(on ? DEFAULT_TASK_LIMIT : 0)}
+        />
+      </SettingRow>
+      {limit > 0 && (
+        <SettingRow
+          label="Limit per task (US dollars)"
+          id="task-spend-limit"
+          hint={
+            priced
+              ? "Counts replies on models with a price. Questions to colleagues and sub-agents' work aren't counted."
+              : 'None of your models has a price yet, so nothing can be measured. Add prices in Models & API keys.'
+          }
+        >
+          <NumberSetting
+            id="task-spend-limit"
+            value={limit}
+            min={0.01}
+            max={1000}
+            step={0.25}
+            onCommit={save}
+            width={100}
+          />
+        </SettingRow>
+      )}
+    </SettingsGroup>
+  );
+}
 
 const errorText = (err: unknown) =>
   err instanceof Error
@@ -110,6 +161,7 @@ export function UsageSection() {
           <span>{error}</span>
         </div>
       )}
+      <SpendLimit />
       {report && (
         <>
           <div className="settings-stats usage-stats">

@@ -1,14 +1,28 @@
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { DISTRICTS } from '../campus/districts';
+import { timeAgo } from '../../../format';
+import type { ConversationHit } from '../../../../../shared/platform';
 
 export type OfficeCommand = { id: string; label: string; detail: string } & (
   | { kind: 'person'; agentId: string }
   | { kind: 'department'; department: string }
   | {
       kind: 'action';
-      action: 'planner' | 'library' | 'settings' | 'focus' | 'overview' | 'team' | 'work' | 'history' | 'company';
+      action:
+        | 'planner'
+        | 'library'
+        | 'settings'
+        | 'focus'
+        | 'overview'
+        | 'team'
+        | 'work'
+        | 'history'
+        | 'company'
+        | 'welcome';
     }
   | { kind: 'ask'; prompt: string }
+  /** A past conversation found by search, opened at the message that matched. */
+  | { kind: 'conversation'; agentId: string; conversationId: string; messageId?: string }
 );
 const actions: OfficeCommand[] = [
   { id: 'company', kind: 'action', action: 'company', label: 'Open company operations', detail: 'Company documents, task briefs, teams and reports' },
@@ -67,6 +81,13 @@ const actions: OfficeCommand[] = [
     action: 'work',
     label: 'Show coworker work',
     detail: 'Code, files and terminal'
+  },
+  {
+    id: 'welcome',
+    kind: 'action',
+    action: 'welcome',
+    label: 'Show the welcome guide',
+    detail: 'Connect a model, choose a folder, try a first task'
   }
 ];
 const catalog: OfficeCommand[] = [
@@ -88,6 +109,30 @@ const catalog: OfficeCommand[] = [
     detail: `${a.department} · ${a.role}`
   }))
 ];
+/** Past conversations found by search, as palette rows: who, when, and the line that matched. */
+export function conversationCommands(
+  hits: readonly ConversationHit[],
+  now = Date.now()
+): OfficeCommand[] {
+  return hits.flatMap((hit) => {
+    const agent = OFFICE_AGENTS.find((a) => a.id === hit.agentId);
+    if (!agent) return [];
+    const short = timeAgo(hit.updatedAt, now);
+    const where = `${agent.name} · ${short === 'now' ? 'just now' : /^\d/.test(short) ? `${short} ago` : short}`;
+    return [
+      {
+        id: `conversation:${hit.conversationId}`,
+        kind: 'conversation' as const,
+        agentId: agent.id,
+        conversationId: hit.conversationId,
+        messageId: hit.messageId,
+        label: hit.title,
+        detail: hit.snippet ? `${where} · ${hit.fromYou ? 'You: ' : ''}${hit.snippet}` : where
+      }
+    ];
+  });
+}
+
 /** All query words match, so specialties and department names work as well as names. */
 export function officeCommands(query: string, limit = 12): OfficeCommand[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);

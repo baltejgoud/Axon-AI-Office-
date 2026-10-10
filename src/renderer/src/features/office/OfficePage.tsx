@@ -14,6 +14,7 @@ import { CompanyOperations } from './company/CompanyOperations';
 import { CommandPalette } from './shell/CommandPalette';
 import { ApprovalOverlay } from './shell/ApprovalOverlay';
 import { OfficeNotifications } from './shell/OfficeNotifications';
+import { WelcomeGuide, firstStart } from './shell/WelcomeGuide';
 
 export function OfficePage() {
   const overlay = useOfficeStore((s) => s.overlay);
@@ -57,6 +58,11 @@ export function OfficePage() {
         );
       }
   }, [tasks, runs]);
+  // Someone's first start: the welcome guide opens by itself (once; Ctrl+K brings it back).
+  const welcome = useApp((s) => firstStart(s.data));
+  useEffect(() => {
+    if (welcome) useOfficeStore.getState().setWelcomeOpen(true);
+  }, [welcome]);
   const close = () => useOfficeStore.getState().openOverlay(null);
   // The panel's width and side, for everything that makes room for it.
   const drawer = useOfficeStore((s) => s.drawer);
@@ -71,6 +77,7 @@ export function OfficePage() {
       <ApprovalOverlay />
       <OfficeNotifications />
       <CommandPalette />
+      <WelcomeGuide />
       {overlay === 'company' && (
         <Overlay title="Company operations" onClose={close} wide>
           <CompanyOperations />

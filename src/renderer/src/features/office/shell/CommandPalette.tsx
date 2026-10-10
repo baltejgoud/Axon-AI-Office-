@@ -4,8 +4,20 @@ import { useOfficeStore } from '../store/officeStore';
 import { useEscape } from '../../../ui/escape';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
 import { activeThread } from '../activity/thread';
-import { officeCommands, type OfficeCommand } from './commands';
+import { conversationCommands, officeCommands, type OfficeCommand } from './commands';
 import { IconSearch } from '../../../ui';
+import type { ConversationHit } from '../../../../../shared/platform';
+
+/** How long typing pauses before past conversations are searched. */
+const SEARCH_PAUSE_MS = 160;
+
+const KIND_LABEL: Record<OfficeCommand['kind'], string> = {
+  person: 'Person',
+  ask: 'Ask',
+  department: 'Department',
+  action: 'Action',
+  conversation: 'Conversation'
+};
 
 export function CommandPalette() {
   const open = useOfficeStore((s) => s.commandPaletteOpen);
@@ -16,7 +28,30 @@ function Palette() {
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
-  const items = officeCommands(query);
+  // Past conversations, searched in the main process once typing pauses; a slower, older answer is dropped.
+  const [hits, setHits] = useState<{ query: string; found: ConversationHit[] }>({ query: '', found: [] });
+  useEffect(() => {
+    const wanted = query.trim();
+    if (wanted.length < 2) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      window.axon
+        .chatSearch(wanted)
+        .then((found) => {
+          if (current) setHits({ query: wanted, found });
+        })
+        .catch(() => undefined);
+    }, SEARCH_PAUSE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+  const commands = officeCommands(query);
+  const found = hits.query === query.trim() ? conversationCommands(hits.found) : [];
+  // The "Ask the receptionist" row stays last, after the conversations.
+  const ask = commands.filter((item) => item.kind === 'ask');
+  const items = [...commands.filter((item) => item.kind !== 'ask'), ...found, ...ask];
   const close = () => useOfficeStore.getState().setCommandPaletteOpen(false);
   useEscape(close);
   useEffect(() => {
@@ -37,8 +72,17 @@ function Palette() {
     else if (command.kind === 'ask') {
       office.focusOn({ agentId: RECEPTIONIST_ID });
       office.compose(RECEPTIONIST_ID, command.prompt);
+    } else if (command.kind === 'conversation') {
+      office.focusOn({ agentId: command.agentId, conversationId: command.conversationId });
+      office.setPanelTab('chat');
+      office.revealMessage(
+        command.messageId ? { conversationId: command.conversationId, messageId: command.messageId } : null
+      );
     } else {
       switch (command.action) {
+        case 'welcome':
+          office.setWelcomeOpen(true);
+          break;
         case 'company':
           office.openOverlay('company');
           break;
@@ -134,13 +178,13 @@ function Palette() {
           <IconSearch size={20} />
           <input
             ref={input}
-            aria-label="Search people, departments and actions"
+            aria-label="Search people, departments, actions and past conversations"
             role="combobox"
             aria-expanded="true"
             aria-controls="office-command-results"
             aria-activedescendant={items[selected] ? `office-command-${selected}` : undefined}
             value={query}
-            placeholder="Find a person, go somewhere, or ask Axon…"
+            placeholder="Find a person, a past conversation, or ask Axon…"
             onChange={(e) => {
               setQuery(e.target.value);
               setSelected(0);
@@ -160,15 +204,7 @@ function Palette() {
               onMouseMove={() => setSelected(index)}
               onClick={() => choose(item)}
             >
-              <span className="command-kind">
-                {item.kind === 'person'
-                  ? 'Person'
-                  : item.kind === 'ask'
-                    ? 'Ask'
-                    : item.kind === 'department'
-                      ? 'Department'
-                      : 'Action'}
-              </span>
+              <span className="command-kind">{KIND_LABEL[item.kind]}</span>
               <span>
                 <strong>{item.label}</strong>
                 <small>{item.detail}</small>

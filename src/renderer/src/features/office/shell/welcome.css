@@ -1,0 +1,193 @@
+/* The welcome guide: three steps to a first result, over the office on a first start. */
+.welcome-backdrop {
+  z-index: 60;
+}
+.welcome-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(600px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 22px 24px 18px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-primary);
+  animation: overlay-in var(--duration-base) var(--ease-out);
+}
+.welcome-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.welcome-head > div {
+  flex: 1;
+}
+.welcome-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+.welcome-head p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.welcome-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.welcome-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.welcome-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+.welcome-step strong {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.welcome-step p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.welcome-step > .btn {
+  align-self: center;
+}
+.welcome-check {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.welcome-step.done {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-default));
+}
+.welcome-step.done .welcome-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.welcome-optional {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.welcome-tasks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.welcome-task {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.welcome-task:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.welcome-task:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.welcome-task > span {
+  display: grid;
+  min-width: 0;
+}
+.welcome-task strong {
+  font-size: var(--text-sm);
+}
+.welcome-task small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome-task-portrait {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.welcome-note {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.welcome-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-primary);
+}
+.welcome-note p {
+  margin: 0;
+}
+.welcome-note strong {
+  color: var(--text-primary);
+}
+.welcome-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+@media (max-width: 640px) {
+  .welcome-step {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+  .welcome-step > .btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .welcome-tasks {
+    grid-template-columns: 1fr;
+  }
+}

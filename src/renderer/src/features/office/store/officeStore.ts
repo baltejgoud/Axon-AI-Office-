@@ -109,6 +109,15 @@ interface OfficeStoreState {
   /** Messages sent while a conversation's run was going, by conversation, until the run reads them. */
   queued: Record<string, string[]>;
   setQueued: (conversationId: string, messages: string[]) => void;
+  /** A search result was opened: the thread scrolls to this message and marks it, then this clears. */
+  reveal: { conversationId: string; messageId: string } | null;
+  revealMessage: (target: { conversationId: string; messageId: string } | null) => void;
+  /** People "Find a person" is showing: they stand out on the map until the search is cleared. */
+  mapHighlight: string[];
+  setMapHighlight: (ids: string[]) => void;
+  /** The welcome guide is showing (first start, or asked for again from Ctrl+K). */
+  welcomeOpen: boolean;
+  setWelcomeOpen: (open: boolean) => void;
 
   // ---------------------------------------------------------------- office-first overlays
   /** Level 2: the selected coworker's small card, pinned over them in the office. */
@@ -272,6 +281,15 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   clearCompose: () => set({ composeRequest: null }),
   queued: {},
   setQueued: (conversationId, messages) => set({ queued: { ...get().queued, [conversationId]: messages } }),
+  reveal: null,
+  revealMessage: (target) => set({ reveal: target }),
+  mapHighlight: [],
+  setMapHighlight: (ids) => {
+    const current = get().mapHighlight;
+    if (ids.length !== current.length || ids.some((id, i) => id !== current[i])) set({ mapHighlight: ids });
+  },
+  welcomeOpen: false,
+  setWelcomeOpen: (open) => set({ welcomeOpen: open, ...(open && { commandPaletteOpen: false }) }),
 
   // Picking someone shows their card; with the drawer already open, the drawer follows them instead.
   selectAgent: (id: string) => {

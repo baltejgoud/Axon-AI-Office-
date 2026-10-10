@@ -1,5 +1,6 @@
 import { COWORKERS, type Coworker } from '../../../../../shared/coworkers';
 import { districtById, districtOf, type DistrictId } from '../campus/districts';
+import { teamColor } from '../campus/teamColors';
 
 export type AgentStatus = 'idle' | 'working' | 'waiting' | 'completed' | 'error';
 
@@ -21,7 +22,7 @@ export interface OfficeAgent {
   roleIds?: string[];
 }
 
-/** The core team's own colours; specialists wear their district's. */
+/** The core team's own colours; specialists wear their team's (see teamColors). */
 const CORE_ACCENTS: Readonly<Record<string, [color: string, soft: string]>> = {
   receptionist: ['#e11d48', 'rgba(225, 29, 72, 0.15)'],
   'research-analyst': ['#2563eb', 'rgba(37, 99, 235, 0.15)'],
@@ -41,11 +42,12 @@ function officeAgent(coworker: Coworker): OfficeAgent {
     return { ...text, district: 'commons', accentColor, accentSoft, status: 'idle' };
   }
   const district = districtById(districtOf(coworker.department));
+  const color = teamColor(coworker.department, district.id);
   return {
     ...text,
     district: district.id,
-    accentColor: district.color,
-    accentSoft: `${district.color}18`,
+    accentColor: color,
+    accentSoft: `${color}18`,
     status: 'idle',
     roleIds
   };

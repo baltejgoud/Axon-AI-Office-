@@ -1560,7 +1560,7 @@ test('"Notify me when done" sends one desktop notice when the run ends, leading 
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   addProvider(repo);
   const notices = [];
-  service.attachShell({ notify: (notice) => notices.push(notice), windowVisible: () => true, applySettings() {} });
+  service.attachShell({ notify: (notice) => notices.push(notice), windowFocused: () => true, applySettings() {} });
   const chat = await coworkerChat(service);
   // Nothing is running: there is nothing to wait for.
   assert.equal(await service.chatNotifyWhenDone(chat.id, true), false);
@@ -1587,4 +1587,139 @@ test('"Notify me when done" sends one desktop notice when the run ends, leading 
   });
   await service.chatSend(chat.id, 'Once more', []);
   assert.equal(notices.length, 1);
+});
+
+test('search finds past conversations by title or by one message, and never by attachments or tool output', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const api = await coworkerChat(service, 'backend-developer');
+  const page = await coworkerChat(service, 'frontend-developer');
+  api.title = 'Invoice API';
+  page.title = 'Landing page';
+  api.updatedAt = 10;
+  page.updatedAt = 20;
+  repo.appendMessages(
+    { id: 'a1', conversationId: api.id, role: 'user', content: 'Add a refund endpoint\n\n<attachment name="notes.txt">secret zebra</attachment>', createdAt: 1 },
+    { id: 'a2', conversationId: api.id, role: 'assistant', content: 'Done: the **refund endpoint** now returns 202.', createdAt: 2 },
+    { id: 'p1', conversationId: page.id, role: 'tool', toolCallId: 'x', content: 'refund endpoint log', createdAt: 3 }
+  );
+  await repo.save();
+  const byTitle = service.chatSearch('landing');
+  assert.deepEqual(byTitle.map((hit) => hit.conversationId), [page.id]);
+  assert.equal(byTitle[0].inTitle, true);
+  const byMessage = service.chatSearch('Refund   ENDPOINT');
+  assert.deepEqual(byMessage.map((hit) => hit.conversationId), [api.id]);
+  assert.equal(byMessage[0].messageId, 'a2', 'the newest message with every word');
+  assert.equal(byMessage[0].fromYou, false);
+  assert.match(byMessage[0].snippet, /refund endpoint now returns 202/);
+  assert.equal(service.chatSearch('zebra').length, 0, 'attachments are not searched');
+  assert.equal(service.chatSearch('r').length, 0, 'one letter is not a search');
+  // Saved conversations are read from their pages on disk, and read again once a page changes.
+  const restart = new Repository(path.join(dir, 'db'), path.join(dir, 'backups'));
+  const saved = restart.searchEntries(api.id);
+  assert.deepEqual(saved.map((entry) => entry.id), ['a1', 'a2']);
+  assert.equal(saved[0].content, 'Add a refund endpoint');
+  assert.equal(restart.searchEntries(api.id), saved, 'kept until the pages change');
+});
+
+test('deleting a conversation says whether it did, and search no longer finds it', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const chat = await coworkerChat(service);
+  repo.appendMessages({ id: 'z1', conversationId: chat.id, role: 'user', content: 'a unique zebra plan', createdAt: 1 });
+  await repo.save();
+  assert.equal(service.chatSearch('zebra').length, 1);
+  assert.equal(await service.chatDelete(chat.id), true);
+  assert.equal(repo.state.conversations.some((c) => c.id === chat.id), false);
+  assert.equal(service.chatSearch('zebra').length, 0);
+});
+
+test('undo all puts every file a task changed back as it was before the task, after one confirmation', async (t) => {
+  const events = [];
+  const { dir, repo, service } = makeService((event) => events.push(event));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const folder = path.join(dir, 'project');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'a.txt'), 'original');
+  await service.project.choose(folder);
+  const chat = await service.chatCreate('p1', 'm1', null, undefined, undefined, folder);
+  const write = (id, file, content) => ({ id, name: 'write_file', arguments: JSON.stringify({ path: file, content }) });
+  let calls = 0;
+  mockModel(t, async () =>
+    ++calls === 1
+      ? { toolCalls: [write('u1', 'a.txt', 'first'), write('u2', 'b.txt', 'made')] }
+      : calls === 2
+        ? { toolCalls: [write('u3', 'a.txt', 'second')] }
+        : { toolCalls: [] }
+  );
+  const run = service.chatSend(chat.id, 'Change things', []);
+  const request = await waitFor(() => events.find((e) => e.approvalRequired)?.approvalRequired, 'the approval');
+  await service.toolApprove({ requestId: request.id, approved: true, allowForTask: true });
+  await run;
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'second');
+  assert.equal(fs.readFileSync(path.join(folder, 'b.txt'), 'utf8'), 'made');
+
+  answerDialog(t, 0);
+  await assert.rejects(service.revertChanges(['u1', 'u2', 'u3']), /cancelled/);
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'second', 'Cancel changes nothing');
+
+  const seen = answerDialog(t, 1);
+  assert.deepEqual(await service.revertChanges(['u1', 'u2', 'u3']), { undone: 3, skipped: 0 });
+  assert.match(seen.asked.message, /Undo all/);
+  assert.match(seen.asked.detail, /2 files go back/);
+  assert.equal(seen.asked.defaultId, 0, 'Cancel is the default');
+  assert.equal(fs.readFileSync(path.join(folder, 'a.txt'), 'utf8'), 'original', 'from before the first save');
+  assert.equal(fs.existsSync(path.join(folder, 'b.txt')), false, 'a file the task made is deleted');
+  const saves = repo.state.messages.flatMap((m) => m.toolCalls ?? []).filter((c) => /^u\d$/.test(c.id));
+  assert.equal(saves.length, 3);
+  assert.ok(saves.every((c) => typeof c.change.revertedAt === 'number'));
+  assert.equal(service.audit.all().filter((entry) => entry.decision === 'reverted').length, 3);
+  await assert.rejects(service.revertChanges(['u1']), /can't be undone any more/);
+});
+
+test('a task that reaches your spending limit pauses before its next call and is marked stopped early', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  Object.assign(repo.state.providers[0].models[0], { pricePerMillionInputTokens: 10, pricePerMillionOutputTokens: 10 });
+  await service.settingsSave({ ...repo.state.settings, taskSpendLimit: 0.05 });
+  const chat = await coworkerChat(service);
+  let calls = 0;
+  // Each call: 3,000 tokens at $10 a million = $0.03. Two calls pass the $0.05 limit.
+  mockModel(t, async () => {
+    calls++;
+    return { toolCalls: [{ id: `s${calls}`, name: 'no_such_tool', arguments: '{}' }], promptTokens: 2000, completionTokens: 1000 };
+  });
+  await service.chatSend(chat.id, 'Research the market', []);
+  assert.equal(calls, 2);
+  const last = repo.conversationMessages(chat.id).findLast((m) => m.role === 'assistant');
+  assert.equal(last.incomplete, 'spend-limit');
+  assert.match(last.notice, /\$0\.05 spending limit/);
+  assert.match(last.notice, /\$0\.06/);
+  assert.equal(last.error, undefined);
+  // A model without a price can't be measured, so the limit never stops it.
+  delete repo.state.providers[0].models[0].pricePerMillionInputTokens;
+  calls = 0;
+  mockModel(t, async () =>
+    ++calls < 4
+      ? { toolCalls: [{ id: `f${calls}`, name: 'no_such_tool', arguments: '{}' }], promptTokens: 2000, completionTokens: 1000 }
+      : { toolCalls: [] }
+  );
+  await service.chatSend(chat.id, 'Again', []);
+  assert.equal(calls, 4);
+});
+
+test('the spending limit per task is checked when saved; 0 turns it off', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  await assert.rejects(service.settingsSave({ ...repo.state.settings, taskSpendLimit: -1 }), /spending limit/);
+  await assert.rejects(service.settingsSave({ ...repo.state.settings, taskSpendLimit: 5000 }), /spending limit/);
+  await service.settingsSave({ ...repo.state.settings, taskSpendLimit: 2.499 });
+  assert.equal(repo.state.settings.taskSpendLimit, 2.5);
+  await service.settingsSave({ ...repo.state.settings, taskSpendLimit: 0, welcomeDone: true });
+  assert.equal(repo.state.settings.taskSpendLimit, undefined);
+  assert.equal(repo.state.settings.welcomeDone, true);
 });

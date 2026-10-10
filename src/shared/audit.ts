@@ -9,7 +9,7 @@ export type AuditDecision =
   /** You approved it and allowed it for the rest of this task (the conversation's current run). */
   | 'approved-task'
   | 'rejected'
-  /** Nobody answered within 5 minutes. */
+  /** Nobody answered within 5 minutes. Only older records: approvals now wait until answered. */
   | 'timed-out'
   /** The run stopped while it waited for you. */
   | 'withdrawn'

@@ -305,10 +305,15 @@ export function OfficeCanvas({
 
   // Labels follow the zoom: districts from afar, departments in between, people up close.
   const tier = labelTier(view?.bounds ?? null);
-  const tagged = useMemo(
-    () => (view ? taggedPeople(view.bounds, view.target, statuses, selectedAgentId) : [selectedAgentId]),
-    [view, statuses, selectedAgentId]
-  );
+  // People "Find a person" found keep their name tags at every zoom, wherever they are.
+  const found = useOfficeStore((s) => s.mapHighlight);
+  const tagged = useMemo(() => {
+    const near = view ? taggedPeople(view.bounds, view.target, statuses, selectedAgentId) : [selectedAgentId];
+    return [...new Set([...near, ...found])];
+  }, [view, statuses, selectedAgentId, found]);
+  useEffect(() => {
+    scene.current?.highlightPeople(found);
+  }, [found, loading, roster]);
   const labelKey = `${view?.target.x.toFixed(1)}|${view?.target.z.toFixed(1)}|${tier}|${tagged.join(',')}|${selectedAgentId}|${loading}`;
   useLayoutEffect(() => {
     scene.current?.setLabels(
@@ -596,6 +601,7 @@ export function OfficeCanvas({
             ref={labels}
             tier={tier}
             people={tagged}
+            found={found}
             selectedId={selectedAgentId}
             statuses={statuses}
             loading={loading}

@@ -1,8 +1,16 @@
 import './workSummary.css';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useApp } from '../../../state';
 import { ToolCallDetails } from '../../../chat/MessageView';
-import { IconFileText, IconMonitor, IconSearch, IconTerminal, IconTool, IconWorld } from '../../../ui';
+import {
+  IconFileText,
+  IconMonitor,
+  IconRotateCcw,
+  IconSearch,
+  IconTerminal,
+  IconTool,
+  IconWorld
+} from '../../../ui';
 import { useOfficeStore } from '../store/officeStore';
 import {
   baseName,
@@ -74,6 +82,11 @@ export function WorkSummary({
     .filter(Boolean)
     .join(' · ');
 
+  // The saves this run made that can still be undone: every one goes back in one step.
+  const undoable = live
+    ? []
+    : steps.filter((s) => s.state === 'done' && s.change?.undo === 'kept' && !s.change.revertedAt);
+
   return (
     <section className={`work-summary${live ? ' is-live' : ''}`} aria-label="What they worked on">
       <header className="work-summary-head">
@@ -82,6 +95,7 @@ export function WorkSummary({
         <span className="work-summary-count">
           {steps.filter((s) => s.state === 'done').length} / {steps.length} steps
         </span>
+        {undoable.length > 0 && <UndoAll steps={undoable} />}
       </header>
       <div className="work-summary-rows">
         {files.map((file) => {
@@ -177,6 +191,47 @@ export function WorkSummary({
         </div>
       </details>
     </section>
+  );
+}
+
+/** Puts every file this run changed back the way it was, after one confirmation (in the main process). */
+function UndoAll({ steps }: { steps: WorkStep[] }) {
+  const [busy, setBusy] = useState(false);
+  const files = new Set(steps.map(stepPath)).size;
+  const undo = async () => {
+    setBusy(true);
+    try {
+      const { undone, skipped } = await window.axon.revertChanges(steps.map((s) => s.id));
+      await useApp.getState().refresh();
+      useApp
+        .getState()
+        .pushToast(
+          skipped
+            ? `Undid ${plural(undone, 'change')}; ${plural(skipped, 'change')} couldn't be undone`
+            : `Undid ${plural(undone, 'change')}`,
+          skipped ? 'error' : 'success'
+        );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+          : String(error);
+      if (!/cancelled/i.test(message)) useApp.getState().patch({ error: message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="work-summary-undo"
+      disabled={busy}
+      title={`Put ${files === 1 ? 'the file' : `all ${files} files`} back the way ${files === 1 ? 'it was' : 'they were'} before this task`}
+      onClick={() => void undo()}
+    >
+      <IconRotateCcw size={13} />
+      {busy ? 'Undoing…' : files === 1 ? 'Undo' : 'Undo all'}
+    </button>
   );
 }
 

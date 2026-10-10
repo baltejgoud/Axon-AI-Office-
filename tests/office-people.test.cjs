@@ -20,21 +20,20 @@ const agents = require('../src/renderer/src/features/office/data/officeAgents.ts
 
 const specialists = agents.OFFICE_AGENTS.filter((a) => a.district !== 'commons');
 
-test('district rings stay on the floor across crowd and full-character handoffs', () => {
+test('team rings stay on the floor across crowd and full-character handoffs', () => {
   const THREE = require('three');
   const { CrowdRenderer } = require('../src/renderer/src/features/office/scene/people/CrowdRenderer.ts');
-  const { districtById } = require('../src/renderer/src/features/office/campus/districts.ts');
   const people = agents.OFFICE_AGENTS.slice(0, 2).map((agent, i) => ({ id: agent.id, look: appearance.appearanceFor(agent.id), seat: { x: i * 3, z: 4, facing: 0 } }));
   const crowd = new CrowdRenderer(people);
   try {
-    const rings = crowd.object.getObjectByName('crowd-district-rings');
+    const rings = crowd.object.getObjectByName('crowd-team-rings');
     assert.ok(rings.isInstancedMesh);
     assert.equal(rings.count, 2);
     assert.equal(rings.geometry.index.count / 3, 24);
     assert.equal(rings.castShadow, false);
     const color = new THREE.Color();
     rings.getColorAt(0, color);
-    assert.equal(color.getHexString(), new THREE.Color(districtById(agents.OFFICE_AGENTS[0].district).color).getHexString());
+    assert.equal(color.getHexString(), new THREE.Color(agents.OFFICE_AGENTS[0].accentColor).getHexString());
     crowd.setVisible(people[0].id, false);
     crowd.setMarkerPosition(people[0].id, 12, -7);
     crowd.update(5, true);
@@ -45,6 +44,51 @@ test('district rings stay on the floor across crowd and full-character handoffs'
     crowd.setVisible(people[0].id, true);
     rings.getMatrixAt(0, matrix);
     assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(matrix).toArray(), [0, 0, 4]);
+  } finally { crowd.dispose(); }
+});
+
+test('teams side by side in a district wear different colours, and people wear their team’s', () => {
+  const { DISTRICTS } = require('../src/renderer/src/features/office/campus/districts.ts');
+  const { teamColor } = require('../src/renderer/src/features/office/campus/teamColors.ts');
+  for (const district of DISTRICTS) {
+    const colors = district.departments.map((department) => teamColor(department, district.id));
+    assert.equal(new Set(colors).size, colors.length, `${district.name} repeats a team colour`);
+    if (colors.length) assert.equal(colors[0], district.color, 'the first team keeps the district colour');
+  }
+  for (const agent of specialists) assert.equal(agent.accentColor, teamColor(agent.department, agent.district));
+});
+
+test('a search’s people stand out: their rings grow, everyone else’s turn grey, and clearing puts them back', () => {
+  const THREE = require('three');
+  const { CrowdRenderer } = require('../src/renderer/src/features/office/scene/people/CrowdRenderer.ts');
+  const people = agents.OFFICE_AGENTS.slice(0, 3).map((agent, i) => ({ id: agent.id, look: appearance.appearanceFor(agent.id), seat: { x: i * 3, z: 4, facing: 0 } }));
+  const crowd = new CrowdRenderer(people);
+  try {
+    const rings = crowd.object.getObjectByName('crowd-team-rings');
+    const scale = (i) => {
+      const m = new THREE.Matrix4();
+      rings.getMatrixAt(i, m);
+      return new THREE.Vector3().setFromMatrixScale(m).x;
+    };
+    const color = (i) => {
+      const c = new THREE.Color();
+      rings.getColorAt(i, c);
+      return c.getHexString();
+    };
+    const own = color(0);
+    crowd.setHighlighted([people[1].id]);
+    assert.ok(scale(1) > 2, 'the found ring grows');
+    assert.equal(scale(0), 1);
+    assert.notEqual(color(0), own, 'the others turn grey');
+    assert.equal(color(1), new THREE.Color(agents.OFFICE_AGENTS[1].accentColor).getHexString());
+    crowd.setMarkerPosition(people[1].id, 9, 9);
+    const m = new THREE.Matrix4();
+    rings.getMatrixAt(1, m);
+    assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(m).toArray(), [9, 0, 9]);
+    assert.ok(scale(1) > 2, 'a walking found person keeps the big ring');
+    crowd.setHighlighted([]);
+    assert.equal(scale(1), 1);
+    assert.equal(color(0), own);
   } finally { crowd.dispose(); }
 });
 

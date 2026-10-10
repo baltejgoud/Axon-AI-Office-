@@ -18,6 +18,29 @@ import { IconBell, IconCaretDown, IconLoader } from '../../../ui';
 import { elapsed } from '../../../format';
 import type { AgentRun } from '../../../../../shared/runtime';
 import { sections, worthReading } from '../../../chat/reading';
+import { useOfficeStore } from '../store/officeStore';
+import { ThreadRail } from '../../../chat/ThreadRail';
+import { conversationCost, formatTokens, formatUsd, type ConversationCost } from '../../../../../shared/cost';
+
+/** Under a finished task: what it cost on priced models, otherwise the tokens it used. */
+function RunCost({ cost }: { cost: ConversationCost }) {
+  const tokens = `${formatTokens(cost.promptTokens + cost.completionTokens)} tokens`;
+  const detail = [
+    `${formatTokens(cost.promptTokens)} tokens in, ${formatTokens(cost.completionTokens)} out.`,
+    cost.priced
+      ? cost.unpriced
+        ? 'Some replies used a model without a price and are not in the dollar figure.'
+        : ''
+      : 'No price is set for this model, so tokens only (Settings → Models).'
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <p className="run-cost" title={detail}>
+      This task: {cost.priced ? `${formatUsd(cost.actual)} · ${tokens}` : tokens}
+    </p>
+  );
+}
 
 /**
  * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
@@ -105,12 +128,15 @@ export function Conversation({
   const [nextBefore, setNextBefore] = useState<number>();
   const [historyError, setHistoryError] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
+  /** The first page of saved history has arrived (or failed), so a message not found is truly older. */
+  const [historyReady, setHistoryReady] = useState(false);
   const list = useRef<VirtuosoHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
   useEffect(() => {
     let disposed = false;
     historyEpoch.current++;
     setLoadingHistory(false);
+    setHistoryReady(false);
     setHistory([]);
     setNextBefore(undefined);
     setHistoryError('');
@@ -121,10 +147,14 @@ export function Conversation({
           if (!disposed) {
             setHistory(page.messages);
             setNextBefore(page.nextBefore);
+            setHistoryReady(true);
           }
         })
         .catch((error) => {
-          if (!disposed) setHistoryError(String(error));
+          if (!disposed) {
+            setHistoryError(String(error));
+            setHistoryReady(true);
+          }
         });
     return () => {
       disposed = true;
@@ -211,6 +241,19 @@ export function Conversation({
       ),
     [shown]
   );
+  // What each finished run cost, shown after its last message.
+  const providers = useApp((s) => s.data?.providers);
+  const runCosts = useMemo(
+    () =>
+      new Map(
+        threadRuns(shown).flatMap((run) => {
+          if (run.messages.some((m) => m.streaming)) return [];
+          const cost = conversationCost(run.messages, providers ?? []);
+          return cost.promptTokens + cost.completionTokens > 0 ? [[run.end, cost] as const] : [];
+        })
+      ),
+    [shown, providers]
+  );
   const lastEnd = shown.length - 1;
   const live = working || pending > 0;
   const end = useRef<HTMLDivElement>(null);
@@ -234,6 +277,48 @@ export function Conversation({
     scroller.addEventListener('scroll', onScroll);
     return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
+
+  // A search result opened this thread at one message: load older pages until it's there, then go to it
+  // and mark it for a moment. A thread that just opened settles at its newest message a few frames
+  // later, so this keeps going back until the message has stayed in view.
+  const reveal = useOfficeStore((s) => s.reveal);
+  useEffect(() => {
+    if (!reveal || reveal.conversationId !== conversation?.id || !scrollParent || !historyReady) return;
+    const index = shown.findIndex((m) => m.id === reveal.messageId);
+    if (index < 0) {
+      if (nextBefore !== undefined) {
+        if (!loadingHistory) void loadEarlier();
+      } else useOfficeStore.getState().revealMessage(null);
+      return;
+    }
+    let frame = 0;
+    let attempts = 0;
+    let steady = 0;
+    const done = () => useOfficeStore.getState().revealMessage(null);
+    const go = () => {
+      if (!scrollParent.isConnected) return;
+      if (++attempts > 120) return done();
+      const element = scrollParent.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(reveal.messageId)}"]`
+      );
+      const box = scrollParent.getBoundingClientRect();
+      const rect = element?.getBoundingClientRect();
+      const inView = !!rect && rect.top >= box.top - 2 && rect.top < box.bottom - 40;
+      steady = inView ? steady + 1 : 0;
+      if (element && steady >= 4 && attempts > 8) {
+        element.classList.add('message-revealed');
+        setTimeout(() => element.classList.remove('message-revealed'), 2400);
+        return done();
+      }
+      if (!inView && attempts % 6 === 1) {
+        follow.current = false;
+        list.current?.scrollToIndex({ index, align: 'start', offset: -12 });
+      }
+      frame = requestAnimationFrame(go);
+    };
+    frame = requestAnimationFrame(go);
+    return () => cancelAnimationFrame(frame);
+  }, [reveal, shown, historyReady, nextBefore, loadingHistory, scrollParent, conversation?.id]);
 
   return (
     <>
@@ -275,6 +360,7 @@ export function Conversation({
                 initialTopMostItemIndex={Math.max(0, shown.length - 1)}
                 itemContent={(i, m) => {
                   const steps = summaries.get(i);
+                  const cost = i === lastEnd && live ? undefined : runCosts.get(i);
                   return (
                     <Fragment key={m.id}>
                       {!onlyWork(m) && (
@@ -293,6 +379,7 @@ export function Conversation({
                           live={i === lastEnd && (live || steps.some((step) => step.state === 'running'))}
                         />
                       )}
+                      {cost && <RunCost cost={cost} />}
                     </Fragment>
                   );
                 }}
@@ -316,6 +403,13 @@ export function Conversation({
                 </button>,
                 jumpSlot
               )}
+            <ThreadRail
+              messages={shown}
+              list={list}
+              scrollParent={scrollParent}
+              agentName={agentName}
+              shown={visible}
+            />
             {activeRun && conversation && <RunStage run={activeRun} conversationId={conversation.id} />}
             <PendingApprovals conversationId={conversation?.id ?? null} />
           </div>

@@ -243,7 +243,7 @@ test('the service hands reminders and waiting approvals to the shell', async (t)
   const notices = [];
   const applied = [];
   let visible = true;
-  service.attachShell({ notify: (notice) => notices.push(notice), windowVisible: () => visible, applySettings: (settings) => applied.push(settings.startWithWindows) });
+  service.attachShell({ notify: (notice) => notices.push(notice), windowFocused: () => visible, applySettings: (settings) => applied.push(settings.startWithWindows) });
   assert.deepEqual(applied, [false], 'applies the sign-in setting at start-up');
   await service.settingsSave({ ...service.settings, startWithWindows: true });
   assert.deepEqual(applied, [false, true]);
@@ -277,7 +277,7 @@ test('a coworker waiting for approval while the window is closed sends a notice 
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   repo.state.providers.push({ id: 'p1', name: 'Mock', kind: 'openai-compatible', baseUrl: 'https://example.com/v1', models: [{ id: 'm1', displayName: 'm1' }], enabled: true, createdAt: 0, hasApiKey: false });
   const notices = [];
-  service.attachShell({ notify: (notice) => notices.push(notice), windowVisible: () => false, applySettings() {} });
+  service.attachShell({ notify: (notice) => notices.push(notice), windowFocused: () => false, applySettings() {} });
   const chat = await service.chatCreate('p1', 'm1', null, 'backend-developer', { skillIds: [], roleIds: [] }, folder, "You are Axon's Backend Developer.");
   const providers = require('../src/main/providers.ts');
   const originalStream = providers.streamChat;

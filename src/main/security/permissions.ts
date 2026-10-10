@@ -15,8 +15,8 @@ export interface CheckResult {
   byTask?: boolean;
 }
 
-/** How an approval request ended. */
-export type ApprovalOutcome = 'approved' | 'approved-session' | 'approved-task' | 'rejected' | 'timed-out' | 'withdrawn';
+/** How an approval request ended. Requests wait for an answer; there is no time limit. */
+export type ApprovalOutcome = 'approved' | 'approved-session' | 'approved-task' | 'rejected' | 'withdrawn';
 
 /** What one run may touch: its folders, and whether shell commands are on. */
 export interface PermissionScope {
@@ -27,7 +27,6 @@ export interface PermissionScope {
 interface PendingApproval {
   request: ToolApprovalRequest;
   resolve: (outcome: ApprovalOutcome) => void;
-  timer: NodeJS.Timeout;
 }
 
 /** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
@@ -161,14 +160,8 @@ export class PermissionManager {
     });
     const promise = outcome.then((ended) => ended === 'approved' || ended === 'approved-session' || ended === 'approved-task');
 
-    // 5-minute timeout on user approvals; a waiting approval never keeps the app from quitting.
-    const timer = setTimeout(() => {
-      this.pendingApprovals.delete(id);
-      settle('timed-out');
-    }, 300_000);
-    timer.unref?.();
-
-    this.pendingApprovals.set(id, { request, resolve: settle, timer });
+    // No time limit: a person who stepped away answers when they're back. Stopping the run withdraws it.
+    this.pendingApprovals.set(id, { request, resolve: settle });
     return { request, promise, outcome };
   }
 
@@ -196,7 +189,6 @@ export class PermissionManager {
   private settle(requestId: string, outcome: ApprovalOutcome): boolean {
     const pending = this.pendingApprovals.get(requestId);
     if (!pending) return false;
-    clearTimeout(pending.timer);
     this.pendingApprovals.delete(requestId);
     if (outcome === 'approved-session') {
       const { toolName, arguments: args } = pending.request;
@@ -220,10 +212,7 @@ export class PermissionManager {
   clearSession() {
     this.sessionGrants.clear();
     this.taskGrants.clear();
-    for (const pending of this.pendingApprovals.values()) {
-      clearTimeout(pending.timer);
-      pending.resolve('withdrawn');
-    }
+    for (const pending of this.pendingApprovals.values()) pending.resolve('withdrawn');
     this.pendingApprovals.clear();
   }
 }

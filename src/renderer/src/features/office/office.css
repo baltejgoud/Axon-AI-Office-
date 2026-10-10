@@ -166,6 +166,18 @@
   gap: 5px;
   align-items: center;
   font-size: 10px;
+  /* Their team's colour, the same as the ring on the floor under them. */
+  border-left: 3px solid var(--agent-color);
+}
+/* Found by "Find a person": stands out at any zoom, in their team's colour. */
+.office-person-label.found:not(.selected) {
+  border-color: var(--agent-color);
+  border-left-width: 3px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--agent-color) 25%, transparent),
+    0 4px 14px #23385830;
+  font-weight: 600;
+  z-index: 2;
 }
 .office-person-label.selected {
   color: #2355f4;
@@ -1064,12 +1076,85 @@ earlier threads. */
   font-size: 10px;
   flex: none;
 }
+.activity-menu [role='menuitem'].danger,
+.activity-menu [role='menuitem'].danger svg {
+  color: var(--danger-text);
+}
+/* An earlier conversation, with its own Delete beside it (shown on hover or keyboard focus). */
+.activity-menu-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.activity-menu-row [role='menuitem'] {
+  padding-right: 34px;
+}
+.activity-menu-delete {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--office-muted);
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.activity-menu-row:hover .activity-menu-delete,
+.activity-menu-delete:focus-visible {
+  opacity: 1;
+}
+.activity-menu-row:hover small {
+  visibility: hidden;
+}
+.activity-menu-delete:hover,
+.activity-menu-delete:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
 .activity-menu-heading {
   padding: 10px 9px 4px;
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--office-muted);
+}
+
+/* Under a finished task: what it cost (or the tokens it used). Quiet: a fact to glance at. */
+.office-thread .run-cost {
+  margin: -6px 0 12px 38px;
+  font-size: 11px;
+  color: var(--office-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A search result opened here: the message it found glows for a moment. */
+.office-thread .message.message-revealed {
+  border-radius: 12px;
+  animation: message-revealed 2.4s ease-out;
+}
+@keyframes message-revealed {
+  0%,
+  45% {
+    box-shadow: 0 0 0 2px var(--office-blue);
+    background: color-mix(in srgb, var(--office-blue) 8%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-thread .message.message-revealed {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--office-blue);
+  }
 }
 
 /* The conversation thread,

@@ -4,7 +4,6 @@ import type { Appearance, HairStyle, Top } from '../agents/appearance';
 import { SOLE, applyPose, buildHumanoid } from '../agents/HumanoidRig';
 import { computePose } from '../agents/poses';
 import { OFFICE_AGENTS } from '../../data/officeAgents';
-import { districtById } from '../../campus/districts';
 
 /** Seat height the crowd pose is baked at; office chairs sit here. */
 const SEAT_HEIGHT = 0.5;
@@ -156,6 +155,11 @@ const template = (overrides: Partial<Appearance>): Appearance => ({
   ...overrides
 });
 
+/** How much bigger a found person's ring is, before its pulse. */
+const HIGHLIGHT_SCALE = 2.2;
+/** Everyone else's ring while a search shows who it found. */
+const DIMMED_RING = '#a9b1bf';
+
 export interface CrowdPerson {
   id: string;
   look: Appearance;
@@ -184,6 +188,11 @@ export class CrowdRenderer {
   private readonly hits: THREE.InstancedMesh;
   private readonly blobs: THREE.InstancedMesh;
   private readonly rings: THREE.InstancedMesh;
+  /** Where each person's ring is (their seat, or where their full character stands), and its own colour. */
+  private readonly markers: { x: number; z: number }[] = [];
+  private readonly ringColors: THREE.Color[] = [];
+  /** People a search found: their rings grow and pulse, everyone else's fade to grey. */
+  private highlighted: ReadonlySet<number> | null = null;
   private readonly hidden = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly scratch = new THREE.Matrix4();
   private readonly lift = new THREE.Matrix4();
@@ -309,7 +318,7 @@ export class CrowdRenderer {
       }),
       people.length
     );
-    this.rings.name = 'crowd-district-rings';
+    this.rings.name = 'crowd-team-rings';
     this.rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rings.frustumCulled = false;
     this.rings.renderOrder = 2;
@@ -318,11 +327,12 @@ export class CrowdRenderer {
       this.hits.setMatrixAt(i, flat);
       this.blobs.setMatrixAt(i, flat);
       this.rings.setMatrixAt(i, flat);
+      this.markers.push({ x: person.seat.x, z: person.seat.z });
+      // Their team's colour (the core team's own), the same as their name tag and badge.
       const agent = OFFICE_AGENTS.find((a) => a.id === person.id);
-      this.rings.setColorAt(
-        i,
-        new THREE.Color(agent ? districtById(agent.district).color : person.look.accent)
-      );
+      const color = new THREE.Color(agent?.accentColor ?? person.look.accent);
+      this.ringColors.push(color);
+      this.rings.setColorAt(i, color);
     });
     this.hits.computeBoundingSphere();
     this.blobs.computeBoundingSphere();
@@ -333,7 +343,30 @@ export class CrowdRenderer {
   setMarkerPosition(id: string, x: number, z: number): void {
     const person = this.index.get(id);
     if (person === undefined) return;
-    this.rings.setMatrixAt(person, this.scratch.makeTranslation(x, 0, z));
+    this.markers[person] = { x, z };
+    this.placeRing(person, this.highlighted?.has(person) ? HIGHLIGHT_SCALE : 1);
+    this.rings.instanceMatrix.needsUpdate = true;
+  }
+
+  private placeRing(person: number, scale: number): void {
+    const { x, z } = this.markers[person];
+    this.rings.setMatrixAt(person, this.scratch.makeScale(scale, 1, scale).setPosition(x, 0, z));
+  }
+
+  /**
+   * Shows where a search's people are: their rings grow (and pulse, unless motion is reduced) while
+   * everyone else's turn grey. An empty list or null puts every ring back.
+   */
+  setHighlighted(ids: readonly string[] | null): void {
+    const found = new Set((ids ?? []).flatMap((id) => (this.index.has(id) ? [this.index.get(id)!] : [])));
+    this.highlighted = found.size ? found : null;
+    const grey = new THREE.Color(DIMMED_RING);
+    this.people.forEach((_, person) => {
+      const lit = !this.highlighted || this.highlighted.has(person);
+      this.rings.setColorAt(person, lit ? this.ringColors[person] : grey);
+      this.placeRing(person, this.highlighted?.has(person) ? HIGHLIGHT_SCALE : 1);
+    });
+    this.rings.instanceColor!.needsUpdate = true;
     this.rings.instanceMatrix.needsUpdate = true;
   }
 
@@ -362,9 +395,14 @@ export class CrowdRenderer {
     this.dirty = true;
   }
 
-  /** A slow breath for everyone seated, applied every other frame. */
+  /** A slow breath for everyone seated, applied every other frame; found people's rings pulse. */
   update(elapsed: number, reducedMotion: boolean): void {
     this.frame++;
+    if (this.highlighted && !reducedMotion) {
+      const pulse = HIGHLIGHT_SCALE + 0.35 * Math.sin(elapsed * 4);
+      for (const person of this.highlighted) this.placeRing(person, pulse);
+      this.rings.instanceMatrix.needsUpdate = true;
+    }
     if (!reducedMotion && this.frame % 2 === 0) {
       for (const group of this.groups)
         group.members.forEach((person, slot) => {

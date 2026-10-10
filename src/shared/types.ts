@@ -165,10 +165,11 @@ export interface Message {
   /** A note about the run itself, e.g. connectors left out for too many tools. */
   notice?: string;
   /**
-   * The run ended without the answer it owes: it ran out of steps, said nothing, or only said what
-   * it would do. Shown as "Stopped early" with a way to continue, never as completed.
+   * The run ended without the answer it owes: it ran out of steps, reached your spending limit for a
+   * task, said nothing, or only said what it would do. Shown as "Stopped early" with a way to
+   * continue, never as completed.
    */
-  incomplete?: 'step-limit' | 'no-answer' | 'preamble';
+  incomplete?: 'step-limit' | 'spend-limit' | 'no-answer' | 'preamble';
   /** Who sent a message on your side when it wasn't you, e.g. a team brief from the Chief of Staff. */
   from?: string;
 }
@@ -316,6 +317,13 @@ export interface Settings {
   voice?: VoiceSettings;
   /** Models skip their thinking where they can, for faster answers. On unless turned off. */
   quickReplies?: boolean;
+  /**
+   * Dollars one task (one run) may spend before it pauses and asks you to continue. Absent or 0: no
+   * limit. Only replies on models with a price count; others can't be measured.
+   */
+  taskSpendLimit?: number;
+  /** The welcome guide was finished or skipped; it doesn't open by itself again. */
+  welcomeDone?: boolean;
 }
 
 /* ------------------------------------ MCP ------------------------------------- */

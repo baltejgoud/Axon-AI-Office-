@@ -1,4 +1,5 @@
 import { MessagePages, type MessagePageRef } from './message-pages';
+import { searchEntries, type SearchEntry } from './conversation-search';
 import type { BackupSummary, PlatformState } from '../shared/platform';
 import { everyone } from '../shared/connectors';
 import { JsonStore } from './infra/store';
@@ -94,7 +95,34 @@ export class Repository {
   deleteMessages(id: string): void {
     if (this.loadedMessages) this.loadedMessages = this.loadedMessages.filter(m => m.conversationId !== id);
     this.conversationCache.delete(id);
+    this.searchCache.delete(id);
     this.pageRefs = this.pageRefs.filter(ref => ref.conversationId !== id);
+  }
+  /** Saved conversations' text for search, by the pages it was read from: a changed page reads again. */
+  private readonly searchCache = new Map<string, { pages: string; entries: SearchEntry[] }>();
+  /** What one search reads conversations through: with every message in memory, grouped once for the search. */
+  searchSource(): (id: string) => SearchEntry[] {
+    if (!this.loadedMessages) return (id) => this.searchEntries(id);
+    const groups = new Map<string, PlatformState['messages']>();
+    for (const m of this.loadedMessages) {
+      const group = groups.get(m.conversationId);
+      if (group) group.push(m);
+      else groups.set(m.conversationId, [m]);
+    }
+    return (id) => searchEntries(groups.get(id) ?? []);
+  }
+  /** One conversation's messages as search reads them. Pages on disk are read once, not kept as live messages. */
+  searchEntries(id: string): SearchEntry[] {
+    if (this.loadedMessages) return searchEntries(this.loadedMessages.filter(m => m.conversationId === id));
+    const live = this.conversationCache.get(id);
+    if (live) return searchEntries(live);
+    const refs = this.pageRefs.filter(ref => ref.conversationId === id);
+    const pages = refs.map(ref => ref.hash).join();
+    const cached = this.searchCache.get(id);
+    if (cached?.pages === pages) return cached.entries;
+    const entries = searchEntries(this.messagePages.all(refs));
+    this.searchCache.set(id, { pages, entries });
+    return entries;
   }
   historyPage(conversationId: string, before?: number, limit = 100) {
     if (this.loadedMessages || this.conversationCache.has(conversationId)) {

@@ -1,0 +1,80 @@
+/* The scrub bar beside a long conversation (ThreadRail): drag through the thread, see whose message is where. */
+.office-activity-panel {
+  position: relative;
+}
+/* The rail stands in for the panel's own scrollbar while the thread is long. */
+.activity-body.has-thread-rail {
+  scrollbar-width: none;
+  padding-right: 30px;
+}
+.activity-body.has-thread-rail::-webkit-scrollbar {
+  display: none;
+}
+.thread-rail {
+  position: absolute;
+  right: 4px;
+  z-index: 6;
+  width: 18px;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.thread-rail.is-dragging {
+  cursor: grabbing;
+}
+.thread-rail-track {
+  position: absolute;
+  inset: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--office-muted) 14%, transparent);
+  transition: inset 0.12s;
+}
+.thread-rail:hover .thread-rail-track,
+.thread-rail.is-dragging .thread-rail-track,
+.thread-rail:focus-visible .thread-rail-track {
+  inset: 0 4px;
+}
+.thread-rail:focus-visible .thread-rail-track {
+  box-shadow: 0 0 0 2px var(--office-blue);
+}
+/* Where you asked something. */
+.thread-rail-mark {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--office-blue) 55%, transparent);
+}
+.thread-rail-thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--office-ink) 30%, transparent);
+  transition: background 0.12s;
+}
+.thread-rail:hover .thread-rail-thumb,
+.thread-rail.is-dragging .thread-rail-thumb {
+  background: color-mix(in srgb, var(--office-ink) 48%, transparent);
+}
+/* Whose message is at that point, beside the pointer. */
+.thread-rail-label {
+  position: absolute;
+  right: 24px;
+  max-width: 260px;
+  transform: translateY(-50%);
+  padding: 5px 9px;
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-paper);
+  box-shadow: 0 8px 22px #1b2c4a24;
+  color: var(--office-ink);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

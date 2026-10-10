@@ -10,7 +10,8 @@ import {
   IconDotsHorizontal,
   IconDownload,
   IconLayoutGrid,
-  IconSparkle
+  IconSparkle,
+  IconTrash
 } from '../../../ui';
 import { defaultTab, useOfficeStore, type AgentActivity, type PanelTab } from '../store/officeStore';
 import { OFFICE_AGENTS, type OfficeAgent } from '../data/officeAgents';
@@ -41,6 +42,22 @@ const NARROW_PANEL = 400;
 /** The whole conversation as Markdown: every message, not only those on screen. */
 const transcriptOf = async (thread: Thread, agentName: string) =>
   transcriptMarkdown(await wholeConversation(thread.id), { title: thread.title, agentName });
+
+/**
+ * Deletes a conversation after you confirm. Work it owns that you keep running keeps it, and says so.
+ * Files the coworker saved are not touched.
+ */
+export const deleteThread = (thread: Pick<Thread, 'id' | 'title'>) =>
+  perform(async () => {
+    if (
+      !confirm(
+        `Delete “${thread.title}”?\n\nIts messages are removed for good. Files your coworkers saved stay where they are.`
+      )
+    )
+      return;
+    if (await window.axon.chatDelete(thread.id)) useApp.getState().pushToast('Conversation deleted');
+    else useApp.getState().pushToast('Not deleted: its work is still running', 'error');
+  });
 
 /** Specialists' descriptions continue a phrase ("the browser-facing code…"); shown alone, they start a sentence. */
 const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -205,6 +222,13 @@ export function ActivityPanel() {
                           );
                           if (path) useApp.getState().pushToast(`Saved to ${path}`);
                         })
+                    },
+                    {
+                      key: 'delete-thread',
+                      label: 'Delete this conversation…',
+                      icon: <IconTrash size={15} />,
+                      danger: true,
+                      onSelect: () => void deleteThread(conversation)
                     }
                   ]
                 : []),
@@ -241,7 +265,8 @@ export function ActivityPanel() {
                 label: thread.title,
                 detail: timeAgo(thread.updatedAt),
                 current: thread.id === conversation?.id,
-                onSelect: () => setAgentConversation(agent.id, thread.id)
+                onSelect: () => setAgentConversation(agent.id, thread.id),
+                onDelete: () => void deleteThread(thread)
               }))
             ]}
           />
@@ -465,7 +490,11 @@ interface MenuItem {
   detail?: string;
   current?: boolean;
   disabled?: boolean;
+  /** Shown in red: it removes something. */
+  danger?: boolean;
   onSelect: () => void;
+  /** An earlier conversation's own Delete button, beside it. */
+  onDelete?: () => void;
 }
 
 function ConversationMenu({
@@ -496,7 +525,7 @@ function ConversationMenu({
       role="menuitem"
       disabled={item.disabled}
       aria-current={item.current || undefined}
-      className={item.current ? 'current' : ''}
+      className={[item.current && 'current', item.danger && 'danger'].filter(Boolean).join(' ')}
       onClick={() => {
         item.onSelect();
         onToggle(false);
@@ -507,6 +536,26 @@ function ConversationMenu({
       {item.detail && <small>{item.detail}</small>}
     </button>
   );
+  const renderRow = (item: MenuItem) =>
+    item.onDelete ? (
+      <div key={item.key} className="activity-menu-row">
+        {render(item)}
+        <button
+          type="button"
+          className="activity-menu-delete"
+          aria-label={`Delete “${item.label}”`}
+          title="Delete conversation"
+          onClick={() => {
+            onToggle(false);
+            item.onDelete!();
+          }}
+        >
+          <IconTrash size={14} />
+        </button>
+      </div>
+    ) : (
+      render(item)
+    );
   return (
     <div className="activity-menu-anchor" ref={root}>
       <button
@@ -523,7 +572,7 @@ function ConversationMenu({
         <div className="activity-menu" role="menu">
           {actions.map(render)}
           {history.length > 0 && <div className="activity-menu-heading">Earlier conversations</div>}
-          {history.map(render)}
+          {history.map(renderRow)}
         </div>
       )}
     </div>

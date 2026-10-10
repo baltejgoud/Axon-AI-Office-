@@ -1,14 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { IconSearch, IconClose } from '../../ui';
 import { OFFICE_AGENTS } from './data/officeAgents';
 import { ColleagueSummary } from './ColleagueSummary';
 import { searchCoworkers } from './shell/search';
+import { useOfficeStore } from './store/officeStore';
 
-/** "Find a person or specialty…": type a name or a skill, pick someone, and the camera goes to them. */
+/**
+ * "Find a person or specialty…": type a name or a skill, pick someone, and the camera goes to them.
+ * While you type, the people it finds stand out on the map, with their name tags.
+ */
 export function OfficeDirectory({ onChoose }: { onChoose: (id: string) => void }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const matches = useMemo(() => searchCoworkers(query, OFFICE_AGENTS, 8), [query]);
+  useEffect(() => {
+    useOfficeStore.getState().setMapHighlight(query.trim() ? matches.map((agent) => agent.id) : []);
+  }, [query, matches]);
+  useEffect(() => () => useOfficeStore.getState().setMapHighlight([]), []);
   const choose = (id: string) => {
     onChoose(id);
     setQuery('');

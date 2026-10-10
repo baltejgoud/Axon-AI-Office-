@@ -60,6 +60,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'readToolArtifact',
   'chatSelectionSet',
   'chatDelete',
+  'chatSearch',
   'chatSend',
   'chatStop',
   'chatNotifyWhenDone',
@@ -71,6 +72,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'auditExport',
   'documentSave',
   'revertChange',
+  'revertChanges',
   'toolApprove',
   'attach',
   'speechTranscribe',
@@ -189,6 +191,8 @@ function createWindow(): void {
   window.on('closed', () => {
     window = null;
   });
+  // A notice flashed the taskbar button; coming back to Axon stops it.
+  window.on('focus', () => window?.flashFrame(false));
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL)
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(rendererFile);
@@ -272,8 +276,13 @@ else {
         }, methods);
       }
       service.attachShell({
-        notify: (notice) => showNotice(notice, showWindow),
-        windowVisible: () => !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
+        notify: (notice) => {
+          showNotice(notice, showWindow);
+          // Open behind another app or minimized: the taskbar button flashes until Axon is in front again.
+          if (window && !window.isDestroyed() && !window.isFocused()) window.flashFrame(true);
+        },
+        windowFocused: () =>
+          !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized() && window.isFocused(),
         applySettings: (settings) => {
           const item = loginItem(settings, app.isPackaged, process.platform);
           if (item) app.setLoginItemSettings(item);

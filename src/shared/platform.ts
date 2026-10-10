@@ -71,6 +71,20 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   /** Start with Windows needs the installed app. */
   startWithWindowsAvailable: boolean;
 }
+/** Search: a past conversation that matched, and the newest message in it that did. */
+export interface ConversationHit {
+  conversationId: string;
+  agentId?: string;
+  title: string;
+  updatedAt: number;
+  /** Every word is in the title. */
+  inTitle: boolean;
+  /** The newest message with every word, when one has them. */
+  messageId?: string;
+  fromYou?: boolean;
+  /** One line of that message around the first word found. */
+  snippet?: string;
+}
 /** Settings' Test connection: one line per model checked. */
 export interface ProviderTestResult {
   results: { modelId: string; ok: boolean; ms?: number; error?: string }[];
@@ -203,7 +217,10 @@ export interface PlatformAPI {
   chatHistoryPage(conversationId: string, before?: number, limit?: number): Promise<{ messages: Message[]; total: number; nextBefore?: number }>;
   chatRename(id: string, title: string): Promise<void>;
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
-  chatDelete(id: string): Promise<void>;
+  /** False when the conversation was kept: you cancelled, or work it owns carries on in the background. */
+  chatDelete(id: string): Promise<boolean>;
+  /** Past conversations whose title or one message has every word of the query. */
+  chatSearch(query: string): Promise<ConversationHit[]>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;
   chatStop(id: string): Promise<void>;
   /** "Notify me when done" for the conversation's current run; whether it is on now. */
@@ -227,6 +244,8 @@ export interface PlatformAPI {
   documentSave(name: string, content: string, folder?: string | null): Promise<string | null>;
   /** Undoes a coworker's saved write after asking; rejects with "Undo cancelled." on Cancel. */
   revertChange(toolCallId: string): Promise<void>;
+  /** "Undo all": a task's file changes, after one confirmation; how many were undone and left as they are. */
+  revertChanges(toolCallIds: string[]): Promise<{ undone: number; skipped: number }>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
   attach(): Promise<{ id: string; name: string }[]>;
   /** Voice typing: a composer recording as text, by the engine Settings → Voice picks. `prompt` names what you're likely to say. */

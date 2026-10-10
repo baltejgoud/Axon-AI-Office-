@@ -455,6 +455,11 @@ export class OfficeScene {
     if (view && focusAgent) this.cameraRig.focus(view.position, 12);
   }
 
+  /** People a search found stand out on the floor (their rings grow and pulse); an empty list clears it. */
+  public highlightPeople(ids: readonly string[]): void {
+    this.crowd.setHighlighted(ids);
+  }
+
   /** Frame one of the Commons rooms. */
   public focusZone(zoneId: string): void {
     const anchor = ZONE_ANCHORS[zoneId as ZoneId];

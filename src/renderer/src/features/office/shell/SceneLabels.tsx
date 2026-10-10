@@ -1,5 +1,5 @@
 import { forwardRef, type CSSProperties } from 'react';
-import { districtById, type Bounds } from '../campus/districts';
+import type { Bounds } from '../campus/districts';
 import { OFFICE_AGENTS, type AgentStatus } from '../data/officeAgents';
 import { HOME_DESKS, poiById } from '../simulation/layout';
 import type { Vec2 } from '../simulation/types';
@@ -54,6 +54,8 @@ export function taggedPeople(
 export interface SceneLabelsProps {
   tier: LabelTier;
   people: string[];
+  /** People a search found: tagged at every zoom, and marked. */
+  found?: readonly string[];
   selectedId: string;
   statuses: Readonly<Record<string, AgentStatus>>;
   loading: boolean;
@@ -69,10 +71,10 @@ export interface SceneLabelsProps {
  * The scene positions the tags; `data-anchor` says whom each follows.
  */
 export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function SceneLabels(
-  { tier, people, selectedId, statuses, loading, onAgent, bounds, target, onPlace },
+  { tier, people, found = [], selectedId, statuses, loading, onAgent, bounds, target, onPlace },
   ref
 ) {
-  const tags = tier === 'near' ? people : people.filter((id) => id === selectedId);
+  const tags = tier === 'near' ? people : people.filter((id) => id === selectedId || found.includes(id));
   // Between tasks, the selected person's tag says how their last task ended, as their panel does.
   const runtime = useOfficeStore((s) => s.agentRuntime[selectedId]);
   const thread = useApp((s) => activeThread(s.data?.conversations ?? [], selectedId, runtime));
@@ -109,8 +111,8 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
           <button
             key={id}
             data-anchor={`agent:${id}`}
-            className={`office-person-label ${selected ? 'selected' : ''}`}
-            style={{ '--agent-color': districtById(agent.district).color } as CSSProperties}
+            className={`office-person-label ${selected ? 'selected' : ''}${found.includes(id) ? ' found' : ''}`}
+            style={{ '--agent-color': agent.accentColor } as CSSProperties}
             onClick={() => onAgent(id)}
             title={agent.role === agent.name ? agent.name : `${agent.name} · ${agent.role}`}
             aria-label={`Select ${agent.name}, ${status}`}

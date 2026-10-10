@@ -6,14 +6,11 @@ import { Button, IconBook, IconCheck, IconCopy, IconSparkle, IconTerminal, IconU
 import { toolPresentation } from './workPresentation';
 import { MessageMarkdown } from './MessageMarkdown';
 import { useReading, worthReading } from './reading';
+import { visibleUserText } from '../../../shared/user-text';
+export { visibleUserText };
 
 /** Messages of yours longer than this start folded, with Show more. */
 const FOLD_AT = { chars: 600, lines: 8 };
-
-/** What the user typed, without the attachment and file-context blocks appended for the model. */
-export function visibleUserText(content: string): string {
-  return content.split('\n\n<attachment')[0].split('\n\nFile context: ')[0].split('\n\n<file path=')[0];
-}
 
 /** The standard card for a tool call: its name and state, opening to its arguments and result. */
 export function ToolCallDetails({ call: tc, conversationId }: { call: ToolCall; conversationId?: string }) {

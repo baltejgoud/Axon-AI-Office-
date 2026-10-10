@@ -1,4 +1,5 @@
 import { DISTRICTS } from '../campus/districts';
+import { teamColor } from '../campus/teamColors';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { TASK_BOARDS } from '../campus/boards';
 import { FURNITURE } from '../simulation/layout';
@@ -25,7 +26,8 @@ export const SPATIAL_LABELS = DISTRICTS.flatMap((district) => [
             target: department,
             title: department,
             district: district.id,
-            color: district.color,
+            // The team's colour: the label says which ring colour is which team.
+            color: teamColor(department, district.id),
             people: OFFICE_AGENTS.filter((a) => a.department === department).length,
             point: { x: item.x, y: 2.4, z: item.z }
           }
