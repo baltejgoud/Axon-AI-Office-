@@ -1,4 +1,4 @@
-import type { Skill, SkillSourceInfo } from '../shared/types';
+import type { Skill, SkillSourceInfo, ToolDefinition } from '../shared/types';
 import catalogJson from '../skills/catalog.json';
 import bodiesJson from '../skills/bodies.json';
 
@@ -20,4 +20,161 @@ export function skillBodies(ids: string[]): { id: string; name: string; source: 
     const skill = byId.get(id);
     return skill && bodies[id] !== undefined ? [{ id, name: skill.name, source: skill.source, body: bodies[id] }] : [];
   });
+}
+/** What a coworker's skill index lists: known ids, in the order given. */
+export function skillIndex(ids: readonly string[]): { id: string; name: string; description: string }[] {
+  return ids.flatMap((id) => {
+    const skill = byId.get(id);
+    return skill ? [{ id, name: skill.name, description: skill.description }] : [];
+  });
+}
+export const FIND_SKILLS: ToolDefinition = {
+  name: 'find_skills',
+  description:
+    'Look through the whole skill library for a skill, playbook or how-to guide that covers what you are about to do, for example "cold email sequence" or "release checklist". Returns up to 8 matches as id — name: description. Read one with load_skill.',
+  parameters: {
+    type: 'object',
+    properties: { query: { type: 'string', description: 'What you need to do, in a few words' } },
+    required: ['query']
+  }
+};
+
+export const LOAD_SKILL: ToolDefinition = {
+  name: 'load_skill',
+  description:
+    'Read a skill, playbook or how-to guide before a task it covers, then follow it. Your own skills are listed under <available_skills> in your instructions; any other skill id that find_skills returns can be read too.',
+  parameters: {
+    type: 'object',
+    properties: { id: { type: 'string', description: 'The skill id, e.g. "ecc/api-design"' } },
+    required: ['id']
+  }
+};
+
+/** The tools that look up and read skills; they answer from the bundled catalog, never from the tool registry. */
+export const SKILL_TOOL_NAMES: ReadonlySet<string> = new Set([FIND_SKILLS.name, LOAD_SKILL.name]);
+
+/** What a skill tool returns. `whole` marks a result the model must get uncut: a skill read in part isn't the skill. */
+export interface SkillToolResult {
+  content: string;
+  isError?: true;
+  whole?: true;
+}
+
+const MATCHES = 8;
+const BLURB = 160;
+
+/** Words that say nothing about which skill is wanted. */
+const FILLER = new Set(
+  'a an the to of for and or in on with my me how do is it this that about what from by be can you your up as at if we us so are was get use using into need want help please skill skills playbook playbooks guide guides'.split(' ')
+);
+
+/** A word in one form whether it was typed as a plural or not ("emails" and "email"). */
+const stem = (word: string) => (word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word);
+const rawWords = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+const wordsOf = (text: string) => rawWords(text).map(stem);
+
+/** What a skill is found by, prepared once: the library has hundreds and a coworker may search it often. */
+interface Searchable {
+  skill: Skill;
+  nameWords: string[];
+  descriptionWords: Set<string>;
+  nameText: string;
+}
+
+/** Skills that need scripts or tool servers Axon doesn't have are left out of searches; they would only disappoint. */
+const searchable: Searchable[] = skills
+  .filter((skill) => skill.supported && bodies[skill.id] !== undefined)
+  .map((skill) => {
+    const nameWords = [...new Set(wordsOf(`${skill.id.split('/').pop()} ${skill.name}`))];
+    return { skill, nameWords, descriptionWords: new Set(wordsOf(skill.description)), nameText: nameWords.join(' ') };
+  });
+
+/** How well a skill answers the query's words: its name counts most, then what it says it does, then its category. */
+function score(entry: Searchable, words: string[]): number {
+  let total = 0;
+  let matched = 0;
+  for (const word of words) {
+    let points = 0;
+    if (entry.nameWords.includes(word)) points = 5;
+    else if (word.length >= 3 && entry.nameWords.some((w) => w.startsWith(word))) points = 3;
+    else if (entry.descriptionWords.has(word)) points = 2;
+    else if (word.length >= 4 && [...entry.descriptionWords].some((w) => w.startsWith(word))) points = 1;
+    if (entry.skill.category === word) points = Math.max(points, 1);
+    if (points) matched++;
+    total += points;
+  }
+  if (!matched) return 0;
+  // Asking for several things, the skill that covers more of them comes first; a name that holds the whole phrase beats both.
+  return total + (matched / words.length) * 6 + (words.length > 1 && entry.nameText.includes(words.join(' ')) ? 8 : 0);
+}
+
+const clip = (text: string, limit: number) => {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+};
+
+/** The best skills in the library for what a coworker says they need, best first. */
+export function searchSkills(query: string, limit = MATCHES): Skill[] {
+  const asked = rawWords(query)
+    .filter((word) => word.length > 1 && !FILLER.has(word))
+    .map(stem);
+  if (!asked.length) return [];
+  return searchable
+    .map((entry) => ({ entry, points: score(entry, asked) }))
+    .filter(({ points }) => points > 0)
+    .sort((a, b) => b.points - a.points || a.entry.skill.id.localeCompare(b.entry.skill.id))
+    .slice(0, limit)
+    .map(({ entry }) => entry.skill);
+}
+
+/** find_skills: the top matches, one line each, as `id — name: description`. */
+export function findSkills(args: Record<string, unknown>): SkillToolResult {
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
+  if (!query) return { content: 'Say what you need a skill for, in a few words, e.g. "cold email sequence".', isError: true };
+  const found = searchSkills(query);
+  if (!found.length)
+    return { content: `No skill matches "${clip(query, 80)}". Try other words for the task itself, or go without a skill.` };
+  return {
+    content: [
+      ...found.map((skill) => `${skill.id} — ${skill.name}: ${clip(skill.description, BLURB)}`),
+      'Read one with load_skill, and follow it only if it fits the task.'
+    ].join('\n')
+  };
+}
+
+/** The skill an id (or a bare name such as "api-design") points at, the coworker's own first. */
+function resolve(id: string, own: readonly string[]): Skill | undefined {
+  if (byId.has(id)) return byId.get(id);
+  const bare = own.find((owned) => owned.endsWith(`/${id}`));
+  if (bare) return byId.get(bare);
+  const named = skills.filter((skill) => skill.id.endsWith(`/${id}`));
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/** load_skill: any skill in the library, in full. `own` are the ids that come with the coworker's role. */
+export function loadSkill(args: Record<string, unknown>, own: readonly string[] = []): SkillToolResult {
+  const id = typeof args.id === 'string' ? args.id.trim() : '';
+  const skill = id ? resolve(id, own) : undefined;
+  if (!skill || bodies[skill.id] === undefined)
+    return {
+      content: `There is no skill called "${id}". Use find_skills to look one up${own.length ? `, or read one of yours: ${own.join(', ')}` : ''}.`,
+      isError: true
+    };
+  return {
+    content: [
+      `<skill id="${skill.id}">`,
+      skill.supported
+        ? "Scripts, tool servers and files this skill mentions are not available here: do the equivalent with your own tools, or say what you can't do."
+        : `This skill was written for tools Axon doesn't have${skill.requires.length ? ` (${skill.requires.join(', ')})` : ''}: take the parts you can do with your own tools, and say what you can't do.`,
+      '',
+      bodies[skill.id],
+      '</skill>'
+    ].join('\n'),
+    whole: true
+  };
+}
+
+/** Answers a call to find_skills or load_skill. `own` are the ids that come with the caller's role (none in your own chats). */
+export function runSkillTool(name: string, args: Record<string, unknown>, own: readonly string[] = []): SkillToolResult {
+  return name === FIND_SKILLS.name ? findSkills(args) : loadSkill(args, own);
 }

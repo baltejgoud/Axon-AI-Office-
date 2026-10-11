@@ -67,9 +67,9 @@ import { search } from './knowledge';
 import { searchConversations } from './conversation-search';
 import { scanFolder } from './folderScan';
 import { ParsePool } from './parse-pool';
-import { catalog, hasSkill, skillBodies } from './skills';
+import { SKILL_TOOL_NAMES, catalog, hasSkill, runSkillTool, skillBodies, skillIndex } from './skills';
 import { roles, hasRole, roleProfiles } from './roles';
-import { HOUSE_RULES, dedupe, rolesBlock, skillsBlock } from './prompt';
+import { HOUSE_RULES, dedupe, rolesBlock, skillIndexBlock, skillsBlock } from './prompt';
 import { ToolRegistry, missingArguments } from './tools/registry';
 import { ProcessManager, localAddress } from './tools/processes';
 import { FILE_SAVERS, PermissionManager, type PermissionScope } from './security/permissions';
@@ -1649,16 +1649,28 @@ export class Service {
           input
         ).slice(0, 5)
       : [];
-    const roleText = rolesBlock(roleProfiles(dedupe(workspace?.roleIds ?? [], chat.roleIds)));
+    const prompts = history.filter((m) => m.role === 'system').map((m) => m.content);
+    // A specialist's own prompt already carries their profile.
+    const roleText = rolesBlock(
+      roleProfiles(dedupe(workspace?.roleIds ?? [], chat.roleIds)).filter(
+        (role) => !prompts.some((prompt) => prompt.includes(role.profile))
+      )
+    );
+    const coworker = coworkerById(chat.agentId);
     /** The connectors this run's coworker (or your own chat) has. */
-    const connectors = this.connectorToolsFor(coworkerById(chat.agentId));
+    const connectors = this.connectorToolsFor(coworker);
+    const selected = dedupe(workspace?.skillIds ?? [], chat.skillIds);
     // Skills written for Rube name Composio's tools when this run has Composio Connect.
     const skillText = skillsBlock(
-      skillBodies(dedupe(workspace?.skillIds ?? [], chat.skillIds)).map((skill) => ({
+      skillBodies(selected).map((skill) => ({
         ...skill,
         body: pointAtComposio(skill.body, connectors.composio)
       }))
     ); // Only selected skills are loaded; admission is model-aware.
+    // The coworker's own skills, by name; a skill already selected in full isn't listed again.
+    const indexText = skillIndexBlock(
+      skillIndex((coworker?.skillIds ?? []).filter((id) => !selected.includes(id)))
+    );
 
     // Scoped tool access: the workspace's or conversation's folders, or for an office coworker the open project
     const roots = runRoots({
@@ -1683,7 +1695,8 @@ export class Service {
         : '',
       roleText,
       skillText,
-      ...history.filter((m) => m.role === 'system').map((m) => m.content),
+      indexText,
+      ...prompts,
       coworkerById(chat.agentId) ? HOUSE_RULES : '',
       // The receptionist plans in the user's local time.
       chat.agentId === RECEPTIONIST_ID ? plannerNow(new Date()) : '',
@@ -1963,12 +1976,13 @@ export class Service {
     /** Records a call's outcome: a tool message, the next request, the call itself, the window, and the audit trail. */
     const answer = (
       tc: ToolCall,
-      full: { content: string; isError?: boolean; change?: FileChange; process?: { id: string } },
+      full: { content: string; isError?: boolean; whole?: boolean; change?: FileChange; process?: { id: string } },
       decision: AuditDecision,
       note?: string
     ): void => {
       const toolMessageId = this.repo.id();
-      const outcome = { ...full, content: toolExcerpt(full.content, toolMessageId) };
+      // A skill is only any use read whole, so it isn't cut down to an excerpt like a long command's output.
+      const outcome = { ...full, content: full.whole ? full.content : toolExcerpt(full.content, toolMessageId) };
       const archived = outcome.content !== full.content;
       if (archived) this.toolOutputs.put(toolMessageId, full.content);
       if (!outcome.isError) lookups.remember(tc.name, toolArgs(tc.arguments));
@@ -2208,6 +2222,15 @@ export class Service {
               answer(tc, this.teamTool(chat, tc.name, parsedArgs), 'allowed');
             else
               answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
+            continue;
+          }
+
+          // Looking up and reading skills (a coworker's, or any in the library): the bundled catalog, never the tool registry.
+          if (SKILL_TOOL_NAMES.has(tc.name) && chat.agentId !== RECEPTIONIST_ID) {
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow') {
+              const skillResult = runSkillTool(tc.name, parsedArgs, coworkerById(chat.agentId)?.skillIds);
+              answer(tc, skillResult, skillResult.isError ? 'skipped' : 'allowed');
+            } else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }
 

@@ -1,6 +1,7 @@
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 import type { ToolDefinition } from '../shared/types';
 import { ASK_COLLEAGUE } from './colleagues';
+import { FIND_SKILLS, LOAD_SKILL } from './skills';
 import { PLANNER_TOOLS } from './tasks/tools';
 import { TEAM_LEADS, TEAM_TOOLS } from './team/tools';
 
@@ -30,7 +31,8 @@ export function runRoots(input: {
 /**
  * The tools a conversation offers the model. File tools still need a folder; connector tools come
  * with the coworker (or your own chats) and don't. Every coworker can ask a colleague, and coworkers
- * do that instead of dispatching sub-agents. The receptionist also keeps the planner.
+ * do that instead of dispatching sub-agents. Everyone but the receptionist, your own chats included,
+ * can look up skills and read them. The receptionist keeps to her planner.
  */
 export function toolsFor(input: {
   agentId?: string;
@@ -48,6 +50,7 @@ export function toolsFor(input: {
       )
     : [];
   if (coworker) tools.push(ASK_COLLEAGUE);
+  if (input.agentId !== RECEPTIONIST_ID) tools.push(FIND_SKILLS, LOAD_SKILL);
   if (input.agentId === RECEPTIONIST_ID) tools.push(...PLANNER_TOOLS);
   // The Chief of Staff and the Ops Coordinator can find people and gather a team.
   if (input.agentId && TEAM_LEADS.has(input.agentId)) tools.push(...TEAM_TOOLS);

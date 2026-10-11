@@ -98,6 +98,7 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
     case 'list_files':
       return clip(str(args.directory ?? args.directoryPath ?? args.path) || '.');
     case 'search_code':
+    case 'find_skills':
       return clip(str(args.query));
     case 'run_command':
     case 'start_process':
@@ -109,6 +110,8 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
       return clip(str(args.message));
     case 'ask_colleague':
       return clip(`${str(args.colleague)}: ${str(args.question)}`);
+    case 'load_skill':
+      return clip(str(args.id));
     case 'dispatch_subagent':
       return clip(`${str(args.role)}: ${str(args.task)}`);
     case 'read_memory':

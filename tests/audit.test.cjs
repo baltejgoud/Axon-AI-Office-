@@ -89,6 +89,8 @@ test('what a call was about, in one line, never its contents', () => {
   assert.equal(auditSubject('run_command', { command: 'npm test' }), 'npm test');
   assert.equal(auditSubject('list_files', {}), '.');
   assert.equal(auditSubject('ask_colleague', { colleague: 'Designer', question: 'Which blue?' }), 'Designer: Which blue?');
+  assert.equal(auditSubject('find_skills', { query: 'cold email' }), 'cold email');
+  assert.equal(auditSubject('load_skill', { id: 'ecc/seo' }), 'ecc/seo');
   const connector = auditSubject('mcp_gmail_send', { to: 'a@b.c', body: 'SECRET' });
   assert.ok(connector.includes('a@b.c') && !connector.includes('SECRET'));
   assert.equal(auditSubject('run_command', { command: 'x'.repeat(500) }).length, 300);

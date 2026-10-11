@@ -36,7 +36,7 @@ const CORE_ACCENTS: Readonly<Record<string, [color: string, soft: string]>> = {
 };
 
 function officeAgent(coworker: Coworker): OfficeAgent {
-  const { core, roleIds, ...text } = coworker;
+  const { core, roleIds, skillIds: _skills, ...text } = coworker;
   if (core) {
     const [accentColor, accentSoft] = CORE_ACCENTS[coworker.id];
     return { ...text, district: 'commons', accentColor, accentSoft, status: 'idle' };
