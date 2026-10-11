@@ -39,12 +39,16 @@ export function StatTile({ widget }: { widget: StatWidget }) {
         {formatValue(widget.value, widget.unit)}
       </strong>
       {widget.change && (
-        <span className="dash-stat-change">
+        <span className="dash-stat-change" title={widget.change}>
           {arrow}
           {widget.change}
         </span>
       )}
-      {widget.note && <span className="dash-stat-note">{widget.note}</span>}
+      {widget.note && (
+        <span className="dash-stat-note" title={widget.note}>
+          {widget.note}
+        </span>
+      )}
     </div>
   );
 }
@@ -229,7 +233,8 @@ function LineChart({ widget }: { widget: LineWidget }) {
       Math.min(n - 1, Math.max(0, (current ?? n - 1) + (event.key === 'ArrowLeft' ? -1 : 1)))
     );
   };
-  const tipLeft = at === null ? 0 : x(at) + 12 + 190 > width ? x(at) - 12 - 190 : x(at) + 12;
+  // Beside the crosshair, on whichever side has room, and never past the chart's edges.
+  const tipLeft = at === null ? 0 : Math.max(0, x(at) + 12 + 190 > width ? x(at) - 12 - 190 : x(at) + 12);
 
   return (
     <Card title={widget.title} actions={<ViewToggle table={table} onChange={setTable} />}>

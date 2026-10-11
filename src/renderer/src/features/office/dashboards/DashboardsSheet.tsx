@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { perform, useApp } from '../../../state';
-import { AxonLogo, Button, EmptyState, IconChartBar, IconTrash } from '../../../ui';
+import { Button, EmptyState, IconChartBar, IconTrash, IconUser } from '../../../ui';
 import { AgentPortrait } from '../AgentPortrait';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { useOfficeStore } from '../store/officeStore';
@@ -80,7 +80,7 @@ export function DashboardsSheet() {
                     <AgentPortrait agent={agent} />
                   ) : (
                     <span className="dash-sheet-axon" aria-hidden="true">
-                      <AxonLogo size={18} />
+                      <IconUser size={16} />
                     </span>
                   )}
                   <span>

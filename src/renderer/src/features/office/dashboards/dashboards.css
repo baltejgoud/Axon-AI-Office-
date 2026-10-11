@@ -504,6 +504,12 @@
 .dash-card .dash-stat-value {
   font-size: 18px;
 }
+/* The panel is narrow: the change and note keep to one line here, in full on hover and in the sheet. */
+.dash-card :is(.dash-stat-change, .dash-stat-note) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* The Dashboards sheet: every dashboard on the left, the one you picked in full on the right. */
 .office-overlay-panel.dashboards {
@@ -577,11 +583,14 @@
   width: 30px;
   height: 30px;
 }
+/* Your own chats: a plain person, in place of a coworker's portrait. */
 .dash-sheet-axon {
   display: grid;
   place-items: center;
+  border: 1px solid var(--office-border);
   border-radius: 50%;
   background: var(--office-paper);
+  color: var(--office-muted);
 }
 .dash-sheet-item span:last-child {
   display: grid;
