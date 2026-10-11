@@ -1,0 +1,115 @@
+// Dashboards: what show_dashboard accepts and refuses, how records are kept and updated, and who gets it.
+const ts = require('typescript');
+const fs = require('node:fs');
+const Module = require('node:module');
+const original = Module._load;
+Module._load = function (name, ...args) {
+  if (name === 'electron') return { app: { isPackaged: false } };
+  return original.call(this, name, ...args);
+};
+require.extensions['.ts'] = (module, file) =>
+  module._compile(
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, resolveJsonModule: true }
+    }).outputText,
+    file
+  );
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const shared = require('../src/shared/dashboards.ts');
+
+const ok = (args) => {
+  const out = shared.normalizeDashboard(args);
+  assert.ok(!('error' in out), out.error);
+  return out;
+};
+const bad = (args, pattern) => {
+  const out = shared.normalizeDashboard(args);
+  assert.ok('error' in out, 'expected an error');
+  assert.match(out.error, pattern);
+};
+
+test('every widget type is accepted and cleaned', () => {
+  const { dashboard } = ok({
+    title: ' Leads this month ',
+    summary: 'Up on last month.',
+    widgets: [
+      { type: 'stat', label: 'Qualified leads', value: '1,284', change: '+12% vs September' },
+      { type: 'stat', label: 'Best channel', value: 'LinkedIn' },
+      { type: 'bar', title: 'By channel', data: [{ label: 'LinkedIn', value: 40 }, { label: 'Email', value: '22' }] },
+      { type: 'line', title: 'Weekly', x: ['W1', 'W2', 'W3'], series: [{ name: 'Leads', values: [3, 5, 8] }] },
+      { type: 'table', title: 'Top accounts', columns: ['Company', 'Size'], rows: [['Acme', 120], ['Globex']] },
+      { type: 'list', title: 'Findings', items: ['Plain text item', { text: 'Linked', url: 'https://example.com/a' }] },
+      { type: 'text', body: '**Note** the dip in W2.' }
+    ],
+    sources: [{ title: 'CRM export', url: 'https://example.com/crm' }, 'Sales call notes']
+  });
+  assert.equal(dashboard.title, 'Leads this month');
+  assert.equal(dashboard.widgets[0].value, 1284);
+  assert.equal(dashboard.widgets[1].value, 'LinkedIn');
+  assert.equal(dashboard.widgets[2].data[1].value, 22);
+  assert.deepEqual(dashboard.widgets[4].rows[1], ['Globex', '']);
+  assert.deepEqual(dashboard.widgets[5].items[0], { text: 'Plain text item' });
+  assert.deepEqual(dashboard.sources, [{ title: 'CRM export', url: 'https://example.com/crm' }, { title: 'Sales call notes' }]);
+  assert.ok(!('unit' in dashboard.widgets[0]), 'missing optional fields are left out');
+});
+
+test('each limit is refused with where and what', () => {
+  bad({ widgets: [{ type: 'text', body: 'x' }] }, /title is missing/);
+  bad({ title: 'T', widgets: [] }, /widgets is empty/);
+  bad({ title: 'T', widgets: Array(13).fill({ type: 'text', body: 'x' }) }, /widgets has 13; keep it to 12 or fewer/);
+  bad({ title: 'T', widgets: [{ type: 'pie' }] }, /widgets\[0\]\.type must be one of stat, bar, line, table, list, text/);
+  bad({ title: 'T', widgets: [{ type: 'bar', title: 'B', data: [{ label: 'a', value: 'lots' }] }] }, /widgets\[0\]\.data\[0\]\.value must be a number/);
+  bad(
+    { title: 'T', widgets: [{ type: 'line', title: 'L', x: ['a', 'b', 'c'], series: [{ name: 's', values: [1, 2] }] }] },
+    /widgets\[0\]\.series\[0\]\.values has 2 numbers; x has 3 labels/
+  );
+  bad({ title: 'T', widgets: [{ type: 'table', title: 'T', columns: ['a'], rows: [['1', '2']] }] }, /widgets\[0\]\.rows\[0\] has 2 cells; there are 1 columns/);
+  bad({ title: 'T', widgets: [{ type: 'table', title: 'T', columns: ['a'], rows: Array(201).fill(['x']) }] }, /rows has 201; keep it to 200 or fewer/);
+  bad({ title: 'x'.repeat(121), widgets: [{ type: 'text', body: 'x' }] }, /title is 121 characters; keep it to 120 or fewer/);
+  bad({ title: 'T', widgets: [{ type: 'text', body: 'x'.repeat(40_001) }] }, /keep it under 40,000/);
+  bad({ title: 'T', widgets: [{ type: 'bar', title: 'B', data: [{ label: 'a', value: Infinity }] }] }, /must be a number/);
+  bad({ title: 'T', widgets: [{ type: 'stat', label: 'L', value: { n: 1 } }] }, /widgets\[0\]\.value must be text/);
+});
+
+test('only web links are kept', () => {
+  const { dashboard } = ok({
+    title: 'T',
+    widgets: [
+      {
+        type: 'list',
+        title: 'L',
+        items: [
+          { text: 'a', url: 'javascript:alert(1)' },
+          { text: 'b', url: 'file:///C:/x' },
+          { text: 'c', url: 'http://ok.test/' }
+        ]
+      }
+    ],
+    sources: [{ title: 's', url: 'ftp://x' }]
+  });
+  assert.deepEqual(dashboard.widgets[0].items.map((i) => i.url), [undefined, undefined, 'http://ok.test/']);
+  assert.deepEqual(dashboard.sources, [{ title: 's' }]);
+});
+
+test('dashboard_id comes back for an update', () => {
+  assert.equal(ok({ title: 'T', dashboard_id: 'd1', widgets: [{ type: 'text', body: 'x' }] }).id, 'd1');
+  assert.ok(!('id' in ok({ title: 'T', widgets: [{ type: 'text', body: 'x' }] })));
+});
+
+test('tables copy as CSV, quoted and safe to open in a spreadsheet', () => {
+  assert.equal(
+    shared.tableCsv(['Name', 'Note'], [['Acme, Inc', 'said "hi"'], ['=HYPERLINK("x")', -5], ['-5', 3]]),
+    'Name,Note\r\n"Acme, Inc","said ""hi"""\r\n"\'=HYPERLINK(""x"")",-5\r\n-5,3'
+  );
+});
+
+test('numbers read short and axes get clean ticks', () => {
+  assert.equal(shared.compactNumber(1284), '1,284');
+  assert.equal(shared.compactNumber(12900), '12.9K');
+  assert.equal(shared.compactNumber(4200000), '4.2M');
+  assert.equal(shared.compactNumber(0.456), '0.46');
+  assert.deepEqual(shared.niceTicks(0, 87), [0, 20, 40, 60, 80, 100]);
+  assert.deepEqual(shared.niceTicks(0, 0), [0, 1]);
+  assert.deepEqual(shared.niceTicks(-12, 30), [-20, -10, 0, 10, 20, 30]);
+});
