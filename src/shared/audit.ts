@@ -98,6 +98,7 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
     case 'list_files':
       return clip(str(args.directory ?? args.directoryPath ?? args.path) || '.');
     case 'search_code':
+    case 'find_skills':
       return clip(str(args.query));
     case 'run_command':
     case 'start_process':

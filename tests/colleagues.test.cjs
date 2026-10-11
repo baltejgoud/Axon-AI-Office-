@@ -66,15 +66,23 @@ test('colleagues resolve by name, id or specialty, and ambiguity is explained', 
 test('toolsFor: coworkers can always ask a colleague; file tools still need a folder', () => {
   const registry = [{ name: 'read_file' }, { name: 'dispatch_subagent' }, { name: 'write_file' }];
   const names = (tools) => tools.map((tool) => tool.name).sort();
-  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), ['ask_colleague', 'load_skill']);
-  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), []);
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), [
+    'ask_colleague',
+    'find_skills',
+    'load_skill'
+  ]);
+  // Your own chats look up skills too, but have no colleagues to ask.
+  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), ['find_skills', 'load_skill']);
   assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: true, registry })), [
     'dispatch_subagent',
+    'find_skills',
+    'load_skill',
     'read_file',
     'write_file'
   ]);
   assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: true, registry })), [
     'ask_colleague',
+    'find_skills',
     'load_skill',
     'read_file',
     'write_file'

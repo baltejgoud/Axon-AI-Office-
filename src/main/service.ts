@@ -67,7 +67,7 @@ import { search } from './knowledge';
 import { searchConversations } from './conversation-search';
 import { scanFolder } from './folderScan';
 import { ParsePool } from './parse-pool';
-import { LOAD_SKILL, catalog, hasSkill, loadSkill, skillBodies, skillIndex } from './skills';
+import { SKILL_TOOL_NAMES, catalog, hasSkill, runSkillTool, skillBodies, skillIndex } from './skills';
 import { roles, hasRole, roleProfiles } from './roles';
 import { HOUSE_RULES, dedupe, rolesBlock, skillIndexBlock, skillsBlock } from './prompt';
 import { ToolRegistry, missingArguments } from './tools/registry';
@@ -1976,12 +1976,13 @@ export class Service {
     /** Records a call's outcome: a tool message, the next request, the call itself, the window, and the audit trail. */
     const answer = (
       tc: ToolCall,
-      full: { content: string; isError?: boolean; change?: FileChange; process?: { id: string } },
+      full: { content: string; isError?: boolean; whole?: boolean; change?: FileChange; process?: { id: string } },
       decision: AuditDecision,
       note?: string
     ): void => {
       const toolMessageId = this.repo.id();
-      const outcome = { ...full, content: toolExcerpt(full.content, toolMessageId) };
+      // A skill is only any use read whole, so it isn't cut down to an excerpt like a long command's output.
+      const outcome = { ...full, content: full.whole ? full.content : toolExcerpt(full.content, toolMessageId) };
       const archived = outcome.content !== full.content;
       if (archived) this.toolOutputs.put(toolMessageId, full.content);
       if (!outcome.isError) lookups.remember(tc.name, toolArgs(tc.arguments));
@@ -2224,11 +2225,11 @@ export class Service {
             continue;
           }
 
-          // A coworker reading one of their skills: the bundled catalog, never the tool registry.
-          if (tc.name === LOAD_SKILL.name && coworkerById(chat.agentId)?.skillIds.length) {
+          // Looking up and reading skills (a coworker's, or any in the library): the bundled catalog, never the tool registry.
+          if (SKILL_TOOL_NAMES.has(tc.name) && chat.agentId !== RECEPTIONIST_ID) {
             if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow') {
-              const loaded = loadSkill(parsedArgs, coworkerById(chat.agentId)!.skillIds);
-              answer(tc, loaded, loaded.isError ? 'skipped' : 'allowed');
+              const skillResult = runSkillTool(tc.name, parsedArgs, coworkerById(chat.agentId)?.skillIds);
+              answer(tc, skillResult, skillResult.isError ? 'skipped' : 'allowed');
             } else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }

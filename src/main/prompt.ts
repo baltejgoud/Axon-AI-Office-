@@ -28,7 +28,7 @@ export function skillIndexBlock(skills: { id: string; description: string }[]): 
     `- ${id}: ${description.length > INDEX_DESCRIPTION ? `${description.slice(0, INDEX_DESCRIPTION - 1)}…` : description}`;
   return [
     '<available_skills>',
-    'These skills come with your role. When a task matches one, call load_skill with its id first and follow it. Load only what the task needs.',
+    'These skills come with your role. When a task matches one, call load_skill with its id first and follow it. Load only what the task needs. If none fits, find_skills searches the whole library.',
     ...skills.map(line),
     '</available_skills>'
   ].join('\n');

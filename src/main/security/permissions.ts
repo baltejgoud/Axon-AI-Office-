@@ -98,8 +98,8 @@ export class PermissionManager {
 
     // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
     if (toolName === 'ask_colleague') return { action: 'allow' };
-    // Reading a skill returns bundled instructions and touches nothing.
-    if (toolName === 'load_skill') return { action: 'allow' };
+    // Looking up and reading a skill return bundled instructions and touch nothing.
+    if (toolName === 'find_skills' || toolName === 'load_skill') return { action: 'allow' };
     // The receptionist's planner tools only touch the task records.
     if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // Finding people and calling a meeting only read; the plan waits for you before anything is done.

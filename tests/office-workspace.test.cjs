@@ -38,7 +38,7 @@ test('each tool shows on its own surface; office business shows on none', () => 
   assert.equal(work.workKind('mcp_playwright_browser_navigate', {}), 'browser');
   assert.equal(work.workKind('mcp_fetch_fetch', { url: 'https://example.com' }), 'browser');
   assert.equal(work.workKind('mcp_postgres_query', { sql: 'select 1' }), 'tool');
-  for (const name of ['ask_colleague', 'add_task', 'complete_task', 'read_memory', 'dispatch_subagent'])
+  for (const name of ['ask_colleague', 'add_task', 'complete_task', 'read_memory', 'dispatch_subagent', 'find_skills', 'load_skill'])
     assert.equal(work.workKind(name, {}), null, name);
 });
 

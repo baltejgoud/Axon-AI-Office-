@@ -3,7 +3,7 @@ import type { Message, ToolCall } from '../../../shared/types';
 import { perform, useApp } from '../state';
 import { timeAgo } from '../format';
 import { Button, IconBook, IconCheck, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
-import { toolPresentation } from './workPresentation';
+import { skillChip, toolPresentation } from './workPresentation';
 import { MessageMarkdown } from './MessageMarkdown';
 import { useReading, worthReading } from './reading';
 import { visibleUserText } from '../../../shared/user-text';
@@ -91,6 +91,18 @@ export function ToolCallDetails({ call: tc, conversationId }: { call: ToolCall; 
   );
 }
 
+/** A skill looked up or read: a quiet chip, since there is nothing in it to open. */
+function SkillChip({ call }: { call: ToolCall }) {
+  const chip = skillChip(call);
+  if (!chip) return null;
+  return (
+    <span className={`skill-chip ${chip.status}`} title={chip.text}>
+      <IconBook size={12} />
+      <span>{chip.text}</span>
+    </span>
+  );
+}
+
 /** One message in a thread: meta line, thought, tool calls, markdown body and actions. */
 export function MessageView({
   message: m,
@@ -162,6 +174,8 @@ export function MessageView({
             {calls.map(({ call, custom }) =>
               custom ? (
                 <Fragment key={call.id}>{custom}</Fragment>
+              ) : skillChip(call) ? (
+                <SkillChip key={call.id} call={call} />
               ) : (
                 <ToolCallDetails key={call.id} call={call} conversationId={m.conversationId} />
               )

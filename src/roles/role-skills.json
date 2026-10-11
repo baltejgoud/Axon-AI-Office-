@@ -21,11 +21,12 @@
     "Marketing Management": ["ecc/marketing-campaign", "ecc/brand-voice", "ecc/content-engine", "ecc/seo", "ecc/market-research"],
     "HR & People": ["axon/grilling", "axon/to-questionnaire", "axon/handoff", "awesome-claude-skills/internal-comms", "awesome-claude-skills/meeting-insights-analyzer"],
     "Customer Success": ["ecc/customer-billing-ops", "ecc/brand-voice", "axon/to-questionnaire", "axon/handoff", "awesome-claude-skills/meeting-insights-analyzer"],
-    "Strategy & Innovation": ["ecc/market-research", "ecc/competitive-platform-analysis", "ecc/competitive-report-structure", "axon/council", "axon/grilling"]
+    "Strategy & Innovation": ["ecc/market-research", "ecc/competitive-platform-analysis", "ecc/competitive-report-structure", "axon/council", "axon/grilling"],
+    "Growth & Outreach": ["ecc/brand-voice", "ecc/market-research", "axon/to-questionnaire", "axon/handoff"]
   },
   "roles": {
     "research-analyst": ["ecc/market-research", "ecc/literature-review", "ecc/scholar-evaluation", "ecc/competitive-platform-analysis", "ecc/competitive-report-structure", "axon/to-questionnaire"],
-    "writer": ["ecc/article-writing", "ecc/brand-voice", "awesome-claude-skills/content-research-writer", "awesome-claude-skills/internal-comms", "awesome-claude-skills/changelog-generator", "axon/handoff"],
+    "chief-of-staff": ["awesome-claude-skills/internal-comms", "axon/council", "axon/to-questionnaire", "axon/handoff", "axon/grilling", "awesome-claude-skills/meeting-insights-analyzer"],
     "designer": ["ecc/design-system", "ecc/make-interfaces-feel-better", "ecc/accessibility", "ecc/click-path-audit", "ecc/motion-foundations", "axon/grilling"],
     "product-coach": ["axon/grilling", "axon/to-spec", "axon/to-tickets", "ecc/product-lens", "ecc/product-capability", "ecc/intent-driven-development"],
     "knowledge-librarian": ["ecc/living-docs-governance", "ecc/literature-review", "ecc/scholar-evaluation", "ecc/iterative-retrieval", "awesome-claude-skills/content-research-writer"],
@@ -229,6 +230,11 @@
     "innovation-manager": ["ecc/product-lens"],
     "business-transformation-manager": ["ecc/ai-first-engineering", "ecc/living-docs-governance"],
     "startup-program-manager": ["ecc/investor-materials", "ecc/product-lens"],
-    "business-analyst": ["axon/to-spec", "axon/to-questionnaire", "ecc/intent-driven-development"]
+    "business-analyst": ["axon/to-spec", "axon/to-questionnaire", "ecc/intent-driven-development"],
+    "lead-generation-specialist": ["awesome-claude-skills/lead-research-assistant", "ecc/social-graph-ranker"],
+    "sales-development-representative": ["ecc/investor-outreach", "awesome-claude-skills/lead-research-assistant", "ecc/social-graph-ranker"],
+    "email-marketing-specialist": ["ecc/marketing-campaign", "ecc/content-engine", "ecc/article-writing"],
+    "content-creator": ["ecc/content-engine", "ecc/crosspost", "awesome-claude-skills/twitter-algorithm-optimizer", "ecc/marketing-campaign"],
+    "copywriter": ["ecc/marketing-campaign", "ecc/article-writing", "awesome-claude-skills/competitive-ads-extractor", "ecc/seo"]
   }
 }

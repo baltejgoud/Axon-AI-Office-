@@ -70,3 +70,27 @@ test('empty successful tool output is completed and incomplete JSON remains read
   assert.equal(toolPresentation({ name: 'read_file', arguments: '{"path":"app.ts"}' }).target, 'app.ts');
   assert.equal(toolPresentation({ name: 'custom_tool', arguments: '{' }).label, 'custom tool');
 });
+
+test('reading a skill shows as a chip with the skill’s name; looking for one shows what was asked', () => {
+  const { skillChip } = require('../src/renderer/src/chat/workPresentation.ts');
+  const load = (outcome) => ({ id: 'c', name: 'load_skill', arguments: '{"id":"ecc/api-design"}', ...outcome });
+  assert.deepEqual(skillChip(load({ result: '<skill id="ecc/api-design">…' })), { text: 'Used skill: api-design', status: 'completed' });
+  assert.deepEqual(skillChip(load({})), { text: 'Reading skill: api-design', status: 'running' });
+  assert.deepEqual(skillChip(load({ error: 'There is no skill called "x".' })), { text: "Couldn't find skill: api-design", status: 'failed' });
+  const find = (outcome) => ({ id: 'd', name: 'find_skills', arguments: '{"query":"cold email"}', ...outcome });
+  assert.deepEqual(skillChip(find({ result: 'ecc/x — x: …' })), { text: 'Looked for skills: cold email', status: 'completed' });
+  assert.deepEqual(skillChip(find({})), { text: 'Looking for skills: cold email', status: 'running' });
+  // Arguments still streaming in, and calls that are not about skills.
+  assert.equal(skillChip({ id: 'e', name: 'load_skill', arguments: '{"id":' }).text, 'Reading skill');
+  assert.equal(skillChip({ id: 'f', name: 'read_file', arguments: '{}' }), null);
+  assert.equal(toolPresentation(load({ result: 'x' })).label, 'Use skill');
+});
+
+test('the activity timeline and run stage describe skills in plain words', () => {
+  const { activitySentence, runStage, skillLabel } = require('../src/shared/runtimePresentation.ts');
+  assert.equal(skillLabel('ecc/api-design'), 'api-design');
+  assert.equal(skillLabel('api-design'), 'api-design');
+  assert.equal(activitySentence({ tool: 'load_skill', result: 'ok', subject: 'ecc/api-design' }), 'Used skill: api-design');
+  assert.equal(activitySentence({ tool: 'find_skills', result: 'ok', subject: 'cold email' }), 'Looked for skills: cold email');
+  assert.equal(runStage({ status: 'working', activeTool: 'load_skill' }), 'Reading up on the task');
+});

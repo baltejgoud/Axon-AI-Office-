@@ -379,8 +379,8 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
   await service.chatSend(chat.id, 'Build the settings page', []);
   assert.deepEqual(
     offered,
-    ['ask_colleague', 'load_skill', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
-    'no folder: a colleague, their skills, and scoped memory retrieval'
+    ['ask_colleague', 'find_skills', 'load_skill', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
+    'no folder: a colleague, skills, and scoped memory retrieval'
   );
   assert.equal(consults, 3);
   const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
@@ -447,6 +447,84 @@ test('a coworker sees their skills listed and reads one before using it', async 
   mockModel(t, async (_p, _k, req, onChunk) => { plainSystem = req.system; onChunk('Hi.'); return { toolCalls: [] }; });
   await service.chatSend(plain.id, 'Hello', []);
   assert.doesNotMatch(plainSystem, /<available_skills>/);
+});
+
+test('a coworker finds a skill outside their own and reads it whole, however long it is', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const { coworkerById } = require('../src/shared/coworkers.ts');
+  const { catalog, loadSkill } = require('../src/main/skills.ts');
+  const own = coworkerById('frontend-developer').skillIds;
+  const long = catalog().skills.find((s) => s.supported && s.bytes > 8000 && !own.includes(s.id));
+  const chat = await coworkerChat(service, 'frontend-developer');
+  let calls = 0;
+  let firstSystem;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (++calls === 1) {
+      firstSystem = req.system;
+      return {
+        toolCalls: [
+          { id: 'f', name: 'find_skills', arguments: JSON.stringify({ query: 'seo audit' }) },
+          { id: 'l', name: 'load_skill', arguments: JSON.stringify({ id: long.id }) },
+          { id: 'x', name: 'load_skill', arguments: JSON.stringify({ id: 'nope/missing' }) }
+        ]
+      };
+    }
+    onChunk('Following the skill.');
+    return { toolCalls: [] };
+  });
+  await service.chatSend(chat.id, 'Audit the landing page', []);
+  assert.match(firstSystem, /find_skills searches the whole library/);
+  assert.ok(!firstSystem.includes(`- ${long.id}: `), 'only their own skills are listed');
+  const [found, read, missing] = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
+  assert.match(found.content, /^ecc\/seo — seo: /);
+  assert.equal(read.content, loadSkill({ id: long.id }).content, 'the skill arrives uncut');
+  assert.ok(read.content.length > 8000);
+  assert.equal(read.toolOutputId, undefined, 'and is not kept aside as a long output');
+  assert.ok(!read.error);
+  assert.ok(missing.error && /Use find_skills/.test(missing.content));
+  // The thread keeps each call's outcome, so it reads the same after a reload.
+  const asking = repo.state.messages.find((m) => m.conversationId === chat.id && m.toolCalls?.length);
+  assert.deepEqual(
+    asking.toolCalls.map((tc) => [tc.name, Boolean(tc.result)]),
+    [['find_skills', true], ['load_skill', true], ['load_skill', false]]
+  );
+});
+
+test('your own chats find and read skills too; the receptionist does not', async (t) => {
+  const { dir, repo, service } = makeService();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  addProvider(repo);
+  const offered = {};
+  let current;
+  mockModel(t, async (_p, _k, req, onChunk) => {
+    if (!offered[current]) {
+      offered[current] = (req.tools ?? []).map((tool) => tool.name);
+      return {
+        toolCalls: [
+          { id: 'f', name: 'find_skills', arguments: JSON.stringify({ query: 'changelog' }) },
+          { id: 'l', name: 'load_skill', arguments: JSON.stringify({ id: 'awesome-claude-skills/changelog-generator' }) }
+        ]
+      };
+    }
+    onChunk('Done.');
+    return { toolCalls: [] };
+  });
+  const plain = await service.chatCreate('p1', 'm1', null);
+  current = 'plain';
+  await service.chatSend(plain.id, 'Write the changelog', []);
+  assert.ok(offered.plain.includes('find_skills') && offered.plain.includes('load_skill'));
+  const [found, read] = repo.state.messages.filter((m) => m.conversationId === plain.id && m.role === 'tool');
+  assert.match(found.content, /^awesome-claude-skills\/changelog-generator — changelog-generator: /);
+  assert.ok(read.content.startsWith('<skill id="awesome-claude-skills/changelog-generator">'));
+
+  const reception = await coworkerChat(service, 'receptionist');
+  current = 'reception';
+  await service.chatSend(reception.id, 'Hello', []);
+  assert.ok(!offered.reception.includes('find_skills') && !offered.reception.includes('load_skill'));
+  const turned = repo.state.messages.filter((m) => m.conversationId === reception.id && m.role === 'tool');
+  assert.ok(turned.every((m) => m.error), 'a call she was never offered is not answered from the library');
 });
 
 test('a colleague who cannot be reached ends their help with the reason', async (t) => {

@@ -1,5 +1,9 @@
 import type { AuditEntry } from './audit';
 import type { AgentRun } from './runtime';
+/** A skill's name from its id ("ecc/api-design" is "api-design"); a bare name stands as it is. */
+export function skillLabel(id: string): string {
+  return id.trim().split('/').pop() || id;
+}
 export function activitySentence(entry: AuditEntry): string {
   if (entry.decision === 'withdrawn') return 'Approval withdrawn because the task stopped.';
   if (entry.decision === 'rejected') return 'You rejected this step.';
@@ -24,6 +28,10 @@ export function activitySentence(entry: AuditEntry): string {
       return 'Asked a colleague for help.';
     case 'call_team_meeting':
       return 'Gathered a team to plan the work.';
+    case 'find_skills':
+      return `Looked for skills: ${path}`;
+    case 'load_skill':
+      return `Used skill: ${skillLabel(path)}`;
     default:
       return entry.tool.replaceAll('_', ' ') + (entry.result === 'ok' ? ' completed.' : ' requested.');
   }
@@ -36,6 +44,7 @@ export function runStage(run: AgentRun): string {
     if (run.activeTool === 'read_file' || run.activeTool === 'list_files' || run.activeTool === 'search_code')
       return 'Reading project files';
     if (run.activeTool === 'run_command' || run.activeTool === 'start_process') return 'Running command';
+    if (run.activeTool === 'find_skills' || run.activeTool === 'load_skill') return 'Reading up on the task';
     return run.activeTool ? run.activeTool.replaceAll('_', ' ') : 'Thinking';
   }
   return run.status.replaceAll('_', ' ');
