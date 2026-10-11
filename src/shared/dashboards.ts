@@ -284,6 +284,30 @@ export function compactNumber(n: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0 }).format(n);
 }
 
+/** A value with its unit: "1,284 leads", "42%", "$4.2M", "LinkedIn". */
+export function formatValue(value: number | string, unit?: string): string {
+  const shown = typeof value === 'number' ? compactNumber(value) : value;
+  if (!unit) return shown;
+  if (/^[$€£¥₹]$/.test(unit)) return shown.startsWith('-') ? `-${unit}${shown.slice(1)}` : `${unit}${shown}`;
+  return unit === '%' ? `${shown}%` : `${shown} ${unit}`;
+}
+
+/** What else a dashboard has besides its number tiles: "2 charts · 1 table · 1 list · 1 note". */
+export function widgetSummary(widgets: readonly Pick<DashboardWidget, 'type'>[]): string {
+  const of = (...types: DashboardWidget['type'][]) => widgets.filter((w) => types.includes(w.type)).length;
+  return (
+    [
+      [of('bar', 'line'), 'chart'],
+      [of('table'), 'table'],
+      [of('list'), 'list'],
+      [of('text'), 'note']
+    ] as const
+  )
+    .filter(([n]) => n > 0)
+    .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`)
+    .join(' · ');
+}
+
 /** Round axis values covering min to max: 1, 2, 2.5 or 5 times a power of ten apart, about `count` steps. */
 export function niceTicks(min: number, max: number, count = 5): number[] {
   if (min === max) return min === 0 ? [0, 1] : niceTicks(Math.min(0, min), Math.max(0, max), count);

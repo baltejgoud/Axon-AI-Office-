@@ -114,6 +114,18 @@ test('numbers read short and axes get clean ticks', () => {
   assert.deepEqual(shared.niceTicks(-12, 30), [-20, -10, 0, 10, 20, 30]);
 });
 
+test('a card sums up what else is on the dashboard, and values read with their units', () => {
+  assert.equal(
+    shared.widgetSummary([{ type: 'stat' }, { type: 'bar' }, { type: 'line' }, { type: 'table' }, { type: 'list' }, { type: 'text' }]),
+    '2 charts · 1 table · 1 list · 1 note'
+  );
+  assert.equal(shared.widgetSummary([{ type: 'stat' }]), '');
+  assert.equal(shared.formatValue(12900, 'USD'), '12.9K USD');
+  assert.equal(shared.formatValue('LinkedIn'), 'LinkedIn');
+  assert.equal(shared.formatValue(42, '%'), '42%');
+  assert.equal(shared.formatValue(-4200000, '$'), '-$4.2M');
+});
+
 const main = require('../src/main/dashboards.ts');
 const { toolsFor } = require('../src/main/officeTools.ts');
 const { selectTools } = require('../src/main/context.ts');
