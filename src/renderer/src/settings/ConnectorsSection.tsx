@@ -9,6 +9,7 @@ import {
 import { COWORKERS } from '../../../shared/coworkers';
 import { useApp } from '../state';
 import { Button, EmptyState, IconPlug, IconPlus, Modal } from '../ui';
+import { confirmAction } from '../ui/confirm';
 import { SettingsGroup } from './controls';
 import { ServiceIcon } from './ServiceIcon';
 import { connectorLogo } from './connectorLogos';
@@ -135,9 +136,11 @@ export function ConnectorsSection({
   const connect = async (entry: ConnectorEntry) => {
     if (
       entry.command &&
-      !confirm(
-        `${entry.name} runs on this PC with:\n\n${[entry.command, ...(entry.args ?? [])].join(' ')}\n\nThe first start downloads the package, which can take a minute. Continue?`
-      )
+      !(await confirmAction({
+        title: `Start ${entry.name}?`,
+        message: `It runs on this PC with:\n\n${[entry.command, ...(entry.args ?? [])].join(' ')}\n\nThe first start downloads the package, which can take a minute.`,
+        confirmLabel: 'Start'
+      }))
     )
       return;
     setError('');

@@ -16,6 +16,7 @@ import {
 import { defaultTab, useOfficeStore, type AgentActivity, type PanelTab } from '../store/officeStore';
 import { OFFICE_AGENTS, type OfficeAgent } from '../data/officeAgents';
 import { perform, useApp } from '../../../state';
+import { confirmAction } from '../../../ui/confirm';
 import { transcriptMarkdown, wholeConversation } from '../../../chat/transcript';
 import type { Conversation as Thread } from '../../../../../shared/types';
 import { timeAgo } from '../../../format';
@@ -50,9 +51,12 @@ const transcriptOf = async (thread: Thread, agentName: string) =>
 export const deleteThread = (thread: Pick<Thread, 'id' | 'title'>) =>
   perform(async () => {
     if (
-      !confirm(
-        `Delete “${thread.title}”?\n\nIts messages are removed for good. Files your coworkers saved stay where they are.`
-      )
+      !(await confirmAction({
+        title: 'Delete this conversation?',
+        message: `“${thread.title}” and its messages are removed for good. Files your coworkers saved stay where they are.`,
+        confirmLabel: 'Delete',
+        tone: 'danger'
+      }))
     )
       return;
     if (await window.axon.chatDelete(thread.id)) useApp.getState().pushToast('Conversation deleted');

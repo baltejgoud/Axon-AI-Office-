@@ -3,10 +3,21 @@ import type { Snapshot } from '../../shared/platform';
 import type { Selection, ToolApprovalRequest } from '../../shared/types';
 import type { ContextUsage } from '../../shared/context-usage';
 import type { RunEstimate } from '../../shared/cost';
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+export interface ToastOptions {
+  /** One button on the notice; it runs, then the notice closes. */
+  action?: ToastAction;
+  /** How long the notice stays, in ms. Errors otherwise stay until closed. */
+  durationMs?: number;
+}
 export interface Toast {
   id: string;
   message: string;
   tone: 'success' | 'error';
+  action?: ToastAction;
 }
 interface UIState {
   data: Snapshot | null;
@@ -24,7 +35,7 @@ interface UIState {
   toasts: Toast[];
   refresh(): Promise<void>;
   patch(value: Partial<UIState>): void;
-  pushToast(message: string, tone?: Toast['tone']): void;
+  pushToast(message: string, tone?: Toast['tone'], options?: ToastOptions): void;
   dismissToast(id: string): void;
 }
 export const useApp = create<UIState>((set, get) => ({
@@ -51,10 +62,13 @@ export const useApp = create<UIState>((set, get) => ({
       pendingApprovals: Object.fromEntries(data.pendingApprovals.map((request) => [request.id, request]))
     });
   },
-  pushToast: (message, tone = 'success') => {
+  pushToast: (message, tone = 'success', options) => {
     const id = crypto.randomUUID();
-    set({ toasts: [...get().toasts, { id, message, tone }] });
-    setTimeout(() => get().dismissToast(id), 3200);
+    set({ toasts: [...get().toasts, { id, message, tone, action: options?.action }] });
+    // Errors wait to be closed; a notice with an action waits long enough to read it and press the button.
+    let wait = options?.durationMs;
+    if (wait === undefined && tone !== 'error') wait = options?.action ? 8000 : 4000;
+    if (wait !== undefined) setTimeout(() => get().dismissToast(id), wait);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) })
 }));

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp, perform } from './state';
 import { Button, EmptyState, IconBook, IconFolderPlus, IconPlus, IconSearch, IconTrash } from './ui';
 import { syncOfficeLibrary } from './features/office/library';
+import { confirmAction } from './ui/confirm';
 
 /** The office library: documents the Library's coworkers can search. Shown in an overlay. */
 export function Knowledge() {
@@ -93,8 +94,14 @@ export function Knowledge() {
                 icon={IconTrash}
                 iconOnly
                 aria-label={`Remove ${d.name}`}
-                onClick={() => {
-                  if (confirm(`Remove "${d.name}" from the library?`))
+                onClick={async () => {
+                  if (
+                    await confirmAction({
+                      title: `Remove "${d.name}" from the library?`,
+                      confirmLabel: 'Remove',
+                      tone: 'danger'
+                    })
+                  )
                     void perform(async () => {
                       await window.axon.knowledgeDelete(d.id);
                       setHits([]);

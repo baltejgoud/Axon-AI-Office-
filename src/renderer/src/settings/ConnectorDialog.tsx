@@ -11,6 +11,7 @@ import {
 import { COWORKERS, SPECIALIST_GROUPS } from '../../../shared/coworkers';
 import { useApp, perform } from '../state';
 import { Button, Modal } from '../ui';
+import { confirmAction } from '../ui/confirm';
 import { Segmented, Switch } from './controls';
 import { ConnectorMark, errorText, statusText } from './ConnectorsSection';
 
@@ -78,8 +79,15 @@ export function ConnectorDialog({
   };
   const save = () =>
     void perform(() => window.axon.mcpServerSave(draft), `${server.name} saved`).then(onClose);
-  const remove = () => {
-    if (confirm(`Remove ${server.name}? Coworkers lose its tools and its sign-in is forgotten.`))
+  const remove = async () => {
+    if (
+      await confirmAction({
+        title: `Remove ${server.name}?`,
+        message: 'Coworkers lose its tools and its sign-in is forgotten.',
+        confirmLabel: 'Remove',
+        tone: 'danger'
+      })
+    )
       void perform(() => window.axon.mcpServerDelete(server.id), `${server.name} removed`).then(onClose);
   };
 
