@@ -300,8 +300,11 @@ app.on('web-contents-created', (_, contents) => {
       const items = await evaluate(`[...document.querySelectorAll('.activity-menu [role=menuitem]')].map((b) => b.textContent)`);
       check(items.includes('Delete this conversation…'), 'the menu has "Delete this conversation…"');
       check((await evaluate(`document.querySelectorAll('.activity-menu-delete').length`)) === 2, 'each earlier conversation has its own Delete');
-      await evaluate(`window.confirm = () => true; true`);
       await evaluate(`[...document.querySelectorAll('.activity-menu-delete')].find((b) => /Old notes/.test(b.getAttribute('aria-label'))).click()`);
+      await waitFor(`!!document.querySelector('.confirm-dialog')`, 'confirm dialog');
+      await snap('delete-2-confirm');
+      check(/Delete this conversation\?/.test(await evaluate(`document.querySelector('.confirm-dialog h2').textContent`)), 'Axon asks in its own dialog');
+      await evaluate(`document.querySelector('.confirm-dialog .btn-danger, .confirm-dialog [class*=danger]').click()`);
       await waitFor(`window.axon.snapshot().then((s) => !s.conversations.some((c) => c.id === 'c-old'))`, 'deleted');
       check(true, 'the old conversation is deleted');
       await waitFor(`[...document.querySelectorAll('.toast')].some((t) => /Conversation deleted/.test(t.textContent))`, 'toast', 30);

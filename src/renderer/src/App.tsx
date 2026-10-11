@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useApp, perform } from './state';
 import { AxonLogo, Button, IconClose, ToastStack } from './ui';
+import { ConfirmHost } from './ui/confirm';
 import { OfficePage } from './features/office/OfficePage';
 import { ReadingHost } from './chat/ReadingView';
 import { useOfficeStore } from './features/office/store/officeStore';
@@ -247,6 +248,7 @@ export function App() {
       </main>
       <ReadingHost />
       <ToastStack />
+      <ConfirmHost />
     </div>
   );
 }

@@ -525,6 +525,13 @@ svg {
   margin-right: auto;
   min-width: 0;
 }
+/* A yes-or-no question: narrower than a form, and its message keeps the line breaks it was written with. */
+.confirm-dialog {
+  width: min(440px, 100%);
+}
+.confirm-message {
+  white-space: pre-line;
+}
 
 /* ---------- Tabs ---------- */
 .tabs {
@@ -727,6 +734,7 @@ svg {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  max-width: min(420px, calc(100vw - var(--space-8)));
   padding: var(--space-3) var(--space-4);
   background: var(--surface-raised);
   border: 1px solid var(--border-default);
@@ -734,7 +742,6 @@ svg {
   box-shadow: var(--shadow-overlay);
   font-size: var(--text-sm);
   color: var(--text-primary);
-  cursor: pointer;
   pointer-events: auto;
   animation: toast-in var(--duration-base) var(--ease-out);
 }
@@ -746,6 +753,43 @@ svg {
 }
 .toast-error svg {
   color: var(--danger-text);
+}
+.toast-message {
+  flex: 1;
+  min-width: 0;
+}
+.toast-action,
+.toast-close {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.toast-action {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
+  font-weight: var(--weight-semibold);
+}
+.toast-action:hover {
+  background: var(--accent-soft);
+}
+.toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+.toast-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* ---------- Motion ---------- */

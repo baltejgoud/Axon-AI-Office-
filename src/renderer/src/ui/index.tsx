@@ -217,16 +217,36 @@ export function PageHeader({
 }
 
 /* ---------- ToastStack ---------- */
-/** Transient confirmations for save/delete/copy actions. Mount once at the app root. */
+/** Notices for save/delete/copy actions. Errors stay until closed. Mount once at the app root. */
 export function ToastStack() {
   const { toasts, dismissToast } = useApp();
   if (!toasts.length) return null;
   return createPortal(
     <div className="toast-stack" role="status" aria-live="polite">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.tone}`} onClick={() => dismissToast(t.id)}>
+        <div key={t.id} className={`toast toast-${t.tone}`} role={t.tone === 'error' ? 'alert' : undefined}>
           <Icon icon={t.tone === 'error' ? IconClose : IconCheck} size="sm" />
-          <span>{t.message}</span>
+          <span className="toast-message">{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                t.action?.run();
+                dismissToast(t.id);
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
+          <button
+            type="button"
+            className="toast-close"
+            aria-label="Dismiss"
+            onClick={() => dismissToast(t.id)}
+          >
+            <Icon icon={IconClose} size="sm" />
+          </button>
         </div>
       ))}
     </div>,

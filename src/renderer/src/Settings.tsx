@@ -26,6 +26,7 @@ import {
   type AppIconProps
 } from './ui';
 import { followsTimeOfDay, setFollowsTimeOfDay } from './features/office/scene/room/lighting';
+import { confirmAction } from './ui/confirm';
 import {
   qualityPreference,
   setQualityPreference,
@@ -319,8 +320,15 @@ function ModelsSection({
                   iconOnly
                   className="danger-hover"
                   aria-label={`Remove ${p.name}`}
-                  onClick={() => {
-                    if (confirm(`Remove ${p.name} and its saved key?`))
+                  onClick={async () => {
+                    if (
+                      await confirmAction({
+                        title: `Remove ${p.name}?`,
+                        message: 'Its saved key goes with it.',
+                        confirmLabel: 'Remove',
+                        tone: 'danger'
+                      })
+                    )
                       void perform(() => window.axon.providerDelete(p.id), 'Provider removed');
                   }}
                 />
