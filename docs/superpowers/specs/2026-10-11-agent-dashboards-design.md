@@ -61,8 +61,8 @@ to update it.`
 
 ## Records
 
-`Dashboard` in `src/shared/types.ts`: `id, title, summary?, widgets, sources, agentId?,
-conversationId, toolCallId, createdAt, updatedAt`. `PlatformState.dashboards` (repository
+`Dashboard` in `src/shared/dashboards.ts`: `id, title, summary?, widgets, sources, agentId?,
+conversationId, toolCallIds (the calls that showed and updated it), createdAt, updatedAt`. `PlatformState.dashboards` (repository
 normalizes a missing list to `[]`), newest 200 kept. Every change emits
 `{ channel: 'dashboards', dashboards }` and the window swaps them in, like teams.
 `dashboardDelete(id)` IPC removes one. Deleting a conversation keeps its dashboards (the sheet's
