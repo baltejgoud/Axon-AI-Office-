@@ -166,10 +166,10 @@ test('only the receptionist gets the planner tools, and they need no approval', 
     const { toolsFor } = require('../src/main/officeTools.ts');
     const { PermissionManager } = require('../src/main/security/permissions.ts');
     const names = (agentId) => toolsFor({ agentId, hasFolder: false, registry: [] }).map((tool) => tool.name);
-    assert.deepEqual(names('receptionist'), ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task']);
-    assert.deepEqual(names('designer'), ['ask_colleague']);
+    assert.deepEqual(names('receptionist'), ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'show_dashboard']);
+    assert.deepEqual(names('designer'), ['ask_colleague', 'show_dashboard']);
     // The Chief of Staff leads teams, but keeps no planner.
-    assert.deepEqual(names('chief-of-staff'), ['ask_colleague', 'find_people', 'call_team_meeting']);
+    assert.deepEqual(names('chief-of-staff'), ['ask_colleague', 'find_people', 'call_team_meeting', 'show_dashboard']);
     const permissions = new PermissionManager([], false);
     for (const name of ['add_task', 'list_tasks', 'update_task', 'complete_task'])
       assert.equal(permissions.check({ toolName: name, args: {} }).action, 'allow');

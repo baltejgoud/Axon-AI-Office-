@@ -377,7 +377,7 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
     return { toolCalls: [] };
   });
   await service.chatSend(chat.id, 'Build the settings page', []);
-  assert.deepEqual(offered, ['ask_colleague', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'], 'no folder: colleague and scoped memory retrieval');
+  assert.deepEqual(offered, ['ask_colleague', 'show_dashboard', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'], 'no folder: colleague and scoped memory retrieval');
   assert.equal(consults, 3);
   const results = repo.state.messages.filter((m) => m.conversationId === chat.id && m.role === 'tool');
   assert.equal(results.length, 4);
@@ -461,7 +461,7 @@ test('the receptionist keeps the planner with her own tools, knowing the date', 
     if (calls === 1) {
       assert.deepEqual(
         req.tools.map((tool) => tool.name),
-        ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
+        ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'show_dashboard', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
       );
       assert.match(
         req.system,

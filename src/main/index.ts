@@ -60,6 +60,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'readToolArtifact',
   'chatSelectionSet',
   'chatDelete',
+  'dashboardDelete',
   'chatSearch',
   'chatSend',
   'chatStop',

@@ -102,6 +102,8 @@ export class PermissionManager {
     if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // Finding people and calling a meeting only read; the plan waits for you before anything is done.
     if (TEAM_TOOL_NAMES.has(toolName)) return { action: 'allow' };
+    // A dashboard only displays what the coworker gathered; it touches nothing else.
+    if (toolName === 'show_dashboard') return { action: 'allow' };
 
     // 2. Path containment check
     if (['read_file', 'list_files', 'file_context', 'get_symbol'].includes(toolName) || FILE_SAVERS.has(toolName)) {

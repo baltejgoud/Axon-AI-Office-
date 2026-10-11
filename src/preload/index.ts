@@ -40,6 +40,7 @@ const api: PlatformAPI = {
   chatRename: invoke('chatRename'),
   chatSelectionSet: invoke('chatSelectionSet'),
   chatDelete: invoke('chatDelete'),
+  dashboardDelete: invoke('dashboardDelete'),
   chatSearch: invoke('chatSearch'),
   chatSend: invoke('chatSend'),
   chatStop: invoke('chatStop'),

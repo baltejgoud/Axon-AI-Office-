@@ -34,6 +34,7 @@ import type {
 } from './scm';
 import type { ContextUsage } from './context-usage';
 import type { AuditEntry, AuditQuery } from './audit';
+import type { Dashboard } from './dashboards';
 export interface PlatformState {
   version: 1;
   runtimeVersion?: 1;
@@ -54,6 +55,8 @@ export interface PlatformState {
   reception: { briefedOn?: string; trayHintShown?: boolean };
   /** Teams the Chief of Staff and the Ops Coordinator gathered. */
   teams: Team[];
+  /** Dashboards coworkers showed with show_dashboard, newest first. */
+  dashboards: Dashboard[];
 }
 export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   dataPath: string;
@@ -219,6 +222,8 @@ export interface PlatformAPI {
   chatSelectionSet(conversationId: string, selection: Selection): Promise<void>;
   /** False when the conversation was kept: you cancelled, or work it owns carries on in the background. */
   chatDelete(id: string): Promise<boolean>;
+  /** Deletes a dashboard after a native confirm; false when you cancelled or it is already gone. */
+  dashboardDelete(id: string): Promise<boolean>;
   /** Past conversations whose title or one message has every word of the query. */
   chatSearch(query: string): Promise<ConversationHit[]>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;

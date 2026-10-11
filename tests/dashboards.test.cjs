@@ -113,3 +113,78 @@ test('numbers read short and axes get clean ticks', () => {
   assert.deepEqual(shared.niceTicks(0, 0), [0, 1]);
   assert.deepEqual(shared.niceTicks(-12, 30), [-20, -10, 0, 10, 20, 30]);
 });
+
+const main = require('../src/main/dashboards.ts');
+const { toolsFor } = require('../src/main/officeTools.ts');
+const { selectTools } = require('../src/main/context.ts');
+const { PermissionManager } = require('../src/main/security/permissions.ts');
+
+const make = (() => {
+  let n = 0;
+  return { id: () => `d${++n}`, now: 1000 };
+})();
+const args = (extra = {}) => ({ title: 'Leads', widgets: [{ type: 'stat', label: 'Leads', value: 3 }], ...extra });
+
+test('a call saves a dashboard, newest first, and says how to update it', () => {
+  const list = [];
+  const first = main.publishDashboard(list, { args: args(), conversationId: 'c1', agentId: 'research-analyst', toolCallId: 't1' }, make);
+  assert.ok(!first.isError);
+  const id = list[0].id;
+  assert.ok(first.content.includes(`on screen for the user (id ${id})`), first.content);
+  assert.match(first.content, new RegExp(`dashboard_id "${id}"`));
+  assert.deepEqual(list[0].toolCallIds, ['t1']);
+  assert.equal(list[0].agentId, 'research-analyst');
+  main.publishDashboard(list, { args: args({ title: 'Second' }), conversationId: 'c1', toolCallId: 't2' }, make);
+  assert.equal(list[0].title, 'Second');
+  assert.ok(!('agentId' in list[0]), 'your own chat has no coworker');
+});
+
+test('an update by id replaces it in place; another conversation cannot', () => {
+  const list = [];
+  main.publishDashboard(list, { args: args(), conversationId: 'c1', toolCallId: 't1' }, make);
+  const id = list[0].id;
+  const later = { ...make, now: 2000 };
+  const updated = main.publishDashboard(list, { args: args({ title: 'Leads v2', dashboard_id: id }), conversationId: 'c1', toolCallId: 't2' }, later);
+  assert.ok(!updated.isError, updated.content);
+  assert.match(updated.content, /updated on screen/);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].title, 'Leads v2');
+  assert.deepEqual(list[0].toolCallIds, ['t1', 't2']);
+  assert.equal(list[0].createdAt, 1000);
+  assert.equal(list[0].updatedAt, 2000);
+  const refused = main.publishDashboard(list, { args: args({ dashboard_id: id }), conversationId: 'c2', toolCallId: 't3' }, make);
+  assert.equal(refused.isError, true);
+  assert.match(refused.content, /no dashboard .* in this conversation/);
+  assert.equal(list[0].title, 'Leads v2');
+});
+
+test('a bad call is refused with what to fix, and nothing is saved', () => {
+  const list = [];
+  const out = main.publishDashboard(list, { args: { title: 'T', widgets: [] }, conversationId: 'c1', toolCallId: 't1' }, make);
+  assert.equal(out.isError, true);
+  assert.equal(out.content, 'Not shown: widgets is empty. Fix it and call show_dashboard again.');
+  assert.equal(list.length, 0);
+});
+
+test('only the newest 200 are kept', () => {
+  const list = [];
+  for (let i = 0; i < 205; i++) main.publishDashboard(list, { args: args(), conversationId: 'c1', toolCallId: `t${i}` }, make);
+  assert.equal(list.length, main.DASHBOARDS_KEPT);
+  assert.deepEqual(list[0].toolCallIds, ['t204']);
+});
+
+test('every coworker and your own chats are offered the tool, with or without a folder, and it stays among many tools', () => {
+  for (const agentId of [undefined, 'receptionist', 'chief-of-staff', 'backend-developer'])
+    for (const hasFolder of [true, false])
+      assert.ok(
+        toolsFor({ agentId, hasFolder, registry: [] }).some((t) => t.name === 'show_dashboard'),
+        `${agentId} ${hasFolder}`
+      );
+  const many = Array.from({ length: 30 }, (_, i) => ({ name: `tool_${i}`, description: 'x', parameters: {} }));
+  assert.ok(selectTools([...many, main.SHOW_DASHBOARD], 'hello').some((t) => t.name === 'show_dashboard'));
+});
+
+test('showing a dashboard needs no approval', () => {
+  const permissions = new PermissionManager([], false);
+  assert.equal(permissions.check({ toolName: 'show_dashboard', args: {} }).action, 'allow');
+});

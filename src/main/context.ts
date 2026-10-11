@@ -212,7 +212,7 @@ export const DISCOVER_TOOLS: ToolDefinition = {
 export function selectTools(tools: readonly ToolDefinition[], query: string, limit = 20): ToolDefinition[] {
   if (tools.length <= limit) return [...tools];
   const terms = query.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
-  const core = new Set(['discover_tools', ...MEMORY_TOOLS.map(t => t.name), 'read_file', 'list_files', 'search_code', 'ask_colleague', 'find_people', 'call_team_meeting']);
+  const core = new Set(['discover_tools', ...MEMORY_TOOLS.map(t => t.name), 'read_file', 'list_files', 'search_code', 'ask_colleague', 'find_people', 'call_team_meeting', 'show_dashboard']);
   return tools.map((tool, index) => ({ tool, index, score: (core.has(tool.name) ? 1000 : 0) + terms.reduce((n, term) => n + ((tool.name + ' ' + tool.description).toLowerCase().includes(term) ? 1 : 0), 0) }))
     .sort((a,b) => b.score - a.score || a.index - b.index).slice(0,limit).sort((a,b) => a.index-b.index).map(t=>t.tool);
 }
