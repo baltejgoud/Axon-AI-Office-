@@ -67,7 +67,8 @@ export interface SceneLabelsProps {
 
 /**
  * Name tags floating over the campus: for the people in view close up, and for the selected
- * person at every zoom. Districts, departments and rooms are named by signs in the world.
+ * person at every zoom; at the middle zoom, a chip on each department's board. Districts and rooms
+ * are named by signs in the world, so they get no chip: from afar a chip would sit on the sign.
  * The scene positions the tags; `data-anchor` says whom each follows.
  */
 export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function SceneLabels(
@@ -88,8 +89,8 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
     (status === 'idle' && endedLabel(lastRun, lastReply)) || STATUS_LABELS[status];
   return (
     <div ref={ref} className={`office-scene-labels tier-${tier} ${loading ? 'is-loading' : ''}`}>
-      {tier !== 'near' &&
-        visibleSpatialLabels(tier === 'far' ? 'district' : 'department', bounds, target).map((label) => (
+      {tier === 'middle' &&
+        visibleSpatialLabels('department', bounds, target).map((label) => (
           <button
             key={label.id}
             data-anchor={`place:${label.id}`}

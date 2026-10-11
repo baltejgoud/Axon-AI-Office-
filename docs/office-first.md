@@ -11,7 +11,7 @@ The office remains mounted at full window size. Conversation and work surfaces f
 
 ## Spatial behavior
 
-HTML labels follow district signs and department boards and show catalog headcounts. They change by zoom tier and avoid floating UI. Collaboration links share one Three.js line layer and follow both moving coworkers until the consultation ends.
+HTML labels follow department boards at the middle zoom and show catalog headcounts; districts are named by their signs in the world, never by a chip on top of one. They change by zoom tier and avoid floating UI. Collaboration links share one Three.js line layer and follow both moving coworkers until the consultation ends.
 
 Coworker cards choose the nearest available position around their scene anchor, flip below near the top, and avoid navigation, planner, dock, drawer, work and approval panels. If a window has no room for a card, selection opens the conversation drawer directly.
 
