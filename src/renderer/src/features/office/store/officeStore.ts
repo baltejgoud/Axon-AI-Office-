@@ -25,7 +25,7 @@ export interface AgentRuntime {
   activities: AgentActivity[];
 }
 
-export type Overlay = 'settings' | 'knowledge' | 'company';
+export type Overlay = 'settings' | 'knowledge' | 'company' | 'dashboards';
 
 /** What the coworker's panel shows under their name: the conversation, or one of their tools. */
 export type PanelTab = 'chat' | 'planner' | 'files' | 'updates';
@@ -42,6 +42,10 @@ interface OfficeStoreState {
   overlay: Overlay | null;
   /** The Settings section to open at, when something asked for one (the avatar opens Accounts). */
   settingsSection: string | null;
+  /** The dashboard the Dashboards sheet shows; null shows the newest. */
+  dashboardId: string | null;
+  /** Opens the Dashboards sheet, at one dashboard or the newest. */
+  openDashboard: (id?: string | null) => void;
 
   selectAgent: (id: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
@@ -198,6 +202,11 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   is3dEnabled: true,
   overlay: null,
   settingsSection: null,
+  dashboardId: null,
+  openDashboard: (id = null) => {
+    get().openOverlay('dashboards');
+    set({ dashboardId: id });
+  },
   pendingFiles: {},
   flyTo: null,
   teamBoard: null,

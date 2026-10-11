@@ -86,6 +86,9 @@ function Palette() {
         case 'company':
           office.openOverlay('company');
           break;
+        case 'dashboards':
+          office.openDashboard();
+          break;
         case 'history':
           office.setWorkFullscreen(false);
           office.setFocusMode(false);

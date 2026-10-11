@@ -8,6 +8,7 @@ import { perform, useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
+import { DashboardCard } from '../dashboards/DashboardCard';
 import { PlannerToolCard } from './PlannerToolCard';
 import { TeamCard } from './TeamCard';
 import { isPlannerCall } from '../tasks';
@@ -43,11 +44,13 @@ function RunCost({ cost }: { cost: ConversationCost }) {
 }
 
 /**
- * Colleagues' answers and the receptionist's planner changes get their own cards in the thread;
+ * Colleagues' answers, dashboards and the receptionist's planner changes get their own cards in the thread;
  * work (files, commands, pages, tools) is summed up once per run instead.
  */
 const officeToolCard = (call: ToolCall, at: number) =>
-  call.name === 'ask_colleague' ? (
+  call.name === 'show_dashboard' ? (
+    <DashboardCard call={call} />
+  ) : call.name === 'ask_colleague' ? (
     <ColleagueCard call={call} />
   ) : call.name === 'call_team_meeting' ? (
     <TeamCard call={call} />

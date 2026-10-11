@@ -11,6 +11,7 @@ import { useOfficeStore } from './store/officeStore';
 import { SettingsPanel } from '../../Settings';
 import { Knowledge } from '../../Knowledge';
 import { CompanyOperations } from './company/CompanyOperations';
+import { DashboardsSheet } from './dashboards/DashboardsSheet';
 import { CommandPalette } from './shell/CommandPalette';
 import { ApprovalOverlay } from './shell/ApprovalOverlay';
 import { OfficeNotifications } from './shell/OfficeNotifications';
@@ -81,6 +82,11 @@ export function OfficePage() {
       {overlay === 'company' && (
         <Overlay title="Company operations" onClose={close} wide>
           <CompanyOperations />
+        </Overlay>
+      )}
+      {overlay === 'dashboards' && (
+        <Overlay title="Dashboards" onClose={close} wide flush className="dashboards">
+          <DashboardsSheet />
         </Overlay>
       )}
       {overlay === 'settings' && (

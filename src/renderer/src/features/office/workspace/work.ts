@@ -22,7 +22,7 @@ export const WORK_TABS: readonly { kind: WorkKind; label: string }[] = [
   { kind: 'tool', label: 'Tools' }
 ];
 
-/** Asking a colleague, the planner, memory and helpers happen in the office, not on a surface. */
+/** Asking a colleague, the planner, memory, helpers and dashboards happen in the office, not on a surface. */
 const OFFICE_TOOLS = new Set([
   'ask_colleague',
   'add_task',
@@ -33,7 +33,8 @@ const OFFICE_TOOLS = new Set([
   'update_memory',
   'dispatch_subagent',
   'find_people',
-  'call_team_meeting'
+  'call_team_meeting',
+  'show_dashboard'
 ]);
 
 /** Connected tools that drive or read a web page. */
