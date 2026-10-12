@@ -27,7 +27,7 @@ import { DistrictChips } from './shell/DistrictChips';
 import { AccountButton } from './shell/AccountButton';
 import { DepartmentMenu, type DepartmentChoice } from './shell/DepartmentMenu';
 import { Minimap } from './shell/Minimap';
-import { SceneLabels, taggedPeople } from './shell/SceneLabels';
+import { SceneLabels, markerKey, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
 import { WaitingPill } from './shell/WaitingPill';
 import { SHORTCUT_KEY } from './workspace/WorkViews';
@@ -36,7 +36,8 @@ import type { Vec2, ZoneId } from './simulation/types';
 import type { SignSpec } from './campus/signs';
 import type { Team } from '../../../../shared/types';
 import { useApp } from '../../state';
-import { activeHelp } from './tasks';
+import { consultVisits, VisitDirector } from './visits';
+import { markersFor } from './presence';
 import { openMeetings, roomBoardCards } from './team';
 import { roomOf } from '../../../../shared/rooms';
 import { TASK_BOARDS } from './campus/boards';
@@ -97,15 +98,13 @@ export function OfficeCanvas({
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<OfficeView | null>(null);
   const tasks = useApp((s) => s.data?.tasks);
-  /** Colleagues over at someone's desk, helper → host, as last sent to the scene. */
-  const helping = useRef(new Map<string, string>());
-  const syncHelp = useCallback((world: OfficeScene, pairs: { helper: string; host: string }[]) => {
-    const next = new Map(pairs.map((pair) => [pair.helper, pair.host]));
-    for (const [helper, host] of helping.current) if (next.get(helper) !== host) world.endHelp(helper);
-    for (const [helper, host] of next)
-      if (helping.current.get(helper) !== host) world.startHelp(helper, host);
-    helping.current = next;
-  }, []);
+  /**
+   * Who is over at whose desk right now, asking a colleague something: the asker visits the one
+   * they asked, until that colleague has answered. Keeps asking the scene for visits that could not
+   * start yet (the visiting spot was taken).
+   */
+  const visiting = useRef<VisitDirector | null>(null);
+  const visits = useMemo(() => consultVisits(tasks ?? [], Date.now()), [tasks]);
   const teams = useApp((s) => s.data?.teams);
   const runs = useApp((s) => s.data?.runs);
   const conversations = useApp((s) => s.data?.conversations);
@@ -226,8 +225,14 @@ export function OfficeCanvas({
       Object.entries(useOfficeStore.getState().agentRuntime).forEach(([id, runtime]) =>
         world.updateAgentStatus(id, runtime.status)
       );
-      helping.current = new Map();
-      syncHelp(world, activeHelp(useApp.getState().data?.tasks ?? []));
+      visiting.current = new VisitDirector({
+        startHelp: (visitor, host) => world.startHelp(visitor, host),
+        endHelp: (visitor) => world.endHelp(visitor),
+        get walks() {
+          return world.walks;
+        }
+      });
+      visiting.current.sync(consultVisits(useApp.getState().data?.tasks ?? [], Date.now()));
       meeting.current = new Set();
       syncTeams(world, useApp.getState().data?.teams ?? []);
     } catch (error) {
@@ -243,8 +248,9 @@ export function OfficeCanvas({
       observer.disconnect();
       world.destroy();
       scene.current = null;
+      visiting.current = null;
     };
-  }, [roster, modelsReady, selectAgent, syncHelp, syncTeams]);
+  }, [roster, modelsReady, selectAgent, syncTeams]);
 
   // The camera lock holds for the scene as it is now, and for one made again (after the roster).
   useEffect(() => {
@@ -267,12 +273,19 @@ export function OfficeCanvas({
     if (flyTo) scene.current?.setSelectedAgent(flyTo.agentId, true);
   }, [flyTo]);
 
-  // Colleagues walk over while they help, and back once the run that asked is over.
+  // Someone who asks a colleague a question walks over to their desk, and back once the colleague
+  // has answered.
   useEffect(() => {
     if (!scene.current) return;
     scene.current.setTasks(tasks ?? []);
-    syncHelp(scene.current, activeHelp(tasks ?? []));
-  }, [tasks, syncHelp]);
+    visiting.current?.sync(visits);
+  }, [tasks, visits]);
+
+  // A visit that couldn't start (someone is already at that desk) tries again every second.
+  useEffect(() => {
+    const timer = setInterval(() => visiting.current?.retry(), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // A team meeting gathers its people in the boardroom; its board shows the team's goal, then its tasks.
   useEffect(() => {
@@ -314,7 +327,20 @@ export function OfficeCanvas({
   useEffect(() => {
     scene.current?.highlightPeople(found);
   }, [found, loading, roster]);
-  const labelKey = `${view?.target.x.toFixed(1)}|${view?.target.z.toFixed(1)}|${tier}|${tagged.join(',')}|${selectedAgentId}|${loading}`;
+  // The badge or bubble over each person: needs you, just finished, asking or answering a colleague,
+  // or quietly working. The scene moves them with the people; React only redraws when one changes.
+  const beacons = useOfficeStore((s) => s.beacons);
+  const markers = useMemo(
+    () =>
+      markersFor({
+        statuses,
+        beacons,
+        visits,
+        nameOf: (id) => OFFICE_AGENTS.find((agent) => agent.id === id)?.name
+      }),
+    [statuses, beacons, visits]
+  );
+  const labelKey = `${view?.target.x.toFixed(1)}|${view?.target.z.toFixed(1)}|${tier}|${tagged.join(',')}|${selectedAgentId}|${loading}|${markerKey(markers)}`;
   useLayoutEffect(() => {
     scene.current?.setLabels(
       Array.from(labels.current?.querySelectorAll<HTMLElement>('[data-anchor]') ?? [])
@@ -576,7 +602,7 @@ export function OfficeCanvas({
                       {statuses[agent.id] === 'idle'
                         ? 'Available'
                         : statuses[agent.id] === 'waiting'
-                          ? 'Waiting'
+                          ? 'Needs you'
                           : (statuses[agent.id] ?? 'Available')}
                     </span>
                   </button>
@@ -604,6 +630,7 @@ export function OfficeCanvas({
             found={found}
             selectedId={selectedAgentId}
             statuses={statuses}
+            markers={markers}
             loading={loading}
             onAgent={chooseAgent}
             bounds={view?.bounds ?? null}

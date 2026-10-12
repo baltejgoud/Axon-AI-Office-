@@ -82,24 +82,7 @@ test('statuses come from each coworker’s newest work record', () => {
   });
 });
 
-test('help walks last while the help runs or the asker’s run continues', () => {
-  const work = task({ id: 'w', coworkerId: 'frontend-developer', conversationId: 'c', status: 'working', runStartedAt: 10 });
-  const help = task({
-    id: 'h',
-    kind: 'help',
-    coworkerId: 'backend-developer',
-    forCoworkerId: 'frontend-developer',
-    conversationId: 'c',
-    status: 'done',
-    createdAt: 12
-  });
-  assert.deepEqual(t.activeHelp([work, help]), [{ helper: 'backend-developer', host: 'frontend-developer' }]);
-  assert.deepEqual(t.activeHelp([{ ...work, status: 'done' }, help]), []);
-  assert.deepEqual(t.activeHelp([{ ...work, runStartedAt: 20 }, help]), [], 'help from an earlier run');
-  assert.equal(t.activeHelp([{ ...work, status: 'done' }, { ...help, status: 'working' }]).length, 1);
-  // Two answers from the same colleague make one walk.
-  assert.equal(t.activeHelp([work, help, { ...help, id: 'h2' }]).length, 1);
-});
+// Who walks over to whom while a colleague answers a question is covered in office-status.test.cjs.
 
 test('colleague calls parse for the card', () => {
   const pending = t.parseColleagueCall({

@@ -614,17 +614,62 @@ test('a colleague walks over to help and stays until released', () => {
   assert.equal(office.view('backend-developer').poiId, spot);
   run(office, 30, 0.1);
   assert.equal(office.view('backend-developer').poiId, spot, 'stays while helping, even though the host is busy');
-  assert.ok(['talking', 'idle'].includes(office.view('backend-developer').behavior));
+  assert.ok(['talking', 'listening', 'idle'].includes(office.view('backend-developer').behavior));
   office.endHelp('backend-developer');
   const home = layout.HOME_DESKS['backend-developer'];
   runUntil(office, (o) => o.view('backend-developer').poiId === home && o.view('backend-developer').sit === 1, 120, 0.05);
   assert.equal(office.view('backend-developer').poiId, home);
-  // Nobody walks with reduced motion, and a colleague on their own task stays put.
+  // Nobody walks with reduced motion.
   const calm = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3, reducedMotion: true });
   assert.equal(calm.startHelp('backend-developer', 'frontend-developer'), false);
-  const busy = new OfficeSimulation({ agentIds: ['frontend-developer', 'backend-developer'], seed: 3 });
-  busy.setTaskStatus('backend-developer', 'working');
-  assert.equal(busy.startHelp('backend-developer', 'frontend-developer'), false);
+});
+
+test('someone waiting on a colleague’s answer walks over to ask, and goes back to their task afterwards', () => {
+  const asker = 'frontend-developer';
+  const host = 'backend-developer';
+  const office = new OfficeSimulation({ agentIds: [asker, host], seed: 3 });
+  // Both are on a task: the asker is waiting for the answer, the colleague is writing it.
+  office.setTaskStatus(asker, 'working');
+  office.setTaskStatus(host, 'working');
+  office.step(1 / 60);
+  assert.ok(office.startHelp(asker, host), 'a visitor on their own task may walk over');
+  const spot = `visit-${layout.HOME_DESKS[host]}`;
+  const homeOfHost = layout.HOME_DESKS[host];
+  runUntil(office, (o) => o.view(asker).poiId === spot, 120, 0.05);
+  assert.equal(office.view(asker).poiId, spot, 'the asker stands at the colleague’s desk');
+  assert.equal(office.view(asker).onTask, true, 'still on their task');
+  run(office, 20, 0.1);
+  assert.equal(office.view(host).poiId, homeOfHost, 'the colleague answers from their own desk');
+  assert.ok(office.view(host).sit > 0.95);
+  assert.ok(office.view(host).attention, 'and turns to the asker');
+  assert.ok(['talking', 'meeting'].includes(office.view(host).behavior), 'listening or talking, not typing');
+  assert.equal(office.screenState(layout.HOME_DESKS[asker]), 'off', 'the empty desk is dark while they are away');
+  // The answer is in: the asker walks back and the task carries on.
+  office.endHelp(asker);
+  const askerDesk = layout.HOME_DESKS[asker];
+  runUntil(office, (o) => o.view(asker).poiId === askerDesk && o.view(asker).sit > 0.95, 120, 0.05);
+  assert.equal(office.view(asker).poiId, askerDesk);
+  assert.equal(office.screenState(askerDesk), 'active', 'working at their screen again');
+  run(office, 5, 0.1);
+  assert.equal(office.view(asker).poiId, askerDesk, 'they do not wander off again');
+});
+
+test('a visit waits its turn: refused while the desk’s visiting spot is taken, or while either is with a team', () => {
+  const ids = ['frontend-developer', 'backend-developer', 'content-creator', 'chief-of-staff'];
+  const office = new OfficeSimulation({ agentIds: ids, seed: 3 });
+  for (const id of ids.slice(0, 3)) office.setTaskStatus(id, 'working');
+  office.step(1 / 60);
+  assert.ok(office.startHelp('frontend-developer', 'backend-developer'));
+  // A second visitor to the same desk has to wait; it is asked again later.
+  assert.equal(office.startHelp('content-creator', 'backend-developer'), false, 'spot taken');
+  office.endHelp('frontend-developer');
+  assert.ok(office.startHelp('content-creator', 'backend-developer'), 'free again');
+  // Someone gathered with a team stays in its room; so does a visit to someone who is there.
+  office.endHelp('content-creator');
+  office.startTeamMeeting('plan', 'chief-of-staff', ['frontend-developer'], 'room-1', ['frontend-developer']);
+  run(office, 1, 0.1);
+  assert.equal(office.startHelp('frontend-developer', 'backend-developer'), false, 'visitor is with a team');
+  assert.equal(office.startHelp('backend-developer', 'frontend-developer'), false, 'host is with a team');
 });
 
 // ---------------------------------------------------------------- Part 3: café and kitchen

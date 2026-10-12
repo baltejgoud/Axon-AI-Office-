@@ -70,7 +70,10 @@ export interface OfficeDebugHandle {
   staffPoint(id: StaffId): { x: number; y: number } | null;
   /** Who is playing on the Lounge TV, and what it shows. */
   lounge(): { players: number; tv: 'game' | 'saver'; controllersOnConsole: number };
+  /** Pairs with a link drawn: the visitor (named `helper` here) who walks over, and the host they walk to. */
   collaborations(): { helper: string; host: string }[];
+  /** The badges and bubbles over heads: whom, what kind, whether drawn and where (container pixels). */
+  markers(): { id: string; kind: string; shown: boolean; x: number; y: number }[];
   help(helperId: string, hostId: string): boolean;
   endHelp(helperId: string): void;
   seed: number;
@@ -94,6 +97,22 @@ interface SceneLabel {
   element: HTMLElement;
   agentId?: string;
   point?: THREE.Vector3;
+}
+
+/**
+ * A badge or speech bubble over a person (needs you, done, asking a colleague…). Not clickable and
+ * never moved aside for others: it sits above the person's name tag, or above their head when they
+ * have none. Its size is read once, when it is collected, and its position written only when it moves.
+ */
+interface SceneMarker {
+  element: HTMLElement;
+  agentId: string;
+  w: number;
+  h: number;
+  x: number;
+  y: number;
+  /** Null until the first time it is placed, so it is hidden or shown whatever it was before. */
+  shown: boolean | null;
 }
 
 /** An invisible box over part of the room that reacts to clicks. */
@@ -195,6 +214,7 @@ export class OfficeScene {
   private readonly boards = new BoardLayer(TASK_BOARDS, FURNITURE);
   private hoveredBoard: Team | null = null;
   private labels: SceneLabel[] = [];
+  private markers: SceneMarker[] = [];
   private full = new Set<string>();
   private selectedId: string | null = null;
   private hoveredAgentId: string | null = null;
@@ -294,6 +314,14 @@ export class OfficeScene {
         help: (helper, host) => this.startHelp(helper, host),
         endHelp: (helper) => this.endHelp(helper),
         collaborations: () => [...this.collaborations].map(([helper, host]) => ({ helper, host })),
+        markers: () =>
+          this.markers.map((m) => ({
+            id: m.agentId,
+            kind: m.element.dataset.kind ?? '',
+            shown: !!m.shown,
+            x: m.x,
+            y: m.y
+          })),
         setHour: (hour) => {
           this.hourOverride = hour;
           this.applyLighting();
@@ -493,8 +521,18 @@ export class OfficeScene {
     this.cameraRig.reset();
   }
 
-  /** Floating name tags. Each element carries `data-anchor="agent:<id>"` and follows that person. */
+  /**
+   * Floating name tags and the badges over heads. A tag carries `data-anchor="agent:<id>"` and follows
+   * that person; a badge or bubble carries `data-anchor="beacon:<id>"` and rides above them.
+   */
   public setLabels(elements: HTMLElement[]): void {
+    this.markers = elements.flatMap((element): SceneMarker[] => {
+      const anchor = element.dataset.anchor ?? '';
+      const id = anchor.startsWith('beacon:') ? anchor.slice(7) : '';
+      return id && this.crowd.has(id)
+        ? [{ element, agentId: id, w: element.offsetWidth, h: element.offsetHeight, x: NaN, y: NaN, shown: null }]
+        : [];
+    });
     this.labels = elements.flatMap((element): SceneLabel[] => {
       const anchor = element.dataset.anchor ?? '';
       const id = anchor.startsWith('agent:') ? anchor.slice(6) : '';
@@ -516,20 +554,33 @@ export class OfficeScene {
     this.boards.setTasks(tasks);
   }
 
-  /** A colleague walks over to help someone; false when they can't (see the simulation). */
-  public startHelp(helperId: string, hostId: string): boolean {
-    const started = this.simulation.startHelp(helperId, hostId);
-    if (this.crowd.has(helperId) && this.crowd.has(hostId) && helperId !== hostId) {
-      this.collaborations.set(helperId, hostId);
+  /** Whether people walk about at all (not with reduced motion). The link between a pair shows either way. */
+  public get walks(): boolean {
+    return !this.reducedMotion;
+  }
+
+  /**
+   * A colleague walks over to someone's desk to ask or help; false when they can't yet (see the
+   * simulation: ask again later). The link between the two shows from the first ask, walking or
+   * not, and asking again for the same pair changes nothing.
+   */
+  public startHelp(visitorId: string, hostId: string): boolean {
+    const started = this.simulation.startHelp(visitorId, hostId);
+    if (
+      this.crowd.has(visitorId) &&
+      this.crowd.has(hostId) &&
+      visitorId !== hostId &&
+      this.collaborations.get(visitorId) !== hostId
+    ) {
+      this.collaborations.set(visitorId, hostId);
       this.resizeCollaborationLines();
     }
     return started;
   }
 
-  public endHelp(helperId: string): void {
-    this.simulation.endHelp(helperId);
-    this.collaborations.delete(helperId);
-    this.resizeCollaborationLines();
+  public endHelp(visitorId: string): void {
+    this.simulation.endHelp(visitorId);
+    if (this.collaborations.delete(visitorId)) this.resizeCollaborationLines();
   }
 
   /**
@@ -568,7 +619,9 @@ export class OfficeScene {
   public updateAgentStatus(agentId: string, status: AgentStatus): void {
     this.statuses.set(agentId, status);
     this.simulation.setTaskStatus(agentId, status);
-    this.characters.get(agentId)?.setWorking(status === 'working');
+    const character = this.characters.get(agentId);
+    character?.setWorking(status === 'working');
+    character?.setHandRaised(status === 'waiting');
   }
 
   // ---------------------------------------------------------------- tiers
@@ -619,6 +672,7 @@ export class OfficeScene {
       character = new OfficeAgentCharacter(id, agent?.accentColor);
       character.setSelected(id === this.selectedId, this.elapsed);
       character.setWorking(this.statuses.get(id) === 'working');
+      character.setHandRaised(this.statuses.get(id) === 'waiting');
       this.characters.set(id, character);
     }
     this.idleSince.delete(id);
@@ -1028,7 +1082,7 @@ export class OfficeScene {
             if (point.z < -1 || point.z > 1 || x < 0 || x > width || y < 0 || y > height) return [];
             return [{ id: agent.id, x: x - 12, y: y - 14, w: 24, h: 28 }];
           });
-    const occupied: { x: number; y: number; w: number; h: number }[] = [];
+    const occupied: { x: number; y: number; w: number; h: number; id?: string }[] = [];
     const ordered = [...this.labels].sort((a, b) => {
       const priority = (label: SceneLabel) => (label.element.getAttribute('aria-pressed') === 'true' ? 0 : 1);
       return priority(a) - priority(b);
@@ -1081,9 +1135,48 @@ export class OfficeScene {
         continue;
       }
       label.element.style.visibility = 'visible';
-      occupied.push({ x: placedX, y: placedY, w, h });
+      occupied.push({ x: placedX, y: placedY, w, h, id: label.agentId });
       label.element.style.left = `${placedX}px`;
       label.element.style.top = `${placedY}px`;
+    }
+    this.placeMarkers(width, height, occupied);
+  }
+
+  /**
+   * Badges and bubbles ride above their person's name tag when it is shown (wherever it ended up),
+   * else just above their head, and hide when the person is off screen. Only moved when they move.
+   */
+  private placeMarkers(
+    width: number,
+    height: number,
+    tags: readonly { x: number; y: number; w: number; h: number; id?: string }[]
+  ): void {
+    for (const marker of this.markers) {
+      const { element, w, h } = marker;
+      const point = this.labelPoint(marker.agentId, this.scratch);
+      let shown = false;
+      let x = 0;
+      let y = 0;
+      if (point) {
+        point.project(this.cameraRig.camera);
+        const px = ((point.x + 1) * width) / 2;
+        const py = ((1 - point.y) * height) / 2;
+        if (point.z > -1 && point.z < 1 && px > -w && px < width + w && py > -h && py < height + h) {
+          const tag = tags.find((rect) => rect.id === marker.agentId);
+          x = Math.max(w / 2 + 4, Math.min(width - w / 2 - 4, tag ? tag.x : px));
+          y = Math.max(h / 2 + 4, tag ? tag.y - tag.h / 2 - h / 2 - 3 : py - h / 2 - 4);
+          shown = true;
+        }
+      }
+      if (shown !== marker.shown) {
+        marker.shown = shown;
+        element.style.visibility = shown ? 'visible' : 'hidden';
+      }
+      if (!shown || (Math.abs(x - marker.x) < 0.25 && Math.abs(y - marker.y) < 0.25)) continue;
+      marker.x = x;
+      marker.y = y;
+      element.style.left = `${x}px`;
+      element.style.top = `${y}px`;
     }
   }
 

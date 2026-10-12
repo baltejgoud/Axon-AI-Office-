@@ -10,13 +10,22 @@ import { useApp } from '../../../state';
 import { endedLabel, latestRun } from '../lifecycle';
 import { activeThread } from '../activity/thread';
 import { useOfficeStore } from '../store/officeStore';
+import type { Marker, MarkerKind } from '../presence';
+import './presence.css';
+
 /** The same words as the coworker's panel and the activity list: one status language everywhere. */
 const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: 'Idle',
   working: 'Working',
-  waiting: 'Waiting',
+  waiting: 'Needs you',
   completed: 'Completed',
   error: 'Failed'
+};
+/** What a badge over someone's head says to a screen reader (the pictures are not read). */
+const BADGE_LABELS: Partial<Record<MarkerKind, string>> = {
+  needs: 'needs you',
+  done: 'just finished',
+  failed: 'ran into a problem'
 };
 const AGENTS = new Map(OFFICE_AGENTS.map((agent) => [agent.id, agent]));
 const HOME = new Map(OFFICE_AGENTS.map((agent) => [agent.id, poiById(HOME_DESKS[agent.id]).position]));
@@ -58,6 +67,8 @@ export interface SceneLabelsProps {
   found?: readonly string[];
   selectedId: string;
   statuses: Readonly<Record<string, AgentStatus>>;
+  /** The badge or speech bubble over each person who has one, at every zoom. */
+  markers?: Readonly<Record<string, Marker>>;
   loading: boolean;
   onAgent: (id: string) => void;
   bounds: Bounds | null;
@@ -72,10 +83,14 @@ export interface SceneLabelsProps {
  * The scene positions the tags; `data-anchor` says whom each follows.
  */
 export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function SceneLabels(
-  { tier, people, found = [], selectedId, statuses, loading, onAgent, bounds, target, onPlace },
+  { tier, people, found = [], selectedId, statuses, markers = {}, loading, onAgent, bounds, target, onPlace },
   ref
 ) {
   const tags = tier === 'near' ? people : people.filter((id) => id === selectedId || found.includes(id));
+  // The quiet dot over someone working is for when their name tag (which has its own) isn't up.
+  const marked = Object.entries(markers).filter(
+    ([id, marker]) => AGENTS.has(id) && !(marker.kind === 'working' && tags.includes(id))
+  );
   // Between tasks, the selected person's tag says how their last task ended, as their panel does.
   const runtime = useOfficeStore((s) => s.agentRuntime[selectedId]);
   const thread = useApp((s) => activeThread(s.data?.conversations ?? [], selectedId, runtime));
@@ -112,11 +127,11 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
           <button
             key={id}
             data-anchor={`agent:${id}`}
-            className={`office-person-label ${selected ? 'selected' : ''}${found.includes(id) ? ' found' : ''}`}
+            className={`office-person-label ${selected ? 'selected' : ''}${found.includes(id) ? ' found' : ''} is-${status}`}
             style={{ '--agent-color': agent.accentColor } as CSSProperties}
             onClick={() => onAgent(id)}
             title={agent.role === agent.name ? agent.name : `${agent.name} · ${agent.role}`}
-            aria-label={`Select ${agent.name}, ${status}`}
+            aria-label={`Select ${agent.name}, ${STATUS_LABELS[status].toLowerCase()}`}
             aria-pressed={selected}
           >
             <span className={`person-status ${status}`} />
@@ -131,6 +146,40 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
           </button>
         );
       })}
+      {marked.map(([id, marker]) => {
+        const name = AGENTS.get(id)!.name;
+        const badge = BADGE_LABELS[marker.kind];
+        return marker.text ? (
+          <span
+            key={id}
+            data-anchor={`beacon:${id}`}
+            data-kind={marker.kind}
+            className={`office-bubble ${marker.kind}`}
+            aria-hidden="true"
+          >
+            {marker.text}
+          </span>
+        ) : (
+          <span
+            key={id}
+            data-anchor={`beacon:${id}`}
+            data-kind={marker.kind}
+            className={`office-beacon ${marker.kind}`}
+            {...(badge ? { role: 'img', 'aria-label': `${name} ${badge}` } : { 'aria-hidden': true })}
+          >
+            {marker.kind === 'needs' ? '!' : marker.kind === 'done' ? '✓' : marker.kind === 'failed' ? '×' : null}
+          </span>
+        );
+      })}
     </div>
   );
 });
+
+/**
+ * What the markers over heads add up to, so the scene collects them again when one appears,
+ * changes or goes.
+ */
+export const markerKey = (markers: Readonly<Record<string, Marker>>): string =>
+  Object.entries(markers)
+    .map(([id, marker]) => `${id}:${marker.kind}:${marker.text ?? ''}`)
+    .join('|');
