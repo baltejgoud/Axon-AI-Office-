@@ -227,6 +227,10 @@ export interface PlatformAPI {
   /** Past conversations whose title or one message has every word of the query. */
   chatSearch(query: string): Promise<ConversationHit[]>;
   chatSend(id: string, text: string, attachmentIds: string[]): Promise<void>;
+  /** Ask again: the last message you sent stays, the replies after it are replaced by a new answer. Resolves when that run ends. */
+  chatRetry(id: string): Promise<void>;
+  /** Edit a message you sent earlier: it and everything after it are replaced, and the new version is sent. Resolves when that run ends. */
+  chatEdit(id: string, messageId: string, text: string): Promise<void>;
   chatStop(id: string): Promise<void>;
   /** "Notify me when done" for the conversation's current run; whether it is on now. */
   chatNotifyWhenDone(id: string, on: boolean): Promise<boolean>;

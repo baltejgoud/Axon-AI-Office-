@@ -4,6 +4,7 @@ import { AxonLogo, Button, IconClose, ToastStack } from './ui';
 import { ConfirmHost } from './ui/confirm';
 import { OfficePage } from './features/office/OfficePage';
 import { ReadingHost } from './chat/ReadingView';
+import { useRewrites } from './chat/rewrites';
 import { useOfficeStore } from './features/office/store/officeStore';
 import { RECEPTIONIST_ID } from '../../shared/coworkers';
 
@@ -90,6 +91,12 @@ export function App() {
       if (event.channel === 'teams') {
         const current = useApp.getState().data;
         if (current) useApp.getState().patch({ data: { ...current, teams: event.teams } });
+        return;
+      }
+      // A retry or an edit cut a conversation back: read it again, and have its thread load its history afresh.
+      if (event.channel === 'chat' && event.rewritten) {
+        useRewrites.getState().bump(event.conversationId);
+        void perform(refresh);
         return;
       }
       // Messages waiting for a coworker's next step: shown above their message box, nothing else to update.

@@ -1,6 +1,8 @@
 import { MessagePages, type MessagePageRef } from './message-pages';
 import { searchEntries, type SearchEntry } from './conversation-search';
+import { pruneReferences } from './truncate';
 import type { BackupSummary, PlatformState } from '../shared/platform';
+import type { Message } from '../shared/types';
 import { everyone } from '../shared/connectors';
 import { DEFAULT_WEB_ACCESS, normalWebAccess } from '../shared/webAccess';
 import { JsonStore } from './infra/store';
@@ -99,6 +101,41 @@ export class Repository {
     this.conversationCache.delete(id);
     this.searchCache.delete(id);
     this.pageRefs = this.pageRefs.filter(ref => ref.conversationId !== id);
+  }
+  /**
+   * Cuts a conversation back: removes `fromMessageId` (when `inclusive`) and every message after it,
+   * and returns what was removed. The conversation's own bookkeeping that named those messages goes
+   * with them (see pruneReferences). The new pages are written before anything in memory changes, so
+   * a disk that refuses leaves the conversation exactly as it was; the manifest follows on the next
+   * save. The caller makes sure nothing is running in the conversation.
+   */
+  truncateMessages(
+    conversationId: string,
+    fromMessageId: string,
+    options: { inclusive: boolean; keepAttachmentIds?: readonly string[] }
+  ): Message[] {
+    const own = this.conversationMessages(conversationId);
+    const at = own.findIndex((m) => m.id === fromMessageId);
+    if (at < 0) throw new Error('That message is no longer in this conversation.');
+    if (options.inclusive && own[at].role === 'system') throw new Error("A conversation's instructions can't be removed.");
+    const cut = options.inclusive ? at : at + 1;
+    const kept = own.slice(0, cut);
+    const removed = own.slice(cut);
+    if (!removed.length) return [];
+    if (this.loadedMessages) {
+      const gone = new Set(removed.map((m) => m.id));
+      let write = 0;
+      for (const m of this.loadedMessages) if (!gone.has(m.id)) this.loadedMessages[write++] = m;
+      this.loadedMessages.length = write;
+    } else {
+      const refs = this.messagePages.write(kept);
+      own.splice(cut);
+      this.pageRefs = [...this.pageRefs.filter((ref) => ref.conversationId !== conversationId), ...refs];
+    }
+    this.searchCache.delete(conversationId);
+    const chat = this.state.conversations.find((c) => c.id === conversationId);
+    if (chat) pruneReferences(chat, removed, kept, options.keepAttachmentIds);
+    return removed;
   }
   /** Saved conversations' text for search, by the pages it was read from: a changed page reads again. */
   private readonly searchCache = new Map<string, { pages: string; entries: SearchEntry[] }>();
