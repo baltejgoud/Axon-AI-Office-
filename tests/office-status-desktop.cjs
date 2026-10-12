@@ -191,14 +191,13 @@ app.on('web-contents-created', (_, contents) => {
       const markers = await handle('markers()');
       const asking = markers.find((m) => m.id === FRONT);
       const answering = markers.find((m) => m.id === BACK);
-      check(asking?.kind === 'asking' && asking.shown, 'a bubble over the asker');
-      check(answering?.kind === 'answering' && answering.shown, 'a bubble over the colleague');
-      check(
-        await evaluate(
-          `[...document.querySelectorAll('.office-bubble.asking')].some(b => b.textContent === 'Asking ${BACK_NAME}…')`
-        ),
-        'the bubble says whom they are asking'
-      );
+      check(asking?.kind === 'asking', 'the asker is marked as asking');
+      check(answering?.kind === 'answering', 'the colleague is marked as answering');
+      // With their name tags on screen, the words go in the tags and no extra bubble piles up above them.
+      const tagText = (id) => `document.querySelector('.office-person-label[data-anchor="agent:' + ${JSON.stringify(id)} + '"]')?.textContent ?? ''`;
+      check((await evaluate(tagText(FRONT))).includes(`Asking ${BACK_NAME}…`), 'the asker’s name tag says whom they are asking');
+      check((await evaluate(tagText(BACK))).includes('Answering…'), 'the colleague’s name tag says they are answering');
+      check(!asking.shown && !answering.shown, 'no separate bubbles while the name tags show the words');
       await pause(700);
       await snap('status-ask.png');
       // The same moment with the coworker card out of the way, to see who stands where.
