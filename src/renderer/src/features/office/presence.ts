@@ -164,6 +164,12 @@ export interface Marker {
   text?: string;
 }
 
+/**
+ * Whether a marker is one half of a question: the asker's or the answerer's. Their words go on their
+ * name tags while those are up; a bubble is drawn only for a person whose tag is not.
+ */
+export const isTalk = (kind: string | undefined): boolean => kind === 'asking' || kind === 'answering';
+
 export interface MarkerInput {
   statuses: Readonly<Record<string, AgentStatus>>;
   beacons: Readonly<Record<string, Beacon>>;

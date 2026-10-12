@@ -10,7 +10,7 @@ import { useApp } from '../../../state';
 import { endedLabel, latestRun } from '../lifecycle';
 import { activeThread } from '../activity/thread';
 import { useOfficeStore } from '../store/officeStore';
-import type { Marker, MarkerKind } from '../presence';
+import { isTalk, type Marker, type MarkerKind } from '../presence';
 import './presence.css';
 
 /** The same words as the coworker's panel and the activity list: one status language everywhere. */
@@ -87,7 +87,8 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
   ref
 ) {
   const tags = tier === 'near' ? people : people.filter((id) => id === selectedId || found.includes(id));
-  // The quiet dot over someone working is for when their name tag (which has its own) isn't up.
+  // The quiet dot over someone working is for when their name tag (which has its own) isn't up. A question's
+  // bubble is also drawn here; the scene hides it while that person's tag is up, since the tag has the words.
   const marked = Object.entries(markers).filter(
     ([id, marker]) => AGENTS.has(id) && !(marker.kind === 'working' && tags.includes(id))
   );
@@ -123,11 +124,13 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
         if (!agent) return null;
         const status = statuses[id] ?? 'idle';
         const selected = selectedId === id;
+        // Someone asking or answering a question has the words on their tag, so the tag opens to show them.
+        const talk = isTalk(markers[id]?.kind) ? markers[id].text : undefined;
         return (
           <button
             key={id}
             data-anchor={`agent:${id}`}
-            className={`office-person-label ${selected ? 'selected' : ''}${found.includes(id) ? ' found' : ''} is-${status}`}
+            className={`office-person-label ${selected ? 'selected' : ''}${found.includes(id) ? ' found' : ''}${talk ? ' talking' : ''} is-${status}`}
             style={{ '--agent-color': agent.accentColor } as CSSProperties}
             onClick={() => onAgent(id)}
             title={agent.role === agent.name ? agent.name : `${agent.name} · ${agent.role}`}
@@ -135,10 +138,10 @@ export const SceneLabels = forwardRef<HTMLDivElement, SceneLabelsProps>(function
             aria-pressed={selected}
           >
             <span className={`person-status ${status}`} />
-            {selected ? (
+            {selected || talk ? (
               <span className="person-label-detail">
-                <strong>{agent.name}</strong>
-                <small>{selectedLabel(status)}</small>
+                <strong>{selected ? agent.name : shortName(agent.name)}</strong>
+                <small>{talk ?? selectedLabel(status)}</small>
               </span>
             ) : (
               <span className="person-label-name">{shortName(agent.name)}</span>

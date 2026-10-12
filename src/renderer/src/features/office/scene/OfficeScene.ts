@@ -7,6 +7,7 @@ import { OfficeSimulation } from '../simulation/OfficeSimulation';
 import { CAFE_PICKUPS, FILES_HOTSPOT, LIBRARY_HOTSPOT, type MeetingRoomId } from '../campus/commons';
 import { SIGNS, type SignKind, type SignSpec } from '../campus/signs';
 import { labelTier } from '../shell/framing';
+import { isTalk } from '../presence';
 import { SignLayer } from './room/signs';
 import { BoardLayer } from './room/boards';
 import { TASK_BOARDS } from '../campus/boards';
@@ -102,11 +103,14 @@ interface SceneLabel {
 /**
  * A badge or speech bubble over a person (needs you, done, asking a colleague…). Not clickable and
  * never moved aside for others: it sits above the person's name tag, or above their head when they
- * have none. Its size is read once, when it is collected, and its position written only when it moves.
+ * have none. A question's bubble (`talk`) stays hidden while that person's name tag is up, since the
+ * tag carries the words. Its size is read once, when it is collected, and its position written only
+ * when it moves.
  */
 interface SceneMarker {
   element: HTMLElement;
   agentId: string;
+  talk: boolean;
   w: number;
   h: number;
   x: number;
@@ -530,7 +534,18 @@ export class OfficeScene {
       const anchor = element.dataset.anchor ?? '';
       const id = anchor.startsWith('beacon:') ? anchor.slice(7) : '';
       return id && this.crowd.has(id)
-        ? [{ element, agentId: id, w: element.offsetWidth, h: element.offsetHeight, x: NaN, y: NaN, shown: null }]
+        ? [
+            {
+              element,
+              agentId: id,
+              talk: isTalk(element.dataset.kind),
+              w: element.offsetWidth,
+              h: element.offsetHeight,
+              x: NaN,
+              y: NaN,
+              shown: null
+            }
+          ]
         : [];
     });
     this.labels = elements.flatMap((element): SceneLabel[] => {
@@ -1153,7 +1168,9 @@ export class OfficeScene {
   ): void {
     for (const marker of this.markers) {
       const { element, w, h } = marker;
-      const point = this.labelPoint(marker.agentId, this.scratch);
+      const tag = tags.find((rect) => rect.id === marker.agentId);
+      // A question's words are on the two name tags while they are up; its bubble waits for a tag that is not.
+      const point = marker.talk && tag ? null : this.labelPoint(marker.agentId, this.scratch);
       let shown = false;
       let x = 0;
       let y = 0;
@@ -1162,7 +1179,6 @@ export class OfficeScene {
         const px = ((point.x + 1) * width) / 2;
         const py = ((1 - point.y) * height) / 2;
         if (point.z > -1 && point.z < 1 && px > -w && px < width + w && py > -h && py < height + h) {
-          const tag = tags.find((rect) => rect.id === marker.agentId);
           x = Math.max(w / 2 + 4, Math.min(width - w / 2 - 4, tag ? tag.x : px));
           y = Math.max(h / 2 + 4, tag ? tag.y - tag.h / 2 - h / 2 - 3 : py - h / 2 - 4);
           shown = true;
