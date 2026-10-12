@@ -1,5 +1,5 @@
 import { PLANNER_TOOL_NAMES } from '../tasks/tools';
-import { TEAM_TOOL_NAMES } from '../team/tools';
+import { MESSAGE_TEAM, TEAM_TOOL_NAMES } from '../team/tools';
 import { WEB_TOOL_NAMES } from '../../shared/webAccess';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
@@ -129,6 +129,8 @@ export class PermissionManager {
     if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // Finding people and calling a meeting only read; the plan waits for you before anything is done.
     if (TEAM_TOOL_NAMES.has(toolName)) return { action: 'allow' };
+    // Messaging a teammate only adds to the team's chat.
+    if (toolName === MESSAGE_TEAM.name) return { action: 'allow' };
 
     // 2. Path containment check
     if (['read_file', 'list_files', 'file_context', 'get_symbol'].includes(toolName) || FILE_SAVERS.has(toolName)) {

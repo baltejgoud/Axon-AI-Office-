@@ -7,6 +7,7 @@ import { everyone } from '../shared/connectors';
 import { DEFAULT_WEB_ACCESS, normalWebAccess } from '../shared/webAccess';
 import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { JsonStore } from './infra/store';
+import { migrateChannels } from './team/channel';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
@@ -364,6 +365,8 @@ export class Repository {
     state.reception = state.reception && typeof state.reception === 'object' ? state.reception : {};
     // Teams arrived with team meetings (2026-10).
     state.teams = Array.isArray(state.teams) ? state.teams : [];
+    // The team chat arrived later (2026-10): older teams start with an empty one.
+    migrateChannels(state.teams);
     // Runtime schema v1 is additive; older conversations and audit records are retained.
     state.runtimeVersion = 1;
     state.runs = Array.isArray(state.runs) ? state.runs : [];

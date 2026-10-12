@@ -4,7 +4,8 @@ import type { ChatRequestMessage, ProviderConfig, Team, TeamAssignment, TeamPlan
 import { rolesBlock } from '../prompt';
 import type { streamChat } from '../providers';
 import { roleProfiles } from '../roles';
-import { RESULT_LIMIT, validatePlan } from './plan';
+import { chatBlock, notesFor } from './channel';
+import { EXCERPT_LIMIT, validatePlan } from './plan';
 import { PROPOSE_PLAN } from './tools';
 
 /** One model, as a team uses it: the lead's provider, key and model for everyone. */
@@ -152,11 +153,12 @@ export function taskBrief(team: Team, assignment: TeamAssignment): string {
     assignment.retryNote ? `Previous attempt needs correction: ${assignment.retryNote}\nPrevious deliverable: ${assignment.result ?? '(none)'}` : '',
     assignment.files.length ? `Files that are yours to create or change: ${assignment.files.join(', ')}` : '',
     others.length
-      ? `The rest of the team (do not edit files someone else owns; ask them with ask_colleague):\n${others
+      ? `The rest of the team (do not edit files someone else owns; message_team reaches the person doing that task, and ask_colleague asks anyone for advice):\n${others
           .map((a) => `- ${nameOf(a.ownerId)}: ${a.title}${a.files.length ? ` (owns ${a.files.join(', ')})` : ''}, ${a.status}`)
           .join('\n')}`
       : '',
     handOffs.length ? `What you are building on:\n\n${handOffs.join('\n\n')}` : '',
+    notesFor(team, assignment.ownerId),
     'When you are done, end with a short hand-off: what you did, where it is, and anything the next person must know.'
   ]
     .filter(Boolean)
@@ -174,6 +176,7 @@ export function teamsBlock(teams: Team[]): string {
         ...(t.plan?.assignments ?? []).map(
           (a) => `- ${a.id} ${a.title}: ${nameOf(a.ownerId)}, ${a.status}${a.note ? ` (${a.note})` : ''}`
         ),
+        chatBlock(t),
         t.report ? `Report: ${t.report}` : ''
       ]
         .filter(Boolean)
@@ -182,11 +185,19 @@ export function teamsBlock(teams: Team[]): string {
   ].join('\n\n');
 }
 
-/** Said to a colleague a teammate asks: they share a team, and here is their own part. Empty when they don't. */
+/**
+ * Said to a colleague a teammate asks: they share a team, and here is their own part. Every task
+ * they have on the team, with where it stands and the start of what they handed in. Empty when
+ * they are not on it.
+ */
 export function teammateContext(team: Team, colleagueId: string): string {
-  const mine = team.plan?.assignments.find((a) => a.ownerId === colleagueId);
-  if (!mine) return '';
-  return `You are both on the team for: ${team.goal}\nYour task: ${mine.title} (${mine.status}).${
-    mine.result ? `\nYour hand-off so far: ${mine.result.slice(0, RESULT_LIMIT / 2)}` : ''
-  }`;
+  const mine = (team.plan?.assignments ?? []).filter((a) => a.ownerId === colleagueId);
+  if (!mine.length) return '';
+  return [
+    `You are both on the team for: ${team.goal}`,
+    ...mine.map(
+      (a) =>
+        `Your task: ${a.title} (${a.status}).${a.result ? `\nYour hand-off so far: ${a.result.slice(0, EXCERPT_LIMIT)}` : ''}`
+    )
+  ].join('\n');
 }

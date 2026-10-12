@@ -27,6 +27,13 @@ test('a team open when Axon closed loads stopped, with its running tasks stopped
   assert.equal(plan.interruptTeams(teams, 6), false, 'nothing left to stop');
 });
 
+test('hand-offs are kept far longer than before: 12,000 characters of an answer, 8,000 in its report, 1,500 in an excerpt', () => {
+  assert.equal(plan.RESULT_LIMIT, 12000);
+  assert.equal(plan.SUMMARY_LIMIT, 8000);
+  assert.equal(plan.EXCERPT_LIMIT, 1500);
+  assert.ok(plan.SUMMARY_LIMIT < plan.RESULT_LIMIT, 'the report is a part of the answer, both are saved');
+});
+
 const people = [
   { id: 'backend-developer', name: 'Backend Developer' },
   { id: 'frontend-developer', name: 'Frontend Developer' },

@@ -79,6 +79,11 @@ export class TeamRunner {
     this.deps.changed();
   }
 
+  /** Something outside the runner changed a team (a message in its chat): save it and tell the window. */
+  changed(teamId: string): void {
+    this.touch(this.get(teamId));
+  }
+
   private track<T>(teamId: string, promise: Promise<T>): Promise<T> {
     const set = this.busy.get(teamId) ?? new Set<Promise<unknown>>();
     this.busy.set(teamId, set);
@@ -109,6 +114,7 @@ export class TeamRunner {
       ...input,
       status: 'meeting',
       minutes: [],
+      channel: [],
       createdAt: now,
       updatedAt: now
     };

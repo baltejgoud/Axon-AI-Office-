@@ -1,4 +1,5 @@
 import { MultiAgents } from './MultiAgents';
+import { CoworkerPreferences } from './CoworkerPreferences';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FilesPanel } from './FilesPanel';
 import {
@@ -475,6 +476,7 @@ function Profile({ agent, onClose }: { agent: OfficeAgent; onClose: () => void }
         </div>
       </div>
       <p>{sentence(agent.description)}</p>
+      <CoworkerPreferences key={agent.id} agentId={agent.id} />
       {agent.capabilities.length > 0 && (
         <div className="activity-capabilities">
           {agent.capabilities.map((cap) => (

@@ -5,7 +5,7 @@ import { WEB_TOOL_NAMES } from '../shared/webAccess';
 import { ASK_COLLEAGUE } from './colleagues';
 import { FIND_SKILLS, LOAD_SKILL } from './skills';
 import { PLANNER_TOOLS } from './tasks/tools';
-import { TEAM_LEADS, TEAM_TOOLS } from './team/tools';
+import { MESSAGE_TEAM, TEAM_LEADS, TEAM_TOOLS } from './team/tools';
 import { WEB_TOOL_DEFINITIONS } from './tools/web';
 
 /** What a colleague may use to look something up; nothing that changes a file or runs a command. */
@@ -53,6 +53,8 @@ export function toolsFor(input: {
    * for an unattended run (a team member's task), which decides and says what it chose.
    */
   askUser?: boolean;
+  /** The conversation is a team task's, or its lead's while the team works: teammates can be messaged. */
+  teamChat?: boolean;
 }): ToolDefinition[] {
   const coworker = coworkerById(input.agentId);
   // Leads delegate: they read for context, and their team writes and runs things.
@@ -72,6 +74,7 @@ export function toolsFor(input: {
   // The Chief of Staff and the Ops Coordinator can find people and gather a team.
   if (input.agentId && TEAM_LEADS.has(input.agentId)) tools.push(...TEAM_TOOLS);
   if (input.webAccess) tools.push(...WEB_TOOL_DEFINITIONS);
+  if (coworker && input.teamChat) tools.push(MESSAGE_TEAM);
   tools.push(...(input.connectorTools ?? []));
   return tools;
 }

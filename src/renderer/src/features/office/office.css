@@ -2171,6 +2171,49 @@ sized for the side panel. */
 .team-minute p {
   margin: 2px 0;
 }
+/* What teammates said to each other while they worked. */
+.team-chat {
+  margin-bottom: 8px;
+}
+.team-chat-title {
+  color: var(--office-blue);
+  font-size: 11px;
+}
+.team-chat-more {
+  margin: 4px 0 0;
+  color: var(--office-muted);
+  font-size: 10.5px;
+}
+.team-chat ol {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+.team-chat-post {
+  display: flex;
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--office-border);
+  line-height: 1.45;
+}
+.team-chat-text {
+  flex: 1;
+  min-width: 0;
+}
+.team-chat-head {
+  color: var(--office-muted);
+  font-size: 10.5px;
+}
+.team-chat-head strong {
+  color: var(--office-ink);
+}
+.team-chat-text p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .team-tasks {
   display: grid;
   gap: 6px;

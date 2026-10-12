@@ -298,6 +298,7 @@ export interface KnowledgeSearchHit {
 /* --------------------------------- Settings ----------------------------------- */
 
 export interface Settings {
+  coworkerPreferences?: Record<string, string>;
   savedPrompts?: import('./savedPrompts').SavedPrompt[];
   providerConcurrency?: Record<string, number>;
   teamConcurrency?: number;
@@ -562,10 +563,25 @@ export interface TeamPlan {
   assignments: TeamAssignment[];
 }
 
+/** One message in a team's chat: from a teammate (or the lead), to one person or to everyone. */
+export interface TeamPost {
+  id: ID;
+  /** Whoever sent it: the lead or an attendee. */
+  fromId: string;
+  /** A teammate it was meant for; missing when it went to the whole team. */
+  toId?: string;
+  text: string;
+  at: number;
+  /** The task the sender was working on, when they were on one. */
+  taskId?: string;
+}
+
 /** A team a lead gathered: the meeting, the plan you approve, the work, and the report. */
 export interface Team {
   /** Company context shared by the meeting and all task owners. */
   context?: string;
+  /** What teammates said to each other while they worked, oldest first; teams from before this had none. */
+  channel: TeamPost[];
   id: ID;
   leadId: string;
   /** The lead's conversation the meeting was called from. */

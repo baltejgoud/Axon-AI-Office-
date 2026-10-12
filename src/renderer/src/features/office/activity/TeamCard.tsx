@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { roomName, roomOf } from '../../../../../shared/rooms';
-import type { Team, TeamAssignment, ToolCall } from '../../../../../shared/types';
+import type { Team, TeamAssignment, TeamPost, ToolCall } from '../../../../../shared/types';
 import { useApp } from '../../../state';
 import { IconUsers } from '../../../ui';
 import { AgentPortrait } from '../AgentPortrait';
@@ -107,6 +107,7 @@ export function TeamBody({ team }: { team: Team }) {
           </ol>
         </div>
       )}
+      {(team.channel?.length ?? 0) > 0 && <TeamChat posts={team.channel} />}
       {team.note && <p className="team-note">{team.note}</p>}
       {team.report && (
         <div className="team-report">
@@ -142,6 +143,42 @@ export function TeamBody({ team }: { team: Team }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Messages shown before "Show all". */
+const CHAT_SHOWN = 6;
+
+/** What teammates said to each other while they worked: who to whom, newest last. */
+function TeamChat({ posts }: { posts: TeamPost[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? posts : posts.slice(-CHAT_SHOWN);
+  return (
+    <section className="team-chat" aria-label="Team chat">
+      <strong className="team-chat-title">Team chat ({posts.length})</strong>
+      {posts.length > shown.length && <p className="team-chat-more">{posts.length - shown.length} earlier</p>}
+      <ol>
+        {shown.map((post) => (
+          <li key={post.id} className="team-chat-post">
+            <Face id={post.fromId} />
+            <div className="team-chat-text">
+              <span className="team-chat-head">
+                <strong>{nameOf(post.fromId)}</strong> to {post.toId ? nameOf(post.toId) : 'everyone'} ·{' '}
+                <time dateTime={new Date(post.at).toISOString()} title={new Date(post.at).toLocaleString()}>
+                  {new Date(post.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </time>
+              </span>
+              <p>{post.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {posts.length > CHAT_SHOWN && (
+        <button className="team-open" onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show all ${posts.length}`}
+        </button>
+      )}
+    </section>
   );
 }
 

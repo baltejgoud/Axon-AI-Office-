@@ -9,7 +9,11 @@ export const MAX_ASSIGNMENTS = 20;
 /** Tasks running at once. */
 export const MAX_PARALLEL = 3;
 /** How much of an owner's final answer is handed on. */
-export const RESULT_LIMIT = 4000;
+export const RESULT_LIMIT = 12000;
+/** How much of it a task's completion report carries (the report and the answer are both saved). */
+export const SUMMARY_LIMIT = 8000;
+/** How much of a teammate's hand-off a message or a question about their task shows. */
+export const EXCERPT_LIMIT = 1500;
 
 /** After a restart: teams that were running are stopped, so Retry can carry them on. */
 export function interruptTeams(teams: Team[], now: number): boolean {

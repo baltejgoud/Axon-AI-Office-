@@ -36,7 +36,8 @@ const OFFICE_TOOLS = new Set([
   'update_memory',
   'dispatch_subagent',
   'find_people',
-  'call_team_meeting'
+  'call_team_meeting',
+  'message_team'
 ]);
 
 /** Connected tools that drive or read a web page. */

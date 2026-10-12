@@ -20,6 +20,7 @@ const LABELS: Record<string, string> = {
   read_webpage: 'Read a web page',
   ask_colleague: 'Consult colleague',
   call_team_meeting: 'Gather team',
+  message_team: 'Message team',
   add_task: 'Create task',
   complete_task: 'Complete task',
   update_task: 'Update task'

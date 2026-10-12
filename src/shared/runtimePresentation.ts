@@ -53,6 +53,8 @@ export function activitySentence(entry: AuditEntry): string {
       return `Looked for skills: ${path}`;
     case 'load_skill':
       return `Used skill: ${skillLabel(path)}`;
+    case 'message_team':
+      return 'Messaged the team.';
     default:
       return entry.tool.replaceAll('_', ' ') + (entry.result === 'ok' ? ' completed.' : ' requested.');
   }

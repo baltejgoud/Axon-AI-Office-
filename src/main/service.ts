@@ -103,6 +103,7 @@ import { TaskTracker } from './tasks/tracker';
 import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
 import { ASK_USER } from '../shared/askUser';
 import { checkedSavedPrompts } from '../shared/savedPrompts';
+import { checkedPreferences, preferenceBlock } from '../shared/coworkerPreferences';
 import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
@@ -144,12 +145,22 @@ import { reviewCompletion } from './team/completion';
 import { AUDIO_MAX_BYTES, SPEECH_TIMEOUT_MS, cleanVoice, transcribe } from './speech';
 import { PROMPT_MAX, chosenEngine } from '../shared/speech';
 import { RepeatGuard } from './runGuards';
-import { OPEN_TEAM, interruptTeams } from './team/plan';
+import { OPEN_TEAM, SUMMARY_LIMIT, interruptTeams } from './team/plan';
 import { keptCount, planEdit, planRetry, type Rewrite } from './rewrite';
 import { isTeamTask } from '../shared/rewrite';
 import {
+  MAX_FOLLOW_UPS,
+  MAX_POSTS,
+  TEAM_AUDIENCE,
+  lateMessages,
+  postToTeam,
+  seatOf,
+  workingTask
+} from './team/channel';
+import {
   FIND_PEOPLE,
   GOAL_LIMIT,
+  MESSAGE_TEAM,
   TEAM_LEADS,
   TEAM_TOOL_NAMES,
   findPeople,
@@ -939,6 +950,7 @@ export class Service {
       );
   }
   async settingsSave(s: Parameters<PlatformAPI['settingsSave']>[0]): Promise<void> {
+    const coworkerPreferences = checkedPreferences(s.coworkerPreferences);
     const savedPrompts = checkedSavedPrompts(s.savedPrompts);
     if (
       !['dark', 'light', 'system'].includes(s.theme) ||
@@ -985,6 +997,7 @@ export class Service {
     this.state.settings = {
       ...s,
       savedPrompts,
+      coworkerPreferences,
       allowShellExecution: Boolean(s.allowShellExecution),
       shellAllowlist: s.shellAllowlist || [],
       sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
@@ -1711,7 +1724,7 @@ export class Service {
     const context = await this.runContext(chat, '');
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: context.roots.length > 0,
       registry: this.tools.getDefinitions().filter(t => !this.mcp.isConnectorTool(t.name)), connectorTools: context.connectors.tools,
-      webAccess: this.webAccess.enabled, askUser: true });
+      webAccess: this.webAccess.enabled, askUser: true, teamChat: !!seatOf(this.state.teams, chat.id) });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const plan = new ContextBudgetPlanner().compile({ model: chat.modelId, system: context.system,
@@ -1826,6 +1839,7 @@ export class Service {
       skillText,
       indexText,
       ...prompts,
+      preferenceBlock(this.state.settings.coworkerPreferences?.[chat.agentId ?? '']),
       coworkerById(chat.agentId) ? HOUSE_RULES : '',
       // The receptionist plans in the user's local time.
       chat.agentId === RECEPTIONIST_ID ? plannerNow(new Date()) : '',
@@ -1861,7 +1875,7 @@ export class Service {
       conversationRoot: chat.projectRoot, projectRoot: this.project.root });
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: roots.length > 0,
       registry: this.tools.getDefinitions().filter(tool => !this.mcp.isConnectorTool(tool.name)),
-      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools, webAccess: this.webAccess.enabled, askUser: true });
+      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools, webAccess: this.webAccess.enabled, askUser: true, teamChat: !!seatOf(this.state.teams, chat.id) });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const tools = selectTools(catalog, history.findLast(m => m.role === 'user')?.content ?? '');
@@ -1962,7 +1976,8 @@ export class Service {
       registry: this.tools.getDefinitions().filter((tool) => !this.mcp.isConnectorTool(tool.name)),
       connectorTools: connectors.tools,
       webAccess: this.webAccess.enabled,
-      askUser: !unattended
+      askUser: !unattended,
+      teamChat: !!seatOf(this.state.teams, chat.id)
     });
     toolCatalog.push(...MEMORY_TOOLS);
     if (toolCatalog.length > 20) toolCatalog.push(DISCOVER_TOOLS);
@@ -1993,10 +2008,25 @@ export class Service {
     };
   }
 
-  /** Messages sent to a conversation while it was generating, read at its next step, with the pictures that went with them. */
-  private queued = new Map<string, { content: string; pictures: Attachment[] }[]>();
+  /** Messages sent to a conversation while it was generating, read at its next step; `from` is who sent one, when it wasn't you. */
+  private queued = new Map<string, { content: string; pictures: Attachment[]; from?: string }[]>();
+  /** Where each team task's conversation stands: reading messages as it works, or writing up its hand-off. */
+  private taskPhase = new Map<string, 'running' | 'closing'>();
+  /** Puts a message in a conversation's queue, and tells the window it is waiting. */
+  private enqueue(id: string, content: string, from?: string, pictures: Attachment[] = []): void {
+    const waiting = [...(this.queued.get(id) ?? []), { content, pictures, ...(from ? { from } : {}) }];
+    this.queued.set(id, waiting);
+    this.emit({
+      channel: 'chat',
+      conversationId: id,
+      messageId: '',
+      queued: waiting.map((w) => w.content),
+      streaming: true,
+      done: false
+    });
+  }
   /** Takes a conversation's waiting messages, and tells the window none are waiting any more. */
-  private takeQueued(id: string, messageId: string): { content: string; pictures: Attachment[] }[] {
+  private takeQueued(id: string, messageId: string): { content: string; pictures: Attachment[]; from?: string }[] {
     const waiting = this.queued.get(id) ?? [];
     this.queued.delete(id);
     if (waiting.length)
@@ -2045,16 +2075,7 @@ export class Service {
   ): Promise<void> {
     // Already working: the message waits for their next step (or their next run), instead of being lost.
     if (this.runs.has(id)) {
-      const waiting = [...(this.queued.get(id) ?? []), { content, pictures }];
-      this.queued.set(id, waiting);
-      this.emit({
-        channel: 'chat',
-        conversationId: id,
-        messageId: '',
-        queued: waiting.map((w) => w.content),
-        streaming: true,
-        done: false
-      });
+      this.enqueue(id, content, options.from ? text(options.from, 80) : undefined, pictures);
       return;
     }
     return this.startRun(id, input, content, pictures, options);
@@ -2161,6 +2182,8 @@ export class Service {
     runProject.root = scope.roots[0] ?? null;
     /** Questions put to colleagues in this run. */
     const asks = { count: 0, questions: new Set<string>() };
+    /** Messages this run has sent to its team. */
+    const posts = { count: 0 };
     /** Lookups this run already made, so a repeat is answered without running again. */
     const lookups = new RepeatGuard();
 
@@ -2507,6 +2530,14 @@ export class Service {
             } else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }
+          // A teammate speaking to the team: kept in its chat and handed to whoever is working on it.
+          if (tc.name === MESSAGE_TEAM.name && coworkerById(chat.agentId)) {
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow')
+              answer(tc, this.messageTeam(chat, parsedArgs, posts), 'allowed');
+            else
+              answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
+            continue;
+          }
 
           // The receptionist keeping the planner: the task records, never the tool registry.
           if (PLANNER_TOOL_NAMES.has(tc.name) && chat.agentId === RECEPTIONIST_ID) {
@@ -2719,6 +2750,7 @@ export class Service {
             role: 'user',
             content: sent.content,
             createdAt: Date.now(),
+            ...(sent.from ? { from: sent.from } : {}),
             ...(kept.length ? { attachments: kept } : {})
           });
           requests.push(await this.asked(sent.content, kept, model?.supportsVision !== false));
@@ -2838,13 +2870,14 @@ export class Service {
         done: true
       });
       // Sent too late for this run (or as you stopped it): it starts the next one.
-      const left = this.takeQueued(id, activeAssistant.id);
+      const left = options.teamId && !stopped ? [] : this.takeQueued(id, activeAssistant.id);
+      const sender = new Set(left.map((l) => l.from));
       const joined = left.map((l) => l.content).join('\n\n');
       if (left.length && !stopped)
         void Promise.resolve()
           .then(() => {
             text(joined, 60000);
-            return this.send(id, joined, joined, left.flatMap((l) => l.pictures), {});
+            return this.send(id, joined, joined, left.flatMap((l) => l.pictures), { ...(sender.size === 1 && left[0].from ? { from: left[0].from } : {}) });
           })
           .catch((error) =>
             this.emit({
@@ -2946,6 +2979,11 @@ export class Service {
     const shared = this.state.teams.find((team) =>
       team.plan?.assignments.some((a) => a.conversationId === chat.id)
     );
+    if (shared && workingTask(shared, colleague.id)) {
+      const delivered = this.messageTeam(chat, { to: colleague.name, text: question }, { count: 0 });
+      return { content: JSON.stringify({ colleague: colleague.id, name: colleague.name, answer: delivered.content,
+        note: 'Sent to the teammate doing this task. Their reply arrives in your conversation; continue your own work.' }), isError: delivered.isError };
+    }
     const context = shared ? teammateContext(shared, colleague.id) : '';
     const parent = this.supervisor.active(chat.id).find((r) => r.agentId === chat.agentId);
     const helperController = new AbortController();
@@ -3010,7 +3048,20 @@ export class Service {
           requiresResponse: false
         });
       this.tracker.helpEnded(help.id);
-      return { content: JSON.stringify({ colleague: colleague.id, name: colleague.name, answer }) };
+      // A teammate on a task right now: this was a quick consult, not them; message_team reaches them.
+      const doing = shared ? workingTask(shared, colleague.id) : undefined;
+      return {
+        content: JSON.stringify({
+          colleague: colleague.id,
+          name: colleague.name,
+          answer,
+          ...(doing
+            ? {
+                note: `${colleague.name} is working on "${doing.title}" for this team right now. This answer came from a quick consult, not from them; message_team reaches the person actually doing that task.`
+              }
+            : {})
+        })
+      };
     } catch (error) {
       const reason = signal.aborted
         ? 'the task was stopped'
@@ -3114,6 +3165,31 @@ export class Service {
     started: (conversationId: string) => void,
     signal?: AbortSignal
   ): Promise<WorkOutcome> {
+    let conversationId: string | undefined;
+    try {
+      return await this.runTask(
+        team,
+        assignment,
+        (id) => {
+          conversationId = id;
+          started(id);
+        },
+        signal
+      );
+    } finally {
+      if (conversationId) {
+        this.taskPhase.delete(conversationId);
+        this.queued.delete(conversationId);
+      }
+    }
+  }
+
+  private async runTask(
+    team: Team,
+    assignment: TeamAssignment,
+    started: (conversationId: string) => void,
+    signal?: AbortSignal
+  ): Promise<WorkOutcome> {
     const owner = coworkerById(assignment.ownerId);
     if (!owner) throw new Error('Unknown owner.');
     const lead = coworkerById(team.leadId);
@@ -3139,7 +3215,7 @@ export class Service {
           toAgentId: assignment.ownerId,
           type: 'handoff',
           purpose: prior.title,
-          content: prior.result.slice(0, 4000),
+          content: prior.completionReport?.summary ?? prior.result.slice(0, SUMMARY_LIMIT),
           artifactRefs: prior.files ?? [],
           requiresResponse: false
         });
@@ -3147,25 +3223,43 @@ export class Service {
     const leadMessages = this.repo.conversationMessages(team.conversationId);
     const constraints = checkpoint([requestHistory(leadMessages)], leadChat?.memoryCorrections).facts.filter(f => f.kind === 'constraint');
     const workerBrief = taskBrief(team, assignment) + (constraints.length ? '\n\nUser requirements (from lead conversation):\n' + constraints.map(f => f.text).join('\n') : '');
-    const run = this.chatSend(chat.id, workerBrief, [], {
-      from: lead?.name,
-      parentRunId: this.teamRun(team.id)?.runId,
-      teamId: team.id,
-      taskId: assignment.id
-    });
+    // Teammates' messages reach this conversation while it is running (the brief above carried any sent before).
+    this.taskPhase.set(chat.id, 'running');
+    const asTask = { parentRunId: this.teamRun(team.id)?.runId, teamId: team.id, taskId: assignment.id };
+    const lastReply = () =>
+      [...this.repo.conversationMessages(chat.id)]
+        .reverse()
+        .find((m) => m.conversationId === chat.id && m.role === 'assistant');
+    const run = this.chatSend(chat.id, workerBrief, [], { from: lead?.name, ...asTask });
     started(chat.id);
     await run;
+    // Messages that arrived as the run was ending are read in a follow-up we wait for, so the task
+    // never ends with one unread or runs on untracked.
+    for (let round = 0; round < MAX_FOLLOW_UPS && team.status === 'working' && !lastReply()?.error; round++) {
+      const late = this.takeQueued(chat.id, '');
+      if (!late.length) break;
+      const senders = new Set(late.map((l) => l.from));
+      try {
+        await this.chatSend(chat.id, lateMessages(late.map((l) => l.content)), [], {
+          ...(senders.size === 1 && late[0].from ? { from: late[0].from } : {}),
+          ...asTask
+        });
+      } catch {
+        break; // The conversation's model went away: the task ends with what it has.
+      }
+    }
+    // From here on a message is too late to act on; it stays in the team chat.
+    this.taskPhase.set(chat.id, 'closing');
+    this.queued.delete(chat.id);
     if (team.status !== 'working') return { outcome: 'stopped', answer: '', error: 'Stopped' };
-    const last = [...this.repo.conversationMessages(chat.id)]
-      .reverse()
-      .find((m) => m.conversationId === chat.id && m.role === 'assistant');
+    const last = lastReply();
     if (last?.error === 'Generation stopped.')
       return { outcome: 'stopped', answer: last.content, error: 'Stopped' };
     if (last?.error) return { outcome: 'failed', answer: last.content, error: last.error };
     const workerMessages = this.repo.conversationMessages(chat.id);
     const calls = workerMessages.flatMap(m => m.toolCalls ?? []);
     const report = {
-      task: assignment.title, status: 'done' as const, summary: (last?.content ?? '').slice(0, 2000),
+      task: assignment.title, status: 'done' as const, summary: (last?.content ?? '').slice(0, SUMMARY_LIMIT),
       decisions: checkpoint([requestHistory(workerMessages)]).facts.filter(f => f.kind === 'decision').map(f => f.text).slice(0, 20),
       filesChanged: [...new Set(calls.filter(call => call.change).map(call => String(toolArgs(call.arguments)?.path ?? '')).filter(Boolean))],
       tests: calls.filter(call => /command/.test(call.name) && /test|check|lint/.test(String(toolArgs(call.arguments)?.command ?? '')))
@@ -3182,6 +3276,54 @@ export class Service {
       if (!review.complete) return { outcome: 'failed', answer: last?.content ?? '', error: review.blockers.join(' '), report: { ...report, status: 'failed' } };
     }
     return { outcome: 'done', answer: last?.content ?? '', report };
+  }
+
+  /**
+   * A teammate speaking to the team (see team/channel.ts): kept in the chat, handed to whoever is
+   * working on it now, and put on the message bus so the Communication tab shows it.
+   */
+  private messageTeam(
+    chat: Conversation,
+    args: Record<string, unknown>,
+    sent: { count: number }
+  ): { content: string; isError?: boolean } {
+    const seat = seatOf(this.state.teams, chat.id);
+    if (!seat)
+      return { content: 'You are not on a team that is working right now, so there is no one to message.', isError: true };
+    if (sent.count >= MAX_POSTS)
+      return {
+        content: `You have sent ${MAX_POSTS} team messages in this task; get on with the work and put the rest in your hand-off.`,
+        isError: true
+      };
+    const result = postToTeam(seat.team, seat, args, {
+      id: () => this.repo.id(),
+      now: Date.now,
+      phase: (conversationId) => this.taskPhase.get(conversationId),
+      leadRunning: (conversationId) => this.runs.has(conversationId),
+      deliver: (conversationId, content, from) => this.enqueue(conversationId, content, from)
+    });
+    const { post, ...answer } = result;
+    if (!post) return answer;
+    sent.count++;
+    const run = this.teamRun(seat.team.id);
+    if (run)
+      try {
+        this.messageBus.send({
+          runId: run.runId,
+          taskId: post.taskId,
+          fromAgentId: post.fromId,
+          toAgentId: post.toId ?? TEAM_AUDIENCE,
+          type: 'status',
+          purpose: 'Team chat',
+          content: post.text,
+          artifactRefs: [],
+          requiresResponse: false
+        });
+      } catch {
+        // The chat has it; the Communication tab is a second view.
+      }
+    this.teams.changed(seat.team.id);
+    return answer;
   }
 
   /** A lead's team tools: finding people, and calling the meeting, which carries on in the background. */

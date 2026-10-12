@@ -180,3 +180,31 @@ test('a team stopped because Axon is closing says so, not that you stopped it', 
   await runner.idle(team.id);
   assert.match(team.note, /Axon closed/);
 });
+
+test('a new team starts with an empty chat, and a change to it outside the runner is saved and announced', async () => {
+  const { runner, team, changes } = rig();
+  assert.deepEqual(team.channel, []);
+  const before = changes();
+  runner.changed(team.id);
+  assert.equal(changes(), before + 1);
+  assert.throws(() => runner.changed('nope'), /not found/);
+});
+
+test("an owner's answer is handed on up to 12,000 characters, not cut at 4,000", async () => {
+  const { RESULT_LIMIT } = require('../src/main/team/plan.ts');
+  assert.equal(RESULT_LIMIT, 12000);
+  const { runner, team, runs } = rig();
+  await runner.meet(team.id);
+  runner.start(team.id);
+  await tick();
+  const long = `${'a'.repeat(5000)}${'b'.repeat(8000)}`;
+  runs.get('t1')({ outcome: 'done', answer: `  ${long}  ` });
+  runs.get('t2')({ outcome: 'done', answer: 'short' });
+  await tick();
+  const [first] = team.plan.assignments;
+  assert.equal(first.result.length, 12000);
+  assert.equal(first.result, long.slice(0, 12000), 'trimmed, then cut at the limit');
+  assert.equal(team.plan.assignments[1].result, 'short');
+  runner.stop(team.id);
+  await runner.idle(team.id);
+});

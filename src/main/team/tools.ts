@@ -97,6 +97,29 @@ export const PROPOSE_PLAN: ToolDefinition = {
   }
 };
 
+/**
+ * Offered to anyone working on a team's task, and to the lead while their team works. It reaches
+ * the person actually doing a task, which ask_colleague (a quick separate consult) does not.
+ */
+export const MESSAGE_TEAM: ToolDefinition = {
+  name: 'message_team',
+  description:
+    'Message a teammate on your team (or everyone) while the team works: tell them what you changed that affects them, ask what you need from their part, or answer their question. ' +
+    'It reaches the person actually doing that task: a teammate who is working reads it at their next step, and one who has not started finds it in their brief; someone who has finished will not see it. ' +
+    'Reply here when a message from a teammate needs an answer. Keep it short and specific; for expert advice use ask_colleague instead.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'What you want to tell or ask them, with what they need to act on it' },
+      to: {
+        type: 'string',
+        description: 'A teammate by name or role, e.g. "Frontend Developer". Leave it out to tell the whole team.'
+      }
+    },
+    required: ['text']
+  }
+};
+
 /** A lead's tools in a conversation. */
 export const TEAM_TOOLS: ToolDefinition[] = [FIND_PEOPLE, CALL_TEAM_MEETING];
 export const TEAM_TOOL_NAMES: ReadonlySet<string> = new Set(TEAM_TOOLS.map((tool) => tool.name));

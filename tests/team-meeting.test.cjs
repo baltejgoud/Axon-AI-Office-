@@ -139,3 +139,211 @@ test('a lead remembers their teams; a teammate knows the asker shares their team
   assert.match(meeting.teammateContext(t, 'backend-developer'), /Your task: API/);
   assert.equal(meeting.teammateContext(t, 'qa-engineer'), '');
 });
+
+// ---- The team chat: who can message whom, who gets it now, and what a brief carries ----
+const channel = require('../src/main/team/channel.ts');
+
+const longHandOff = 'Checked every flow. '.repeat(200);
+/** A team mid-work: the API owner is writing, the form owner is waiting, QA is done, the lead is the Chief of Staff. */
+const working = (extra = {}) => team({
+  status: 'working', conversationId: 'lead-chat', channel: [],
+  attendees: ['backend-developer', 'frontend-developer', 'qa-engineer'],
+  plan: { summary: 's', assignments: [
+    { id: 't1', ownerId: 'backend-developer', title: 'API', brief: 'b', dependsOn: [], files: [], status: 'working', conversationId: 'c-api' },
+    { id: 't2', ownerId: 'frontend-developer', title: 'Form', brief: 'b', dependsOn: ['t1'], files: [], status: 'waiting' },
+    { id: 't3', ownerId: 'qa-engineer', title: 'Checks', brief: 'b', dependsOn: [], files: [], status: 'done', result: longHandOff }] },
+  ...extra
+});
+/** What the service would give postToTeam: the phase of each task conversation, and a record of what was delivered. */
+const desk = (phases = { 'c-api': 'running' }, leadRunning = false) => {
+  const delivered = [];
+  let n = 0;
+  return { delivered, deps: { id: () => `p${++n}`, now: () => 1000 + n, phase: (c) => phases[c], leadRunning: () => leadRunning, deliver: (conversationId, text, from) => delivered.push({ conversationId, text, from }) } };
+};
+const sendFrom = (t, conversationId, input, d = desk()) => ({ ...channel.postToTeam(t, channel.seatOf([t], conversationId), input, d.deps), d });
+
+test('a conversation sits in a team as the owner of a task under way, or the lead while the team works', () => {
+  const t = working();
+  assert.deepEqual([channel.seatOf([t], 'c-api').selfId, channel.seatOf([t], 'c-api').assignment.id], ['backend-developer', 't1']);
+  assert.equal(channel.seatOf([t], 'lead-chat').selfId, 'chief-of-staff');
+  assert.equal(channel.seatOf([t], 'lead-chat').assignment, undefined);
+  assert.equal(channel.seatOf([t], 'elsewhere'), null);
+  assert.equal(channel.seatOf([working({ status: 'reporting' })], 'lead-chat'), null, 'the report is written with no tools');
+  const finished = working();
+  finished.plan.assignments[0].status = 'done';
+  assert.equal(channel.seatOf([finished], 'c-api'), null, 'a task that is over has no seat');
+});
+
+test('a teammate is found by id, name, or the part of a name that fits only one; anything else lists the teammates', () => {
+  const t = working();
+  for (const asked of ['frontend-developer', 'Frontend Developer', 'frontend developer', 'frontend'])
+    assert.deepEqual(channel.resolveTeammate(t, asked, 'backend-developer'), { id: 'frontend-developer' }, asked);
+  assert.deepEqual(channel.resolveTeammate(t, 'Chief of Staff', 'backend-developer'), { id: 'chief-of-staff' }, 'the lead is a teammate too');
+  const unknown = channel.resolveTeammate(t, 'Plumber', 'backend-developer').error;
+  assert.match(unknown, /Nobody on this team is called "Plumber"/);
+  assert.match(unknown, /Chief of Staff \(the lead\)/);
+  assert.match(unknown, /Frontend Developer \(Form\)/);
+  assert.doesNotMatch(unknown, /Backend Developer/, 'not yourself');
+  assert.match(channel.resolveTeammate(t, 'developer', 'chief-of-staff').error, /More than one teammate fits "developer": Backend Developer, Frontend Developer/);
+  assert.match(channel.resolveTeammate(t, 'Backend Developer', 'backend-developer').error, /That is you/);
+});
+
+test('a message to a teammate who is working is kept in the chat and handed to their run, from the sender', () => {
+  const t = working();
+  const sent = sendFrom(t, 'lead-chat', { text: ' Use JWT for the reset token. ', to: 'Backend Developer' });
+  assert.equal(sent.isError, undefined);
+  assert.deepEqual(sent.d.delivered, [{
+    conversationId: 'c-api', from: 'Chief of Staff',
+    text: 'Message from Chief of Staff on your team: Use JWT for the reset token.\n\nReply with message_team if they need an answer.'
+  }]);
+  assert.deepEqual(t.channel, [{ id: 'p1', fromId: 'chief-of-staff', toId: 'backend-developer', text: 'Use JWT for the reset token.', at: 1001 }]);
+  assert.equal(sent.post, t.channel[0]);
+  assert.match(sent.content, /^Sent to Backend Developer: Backend Developer is working and will read it at their next step\./);
+  assert.match(sent.content, /a reply arrives here as a message/);
+});
+
+test('with no one named it goes to every live teammate but the sender; others see it later, or are told it is too late', () => {
+  const t = working();
+  t.plan.assignments[2].status = 'waiting'; // QA has not started
+  const d = desk({ 'c-api': 'running', 'c-form': 'running' }, true);
+  // The form owner is working too, and the lead has a run going.
+  Object.assign(t.plan.assignments[1], { status: 'working', conversationId: 'c-form' });
+  const sent = sendFrom(t, 'c-api', { text: 'The reset endpoint is POST /reset.' }, d);
+  assert.deepEqual(d.delivered.map((x) => x.conversationId).sort(), ['c-form', 'lead-chat']);
+  assert.ok(d.delivered.every((x) => x.from === 'Backend Developer' && /\(to everyone\)/.test(x.text)));
+  assert.match(sent.content, /^Sent to the team: Chief of Staff, Frontend Developer are working and will read it at their next step; QA Engineer will find it in their brief when they start\./);
+  assert.equal(t.channel[0].toId, undefined, 'a post to everyone has no addressee');
+  assert.equal(t.channel[0].taskId, 't1');
+  // "everyone" in the place of a name is the same thing.
+  const again = sendFrom(t, 'c-api', { text: 'And it needs an email.', to: 'everyone' }, desk());
+  assert.equal(again.post.toId, undefined);
+  // Wrapping up: kept, not delivered, and said so.
+  const closing = sendFrom(working(), 'lead-chat', { text: 'One more thing.', to: 'Backend Developer' }, desk({ 'c-api': 'closing' }));
+  assert.deepEqual(closing.d.delivered, []);
+  assert.match(closing.content, /writing up a hand-off, so it is only in the team chat/);
+});
+
+test('nobody is started for a message: an idle lead and a teammate who has not begun just have it kept', () => {
+  const t = working();
+  const toLead = sendFrom(t, 'c-api', { text: 'Which hash do you want?', to: 'Chief of Staff' });
+  assert.deepEqual(toLead.d.delivered, []);
+  assert.match(toLead.content, /Chief of Staff will see it on their next turn/);
+  const toForm = sendFrom(t, 'c-api', { text: 'POST /reset takes an email.', to: 'Frontend Developer' });
+  assert.deepEqual(toForm.d.delivered, []);
+  assert.match(toForm.content, /Frontend Developer will find it in their brief when they start/);
+  assert.equal(t.channel.length, 2);
+});
+
+test('a teammate who has not started finds what was said to them, or to everyone, in their brief', () => {
+  const t = working();
+  sendFrom(t, 'c-api', { text: 'POST /reset takes an email.', to: 'Frontend Developer' });
+  sendFrom(t, 'c-api', { text: 'The API runs on port 4000.' });
+  sendFrom(t, 'c-api', { text: 'Secret between us.', to: 'Chief of Staff' });
+  sendFrom(t, 'lead-chat', { text: 'Keep it accessible.', to: 'Frontend Developer' });
+  const brief = meeting.taskBrief(t, t.plan.assignments[1]);
+  assert.match(brief, /Notes from your team[^\n]*message_team/);
+  assert.match(brief, /- Backend Developer to you: POST \/reset takes an email\./);
+  assert.match(brief, /- Backend Developer to everyone: The API runs on port 4000\./);
+  assert.match(brief, /- Chief of Staff to you: Keep it accessible\./);
+  assert.doesNotMatch(brief, /Secret between us/, 'a note to someone else is not theirs');
+  assert.doesNotMatch(meeting.taskBrief(t, t.plan.assignments[0]), /POST \/reset takes an email/, 'what you said yourself is not a note to you');
+  assert.match(brief, /message_team reaches the person doing that task/);
+  // A long chat is cut to the latest, each note to a size a brief can carry.
+  for (let i = 0; i < 14; i++) sendFrom(t, 'lead-chat', { text: `Note ${i} ${'y'.repeat(2000)}`, to: 'Frontend Developer' });
+  const long = meeting.taskBrief(t, t.plan.assignments[1]);
+  assert.match(long, /the latest 10 of 17/);
+  assert.match(long, /Note 13 /);
+  assert.doesNotMatch(long, /Note 3 /);
+  assert.ok(!long.includes('y'.repeat(1501)));
+});
+
+test('a message to a teammate who is done is not kept: the sender is told, with the start of their hand-off', () => {
+  const t = working();
+  const sent = sendFrom(t, 'c-api', { text: 'Can you recheck login?', to: 'QA Engineer' });
+  assert.equal(sent.isError, undefined);
+  assert.deepEqual(sent.d.delivered, []);
+  assert.equal(t.channel.length, 0);
+  assert.match(sent.content, /QA Engineer has already finished "Checks", so they will not read this\. Their hand-off: Checked every flow\./);
+  const excerpt = sent.content.split('Their hand-off: ')[1];
+  assert.equal(excerpt.length, 1501, 'the first 1,500 characters and an ellipsis');
+});
+
+test('an unknown teammate, an empty or oversize message, a repeat and a stranger to the plan are all refused clearly', () => {
+  const t = working({ attendees: ['backend-developer', 'frontend-developer', 'qa-engineer', 'designer'] });
+  const unknown = sendFrom(t, 'c-api', { text: 'Hi', to: 'Plumber' });
+  assert.equal(unknown.isError, true);
+  assert.match(unknown.content, /Your teammates: .*Chief of Staff \(the lead\).*Frontend Developer \(Form\)/);
+  assert.equal(sendFrom(t, 'c-api', { text: '   ' }).isError, true);
+  const huge = sendFrom(t, 'c-api', { text: 'x'.repeat(channel.POST_LIMIT + 1) });
+  assert.equal(huge.isError, true);
+  assert.match(huge.content, /under 4,000/);
+  assert.equal(sendFrom(t, 'c-api', { text: 'ok', to: ['A', 'B'] }).isError, true);
+  assert.equal(t.channel.length, 0, 'nothing refused is kept');
+  assert.equal(sendFrom(t, 'c-api', { text: 'Same thing', to: 'Frontend Developer' }).isError, undefined);
+  assert.match(sendFrom(t, 'c-api', { text: 'Same thing', to: 'Frontend Developer' }).content, /already sent that to Frontend Developer/);
+  const nobody = sendFrom(t, 'c-api', { text: 'Hello?', to: 'Designer' });
+  assert.match(nobody.content, /Designer has no task in this plan/);
+  assert.equal(t.channel.length, 1);
+});
+
+test('the chat keeps the latest 200 posts of at most 4,000 characters, and old teams get an empty one', () => {
+  const t = working();
+  for (let i = 0; i < 205; i++) sendFrom(t, 'lead-chat', { text: `message ${i}`, to: 'Backend Developer' });
+  assert.equal(t.channel.length, channel.CHANNEL_LIMIT);
+  assert.equal(t.channel[0].text, 'message 5');
+  assert.equal(t.channel.at(-1).text, 'message 204');
+  assert.equal(sendFrom(t, 'lead-chat', { text: 'y'.repeat(channel.POST_LIMIT), to: 'Backend Developer' }).isError, undefined);
+  // Saved teams: none yet, junk, too many, too long.
+  const old = { id: 'old' };
+  const junk = { id: 'junk', channel: [null, { id: 1 }, { id: 'a', fromId: 'x', text: 'ok', at: 1 }] };
+  const bloated = { id: 'bloated', channel: Array.from({ length: 230 }, (_, i) => ({ id: `${i}`, fromId: 'x', text: i === 229 ? 'z'.repeat(5000) : 'hi', at: i })) };
+  const fine = { id: 'fine', channel: [{ id: 'a', fromId: 'x', text: 'ok', at: 1 }] };
+  assert.equal(channel.migrateChannels([old, junk, bloated, fine]), true);
+  assert.deepEqual(old.channel, []);
+  assert.deepEqual(junk.channel.map((p) => p.id), ['a']);
+  assert.equal(bloated.channel.length, 200);
+  assert.equal(bloated.channel.at(-1).text.length, channel.POST_LIMIT);
+  assert.equal(fine.channel.length, 1);
+  assert.equal(channel.migrateChannels([old, junk, bloated, fine]), false, 'nothing left to change');
+});
+
+test('a colleague asked about a teammate knows all of their tasks, each with its status and the start of its hand-off', () => {
+  const t = working();
+  t.plan.assignments.push({ id: 't4', ownerId: 'qa-engineer', title: 'Retest', brief: 'b', dependsOn: ['t2'], files: [], status: 'waiting' });
+  const context = meeting.teammateContext(t, 'qa-engineer');
+  assert.match(context, /You are both on the team for: Add a password reset flow/);
+  assert.match(context, /Your task: Checks \(done\)\.\nYour hand-off so far: Checked every flow\./);
+  assert.match(context, /Your task: Retest \(waiting\)\./);
+  const handOff = context.split('Your hand-off so far: ')[1].split('\n')[0];
+  assert.equal(handOff.length, 1500);
+  assert.equal(meeting.teammateContext(t, 'designer'), '');
+  assert.equal(channel.workingTask(t, 'backend-developer').id, 't1');
+  assert.equal(channel.workingTask(t, 'qa-engineer'), undefined, 'done or waiting is not working');
+});
+
+test('the lead sees the latest team chat in their next turn while the team is not finished', () => {
+  const t = working();
+  assert.doesNotMatch(meeting.teamsBlock([t]), /Team chat/);
+  sendFrom(t, 'c-api', { text: 'Which hash do you want?', to: 'Chief of Staff' });
+  sendFrom(t, 'c-api', { text: 'API is on 4000.' });
+  const block = meeting.teamsBlock([t]);
+  assert.match(block, /Team chat \(latest 2 of 2\):\n- Backend Developer to you: Which hash do you want\?\n- Backend Developer to everyone: API is on 4000\./);
+  assert.doesNotMatch(meeting.teamsBlock([{ ...t, status: 'done' }]), /Team chat/);
+});
+
+test('message_team is an ordinary tool with one required field, offered only inside a team, and never dropped for a long tool list', () => {
+  assert.equal(tools.MESSAGE_TEAM.name, 'message_team');
+  assert.deepEqual(tools.MESSAGE_TEAM.parameters.required, ['text']);
+  assert.ok(tools.MESSAGE_TEAM.parameters.properties.to);
+  assert.equal(tools.TEAM_TOOL_NAMES.has('message_team'), false, 'not one of the lead-only tools');
+  const { toolsFor } = require('../src/main/officeTools.ts');
+  const names = (input) => toolsFor({ registry: [], hasFolder: false, ...input }).map((x) => x.name);
+  assert.ok(names({ agentId: 'backend-developer', teamChat: true }).includes('message_team'));
+  assert.ok(!names({ agentId: 'backend-developer' }).includes('message_team'), 'not for a run outside a team');
+  assert.ok(names({ agentId: 'chief-of-staff', teamChat: true }).includes('message_team'));
+  assert.ok(!names({ agentId: 'chief-of-staff' }).includes('message_team'));
+  // Past twenty tools only the best matches are offered, but this one is always among them.
+  const { selectTools } = require('../src/main/context.ts');
+  const many = Array.from({ length: 30 }, (_, i) => ({ name: `tool_${i}`, description: 'x', parameters: { type: 'object', properties: {} } }));
+  assert.ok(selectTools([...many, tools.MESSAGE_TEAM], 'unrelated words').some((x) => x.name === 'message_team'));
+});
