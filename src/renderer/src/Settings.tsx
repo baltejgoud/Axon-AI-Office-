@@ -721,6 +721,21 @@ function SystemSection() {
             onChange={(startWithWindows) => save({ startWithWindows })}
           />
         </SettingRow>
+        <SettingRow
+          label="Open for recurring work"
+          hint={
+            startAvailable
+              ? 'When a recurring job is due and Axon is closed, Windows opens it in the tray to do the job.'
+              : 'Available in the installed app.'
+          }
+        >
+          <Switch
+            checked={settings.wakeForJobs !== false}
+            disabled={!startAvailable}
+            label="Open for recurring work"
+            onChange={(wakeForJobs) => save({ wakeForJobs })}
+          />
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title="Keyboard shortcuts">
         <SettingRow label="Find a coworker">

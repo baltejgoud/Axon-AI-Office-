@@ -269,6 +269,35 @@ test('window and tray rules', () => {
   assert.equal(lifecycle.loginItem({ startWithWindows: true }, true, 'linux'), null);
   assert.equal(lifecycle.appUserModelId(true, 'C:/electron.exe'), 'com.axon.studio');
   assert.equal(lifecycle.appUserModelId(false, 'C:/electron.exe'), 'C:/electron.exe');
+  // A launch by the recurring-work task stays in the tray, even when Axon is already running.
+  assert.equal(lifecycle.launchedForJobs(['axon.exe', '--background', '--scheduled']), true);
+  assert.equal(lifecycle.launchedForJobs(['axon.exe', '--background']), false);
+  assert.equal(lifecycle.secondLaunchOpens(['axon.exe', '--background', '--scheduled']), false);
+  assert.equal(lifecycle.secondLaunchOpens(['axon.exe']), true);
+  assert.equal(lifecycle.wakesForJobs({ wakeForJobs: true }, true, 'win32'), true);
+  assert.equal(lifecycle.wakesForJobs({ wakeForJobs: undefined }, true, 'win32'), true, 'on unless turned off');
+  assert.equal(lifecycle.wakesForJobs({ wakeForJobs: false }, true, 'win32'), false);
+  assert.equal(lifecycle.wakesForJobs({ wakeForJobs: true }, false, 'win32'), false, 'a dev build would register electron.exe');
+  assert.equal(lifecycle.wakesForJobs({ wakeForJobs: true }, true, 'darwin'), false);
+});
+
+test('the recurring-work task opens Axon in the tray at the next due time and is never cut short', () => {
+  // 15:04 local on 13 Oct 2026, whatever the test machine's zone.
+  const at = new Date(2026, 9, 13, 15, 4, 30).getTime();
+  const xml = lifecycle.wakeTaskXml(at, 'C:\\Users\\a & b\\Axon\\Axon.exe');
+  assert.match(xml, /<StartBoundary>2026-10-13T15:04:00<\/StartBoundary>/, 'local wall time, on the minute');
+  assert.match(xml, /<Command>C:\\Users\\a &amp; b\\Axon\\Axon\.exe<\/Command>/);
+  assert.match(xml, /<Arguments>--background --scheduled<\/Arguments>/);
+  // Task Scheduler stops a task after 72 hours by default; that would close Axon in the tray.
+  assert.match(xml, /<ExecutionTimeLimit>PT0S<\/ExecutionTimeLimit>/);
+  // Priority 7, the default, would leave Axon running below normal for the rest of the day.
+  assert.match(xml, /<Priority>4<\/Priority>/);
+  assert.match(xml, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
+  assert.match(xml, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
+  assert.match(xml, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
+  assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
+  assert.equal(lifecycle.WAKE_TASK, 'Axon recurring work');
 });
 
 test('a coworker waiting for approval while the window is closed sends a notice that leads to them', async (t) => {

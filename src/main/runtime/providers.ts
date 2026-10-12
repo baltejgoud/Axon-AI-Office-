@@ -72,8 +72,9 @@ export function providerProblem(error: unknown): string {
       return 'The provider endpoint or model is unavailable. This task stopped. Choose another model or check the provider address, then retry.';
     if (error.status === 401 || error.status === 403)
       return 'The provider refused access. Check its API key in Settings, then retry.';
+    // The provider's reason stays: a per-minute token cap and a daily cap call for different waits.
     if (error.status === 429)
-      return 'The provider is at its request limit. This task stopped after bounded retries. Try again when capacity is available.';
+      return `The provider is at its request limit${error.detail ? ` (${error.detail.replace(/[.!?]$/, '')})` : ''}. This task stopped after bounded retries. Try again when capacity is available.`;
   }
   return error instanceof Error ? error.message : 'Generation failed.';
 }

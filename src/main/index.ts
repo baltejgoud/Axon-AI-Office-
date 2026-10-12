@@ -10,7 +10,16 @@ import { loadWindowState, saveWindowState } from './windowState';
 import type { PlatformAPI } from '../shared/platform';
 import type { FocusTarget } from '../shared/types';
 import { RECEPTIONIST_ID } from '../shared/coworkers';
-import { afterLastWindow, appUserModelId, loginItem, startedInBackground } from './shell/lifecycle';
+import {
+  afterLastWindow,
+  appUserModelId,
+  launchedForJobs,
+  loginItem,
+  secondLaunchOpens,
+  startedInBackground,
+  wakesForJobs
+} from './shell/lifecycle';
+import { syncWakeTask } from './shell/wake';
 import { showNotice } from './shell/notify';
 import { createTray } from './shell/tray';
 import { WINDOW_ICON } from './shell/icon';
@@ -19,6 +28,8 @@ let browserBridge: Awaited<ReturnType<typeof startBrowserBridge>> | undefined;
 let window: BrowserWindow | null = null;
 let service: Service;
 let quitting = false;
+/** Opened by the recurring-work task: a slot that began this long ago still runs (Axon starting, or the PC just waking). */
+const JOB_CATCH_UP_MS = 15 * 60_000;
 /** Kept for the life of the app, so the icon isn't garbage-collected away. */
 let tray: Tray | null = null;
 const TODAY: FocusTarget = { agentId: RECEPTIONIST_ID, planner: true };
@@ -223,7 +234,12 @@ function showWindow(target?: FocusTarget): void {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.setAppUserModelId(appUserModelId(app.isPackaged, process.execPath));
-  app.on('second-instance', () => showWindow());
+  // The recurring-work task launching Axon while it already runs: the running one does the job, unseen,
+  // with the same grace a fresh launch gets (the computer may have just woken past the time).
+  app.on('second-instance', (_event, argv) => {
+    if (secondLaunchOpens(argv)) showWindow();
+    if (launchedForJobs(argv)) void service?.runScheduledJobs(Date.now(), JOB_CATCH_UP_MS).catch(() => {});
+  });
   void app
     .whenReady()
     .then(async () => {
@@ -294,8 +310,13 @@ else {
         applySettings: (settings) => {
           const item = loginItem(settings, app.isPackaged, process.platform);
           if (item) app.setLoginItemSettings(item);
-        }
-      });
+        },
+        // Only the installed app touches the task; a dev build sharing this profile leaves it alone.
+        scheduleWake:
+          app.isPackaged && process.platform === 'win32'
+            ? (at) => void syncWakeTask(wakesForJobs(service.settings, true, process.platform) ? at : null, process.execPath)
+            : undefined
+      }, { catchUpMs: launchedForJobs(process.argv) ? JOB_CATCH_UP_MS : 0 });
       tray = createTray({ open: () => showWindow(), today: () => showWindow(TODAY), quit: () => app.quit() });
       // Started by Windows at sign-in: wait in the tray until needed.
       if (!startedInBackground(process.argv)) createWindow();

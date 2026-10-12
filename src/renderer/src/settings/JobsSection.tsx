@@ -9,6 +9,7 @@ import './jobs.css';
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 export function JobsSection() {
   const data=useApp(s=>s.data);
+  const wakes=!!data?.startWithWindowsAvailable&&data.settings.wakeForJobs!==false;
   const [editing,setEditing]=useState<ScheduledJob|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   useEffect(()=>{const timer=setInterval(()=>void useApp.getState().refresh(),5000);return()=>clearInterval(timer);},[]);
@@ -18,7 +19,7 @@ export function JobsSection() {
   const save=async(next:ScheduledJob[])=>{setBusy(true);setError('');try {await window.axon.settingsSave({...useApp.getState().data!.settings,scheduledJobs:next});await useApp.getState().refresh();setEditing(null);}catch(e){setError(String(e));}finally{setBusy(false);}};
   const add=()=>{const [providerId,...model]=models[0].id.split('::');setEditing({id:crypto.randomUUID(),name:'Weekly draft',agentId:'marketing-strategist',providerId,modelId:model.join('::'),prompt:'',days:[1],time:'09:00',timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,enabled:false});};
   return <SettingsGroup title="Recurring work">
-    <div className="jobs-info"><p>Axon runs these tasks while it is open, including in the tray. Missed times while the app is closed are skipped. Files and external actions keep their normal approval checks.</p><Button size="sm" onClick={add} disabled={!models.length||busy}>New recurring job</Button>{error&&<p role="alert">{error}</p>}</div>
+    <div className="jobs-info"><p>{wakes?'Axon runs these tasks in the tray. If it is closed when one is due, Windows opens it to do the job, as long as you are signed in to this computer. A time more than 15 minutes late (the computer was off or asleep) is skipped.':'Axon runs these tasks while it is open, including in the tray. Missed times while the app is closed are skipped.'} Files and external actions keep their normal approval checks.</p><Button size="sm" onClick={add} disabled={!models.length||busy}>New recurring job</Button>{error&&<p role="alert">{error}</p>}</div>
     {jobs.map(j=><article className="job-row" key={j.id}><strong>{j.name}</strong><p>{OFFICE_AGENTS.find(a=>a.id===j.agentId)?.name} · {j.days.map(d=>DAYS[d]).join(', ')} at {j.time} ({j.timezone}) · {j.enabled?'Enabled':'Paused'}</p><p>{j.status??'Not run yet'}{j.error?` · ${j.error}`:''}</p><div>
       <Button size="sm" variant="ghost" onClick={()=>setEditing({...j})}>Edit</Button>
       <Button size="sm" variant="ghost" disabled={busy} onClick={()=>void save(jobs.map(x=>x.id===j.id?{...x,enabled:!x.enabled}:x))}>{j.enabled?'Pause':'Enable'}</Button>

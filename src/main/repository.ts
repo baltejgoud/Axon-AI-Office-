@@ -59,6 +59,7 @@ export function initialState(): PlatformState {
       dataDirectoryNote: '',
       keepInTray: true,
       startWithWindows: false,
+      wakeForJobs: true,
       savedPrompts: [],
       webAccess: { ...DEFAULT_WEB_ACCESS }
     },
@@ -383,6 +384,7 @@ export class Repository {
       catch { state.settings.savedPrompts = []; }
       state.settings.keepInTray ??= true;
       state.settings.startWithWindows ??= false;
+      state.settings.wakeForJobs ??= true;
       // Web access arrived with the web tools (2026-10): older saves get it on, with DuckDuckGo.
       state.settings.webAccess = normalWebAccess(state.settings.webAccess);
     }

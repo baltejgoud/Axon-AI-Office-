@@ -1,7 +1,7 @@
 {
   "name": "axon-ai-studio",
   "productName": "Axon",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Axon — a multi-provider AI desktop platform: chat, code, workspaces, agents, and knowledge.",
   "main": "out/main/index.js",
   "author": "Axon",
@@ -75,6 +75,9 @@
         "nsis"
       ],
       "artifactName": "Axon-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [

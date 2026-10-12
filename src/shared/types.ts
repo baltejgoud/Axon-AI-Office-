@@ -321,6 +321,8 @@ export interface Settings {
   keepInTray: boolean;
   /** Start in the tray when Windows starts (installed app only). */
   startWithWindows: boolean;
+  /** Windows opens Axon in the tray when a recurring job is due, even after it was quit (installed app only). On unless turned off. */
+  wakeForJobs?: boolean;
   /** Voice typing in the composer; absent until you change it. */
   voice?: VoiceSettings;
   /** Models skip their thinking where they can, for faster answers. On unless turned off. */

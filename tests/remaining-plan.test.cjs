@@ -3,7 +3,7 @@ require.extensions['.ts']=(module,file)=>module._compile(ts.transpileModule(fs.r
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {documentBytes,documentHtml}=require('../src/main/documents.ts');
 const {Project}=require('../src/main/project.ts');
-const {checkedJobs,dueSlot}=require('../src/shared/scheduledJobs.ts');
+const {checkedJobs,dueSlot,nextJobRun,nextWake}=require('../src/shared/scheduledJobs.ts');
 const {checkedPreferences,preferenceBlock}=require('../src/shared/coworkerPreferences.ts');
 const ExcelJS=require('exceljs'),mammoth=require('mammoth');
 test('Word export contains the title, prose and actual table cells',async()=>{
@@ -33,6 +33,30 @@ test('recurring jobs use the selected timezone, weekday and minute, without dupl
  assert.equal(dueSlot({...job,lastSlot:'2026-10-12 09:00'},now),null);
  assert.equal(dueSlot({...job,status:'running'},now),null);assert.equal(dueSlot({...job,enabled:false},now),null);
  assert.equal(dueSlot(job,Date.parse('2026-10-13T03:30:20Z')),null);assert.equal(dueSlot(job,now+60000),null);
+});
+test('a launch by the wake task may catch a slot up to its grace, once, and never one older',()=>{
+ const late=Date.parse('2026-10-12T03:42:00Z');// 09:12 in Kolkata
+ assert.equal(dueSlot(job,late),null,'the ordinary tick only takes the minute itself');
+ assert.equal(dueSlot(job,late,15*60_000),'2026-10-12 09:00');
+ assert.equal(dueSlot({...job,lastSlot:'2026-10-12 09:00'},late,15*60_000),null);
+ assert.equal(dueSlot(job,Date.parse('2026-10-12T03:46:00Z'),15*60_000),null,'16 minutes late is skipped');
+});
+test('the next run is the earliest future slot across the week, in the job timezone',()=>{
+ // Monday 12 Oct 2026, 08:00 in Kolkata: today's 09:00 is next.
+ assert.equal(nextJobRun(job,Date.parse('2026-10-12T02:30:00Z')),Date.parse('2026-10-12T03:30:00Z'));
+ // After today's slot ran, the next Monday.
+ assert.equal(nextJobRun({...job,lastSlot:'2026-10-12 09:00'},Date.parse('2026-10-12T03:30:20Z')),Date.parse('2026-10-19T03:30:00Z'));
+ // During the slot minute, before it is claimed, the slot itself.
+ assert.equal(nextJobRun(job,Date.parse('2026-10-12T03:30:40Z')),Date.parse('2026-10-12T03:30:00Z'));
+ assert.equal(nextJobRun({...job,enabled:false},Date.parse('2026-10-12T02:30:00Z')),null);
+ // New York leaves daylight saving on 1 Nov 2026: 09:00 is 13:00Z before, 14:00Z after.
+ const ny={...job,days:[0,1,2,3,4,5,6],timezone:'America/New_York'};
+ assert.equal(nextJobRun(ny,Date.parse('2026-10-31T14:00:00Z')),Date.parse('2026-11-01T14:00:00Z'));
+ // A time that does not exist that day (the spring-forward gap) moves to the next day that has it.
+ const gap={...ny,time:'02:30'};
+ assert.equal(nextJobRun(gap,Date.parse('2027-03-14T05:00:00Z')),Date.parse('2027-03-15T06:30:00Z'));
+ assert.equal(nextWake([{...job,enabled:false},job,{...job,id:'j2',time:'08:30'}],Date.parse('2026-10-12T02:00:00Z')),Date.parse('2026-10-12T03:00:00Z'));
+ assert.equal(nextWake([],Date.now()),null);
 });
 test('job settings cannot forge completed runs and validate bounded configs',()=>{
  assert.equal(checkedJobs([{...job,status:'completed',lastSlot:'fake'}])[0].status,undefined);

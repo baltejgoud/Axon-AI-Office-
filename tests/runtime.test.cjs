@@ -177,6 +177,11 @@ test('invalid models are cached until provider configuration is corrected; 402 i
   assert.equal(calls, 2);
   assert.match(providerProblem(new ProviderError(402, 'raw private body')), /insufficient available credits/);
   assert.doesNotMatch(providerProblem(new ProviderError(402, 'raw private body')), /raw private/);
+  // A rate limit keeps the provider's reason: a per-minute token cap and a daily cap need different waits.
+  const limited = providerProblem(new ProviderError(429, 'Rate limit reached for model openai/gpt-oss-120b on tokens per minute (TPM): Limit 8000, Used 6100, Requested 4200.'));
+  assert.match(limited, /request limit/);
+  assert.match(limited, /tokens per minute \(TPM\): Limit 8000/);
+  assert.match(providerProblem(new ProviderError(429, '')), /^The provider is at its request limit\. /);
 });
 test('terminal validates canonical cwd, traversal and junction escapes', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-terminal-'));

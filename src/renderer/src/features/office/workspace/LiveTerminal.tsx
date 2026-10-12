@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalSession } from '../../../../../shared/runtime';
+import { errorText } from '../../../accounts';
 export function LiveTerminal({ conversationId }: { conversationId: string }) {
   const host = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal>();
@@ -19,7 +20,7 @@ export function LiveTerminal({ conversationId }: { conversationId: string }) {
         setSessions(items);
         setSessionId(items.at(-1)?.id ?? '');
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errorText(e)));
   }, [conversationId]);
   useEffect(() => {
     const term = new Terminal({
@@ -37,7 +38,7 @@ export function LiveTerminal({ conversationId }: { conversationId: string }) {
     term.open(host.current!);
     const input = term.onData((data) => {
       if (selected.current)
-        void window.axon.terminalWrite(selected.current, data).catch((e) => setError(String(e)));
+        void window.axon.terminalWrite(selected.current, data).catch((e) => setError(errorText(e)));
     });
     const resize = new ResizeObserver(() => {
       if (!host.current?.clientHeight) return;
@@ -72,7 +73,7 @@ export function LiveTerminal({ conversationId }: { conversationId: string }) {
         setSessions((items) => [...items.filter((i) => i.id !== s.id), s]);
         setSessionId(s.id);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errorText(e)));
   };
   const current = sessions.find((s) => s.id === sessionId);
   return (

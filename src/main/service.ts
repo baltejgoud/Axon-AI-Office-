@@ -105,7 +105,7 @@ import { ASK_USER } from '../shared/askUser';
 import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { checkedPreferences, preferenceBlock } from '../shared/coworkerPreferences';
 import { documentBytes, checkedSheets, sheetPreview, type DocumentFormat, type DocumentSheet } from './documents';
-import { checkedJobs, dueSlot, type ScheduledJob } from '../shared/scheduledJobs';
+import { checkedJobs, dueSlot, nextWake, type ScheduledJob } from '../shared/scheduledJobs';
 import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { SHOW_DASHBOARD, publishDashboard } from './dashboards';
@@ -198,6 +198,8 @@ export interface ShellPort {
   /** The person is looking at Axon: its window is shown and is the one in front. */
   windowFocused(): boolean;
   applySettings(settings: Settings): void;
+  /** Have Windows open Axon at `at` for recurring work, or not at all (null). The installed app only. */
+  scheduleWake?(at: number | null): void;
 }
 
 /** The highest spending limit per task Settings takes, in dollars. */
@@ -649,23 +651,37 @@ export class Service {
     return this.state.settings;
   }
 
-  /** Connects the desktop shell: applies the sign-in setting and lets reminders fire, missed ones first. */
-  attachShell(shell: ShellPort): void {
+  /**
+   * Connects the desktop shell: applies the sign-in setting and lets reminders fire, missed ones first.
+   * `catchUpMs`: opened by the recurring-work task, so a slot that began that long ago still runs.
+   */
+  attachShell(shell: ShellPort, options: { catchUpMs?: number } = {}): void {
     this.shell = shell;
     shell.applySettings(this.state.settings);
     this.reminders.startup();
     if(!this.jobsTimer) { this.jobsTimer=setInterval(()=>void this.runScheduledJobs(Date.now()).catch(()=>{}),15000); this.jobsTimer.unref?.(); }
-    void this.runScheduledJobs(Date.now()).catch(()=>{});
+    void this.runScheduledJobs(Date.now(),options.catchUpMs).catch(()=>{});
   }
   /** Claim a due minute durably, then launch work without blocking the next scheduler tick. */
-  async runScheduledJobs(now: number): Promise<void> {
+  async runScheduledJobs(now: number, lateMs = 0): Promise<void> {
     if(this.shuttingDown)return;
+    let claimed=false;
     for(const job of this.state.settings.scheduledJobs??[]) {
-      const slot=dueSlot(job,now); if(!slot)continue;
-      job.lastSlot=slot; job.lastRunAt=now; job.status='running'; job.error=undefined;
+      const slot=dueSlot(job,now,lateMs); if(!slot)continue;
+      job.lastSlot=slot; job.lastRunAt=now; job.status='running'; job.error=undefined; claimed=true;
       try {await this.repo.save(); void this.executeScheduledJob(job).catch(()=>{});}
       catch(e){job.status='failed';job.error=String(e);}
     }
+    // The task is moved when a slot is claimed, and once the time it was set for has gone by.
+    if(claimed||this.wakeAt===undefined||(this.wakeAt!==null&&now>=this.wakeAt+60_000))this.syncWake(now);
+  }
+  /** When Windows was last asked to open Axon; undefined until the first sync. */
+  private wakeAt: number | null | undefined;
+  /** Tells the shell when the next recurring job is due, so Windows can open Axon for it after a quit. */
+  private syncWake(now = Date.now()): void {
+    if(!this.shell?.scheduleWake||this.shuttingDown)return;
+    this.wakeAt=this.state.settings.wakeForJobs===false?null:nextWake(this.state.settings.scheduledJobs??[],now);
+    this.shell.scheduleWake(this.wakeAt);
   }
   async jobRun(id: string): Promise<void> {
     if(this.shuttingDown)throw new Error('Axon is closing.');
@@ -734,6 +750,7 @@ export class Service {
       job.status=run?.status==='completed'?'completed':'failed';job.error=run?.error??(job.status==='failed'?'The job ended without completion.':undefined);
     } catch(e){job.status='failed';job.error=e instanceof Error?e.message:String(e);}
     await this.repo.save();
+    this.syncWake();
     this.shell?.notify({title:`${job.name}: ${job.status==='completed'?'finished':'needs attention'}`,body:job.error??'Open the conversation to read the result.',target:{agentId:job.agentId,conversationId:job.conversationId}});
   }
   /** True the first time the window closes to the tray, so the user is told once. */
@@ -983,7 +1000,19 @@ export class Service {
     if (id === CLAUDE_PROVIDER_ID) { await this.claudeDisconnect(); return; }
     this.state.providers = this.state.providers.filter((p) => p.id !== id);
     this.vault.remove(id);
+    // Execution profiles on this provider go with it.
+    const profiles = this.state.settings.modelProfiles;
+    if (profiles)
+      this.state.settings.modelProfiles = Object.fromEntries(
+        Object.entries(profiles).filter(([, selection]) => selection?.providerId !== id)
+      );
     await this.repo.save();
+  }
+  /** An enabled provider still offers this model. */
+  private usableModel(selection: { providerId: string; modelId: string }): boolean {
+    return this.state.providers.some(
+      (p) => p.enabled && p.id === selection.providerId && p.models.some((m) => m.id === selection.modelId)
+    );
   }
   async workspaceSave(w: Workspace): Promise<void> {
     text(w.id, 100);
@@ -1083,28 +1112,30 @@ export class Service {
         s.taskSpendLimit > MAX_TASK_SPEND)
     )
       throw new Error(`The spending limit per task must be between $0 and $${MAX_TASK_SPEND}.`);
+    // A profile kept from before whose provider or model has since gone is dropped, so it can't block
+    // every later save; a profile chosen now must name an enabled model.
+    type Profile = keyof NonNullable<Settings['modelProfiles']>;
+    const modelProfiles: Settings['modelProfiles'] = s.modelProfiles ? {} : undefined;
     if (s.modelProfiles)
-      for (const [profile, selection] of Object.entries(s.modelProfiles)) {
-        if (
-          !['fast', 'standard', 'deep', 'coding'].includes(profile) ||
-          !selection ||
-          !this.state.providers.some(
-            (p) =>
-              p.enabled && p.id === selection.providerId && p.models.some((m) => m.id === selection.modelId)
-          )
-        )
-          throw new Error('Choose an enabled model for each execution profile.');
+      for (const [profile, selection] of Object.entries(s.modelProfiles) as [Profile, { providerId: string; modelId: string } | undefined][]) {
+        const stored = this.state.settings.modelProfiles?.[profile];
+        const unchanged = !!selection && stored?.providerId === selection.providerId && stored?.modelId === selection.modelId;
+        if (['fast', 'standard', 'deep', 'coding'].includes(profile) && selection && this.usableModel(selection))
+          modelProfiles![profile] = selection;
+        else if (!unchanged) throw new Error('Choose an enabled model for each execution profile.');
       }
     this.state.settings = {
       ...s,
       savedPrompts,
       coworkerPreferences,
+      modelProfiles,
       scheduledJobs: scheduledJobs.map(j=>{const current=this.state.settings.scheduledJobs?.find(c=>c.id===j.id);return current?Object.assign(current,j):j;}),
       allowShellExecution: Boolean(s.allowShellExecution),
       shellAllowlist: s.shellAllowlist || [],
       sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
       keepInTray: s.keepInTray !== false,
       startWithWindows: Boolean(s.startWithWindows),
+      wakeForJobs: s.wakeForJobs !== false,
       voice: cleanVoice(s.voice),
       quickReplies: s.quickReplies !== false,
       taskSpendLimit: s.taskSpendLimit ? Math.round(s.taskSpendLimit * 100) / 100 : undefined,
@@ -1113,6 +1144,7 @@ export class Service {
     };
     await this.repo.save();
     this.shell?.applySettings(this.state.settings);
+    this.syncWake();
   }
   /** Whether coworkers may use the web, and which search service they search with. */
   private get webAccess() {
@@ -3337,7 +3369,9 @@ export class Service {
     if (!owner) throw new Error('Unknown owner.');
     const lead = coworkerById(team.leadId);
     const leadChat = this.state.conversations.find((c) => c.id === team.conversationId);
-    const selected = assignment.profile ? this.state.settings.modelProfiles?.[assignment.profile] : undefined;
+    // A profile whose model has gone falls back to the team's own model instead of failing the task.
+    const profiled = assignment.profile ? this.state.settings.modelProfiles?.[assignment.profile] : undefined;
+    const selected = profiled && this.usableModel(profiled) ? profiled : undefined;
     const chat = await this.chatCreate(
       selected?.providerId ?? team.providerId,
       selected?.modelId ?? team.modelId,

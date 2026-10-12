@@ -93,6 +93,55 @@ test('a recurring job claims its local slot once and runs unattended with saved 
   await service.runScheduledJobs(now+20000);assert.equal(calls,1);
 });
 
+test('Windows is asked to open Axon at the next job; a launch for the job catches its slot, and the setting turns it off',async(t)=>{
+  const {dir,repo,service}=makeService();addProvider(repo);t.after(async()=>{service.shutdown();await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  // Every minute of every day, so a job is always due within the minute: the slot that just began is caught.
+  const job={id:'j',name:'Daily',agentId:'designer',providerId:'p1',modelId:'m1',prompt:'Draft',days:[0,1,2,3,4,5,6],time:'00:00',timezone:'UTC',enabled:true};
+  const minute=new Date();minute.setUTCSeconds(0,0);
+  const late=new Date(minute.getTime()-5*60_000);// five minutes ago, as HH:MM in UTC
+  job.time=`${String(late.getUTCHours()).padStart(2,'0')}:${String(late.getUTCMinutes()).padStart(2,'0')}`;
+  repo.state.settings.scheduledJobs=[job];
+  let calls=0;mockModel(t,async(_p,_k,_r,onChunk)=>{calls++;onChunk('Done.');return {toolCalls:[]};});
+  const wakes=[];
+  service.attachShell({notify(){},windowFocused:()=>false,applySettings(){},scheduleWake:(at)=>wakes.push(at)},{catchUpMs:15*60_000});
+  for(let i=0;i<300&&calls===0;i++)await new Promise(r=>setTimeout(r,10));
+  for(let i=0;i<300&&repo.state.settings.scheduledJobs[0].status==='running';i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(calls,1,'the slot five minutes ago ran once');
+  assert.equal(repo.state.settings.scheduledJobs[0].lastSlot.slice(-5),job.time);
+  // Its next run is tomorrow at the same time.
+  assert.equal(wakes.at(-1),late.getTime()+86_400_000);
+  await service.settingsSave({...repo.state.settings,wakeForJobs:false});
+  assert.equal(wakes.at(-1),null);
+  assert.equal(repo.state.settings.wakeForJobs,false);
+  await service.settingsSave({...repo.state.settings,wakeForJobs:true});
+  assert.equal(wakes.at(-1),late.getTime()+86_400_000);
+});
+
+test('a profile left on a removed provider never blocks saving settings, and a new bad choice still does',async(t)=>{
+  const {dir,repo,service}=makeService();addProvider(repo);t.after(async()=>{service.shutdown();await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  // As found on a real profile: every profile pointed at an OpenRouter provider deleted since.
+  repo.state.settings.modelProfiles={fast:{providerId:'gone',modelId:'x:free'},deep:{providerId:'p1',modelId:'m1'}};
+  await service.settingsSave({...repo.state.settings,keepInTray:false});
+  assert.equal(repo.state.settings.keepInTray,false,'the change the person made is saved');
+  assert.deepEqual(repo.state.settings.modelProfiles,{deep:{providerId:'p1',modelId:'m1'}},'the stale profile is dropped, the good one kept');
+  await assert.rejects(()=>service.settingsSave({...repo.state.settings,modelProfiles:{fast:{providerId:'p1',modelId:'nope'}}}),/enabled model for each execution profile/);
+  // Removing a provider clears the profiles that used it.
+  repo.state.providers.push({...repo.state.providers[0],id:'p2',name:'Second'});
+  repo.state.settings.modelProfiles={fast:{providerId:'p2',modelId:'m1'},deep:{providerId:'p1',modelId:'m1'}};
+  await service.providerDelete('p2');
+  assert.deepEqual(repo.state.settings.modelProfiles,{deep:{providerId:'p1',modelId:'m1'}});
+});
+
+test('an ordinary start skips a slot that began minutes ago',async(t)=>{
+  const {dir,repo,service}=makeService();addProvider(repo);t.after(async()=>{service.shutdown();await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  const late=new Date(Date.now()-5*60_000);
+  repo.state.settings.scheduledJobs=[{id:'j',name:'Daily',agentId:'designer',providerId:'p1',modelId:'m1',prompt:'Draft',days:[0,1,2,3,4,5,6],time:`${String(late.getUTCHours()).padStart(2,'0')}:${String(late.getUTCMinutes()).padStart(2,'0')}`,timezone:'UTC',enabled:true}];
+  let calls=0;mockModel(t,async()=>{calls++;return {toolCalls:[]};});
+  service.attachShell({notify(){},windowFocused:()=>false,applySettings(){}});
+  await new Promise(r=>setTimeout(r,100));
+  assert.equal(calls,0);assert.equal(repo.state.settings.scheduledJobs[0].lastSlot,undefined);
+});
+
 test('a persisted scheduled launch cannot start after shutdown',async(t)=>{
   const {dir,repo,service}=makeService();addProvider(repo);
   t.after(async()=>{await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});

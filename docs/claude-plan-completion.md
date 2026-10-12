@@ -36,4 +36,12 @@ The user explicitly resumed all unfinished work, including the previously paused
 
 Recurring jobs run while Axon is open or in its tray; this is not an OS background service. Live paid-provider adherence, the historical ChatGPT account tool-call comparison and the mains-power FPS comparison were not rerun. Desktop provider transport was an isolated loopback fixture; no user accounts or projects were used for these checks.
 
+## Follow-up — 12 October 2026 (0.2.1)
+
+- **Recurring work after a quit.** The installed app keeps one per-user Task Scheduler task, "Axon recurring work", at the next due job. It opens Axon in the tray (`--background --scheduled`), the job runs, and the task moves to the next slot; with no enabled jobs it is removed. A launch for a job may take a slot up to 15 minutes late; ordinary ticks still take only the minute. Settings → System → *Open for recurring work* turns it off; the uninstaller deletes the task; dev builds never touch it. Verified live on the installed 0.2.1: with Axon fully quit, Windows opened it at 14:16:00 and at 14:21:01 with no window, the jobs ran (DeepSeek Flash, then ChatGPT GPT-5.6-Luna; both replied "OK"), and the task re-armed for the following week.
+- **Settings could not be saved** on a real profile: all four execution profiles pointed at a deleted provider, so every save failed with "Choose an enabled model for each execution profile". Stale profiles are now dropped, deleting a provider clears its profiles, and a team task whose profile model is gone uses the team's model.
+- **Live providers, real profile (installed 0.2.0):** ChatGPT GPT-5.6-Luna — web search tool call and a correct, sourced answer. DeepSeek Flash — the same. Groq GPT-OSS 120b — the tool calls worked, the final call hit HTTP 429 after bounded retries (Axon now shows the provider's reason). Anthropic — the key's Console organization has no credit ("credit balance is too low"); Axon's message says where to add credits.
+- **FPS on mains** (1080p Balanced, median of ten, interleaved, GPU idle): previous build 61108bc 44 and 45; this build 41 and 44. Both miss the 50 floor on this machine today with other apps running, so the gap is machine load rather than this release; the difference between builds is within run-to-run noise.
+- The user terminal no longer shows Electron's "Error invoking remote method" wrapper.
+
 Original Claude task worktrees were preserved. Main integration and distributables are recorded in the final delivery, after verification.

@@ -16,11 +16,54 @@ export function checkedJobs(value: unknown, prior: readonly ScheduledJob[] = [])
       ...(old?{lastSlot:old.lastSlot,lastRunAt:old.lastRunAt,conversationId:old.conversationId,status:old.status,error:old.error}:{})};
   });
 }
-export function dueSlot(job: ScheduledJob, now: number): string | null {
-  if(!job.enabled||job.status==='running')return null;
-  const parts=new Intl.DateTimeFormat('en-US',{timeZone:job.timezone,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(now));
+const MINUTE=60_000, DAY=86_400_000;
+const clocks=new Map<string,Intl.DateTimeFormat>();
+/** The wall clock in `timezone` at `at`: date, weekday (0 = Sunday) and HH:MM. */
+function wallClock(timezone: string, at: number) {
+  let format=clocks.get(timezone);
+  if(!format){format=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});clocks.set(timezone,format);}
+  const parts=format.formatToParts(new Date(at));
   const get=(type:string)=>parts.find(p=>p.type===type)?.value ?? '';
-  const day=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(get('weekday'));
-  const slot=`${get('year')}-${get('month')}-${get('day')} ${job.time}`;
-  return job.days.includes(day)&&`${get('hour')}:${get('minute')}`===job.time&&job.lastSlot!==slot?slot:null;
+  return {date:`${get('year')}-${get('month')}-${get('day')}`,weekday:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(get('weekday')),time:`${get('hour')}:${get('minute')}`};
+}
+/**
+ * The slot to run now, if any. `lateMs` lets a launch by the recurring-work task take a slot that began
+ * up to that long ago (Axon starting, or the computer waking just after); the ordinary tick takes only the minute itself.
+ */
+export function dueSlot(job: ScheduledJob, now: number, lateMs = 0): string | null {
+  if(!job.enabled||job.status==='running')return null;
+  for(let back=0;back<=lateMs;back+=MINUTE) {
+    const clock=wallClock(job.timezone,now-back), slot=`${clock.date} ${job.time}`;
+    if(job.days.includes(clock.weekday)&&clock.time===job.time)return job.lastSlot!==slot?slot:null;
+  }
+  return null;
+}
+/** The instant of `date` (YYYY-MM-DD) at `time` in `timezone`, or null where that wall time does not exist (a daylight-saving gap). */
+function zonedInstant(date: string, time: string, timezone: string): number | null {
+  const [y,m,d]=date.split('-').map(Number), [h,min]=time.split(':').map(Number);
+  const wall=Date.UTC(y,m-1,d,h,min);
+  let at=wall;
+  // The zone's offset at a guess, applied twice so a guess on the far side of a change settles.
+  for(let i=0;i<2;i++){const c=wallClock(timezone,at);const [cy,cm,cd]=c.date.split('-').map(Number),[ch,cmin]=c.time.split(':').map(Number);at-= Date.UTC(cy,cm-1,cd,ch,cmin)-wall;}
+  const check=wallClock(timezone,at);
+  return check.date===date&&check.time===time?at:null;
+}
+/** When the job next runs: its earliest slot from this minute on that has not run yet, or null when paused. */
+export function nextJobRun(job: ScheduledJob, now: number): number | null {
+  if(!job.enabled)return null;
+  const from=Math.floor(now/MINUTE)*MINUTE;
+  let best: number | null=null;
+  // Nine days cover a full week from any zone, with room for a day that lacks the time.
+  for(let d=0;d<9;d++) {
+    const clock=wallClock(job.timezone,from+d*DAY);
+    const at=zonedInstant(clock.date,job.time,job.timezone);
+    if(at===null||at<from||job.lastSlot===`${clock.date} ${job.time}`)continue;
+    if(!job.days.includes(wallClock(job.timezone,at).weekday))continue;
+    if(best===null||at<best)best=at;
+  }
+  return best;
+}
+/** The earliest next run across jobs: when Windows should open Axon, or null when nothing is scheduled. */
+export function nextWake(jobs: readonly ScheduledJob[], now: number): number | null {
+  return jobs.reduce<number|null>((best,job)=>{const at=nextJobRun(job,now);return at!==null&&(best===null||at<best)?at:best;},null);
 }
