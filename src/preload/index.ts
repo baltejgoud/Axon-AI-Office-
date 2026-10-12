@@ -46,6 +46,7 @@ const api: PlatformAPI = {
   chatNotifyWhenDone: invoke('chatNotifyWhenDone'),
   toolApprove: invoke('toolApprove'),
   attach: invoke('attach'),
+  attachData: invoke('attachData'),
   speechTranscribe: invoke('speechTranscribe'),
   getContextUsage: invoke('getContextUsage'),
   usageReport: invoke('usageReport'),

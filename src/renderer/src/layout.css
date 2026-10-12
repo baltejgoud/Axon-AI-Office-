@@ -744,6 +744,28 @@
   margin-bottom: var(--space-2);
   font-size: var(--text-sm);
 }
+/* The pictures you sent, as small previews above what you wrote. */
+.message-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+.message-pictures img {
+  display: block;
+  max-width: 120px;
+  max-height: 96px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  object-fit: cover;
+}
+.message-picture-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
 .message-meta strong {
   font-weight: var(--weight-semibold);
 }

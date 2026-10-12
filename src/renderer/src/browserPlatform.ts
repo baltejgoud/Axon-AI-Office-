@@ -35,6 +35,12 @@ export async function connectBrowserPlatform(): Promise<void> {
         const folder = window.prompt('Open a local project folder. Enter its full path:');
         return folder?.trim() ? invoke('projectOpen', [folder.trim()]) : null;
       };
+      // A file's bytes cross as base64 text: JSON would write each byte out as its own number.
+      if (name === 'attachData') return async (fileName: string, bytes: Uint8Array) => {
+        let binary = '';
+        for (let at = 0; at < bytes.length; at += 0x8000) binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+        return invoke('attachData', [fileName, { __axonBytes: btoa(binary) }]);
+      };
       if (typeof name !== 'string' || name === 'then') return undefined;
       return (...args: unknown[]) => invoke(name, args);
     }

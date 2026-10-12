@@ -180,3 +180,25 @@ test('intra-task compaction with reused call IDs preserves the latest result', (
   assert.equal(plan.request.messages.at(-2).replay.signature,'s99');
   assert.equal(plan.request.messages.filter(m=>m.role==='assistant').length,plan.request.messages.filter(m=>m.role==='tool').length);
 });
+
+test('pictures are planned by number: a large one neither fills the budget nor reaches the tokenizer as bytes', () => {
+  const big = { name: 'shot.png', mime: 'image/png', base64: 'A'.repeat(4_000_000) };
+  const none = request([{ role: 'user', content: 'What is this?' }]);
+  const one = request([{ role: 'user', content: 'What is this?', images: [big] }]);
+  const plain = planner.compile(none, model(131072)), withPicture = planner.compile(one, model(131072));
+  // About the 1,600 tokens a picture costs, never the million-odd its bytes would.
+  assert.ok(withPicture.inputTokens - plain.inputTokens >= 1500);
+  assert.ok(withPicture.inputTokens - plain.inputTokens <= 1700);
+  assert.deepEqual(withPicture.request.messages[0].images, [big]);
+  // Counted the same way by the byte-based estimate used when no tokenizer is known.
+  assert.ok(countTokens(one.messages) - countTokens(none.messages) >= 1500 && countTokens(one.messages) < 10_000);
+});
+
+test('a conversation of pictures is trimmed by turns like any other: the oldest pictures go first', () => {
+  const picture = i => ({ name: `${i}.png`, mime: 'image/png', base64: 'A' });
+  const messages = Array.from({ length: 12 }, (_, i) => ({ role: 'user', content: `Look at ${i}`, images: [picture(i), picture(i + 100)] }));
+  const plan = planner.compile(request(messages), model(32768));
+  assert.ok(plan.inputTokens + plan.outputReserve + plan.safetyMargin <= 32768);
+  assert.equal(plan.request.messages.at(-1).images.length, 2);
+  assert.ok(plan.request.messages.length < messages.length);
+});

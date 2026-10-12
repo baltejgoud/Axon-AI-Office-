@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
-import { IconPaperclip, IconSend, IconStop, IconClose, IconFileText } from '../../../ui';
+import { IconPaperclip, IconSend, IconStop, IconClose, IconFileText, IconLoader } from '../../../ui';
 import { FolderPicker } from './FolderPicker';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
@@ -13,6 +14,7 @@ import { ContextMeter } from '../../../chat/ContextMeter';
 import { DictationButton } from '../../../chat/DictationButton';
 import { useDictation } from '../../../chat/useDictation';
 import { chosenEngine, insertDictation, speechPrompt } from '../../../../../shared/speech';
+import { MAX_ATTACHMENTS, MAX_UPLOAD_BYTES, isClipboardName, pastedName, type AttachedFile } from '../../../../../shared/attach';
 
 /** The tallest the message box grows as you type before it scrolls. */
 const MAX_BOX = 160;
@@ -21,6 +23,10 @@ interface AgentComposerProps {
   agentId: string;
 }
 
+/** An error from main as plain words, without Electron's "Error invoking remote method" wrapper. */
+const plainError = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : fallback;
+
 export function AgentComposer({ agentId }: AgentComposerProps) {
   const { data, model, patch } = useApp();
   const { agentRuntime, setAgentStatus, setAgentTask, setAgentConversation, pushActivity, removeFile } =
@@ -28,9 +34,21 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const handed = useOfficeStore((s) => s.pendingFiles[agentId]) ?? [];
 
   const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<{ id: string; name: string }[]>([]);
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  /** What is attached right now, for batches of pasted or dropped files that arrive while another is still being read. */
+  const held = useRef<AttachedFile[]>([]);
+  const setHeld = (next: AttachedFile[]) => {
+    held.current = next;
+    setAttachments(next);
+  };
+  /** Something to say about the files you added (some left out, one unreadable); it fades by itself. */
+  const [attachNote, setAttachNote] = useState('');
+  const [adding, setAdding] = useState(false);
+  /** The panel's box (and the office it sits in, which holds the colours) while files are dragged over it. */
+  const [dropping, setDropping] = useState<{ box: DOMRect; host: Element } | null>(null);
   const [sending, setSending] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   /** Where the cursor was when you started speaking: the words go there. */
   const dictateAt = useRef({ start: 0, end: 0 });
 
@@ -165,7 +183,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     try {
       const files = await window.axon.attach();
       if (files?.length) {
-        setAttachments((prev) => [...prev, ...files].slice(0, 5));
+        setAttachNote('');
+        setHeld([...held.current, ...files].slice(0, MAX_ATTACHMENTS));
         pushActivity(agentId, {
           type: 'file',
           title: 'Files attached',
@@ -173,9 +192,131 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
         });
       }
     } catch (error) {
-      patch({ error: error instanceof Error ? error.message : 'Could not attach files.' });
+      patch({ error: plainError(error, 'Could not attach files.') });
     }
   };
+
+  /** Batches of pasted or dropped files wait their turn, so the five-file limit counts what the last batch added. */
+  const batches = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * Pasted or dropped files: each is read here and handed over as its bytes (main keeps its own copy
+   * under a name it makes up; no path is ever sent). Up to five go with a message; what doesn't fit,
+   * or can't be read, is said in a note.
+   */
+  const addFiles = (files: File[], options: { pasted?: boolean; folders?: number } = {}) => {
+    if (!files.length && !options.folders) return;
+    batches.current = batches.current.then(async () => {
+      const notes: string[] = [];
+      if (options.folders)
+        notes.push(
+          "Folders can't go in a message. To let a coworker work in a folder, choose it with the folder button; or drop the files inside it."
+        );
+      const room = Math.max(0, MAX_ATTACHMENTS - held.current.length);
+      const taking = files.slice(0, room);
+      if (files.length > taking.length)
+        notes.push(
+          room === 0
+            ? `A message can carry up to ${MAX_ATTACHMENTS} files, and this one has them. Send it, or remove one first.`
+            : `A message can carry up to ${MAX_ATTACHMENTS} files, so I added the first ${taking.length} and left out ${files.length - taking.length}.`
+        );
+      setAdding(taking.length > 0);
+      const added: string[] = [];
+      let pictures = 0;
+      for (const file of taking) {
+        // The clipboard calls every screenshot "image.png"; a name made from the time tells them apart.
+        const name =
+          options.pasted && file.type.startsWith('image/') && isClipboardName(file.name)
+            ? pastedName(file.type, new Date(), ++pictures)
+            : file.name || 'Attachment';
+        if (file.size === 0) notes.push(`${name} is empty.`);
+        else if (file.size > MAX_UPLOAD_BYTES) notes.push(`${name} is over 20 MB, which is too big to attach.`);
+        else
+          try {
+            const attached = await window.axon.attachData(name, new Uint8Array(await file.arrayBuffer()));
+            setHeld([...held.current, attached].slice(0, MAX_ATTACHMENTS));
+            added.push(attached.name);
+          } catch (error) {
+            notes.push(plainError(error, `Could not attach ${name}.`));
+          }
+      }
+      setAdding(false);
+      setAttachNote(notes.join(' '));
+      if (added.length) pushActivity(agentId, { type: 'file', title: 'Files attached', detail: added.join(', ') });
+    });
+  };
+
+  // The note fades by itself.
+  useEffect(() => {
+    if (!attachNote) return;
+    const timer = setTimeout(() => setAttachNote(''), 10000);
+    return () => clearTimeout(timer);
+  }, [attachNote]);
+
+  /** A screenshot or file pasted into the box is attached; text, even with a picture of it alongside, pastes as text. */
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files);
+    if (!files.length || e.clipboardData.getData('text/plain').trim()) return;
+    e.preventDefault();
+    addFiles(files, { pasted: true });
+  };
+
+  // Files dragged over the conversation or the box: a calm overlay says where they will go.
+  const adder = useRef(addFiles);
+  adder.current = addFiles;
+  useEffect(() => {
+    const panel = root.current?.closest('.office-activity-panel');
+    if (!panel) return;
+    let depth = 0;
+    const withFiles = (e: Event) => Array.from((e as DragEvent).dataTransfer?.types ?? []).includes('Files');
+    const enter = (e: Event) => {
+      if (!withFiles(e)) return;
+      e.preventDefault();
+      depth++;
+      setDropping({ box: panel.getBoundingClientRect(), host: panel.closest('.office-container') ?? document.body });
+    };
+    const over = (e: Event) => {
+      if (!withFiles(e)) return;
+      e.preventDefault();
+      (e as DragEvent).dataTransfer!.dropEffect = 'copy';
+    };
+    const leave = (e: Event) => {
+      if (!withFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth) setDropping(null);
+    };
+    const drop = (e: Event) => {
+      if (!withFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDropping(null);
+      const transfer = (e as DragEvent).dataTransfer!;
+      // Folders are told from files while the drop is still happening; later the entries are gone.
+      const files: File[] = [];
+      let folders = 0;
+      const items = Array.from(transfer.items ?? []).filter((item) => item.kind === 'file');
+      if (items.length)
+        for (const item of items) {
+          if (item.webkitGetAsEntry?.()?.isDirectory) folders++;
+          else {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          }
+        }
+      else files.push(...Array.from(transfer.files));
+      adder.current(files, { folders });
+    };
+    const events: [string, (e: Event) => void][] = [
+      ['dragenter', enter],
+      ['dragover', over],
+      ['dragleave', leave],
+      ['drop', drop]
+    ];
+    for (const [type, handler] of events) panel.addEventListener(type, handler);
+    return () => {
+      for (const [type, handler] of events) panel.removeEventListener(type, handler);
+      setDropping(null);
+    };
+  }, []);
 
   /** Stops the run: the reply so far stays, a waiting approval is withdrawn, and a message you queued goes next. */
   const handleStop = () => {
@@ -191,7 +332,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     if (!conversation) return;
     const attachIds = attachments.map((a) => a.id);
     setInput('');
-    setAttachments([]);
+    setHeld([]);
     try {
       await window.axon.chatSend(
         conversation.id,
@@ -275,7 +416,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       const attachIds = fromBox ? attachments.map((a) => a.id) : [];
       if (fromBox) {
         setInput('');
-        setAttachments([]);
+        setHeld([]);
+        setAttachNote('');
       }
 
       pushActivity(agentId, {
@@ -318,13 +460,42 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     }
   };
 
+  // A picture only helps a model that can see pictures; said before you send.
+  const hasPictures = attachments.some((a) => a.thumbnail);
+  const blind = hasPictures && chosenSpec?.supportsVision === false;
+
   return (
-    <div className="activity-composer">
+    <div className="activity-composer" ref={root}>
+      {dropping &&
+        createPortal(
+          <div
+            className="drop-overlay"
+            aria-hidden="true"
+            style={{ left: dropping.box.left, top: dropping.box.top, width: dropping.box.width, height: dropping.box.height }}
+          >
+            <div className="drop-overlay-card">
+              <IconPaperclip size={22} />
+              <strong>Drop files to attach</strong>
+              <span>Pictures, PDFs, Word, Excel and text files, up to {MAX_ATTACHMENTS} per message</span>
+            </div>
+          </div>,
+          dropping.host
+        )}
       {noTools && (
         <p className="composer-notice" role="note">
           {agentId === RECEPTIONIST_ID
             ? 'This model can’t use tools, so I can’t keep your planner. Pick another model.'
             : `${chosenSpec?.displayName || 'This model'} can’t use tools, so ${agent?.name ?? 'they'} can only answer from what you write here: no files, searches or connectors. Pick another model for that.`}
+        </p>
+      )}
+      {blind && (
+        <p className="composer-notice" role="note">
+          {`${chosenSpec?.displayName || 'This model'} can’t see pictures, so it would only get their file names. Pick a model that can see pictures for it to look.`}
+        </p>
+      )}
+      {attachNote && (
+        <p className="composer-notice" role="status">
+          {attachNote}
         </p>
       )}
       {handed.length > 0 && (
@@ -340,22 +511,32 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           ))}
         </div>
       )}
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || adding) && (
         <div className="composer-attachments-preview">
           {attachments.map((att) => (
             <span key={att.id} className="composer-attachment-tag">
-              <IconPaperclip size={13} />
+              {att.thumbnail ? (
+                <img className="composer-attachment-thumb" src={att.thumbnail} alt="" />
+              ) : (
+                <IconPaperclip size={13} />
+              )}
               <span>{att.name}</span>
               <button
                 type="button"
                 className="btn-icon-subtle"
-                aria-label="Remove attachment"
-                onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                aria-label={`Remove ${att.name}`}
+                onClick={() => setHeld(held.current.filter((a) => a.id !== att.id))}
               >
                 <IconClose size={12} />
               </button>
             </span>
           ))}
+          {adding && (
+            <span className="composer-attachment-tag adding" role="status">
+              <IconLoader className="spin" size={13} />
+              <span>Adding…</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -383,12 +564,15 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                 ? 'Writing down what you said…'
                 : running
                   ? `Add to what ${agent?.name || 'they'} is doing — they read it after this step`
-                  : `Give ${agent?.name || 'this agent'} a task...`
+                  : attachments.length > 0
+                    ? `What should ${agent?.name || 'they'} do with ${attachments.length === 1 ? 'this' : 'these'}?`
+                    : `Give ${agent?.name || 'this agent'} a task...`
           }
           value={input}
           disabled={sending && !conversation}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
         />
 
         <div className="composer-actions-row">
@@ -398,7 +582,6 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             title="Attach file"
             aria-label="Attach file"
             onClick={handleAttach}
-            disabled={isBusy}
           >
             <IconPaperclip size={15} />
           </button>

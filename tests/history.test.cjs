@@ -53,3 +53,28 @@ test('provider call IDs reused in later turns cannot replace earlier results', (
   ]);
   assert.deepEqual(history.filter(m=>m.role==='tool').map(m=>m.content),['first output','second output']);
 });
+
+const picture = (id, name = `${id}.png`) => ({ id, name, mime: 'image/png', size: 10, path: `/attachments/${id}.png`, kind: 'image' });
+const { requestSize } = require('../src/main/history.ts');
+
+test('a message you sent with pictures carries them, as the run loaded them', () => {
+  const loaded = new Map([['a1', { name: 'shot.png', mime: 'image/png', base64: 'AAAA' }]]);
+  const history = requestHistory([
+    msg('user', 'What is in this?', { attachments: [picture('a1', 'shot.png'), picture('gone')] }),
+    msg('assistant', 'A chart.')
+  ], (a) => loaded.get(a.id));
+  assert.deepEqual(history[0].images, [{ name: 'shot.png', mime: 'image/png', base64: 'AAAA' }]);
+  assert.equal(history[1].images, undefined);
+});
+
+test('without a way to load pictures, the history carries none (the context meter and checkpoints read it so)', () => {
+  const history = requestHistory([msg('user', 'What is in this?', { attachments: [picture('a1')] })]);
+  assert.equal(history[0].images, undefined);
+});
+
+test('a picture counts as a fixed amount of the budget, not by its bytes', () => {
+  const small = [{ role: 'user', content: 'Look', images: [{ name: 'a.png', mime: 'image/png', base64: 'A'.repeat(10) }] }];
+  const large = [{ role: 'user', content: 'Look', images: [{ name: 'a.png', mime: 'image/png', base64: 'A'.repeat(2_000_000) }] }];
+  assert.equal(requestSize(small), requestSize(large));
+  assert.ok(requestSize(small) > requestSize([{ role: 'user', content: 'Look' }]) + 1000);
+});

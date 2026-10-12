@@ -70,3 +70,42 @@ test('empty successful tool output is completed and incomplete JSON remains read
   assert.equal(toolPresentation({ name: 'read_file', arguments: '{"path":"app.ts"}' }).target, 'app.ts');
   assert.equal(toolPresentation({ name: 'custom_tool', arguments: '{' }).label, 'custom tool');
 });
+
+test('Responses sends your pictures as input_image parts after your words, and plain messages as text', async (t) => {
+  const oldFetch = global.fetch; t.after(() => global.fetch = oldFetch);
+  const image = { name: 'shot.png', mime: 'image/png', base64: 'iVBORw0KGgo=' };
+  const input = responsesInput([
+    { role: 'user', content: 'Earlier question' },
+    { role: 'assistant', content: 'Earlier answer' },
+    { role: 'user', content: 'What is this?', images: [image, { ...image, mime: 'image/jpeg', base64: '/9j/4AAQ' }] }
+  ]);
+  assert.deepEqual(input[0], { role: 'user', content: 'Earlier question' });
+  assert.deepEqual(input[2], { role: 'user', content: [
+    { type: 'input_text', text: 'What is this?' },
+    { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0KGgo=' },
+    { type: 'input_image', image_url: 'data:image/jpeg;base64,/9j/4AAQ' }
+  ] });
+  // Through the whole request, as the ChatGPT sign-in sends it.
+  let sent;
+  global.fetch = async (url, init) => { sent = JSON.parse(init.body); return stream([{ type: 'response.output_text.delta', delta: 'A chart.' }, { type: 'response.completed', response: { output: [], usage: {} } }]); };
+  const result = await streamChat(provider, 'token', { model: 'account-model', messages: [{ role: 'user', content: 'What is this?', images: [image] }] }, () => {});
+  assert.equal(result.imagesDropped, undefined);
+  assert.equal(sent.input[0].content[1].type, 'input_image');
+});
+
+test('a Responses model that refuses pictures is asked again with their names', async (t) => {
+  const oldFetch = global.fetch; t.after(() => global.fetch = oldFetch);
+  const bodies = [];
+  global.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return bodies.length === 1
+      ? new Response(JSON.stringify({ error: { message: 'This model does not support image inputs.' } }), { status: 400 })
+      : stream([{ type: 'response.output_text.delta', delta: 'I only see a name.' }, { type: 'response.completed', response: { output: [], usage: {} } }]);
+  };
+  const image = { name: 'shot.png', mime: 'image/png', base64: 'iVBORw0KGgo=' };
+  const result = await streamChat(provider, 'token', { model: 'm', messages: [{ role: 'user', content: 'What is this?', images: [image] }] }, () => {});
+  assert.equal(bodies.length, 2);
+  assert.equal(typeof bodies[1].input[0].content, 'string');
+  assert.match(bodies[1].input[0].content, /shot\.png/);
+  assert.equal(result.imagesDropped, true);
+});

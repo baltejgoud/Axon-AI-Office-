@@ -5,8 +5,10 @@ import { AgentMessageBus } from './runtime/messages';
 import { TerminalService, defaultShell, executableAvailability } from './runtime/terminal';
 import { ProviderRuntimeManager, providerProblem } from './runtime/providers';
 import { app, dialog, shell } from 'electron';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
+import { Attachments, isPicture } from './attachments';
+import type { AttachedFile } from '../shared/attach';
 import type {
   BackupSummary,
   ClaudeConnectInput,
@@ -34,6 +36,7 @@ import type {
 } from '../shared/types';
 import type {
   Agent,
+  Attachment,
   Message,
   Selection,
   StreamEvent,
@@ -61,7 +64,8 @@ import {
   contextModel,
   otherRegions,
   outputLimit,
-  streamChat
+  streamChat,
+  withoutImages
 } from './providers';
 import { search } from './knowledge';
 import { searchConversations } from './conversation-search';
@@ -201,6 +205,9 @@ export const TRUNCATED =
 /** Shown when a thinking model (Kimi, Qwen or DeepSeek reasoning) spends the whole limit before it answers. */
 export const TRUNCATED_THINKING =
   'The model used the whole max-token limit thinking and stopped before it answered. Raise Max tokens in Settings to give it more room.';
+/** Shown on a reply when pictures went with your message but the model could not see them. */
+export const unseenPictures = (model: string) =>
+  `${model} can't see pictures, so it only got their file names. Pick a model that can see pictures and ask again.`;
 /** Asked of a run that used all its steps: one last reply, written from what it has. */
 const wrapUpPrompt = (steps: number) =>
   `You have used all ${steps} steps this task allows (the step limit), so no more tools will run. Write your final answer now from what you have found so far, and say plainly what is still unfinished.`;
@@ -300,7 +307,8 @@ export class Service {
   private runs = new Map<string, AbortController>();
   /** Conversations whose run you asked to hear about when it ends ("Notify me when done"). */
   private notifyWhenDone = new Set<string>();
-  private attachments = new Map<string, { name: string; text: string }>();
+  /** Files you attached and haven't sent yet: a document's start, or a picture ready to send. */
+  private readonly files: Attachments;
   private readonly parsers: ParsePool;
   private tickTimer: NodeJS.Timeout | null = null;
   /** Coworkers' task records, and the tracker that keeps them in step with each run. */
@@ -371,6 +379,11 @@ export class Service {
       progress: (line) => this.emit({ channel: 'git', line })
     });
     this.parsers = new ParsePool(parserPath);
+    this.files = new Attachments(join(dataPath, 'data', 'attachments'), {
+      id: () => this.repo.id(),
+      extract: (path) => this.parsers.extract(path),
+      keepText: (id, content) => this.toolOutputs.put('attachment:' + id, content)
+    });
     this.mcp = new MCPClientManager(this.tools, {
       bearerFor: (config) => this.bearerFor(config),
       onChange: (serverId, status) =>
@@ -1629,10 +1642,13 @@ export class Service {
       this.state.teams.some((t) => t.conversationId === id && OPEN_TEAM.has(t.status))
     )
       return false;
+    const pictures = this.repo.conversationMessages(id).flatMap((m) => m.attachments ?? []).filter((a) => a.kind === 'image');
     this.state.conversations = this.state.conversations.filter((c) => c.id !== id);
     this.repo.deleteMessages(id);
     this.notifyWhenDone.delete(id);
     await this.repo.save();
+    // Its pictures go with it.
+    await this.files.remove(pictures);
     return true;
   }
   /**
@@ -1723,9 +1739,11 @@ export class Service {
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const tools = selectTools(catalog, history.findLast(m => m.role === 'user')?.content ?? '');
+    // Pictures count by number, so none are read for the meter (a model that can't see them is sent their names).
+    const picture = model?.supportsVision === false ? undefined : (a: Attachment) => ({ name: a.name, mime: a.mime, base64: '' });
     try {
     const plan = new ContextBudgetPlanner().compile({ model: chat.modelId, system, tools, contextSections, memoryCorrections: chat.memoryCorrections, semanticFacts: chat.memory?.facts,
-      messages: requestHistory(history), maxTokens: outputLimit(chat.modelId, this.state.settings.defaultMaxTokens) }, model);
+      messages: requestHistory(history, picture), maxTokens: outputLimit(chat.modelId, this.state.settings.defaultMaxTokens) }, model);
     return { usedChars: 0, budgetChars: 0, pct: plan.inputTokens / plan.contextWindow, estimated: true,
       tokenBasis: { usedTokens: plan.inputTokens, windowTokens: plan.contextWindow },
       outputReserve: plan.outputReserve, safetyMargin: plan.safetyMargin, archivedTokens: plan.archivedTokens, sections: plan.sections };
@@ -1786,8 +1804,12 @@ export class Service {
   }
 
   /** What a run needs before its first call: its context, tools, folders, and the request so far. */
-  private async prepareRun(chat: Conversation, provider: ProviderConfig, input: string, content: string) {
+  private async prepareRun(chat: Conversation, provider: ProviderConfig, input: string, content: string, pictures: Attachment[]) {
     const { history, connectors, roots, system, contextSections } = await this.runContext(chat, input);
+    const model = contextModel(provider, chat.modelId);
+    // A model marked as unable to see pictures is sent their names; one not marked is sent the pictures.
+    const sees = model?.supportsVision !== false;
+    const loaded = await this.files.load([...history.flatMap((m) => m.attachments ?? []), ...pictures], sees);
     /** This run's folders and shell setting; other runs keep their own. */
     const scope: PermissionScope = { roots, allowShell: Boolean(this.state.settings.allowShellExecution) };
     const toolCatalog = toolsFor({
@@ -1802,8 +1824,10 @@ export class Service {
     /** What this run offers; a connector tool outside it is refused even if the model names it. */
     const offered = new Set(availableTools.map((tool) => tool.name));
     // Every call keeps its result and trimming drops whole turns, so the history is always one providers accept.
-    const requests = [...requestHistory(history), { role: 'user' as const, content }];
-    const model = contextModel(provider, chat.modelId);
+    const images = pictures.flatMap((a) => loaded.get(a.id) ?? []);
+    const asked: ChatRequestMessage = { role: 'user', content, ...(images.length ? { images } : {}) };
+    const requests: ChatRequestMessage[] = [...requestHistory(history, (a) => loaded.get(a.id)), asked];
+    if (!sees) requests.splice(0, requests.length, ...withoutImages(requests));
     const maxTokens = Math.min(outputLimit(chat.modelId, this.state.settings.defaultMaxTokens), model?.maxOutputTokens ?? Infinity);
     return {
       connectors,
@@ -1820,10 +1844,10 @@ export class Service {
     };
   }
 
-  /** Messages sent to a conversation while it was generating, read at its next step. */
-  private queued = new Map<string, string[]>();
+  /** Messages sent to a conversation while it was generating, read at its next step, with the pictures that went with them. */
+  private queued = new Map<string, { content: string; pictures: Attachment[] }[]>();
   /** Takes a conversation's waiting messages, and tells the window none are waiting any more. */
-  private takeQueued(id: string, messageId: string): string[] {
+  private takeQueued(id: string, messageId: string): { content: string; pictures: Attachment[] }[] {
     const waiting = this.queued.get(id) ?? [];
     this.queued.delete(id);
     if (waiting.length)
@@ -1843,28 +1867,42 @@ export class Service {
     if (!Array.isArray(attachmentIds) || attachmentIds.length > 5)
       throw new Error('At most five attachments per message.');
     const attached = attachmentIds.map((id) => {
-      const a = this.attachments.get(id);
+      const a = this.files.get(id);
       if (!a) throw new Error('Attachment expired. Attach it again.');
-      return a;
+      return { id, ...a };
     });
+    // A picture goes to the model as a picture; only a document is written into the message.
+    const documents = attached.flatMap((a) => ('text' in a ? [{ id: a.id, name: a.name, text: a.text }] : []));
+    const pictures = attached.flatMap((a) => (isPicture(a) ? [a.picture] : []));
     const content =
       input +
-      attached
-        .map((a, index) => `\n\n<attachment name=${JSON.stringify(a.name)} attachmentId=${JSON.stringify(attachmentIds[index])}>\n${a.text}\n[Full document ingested. Use read_attachment with attachmentId ${attachmentIds[index]} for relevant sections.]\n</attachment>`)
+      documents
+        .map((a) => `\n\n<attachment name=${JSON.stringify(a.name)} attachmentId=${JSON.stringify(a.id)}>\n${a.text}\n[Full document ingested. Use read_attachment with attachmentId ${a.id} for relevant sections.]\n</attachment>`)
         .join('');
     const attachmentChat = this.state.conversations.find(c => c.id === id);
-    if (attachmentChat && attached.length) attachmentChat.attachmentRefs = [...(attachmentChat.attachmentRefs ?? []),
-      ...attached.map((attachment, index) => ({ id: attachmentIds[index], name: attachment.name }))]
+    if (attachmentChat && documents.length) attachmentChat.attachmentRefs = [...(attachmentChat.attachmentRefs ?? []),
+      ...documents.map((attachment) => ({ id: attachment.id, name: attachment.name }))]
       .filter((ref, index, all) => all.findIndex(item => item.id === ref.id) === index);
+    return this.send(id, input, content, pictures, options);
+  }
+
+  /** Runs a conversation on your message, or queues it while one is running. */
+  private async send(
+    id: string,
+    input: string,
+    content: string,
+    pictures: Attachment[],
+    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string }
+  ): Promise<void> {
     // Already working: the message waits for their next step (or their next run), instead of being lost.
     if (this.runs.has(id)) {
-      const waiting = [...(this.queued.get(id) ?? []), content];
+      const waiting = [...(this.queued.get(id) ?? []), { content, pictures }];
       this.queued.set(id, waiting);
       this.emit({
         channel: 'chat',
         conversationId: id,
         messageId: '',
-        queued: waiting,
+        queued: waiting.map((w) => w.content),
         streaming: true,
         done: false
       });
@@ -1898,7 +1936,9 @@ export class Service {
     let prepared: Awaited<ReturnType<Service['prepareRun']>>;
     try {
       await this.supervisor.acquire(supervised.runId);
-      prepared = await this.prepareRun(chat, provider, input, content);
+      prepared = await this.prepareRun(chat, provider, input, content, pictures);
+      // Read for this run just above; from now on they stay with the conversation.
+      await this.files.keep(pictures);
     } catch (error) {
       this.runs.delete(id);
       this.supervisor.finish(
@@ -1909,6 +1949,8 @@ export class Service {
       throw error;
     }
     const { connectors, system, contextSections, scope, availableTools, toolCatalog, offered, requests, maxTokens, model, key } = prepared;
+    /** Pictures went with this run's own messages, and the model could not take them: said once, on the last reply. */
+    let pictured = pictures.length > 0, unseen = model?.supportsVision === false;
     const runProject = new Project();
     runProject.root = scope.roots[0] ?? null;
     /** Questions put to colleagues in this run. */
@@ -1944,6 +1986,7 @@ export class Service {
         role: 'user',
         content,
         createdAt: Date.now(),
+        ...(pictures.length ? { attachments: pictures } : {}),
         ...(options.from ? { from: text(options.from, 80) } : {})
       },
       activeAssistant
@@ -2099,6 +2142,11 @@ export class Service {
         };
         spent += costOf(activeAssistant.usage, runModel) ?? 0;
         activeAssistant.toolCalls = usage.toolCalls;
+        // The model refused the pictures and answered from their names: later steps don't send them again.
+        if (usage.imagesDropped) {
+          unseen = true;
+          requests.splice(0, requests.length, ...withoutImages(requests));
+        }
 
         if (!usage.toolCalls || usage.toolCalls.length === 0) {
           if (usage.truncated)
@@ -2393,14 +2441,18 @@ export class Service {
         });
         // What you sent while this step ran is read now, after its results (never between a call and its answer).
         for (const sent of this.takeQueued(id, activeAssistant.id)) {
+          // A picture that has gone from disk since is left out; the message still reaches them.
+          const kept = await this.files.keep(sent.pictures).catch(() => [] as Attachment[]);
           this.repo.appendMessages({
             id: this.repo.id(),
             conversationId: id,
             role: 'user',
-            content: sent,
-            createdAt: Date.now()
+            content: sent.content,
+            createdAt: Date.now(),
+            ...(kept.length ? { attachments: kept } : {})
           });
-          requests.push({ role: 'user', content: sent });
+          requests.push(await this.asked(sent.content, kept, model?.supportsVision !== false));
+          if (kept.length) pictured = true;
         }
         activeAssistant = {
           id: this.repo.id(),
@@ -2500,6 +2552,8 @@ export class Service {
           target: { agentId: who?.id ?? chat.agentId ?? RECEPTIONIST_ID, conversationId: id }
         });
       }
+      if (pictured && unseen)
+        activeAssistant.notice = [activeAssistant.notice, unseenPictures(model?.displayName ?? chat.modelId)].filter(Boolean).join(' ');
       await this.repo.save();
       this.emit({
         channel: 'chat',
@@ -2515,17 +2569,23 @@ export class Service {
       });
       // Sent too late for this run (or as you stopped it): it starts the next one.
       const left = this.takeQueued(id, activeAssistant.id);
+      const joined = left.map((l) => l.content).join('\n\n');
       if (left.length && !stopped)
-        void this.chatSend(id, left.join('\n\n'), []).catch((error) =>
-          this.emit({
-            channel: 'chat',
-            conversationId: id,
-            messageId: activeAssistant.id,
-            error: error instanceof Error ? error.message : 'Could not send your message.',
-            streaming: false,
-            done: true
+        void Promise.resolve()
+          .then(() => {
+            text(joined, 60000);
+            return this.send(id, joined, joined, left.flatMap((l) => l.pictures), {});
           })
-        );
+          .catch((error) =>
+            this.emit({
+              channel: 'chat',
+              conversationId: id,
+              messageId: activeAssistant.id,
+              error: error instanceof Error ? error.message : 'Could not send your message.',
+              streaming: false,
+              done: true
+            })
+          );
     }
   }
 
@@ -3284,23 +3344,25 @@ export class Service {
       signal: AbortSignal.timeout(SPEECH_TIMEOUT_MS)
     });
   }
-  async attach(): Promise<{ id: string; name: string }[]> {
+  /** Documents go as their text; pictures (known by their bytes) as pictures, with a preview. */
+  async attach(): Promise<AttachedFile[]> {
     const files = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });
     if (files.canceled) return [];
     if (files.filePaths.length > 5) throw new Error('Choose at most five attachments.');
-    const result: { id: string; name: string }[] = [];
-    for (const path of files.filePaths) {
-      const content = await this.parsers.extract(path);
-      if (Buffer.byteLength(content, 'utf8') > 5_000_000)
-        throw new Error('Attachment exceeds the 5 MB ingestion limit. Split the document before attaching it.');
-      const id = this.repo.id(),
-        name = basename(path);
-      if (this.attachments.size >= 50) this.attachments.delete(this.attachments.keys().next().value!);
-      this.toolOutputs.put('attachment:' + id, content);
-      this.attachments.set(id, { name, text: content.slice(0, 1200) });
-      result.push({ id, name });
-    }
+    const result: AttachedFile[] = [];
+    for (const path of files.filePaths) result.push(await this.files.fromPath(path));
     return result;
+  }
+  /** A file pasted or dropped into the chat box: the same as choosing it, from its bytes and the name it had. */
+  async attachData(name: string, bytes: Uint8Array): Promise<AttachedFile> {
+    return this.files.fromBytes(name, bytes);
+  }
+  /** Your message as a request carries it: its pictures read from disk now, or named only for a model that can't see them. */
+  private async asked(content: string, pictures: Attachment[], sees: boolean): Promise<ChatRequestMessage> {
+    const loaded = await this.files.load(pictures, sees);
+    const images = pictures.flatMap((a) => loaded.get(a.id) ?? []);
+    const message: ChatRequestMessage = { role: 'user', content, ...(images.length ? { images } : {}) };
+    return sees ? message : withoutImages([message])[0];
   }
   async knowledgeImport(): Promise<void> {
     const files = await dialog.showOpenDialog({

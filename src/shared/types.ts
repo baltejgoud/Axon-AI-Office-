@@ -97,6 +97,8 @@ export interface Attachment {
   kind: 'text' | 'image' | 'binary';
   /** Extracted textual content for text-like files (bounded). */
   textPreview?: string;
+  /** Pictures: a small `data:` URL preview, shown with your message. */
+  thumbnail?: string;
 }
 
 export interface ToolCall {
@@ -392,12 +394,20 @@ export interface ProviderReplay {
   content: unknown[];
 }
 
+/** A picture as a request carries it; the name is what a model that can't see pictures gets instead. */
+export interface RequestImage {
+  name: string;
+  mime: string;
+  base64: string;
+}
+
 export interface ChatRequestMessage {
   /** Local provenance only; provider adapters do not serialize this field. */
   sourceMessageId?: string;
   role: MessageRole;
   content: string;
-  images?: { mime: string; base64: string }[];
+  /** Pictures that go with a message of yours, ahead of its text. */
+  images?: RequestImage[];
   /** For role === 'tool'. */
   name?: string;
   toolCallId?: string;

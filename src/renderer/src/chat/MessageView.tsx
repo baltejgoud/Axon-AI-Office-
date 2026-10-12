@@ -2,7 +2,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { Message, ToolCall } from '../../../shared/types';
 import { perform, useApp } from '../state';
 import { timeAgo } from '../format';
-import { Button, IconBook, IconCheck, IconCopy, IconSparkle, IconTerminal, IconUser } from '../ui';
+import { Button, IconBook, IconCheck, IconCopy, IconPaperclip, IconSparkle, IconTerminal, IconUser } from '../ui';
 import { toolPresentation } from './workPresentation';
 import { MessageMarkdown } from './MessageMarkdown';
 import { useReading, worthReading } from './reading';
@@ -117,6 +117,7 @@ export function MessageView({
   const [copied, setCopied] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
+  const pictures = (m.attachments ?? []).filter((a) => a.kind === 'image');
   const readable = copyable && worthReading(m.content);
   const shownText = m.role === 'user' ? visibleUserText(m.content) : m.content;
   const foldable =
@@ -164,6 +165,20 @@ export function MessageView({
                 <Fragment key={call.id}>{custom}</Fragment>
               ) : (
                 <ToolCallDetails key={call.id} call={call} conversationId={m.conversationId} />
+              )
+            )}
+          </div>
+        )}
+        {pictures.length > 0 && (
+          <div className="message-pictures">
+            {pictures.map((a) =>
+              a.thumbnail ? (
+                <img key={a.id} src={a.thumbnail} alt={a.name} title={a.name} />
+              ) : (
+                <span key={a.id} className="message-picture-name" title={a.name}>
+                  <IconPaperclip size={12} />
+                  {a.name}
+                </span>
               )
             )}
           </div>

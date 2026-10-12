@@ -999,6 +999,68 @@
   padding: 4px 6px;
   border-radius: 6px;
 }
+/* A picture you attached shows itself instead of the paperclip. */
+.composer-attachment-thumb {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.composer-attachment-tag.adding {
+  color: var(--office-muted);
+}
+/* Files dragged over the conversation: a calm veil over the panel, on top of it and out of the way of the drag. */
+.drop-overlay {
+  position: fixed;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 18px;
+  border-radius: var(--office-radius);
+  /* A veil, not a wall: the conversation stays faintly readable underneath. */
+  background: color-mix(in srgb, var(--office-blue) 9%, color-mix(in srgb, var(--office-paper) 68%, transparent));
+  border: 2px dashed color-mix(in srgb, var(--office-blue) 55%, transparent);
+  pointer-events: none;
+  animation: drop-overlay-in 0.14s ease-out;
+}
+.drop-overlay-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 270px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: var(--office-paper);
+  box-shadow: 0 8px 26px #14264220;
+  text-align: center;
+  color: var(--office-ink);
+}
+.drop-overlay-card svg {
+  color: var(--office-blue);
+}
+.drop-overlay-card strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.drop-overlay-card span {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--office-muted);
+}
+@keyframes drop-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drop-overlay {
+    animation: none;
+  }
+}
 /* Hero overflow menu: new conversation,
 library,
 earlier threads. */
@@ -1213,7 +1275,8 @@ sized for the side panel. */
   border-radius: 12px 4px 12px 12px;
   padding: 8px 11px;
 }
-.office-thread .message.user .message-meta {
+.office-thread .message.user .message-meta,
+.office-thread .message.user .message-pictures {
   justify-content: flex-end;
 }
 .office-thread .message-meta {

@@ -432,3 +432,101 @@ test('an address that cannot be reached is named, with what to check', async (t)
     /Could not reach offline\.example\. Check your internet connection/
   );
 });
+
+const shot = { name: 'shot.png', mime: 'image/png', base64: 'iVBORw0KGgo=' };
+const withShot = [{ role: 'user', content: 'What is this?', images: [shot] }];
+const geminiText = { candidates: [{ content: { parts: [{ text: 'ok' }] } }] };
+
+test('Anthropic gets pictures as base64 image blocks ahead of the text', async (t) => {
+  const bodies = mockFetch(t, () => new Response(sseBody(textEvent)));
+  const result = await streamChat(anthropic, 'k', { model: 'claude-sonnet-5', maxTokens: 10, messages: withShot }, () => {});
+  assert.deepEqual(bodies[0].messages[0].content, [
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: shot.base64 } },
+    { type: 'text', text: 'What is this?' }
+  ]);
+  assert.equal(result.imagesDropped, undefined);
+});
+
+test('a picture sent mid-run joins the results turn on Anthropic', async (t) => {
+  const bodies = mockFetch(t, () => new Response(sseBody(textEvent)));
+  await streamChat(anthropic, 'k', {
+    model: 'm', maxTokens: 10,
+    messages: [
+      { role: 'user', content: 'Read a' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'a', name: 'read_file', arguments: '{"path":"a"}' }] },
+      { role: 'tool', toolCallId: 'a', content: 'A' },
+      { role: 'user', content: 'Also this', images: [shot] }
+    ]
+  }, () => {});
+  const turn = bodies[0].messages[2].content;
+  assert.deepEqual(turn.map((block) => block.type), ['tool_result', 'image', 'text']);
+});
+
+test('Gemini gets pictures as inline data parts', async (t) => {
+  const bodies = mockFetch(t, () => new Response(sseBody(geminiText)));
+  await streamChat(gemini, 'k', { model: 'gemini-2.5-pro', maxTokens: 10, messages: withShot }, () => {});
+  assert.deepEqual(bodies[0].contents[0].parts, [{ inlineData: { mimeType: 'image/png', data: shot.base64 } }, { text: 'What is this?' }]);
+});
+
+test('OpenAI-compatible models get pictures as data URLs in a content list', async (t) => {
+  const bodies = mockFetch(t, () => new Response(sseBody(openAiText, '[DONE]')));
+  await streamChat(openai, 'k', { model: 'gpt-5', maxTokens: 10, messages: withShot }, () => {});
+  assert.deepEqual(bodies[0].messages[0].content, [
+    { type: 'text', text: 'What is this?' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${shot.base64}` } }
+  ]);
+});
+
+test('a model that refuses pictures is asked again with their names instead, and says so', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'Failed to deserialize the JSON body: unknown variant `image_url`, expected `text`' } }), { status: 422 })
+    : new Response(sseBody(openAiText, '[DONE]')));
+  let text = '';
+  const result = await streamChat(openai, 'k', { model: 'deepseek-v4-pro', maxTokens: 10, messages: withShot }, (chunk) => { text += chunk; });
+  assert.equal(bodies.length, 2);
+  assert.equal(typeof bodies[1].messages[0].content, 'string');
+  assert.match(bodies[1].messages[0].content, /What is this\?/);
+  assert.match(bodies[1].messages[0].content, /shot\.png/);
+  assert.equal(result.imagesDropped, true);
+  assert.equal(text, 'ok');
+});
+
+test('a 400 that is not about a field is also tried once more without the pictures', async (t) => {
+  const bodies = mockFetch(t, (n) => n === 1
+    ? new Response(JSON.stringify({ error: { message: 'Invalid content type for this model.' } }), { status: 400 })
+    : new Response(sseBody(textEvent)));
+  const result = await streamChat(anthropic, 'k', { model: 'text-only', maxTokens: 10, messages: withShot }, () => {});
+  assert.equal(bodies.length, 2);
+  assert.equal(typeof bodies[1].messages[0].content, 'string');
+  assert.equal(result.imagesDropped, true);
+});
+
+test('a refusal that is not about pictures still fails with the provider\'s message', async (t) => {
+  const bodies = mockFetch(t, () => new Response(JSON.stringify({ error: { message: 'model gpt-nope does not exist' } }), { status: 404 }));
+  await assert.rejects(
+    streamChat(openai, 'k', { model: 'gpt-nope', maxTokens: 10, messages: withShot }, () => {}),
+    /gpt-nope does not exist/
+  );
+  assert.equal(bodies.length, 2);
+});
+
+test('a request without pictures is never sent a second time because of them', async (t) => {
+  const bodies = mockFetch(t, () => new Response(JSON.stringify({ error: { message: 'model gpt-nope does not exist' } }), { status: 404 }));
+  await assert.rejects(streamChat(openai, 'k', { model: 'gpt-nope', maxTokens: 10, messages: hi }, () => {}), /does not exist/);
+  assert.equal(bodies.length, 1);
+});
+
+test('a wrong key is not retried without the pictures', async (t) => {
+  const bodies = mockFetch(t, () => new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), { status: 401 }));
+  await assert.rejects(streamChat(openai, 'k', { model: 'gpt-5', maxTokens: 10, messages: withShot }, () => {}), /401/);
+  assert.equal(bodies.length, 1);
+});
+
+test('withoutImages names each picture and drops its bytes', () => {
+  const [plain, named] = providers.withoutImages([{ role: 'user', content: 'Hi' }, { role: 'user', content: 'Look', images: [shot, { ...shot, name: 'b.png' }] }]);
+  assert.deepEqual(plain, { role: 'user', content: 'Hi' });
+  assert.equal('images' in named, false);
+  assert.match(named.content, /^Look\n\n\[Picture attached: shot\.png\./);
+  assert.match(named.content, /\[Picture attached: b\.png\./);
+  assert.doesNotMatch(JSON.stringify(named), /iVBOR/);
+});

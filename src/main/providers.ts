@@ -126,6 +126,8 @@ export interface StreamChatResult extends ChatUsage {
   replay?: ProviderReplay;
   /** The answer stopped at the max-token limit. */
   truncated?: boolean;
+  /** The model refused the request's pictures, so it was sent their names instead. */
+  imagesDropped?: boolean;
 }
 
 /** A provider's HTTP failure, with the provider's own explanation when it gave one. */
@@ -256,9 +258,13 @@ function anthropicMessages(messages: ChatRequestMessage[]): { role: string; cont
       ] });
     } else {
       const last = out[out.length - 1];
+      // Pictures go ahead of the text that asks about them.
+      const blocks = m.role === 'user' && m.images?.length
+        ? [...m.images.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mime, data: image.base64 } })), { type: 'text', text: m.content }]
+        : null;
       // A message you sent mid-run follows the step's results: it joins their turn, after them.
-      if (m.role === 'user' && last?.role === 'user' && Array.isArray(last.content)) last.content.push({ type: 'text', text: m.content });
-      else out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
+      if (m.role === 'user' && last?.role === 'user' && Array.isArray(last.content)) last.content.push(...(blocks ?? [{ type: 'text', text: m.content }]));
+      else out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: blocks ?? m.content });
     }
   }
   return out;
@@ -286,9 +292,10 @@ function geminiContents(messages: ChatRequestMessage[]): { role: string; parts: 
       ] });
     } else {
       const last = out[out.length - 1];
+      const parts = [...(m.role === 'user' ? m.images ?? [] : []).map(image => ({ inlineData: { mimeType: image.mime, data: image.base64 } })), { text: m.content }];
       // A message you sent mid-run follows the step's answers: it joins their turn, after them.
-      if (m.role === 'user' && last?.role === 'user') last.parts.push({ text: m.content });
-      else out.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] });
+      if (m.role === 'user' && last?.role === 'user') last.parts.push(...parts);
+      else out.push({ role: m.role === 'assistant' ? 'model' : 'user', parts });
     }
   }
   return out;
@@ -309,6 +316,10 @@ function openAiMessages(request: ChatRequest): unknown[] {
           tool_calls: m.toolCalls.map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name, arguments: tc.arguments } }))
         };
       }
+      if (m.role === 'user' && m.images?.length) return { role: m.role, content: [
+        { type: 'text', text: m.content },
+        ...m.images.map(image => ({ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.base64}` } }))
+      ] };
       return { role: m.role, content: m.content };
     })
   ];
@@ -319,7 +330,12 @@ export function responsesInput(messages: ChatRequestMessage[]): unknown[] {
   return messages.flatMap((m): unknown[] => {
     if (m.role === 'tool') return [{ type: 'function_call_output', call_id: m.toolCallId, output: m.content }];
     if (m.role === 'assistant' && m.replay?.kind === 'openai-responses') return m.replay.content;
-    const content: unknown[] = m.content ? [{ role: m.role === 'system' ? 'developer' : m.role, content: m.content }] : [];
+    // Your pictures follow your words as input_image parts; a message without pictures stays plain text.
+    const images = m.role === 'user' ? m.images ?? [] : [];
+    const body = images.length
+      ? [{ type: 'input_text', text: m.content }, ...images.map(image => ({ type: 'input_image', image_url: `data:${image.mime};base64,${image.base64}` }))]
+      : m.content;
+    const content: unknown[] = m.content || images.length ? [{ role: m.role === 'system' ? 'developer' : m.role, content: body }] : [];
     if (m.role === 'assistant') content.push(...(m.toolCalls ?? []).map((tc) => ({ type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments })));
     return content;
   });
@@ -389,35 +405,59 @@ function buildRequest(provider: ProviderConfig, key: string | null, request: Cha
   } };
 }
 
+/** Refusals that say nothing about what was sent: a wrong key, a timeout, a rate limit. */
+const NOT_ABOUT_CONTENT = [401, 403, 408, 429];
+
+/**
+ * The messages with each picture replaced by a line naming it, for a model that can't see pictures:
+ * it still learns what you attached, and can say it cannot look.
+ */
+export function withoutImages(messages: ChatRequestMessage[]): ChatRequestMessage[] {
+  return messages.map(({ images, ...m }) => images?.length
+    ? { ...m, content: `${m.content}\n\n${images.map(image => `[Picture attached: ${image.name}. This model can't see pictures, so only its name was sent.]`).join('\n')}` }
+    : m);
+}
+
 /**
  * Sends a chat request and returns the stream once the provider accepts it. A 400 that names an
  * optional field is sent again without it (or, for the output limit, under its other name), and that
- * field stays out for this endpoint and model.
+ * field stays out for this endpoint and model. A request with pictures that is refused is sent again
+ * with only their names (`imagesDropped`).
  */
-async function open(provider: ProviderConfig, key: string | null, request: ChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+async function open(provider: ProviderConfig, key: string | null, request: ChatRequest, signal: AbortSignal): Promise<{ body: ReadableStream<Uint8Array>; imagesDropped?: boolean }> {
   const { url, headers, payload } = buildRequest(provider, key, request);
   const refusedKey = `${url}|${request.model}`;
   withoutRefused(payload, refused.get(refusedKey) ?? new Set());
   let response = await post(url, headers, payload, signal, request.signal);
+  let failure: ProviderError | null = null;
   // One field at a time: a server may refuse two (a fixed temperature and the older limit name).
   for (let fallback = 0; response.status === 400 && fallback < 3; fallback++) {
-    const error = await providerError(response, key, provider);
-    const detail = error.detail.toLowerCase();
+    failure = await providerError(response, key, provider);
+    const detail = failure.detail.toLowerCase();
     const renamable = provider.kind === 'openai-compatible' ? LIMIT_NAMES : [];
     const field = [...OPTIONAL_FIELDS, ...renamable].find(name => name in payload && detail.includes(name));
-    if (!field) throw error;
+    if (!field) break;
     const fields = new Set([...(refused.get(refusedKey) ?? []), field]);
     refused.set(refusedKey, fields);
     withoutRefused(payload, fields);
+    failure = null;
     response = await post(url, headers, payload, signal, request.signal);
   }
-  if (!response.ok) throw await providerError(response, key, provider);
+  if (!response.ok) {
+    failure ??= await providerError(response, key, provider);
+    // Models that can't see pictures each refuse them in their own words (400, 404, 422...), so any
+    // refusal of the request itself is tried once more without them. If that fails too, its error says why.
+    const pictures = request.messages.some(m => m.images?.length);
+    if (pictures && failure.status >= 400 && failure.status < 500 && !NOT_ABOUT_CONTENT.includes(failure.status))
+      return { body: (await open(provider, key, { ...request, messages: withoutImages(request.messages) }, signal)).body, imagesDropped: true };
+    throw failure;
+  }
   if (provider.kind === 'anthropic') {
     const limits = rateLimitsOf(response.headers, request.model);
     if (limits) claudeLimits.set(provider.id, limits);
   }
   if (!response.body) throw new Error('Provider returned no response body.');
-  return response.body;
+  return { body: response.body };
 }
 
 /** A streamed error event becomes an error carrying the provider's message. */
@@ -434,7 +474,7 @@ function throwIfError(event: { error?: unknown; type?: string }, key: string | n
  */
 export async function checkModel(provider: ProviderConfig, key: string | null, model: string, signal?: AbortSignal): Promise<void> {
   const request: ChatRequest = { model, messages: [{ role: 'user', content: 'Reply with OK.' }], maxTokens: 16, signal };
-  const body = await open(provider, key, request, signal ?? new AbortController().signal);
+  const { body } = await open(provider, key, request, signal ?? new AbortController().signal);
   for await (const raw of sse(body)) {
     if (raw === '[DONE]') break;
     let event: { error?: unknown; type?: string };
@@ -534,7 +574,7 @@ export async function streamChat(
   // Aborted when the stream goes quiet for too long.
   const watchdog = new AbortController();
   const signal = request.signal ? AbortSignal.any([request.signal, watchdog.signal]) : watchdog.signal;
-  const body = await open(provider, key, request, signal);
+  const { body, imagesDropped } = await open(provider, key, request, signal);
 
   let received = false, truncated = false, refusedAnswer = false;
   let usage: ChatUsage = {};
@@ -727,7 +767,8 @@ export async function streamChat(
   return {
     ...usage,
     ...(toolCalls.length ? { toolCalls, replay: replayOf(provider, blocks, parts, openAiReasoning) } : {}),
-    ...(truncated ? { truncated } : {})
+    ...(truncated ? { truncated } : {}),
+    ...(imagesDropped ? { imagesDropped } : {})
   };
 }
 
