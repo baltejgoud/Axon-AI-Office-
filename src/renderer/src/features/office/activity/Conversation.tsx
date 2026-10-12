@@ -7,6 +7,7 @@ import type { Conversation as Thread, Message, ToolCall } from '../../../../../s
 import { perform, useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
 import { RetryRow } from '../../../chat/RetryRow';
+import { followUps } from './followUps';
 import { useRewrites } from '../../../chat/rewrites';
 import { filesChangedAfter, isTeamTask, writtenByYou } from '../../../../../shared/rewrite';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
@@ -277,6 +278,20 @@ export function Conversation({
     !shown.some((m) => m.streaming);
   const lastUserAt = shown.findLastIndex((m) => m.role === 'user');
   const lastShownAt = shown.findLastIndex((m) => !onlyWork(m));
+  const latestReply = shown[lastShownAt];
+  const latestRun = useApp((s) => s.data?.runs?.findLast((r) => r.conversationId === conversation?.id));
+  const suggestions =
+    !live &&
+    !activeRun &&
+    !rewriting &&
+    conversation?.agentId &&
+    latestReply?.role === 'assistant' &&
+    !latestReply.streaming &&
+    !latestReply.incomplete &&
+    !latestReply.error &&
+    (!latestRun || latestRun.status === 'completed')
+      ? followUps(latestReply.content)
+      : [];
   /** Under the last finished reply to something you wrote yourself. */
   const retryAt =
     rewritable &&
@@ -454,6 +469,22 @@ export function Conversation({
                       {cost && <RunCost cost={cost} />}
                       {i === retryAt && (
                         <RetryRow filesChanged={filesChangedAfter(shown, lastUserAt + 1)} onRetry={retry} />
+                      )}
+                      {i === lastShownAt && suggestions.length > 0 && (
+                        <div className="follow-up-chips" role="group" aria-label="Suggested follow-ups">
+                          {suggestions.map((text) => (
+                            <button
+                              key={text}
+                              type="button"
+                              title="Send this follow-up; Shift+click to edit first"
+                              onClick={(e) =>
+                                useOfficeStore.getState().compose(conversation!.agentId!, text, !e.shiftKey)
+                              }
+                            >
+                              {text}
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </Fragment>
                   );

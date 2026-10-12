@@ -17,23 +17,16 @@ export const MAX_OPTIONS = 6;
 export const ASK_USER_TOOL: ToolDefinition = {
   name: ASK_USER,
   description:
-    'Ask the user a question and wait for their answer. Use it when you need a decision only they can make, or ' +
-    'something you cannot find out yourself, and guessing could waste their time. Do not ask what you can learn by ' +
-    'reading the project or searching, and do not ask permission to do the task you were given. Ask one clear ' +
-    'question at a time, in plain words. When the answer is one of a few choices, give them as options.',
+    'Ask one essential user decision; never re-ask task permission.',
   parameters: {
     type: 'object',
     properties: {
-      question: { type: 'string', description: 'The question, in plain words.' },
+      question: { type: 'string' },
       options: {
         type: 'array',
-        items: { type: 'string' },
-        description: `Two to ${MAX_OPTIONS} short choices to pick from. Leave out for an open question.`
+        items: { type: 'string' }
       },
-      allow_other: {
-        type: 'boolean',
-        description: 'Let the user type their own answer as well (default true). Only false when the choices are the only sensible answers.'
-      }
+      allow_other: { type: 'boolean', default: true }
     },
     required: ['question']
   }

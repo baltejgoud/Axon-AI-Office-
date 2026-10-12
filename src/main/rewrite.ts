@@ -1,6 +1,8 @@
 import type { Message } from '../shared/types';
 import { attachmentIdsIn, userBlocks, writtenByYou } from '../shared/rewrite';
 import { visibleUserText } from '../shared/user-text';
+import { withMentions } from '../shared/mentions';
+import { COWORKERS } from '../shared/coworkers';
 
 /** A retry or an edit: where a conversation is cut back to before it carries on. */
 export interface Rewrite {
@@ -39,11 +41,12 @@ export function planRetry(messages: readonly Message[]): RewritePlan {
  * Edit: your message is replaced by the same message with new words, and everything after it goes.
  * Its attachment and file blocks are kept exactly as they were, with the attachments they name.
  */
-export function planEdit(messages: readonly Message[], messageId: string, words: string): RewritePlan {
+export function planEdit(messages: readonly Message[], messageId: string, words: string, agentId = ''): RewritePlan {
   const original = messages.find((m) => m.id === messageId);
   if (!original) throw new Error('That message is no longer in this conversation.');
   if (!writtenByYou(original)) throw new Error('Only messages you wrote yourself can be edited.');
-  const content = words + userBlocks(original.content);
+  const blocks = userBlocks(original.content).replace(/\n\n<mentioned-colleagues>[\s\S]*?<\/mentioned-colleagues>/g, '');
+  const content = withMentions(words, COWORKERS, agentId) + blocks;
   return {
     rewrite: { fromId: original.id, inclusive: true, keepAttachmentIds: attachmentIdsIn(original.content) },
     input: words,

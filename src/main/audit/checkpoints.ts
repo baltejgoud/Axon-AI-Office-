@@ -15,6 +15,12 @@ export interface Checkpoint {
   before?: string;
   /** What the write left, to tell whether the file has changed since. */
   afterHash: string;
+  /**
+   * What the call did, when it wasn't a write: it deleted the file (`before` is its text), or moved it
+   * to `movedTo` (`path` is where it was). Undo puts the file back; it never replaces another file.
+   */
+  kind?: 'delete' | 'move';
+  movedTo?: string;
   savedAt: number;
 }
 
@@ -50,7 +56,11 @@ export class Checkpoints {
   async get(toolCallId: string): Promise<Checkpoint | null> {
     try {
       const point = JSON.parse(await readFile(this.fileOf(toolCallId), 'utf8')) as Checkpoint;
-      return point.toolCallId === toolCallId && typeof point.root === 'string' && typeof point.path === 'string' ? point : null;
+      if (point.toolCallId !== toolCallId || typeof point.root !== 'string' || typeof point.path !== 'string') return null;
+      // A kept record that names an operation Axon doesn't know, or a move with no destination, is not trusted.
+      if (point.kind !== undefined && point.kind !== 'delete' && point.kind !== 'move') return null;
+      if (point.kind === 'move' && typeof point.movedTo !== 'string') return null;
+      return point;
     } catch {
       return null;
     }

@@ -185,8 +185,8 @@ export function CodeView({
   );
 }
 
-/** Undo for a saved write: asks natively first, and says why when it can't. */
-function UndoChange({ step }: { step: WorkStep }) {
+/** Undo for a saved write, a deleted file or a move: asks natively first, and says why when it can't. */
+export function UndoChange({ step }: { step: WorkStep }) {
   const [busy, setBusy] = useState(false);
   const change = step.change;
   if (!change || step.state !== 'done') return null;
@@ -289,7 +289,9 @@ function FileBar({
 /** Reject and approve, for a step waiting on you (the same answer as the card in the thread). */
 function Decision({ request, approve }: { request: ToolApprovalRequest; approve: string }) {
   // For a command, "always" covers that exact command; for anything else, the tool itself.
-  const always = EXACT_GRANTS.has(request.toolName)
+  const always = FILE_OPS.has(request.toolName)
+    ? `Do this exact ${request.toolName === 'delete_file' ? 'deletion' : 'move'} without asking again this session`
+    : EXACT_GRANTS.has(request.toolName)
     ? 'Run this exact command without asking again this session'
     : request.toolName === 'write_file' || request.toolName === 'edit_file'
       ? 'Save files without asking again this session'
@@ -305,7 +307,7 @@ function Decision({ request, approve }: { request: ToolApprovalRequest; approve:
       <button
         className="work-always"
         onClick={() => decideApproval(request, true, 'task')}
-        title={`Don’t ask again for ${toolLabel(request.toolName)} until this task is done`}
+        title={`Don’t ask again for ${FILE_OPS.has(request.toolName) ? `this exact ${request.toolName === 'delete_file' ? 'file' : 'move'}` : toolLabel(request.toolName)} until this task is done`}
       >
         Allow for this task
       </button>
@@ -324,6 +326,8 @@ function Decision({ request, approve }: { request: ToolApprovalRequest; approve:
 export const SHORTCUT_KEY = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 /** Commands whose "always allow" covers only the exact call (as in the main process's permissions). */
 const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
+/** Deleting or moving a file: the grant covers only that file (or that move). */
+const FILE_OPS = new Set(['delete_file', 'move_file']);
 
 function FileTree({
   nodes,

@@ -213,6 +213,18 @@ function describe(step: WorkStep, waiting: boolean, work: Work, processes: Proce
           : failed
             ? `${file} was not saved`
             : `Saved ${file}`;
+    case 'delete_file':
+    case 'move_file': {
+      const deleting = step.name === 'delete_file';
+      const name = deleting ? file : `${baseName(String(step.args.from ?? ''))} → ${String(step.args.to ?? '')}`;
+      return waiting
+        ? `Waiting for your OK to ${deleting ? 'delete' : 'move'} ${name}`
+        : running
+          ? `${deleting ? 'Deleting' : 'Moving'} ${name}`
+          : failed
+            ? `${name} was not ${deleting ? 'deleted' : 'moved'}`
+            : `${deleting ? 'Deleted' : 'Moved'} ${name}`;
+    }
     case 'list_files': {
       const where = String(step.args.directory ?? '').trim();
       return running ? 'Looking through the files' : `Looked through ${where ? where + '/' : 'the project'}`;

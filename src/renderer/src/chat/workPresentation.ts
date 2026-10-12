@@ -8,6 +8,8 @@ const LABELS: Record<string, string> = {
   read_file: 'Read file',
   write_file: 'Save file',
   edit_file: 'Edit file',
+  delete_file: 'Delete file',
+  move_file: 'Move file',
   list_files: 'Explore files',
   search_code: 'Search code',
   run_command: 'Run command',
@@ -37,7 +39,10 @@ const statusOf = (call: ToolCall): CallStatus =>
 
 export function toolPresentation(call: ToolCall) {
   const args = argsOf(call);
-  let target = [args.path, args.command, args.url, args.query].find((v) => typeof v === 'string');
+  let target =
+    call.name === 'move_file' && typeof args.from === 'string' && typeof args.to === 'string'
+      ? `${args.from} → ${args.to}`
+      : [args.path, args.command, args.url, args.query].find((v) => typeof v === 'string');
   const status = statusOf(call);
   let label = LABELS[call.name] ?? call.name.replace(/_/g, ' ');
   // A question to you: "Asked you: ..." with the words of the question.

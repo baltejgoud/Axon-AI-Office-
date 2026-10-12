@@ -31,6 +31,17 @@ const assert = require('node:assert/strict');
 const { Repository } = require('../src/main/repository.ts');
 const { Service } = require('../src/main/service.ts');
 
+test('saved shortcuts persist across repository reloads and invalid updates leave settings intact', async () => {
+  const { dir, repo, service } = makeService();
+  try {
+    await service.settingsSave({ ...repo.state.settings, savedPrompts: [{ name: 'weekly', text: 'Write my weekly update.' }] });
+    await repo.store.flushAll();
+    assert.deepEqual(new Repository(path.join(dir, 'db'), path.join(dir, 'backups')).state.settings.savedPrompts, [{ name: 'weekly', text: 'Write my weekly update.' }]);
+    await assert.rejects(() => service.settingsSave({ ...repo.state.settings, savedPrompts: [{ name: 'weekly', text: '' }] }), /Shortcut names/);
+    assert.equal(repo.state.settings.savedPrompts[0].text, 'Write my weekly update.');
+  } finally { service.shutdown(); await repo.store.flushAll(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 const makeService = (emit = () => {}) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'axon-service-'));
   fs.mkdirSync(path.join(dir, 'db'), { recursive: true });
@@ -379,7 +390,7 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
   await service.chatSend(chat.id, 'Build the settings page', []);
   assert.deepEqual(
     offered,
-    ['ask_colleague', 'find_skills', 'load_skill', 'web_search', 'read_webpage', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
+    ['ask_colleague', 'ask_user', 'find_skills', 'load_skill', 'web_search', 'read_webpage', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
     'no folder: a colleague, skills, the web and scoped memory retrieval'
   );
   assert.equal(consults, 3);
@@ -574,7 +585,7 @@ test('the receptionist keeps the planner with her own tools, knowing the date', 
     if (calls === 1) {
       assert.deepEqual(
         req.tools.map((tool) => tool.name),
-        ['ask_colleague', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'web_search', 'read_webpage', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
+        ['ask_colleague', 'ask_user', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'web_search', 'read_webpage', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
       );
       assert.match(
         req.system,

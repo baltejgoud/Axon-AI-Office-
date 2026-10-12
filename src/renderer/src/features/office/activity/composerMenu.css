@@ -1,0 +1,98 @@
+.composer-input-wrapper {
+  position: relative;
+}
+.composer-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 8;
+  max-height: 330px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--office-border);
+  border-radius: 12px;
+  background: var(--office-paper);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.composer-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 9px 12px;
+  gap: 3px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--office-ink);
+  cursor: pointer;
+}
+.composer-menu button.selected,
+.composer-menu button:hover {
+  background: var(--office-soft);
+}
+.composer-menu button span {
+  color: var(--office-muted);
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.composer-menu small,
+.composer-menu p {
+  display: block;
+  margin: 6px 12px;
+  color: var(--office-muted);
+  font-size: 12px;
+}
+.composer-save-shortcut {
+  margin-top: 6px;
+  font-size: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--office-muted);
+  cursor: pointer;
+}
+.composer-shortcut-save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  padding: 10px 0;
+}
+.composer-shortcut-save label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.composer-shortcut-save input {
+  min-width: 0;
+  padding: 6px;
+}
+.composer-shortcut-save p {
+  width: 100%;
+  color: var(--danger);
+}
+.follow-up-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 12px;
+}
+.follow-up-chips button {
+  padding: 7px 10px;
+  border: 1px solid var(--office-border);
+  border-radius: 16px;
+  background: var(--office-paper);
+  color: var(--office-ink);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.follow-up-chips button:hover {
+  background: var(--office-soft);
+}

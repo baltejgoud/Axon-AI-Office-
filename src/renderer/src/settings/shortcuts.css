@@ -1,0 +1,35 @@
+.shortcut-settings-info {
+  padding: var(--space-4);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.shortcut-settings-info p + p {
+  margin-top: var(--space-2);
+}
+.shortcut-settings-row {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.shortcut-settings-row label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.shortcut-settings-row .input {
+  width: 100%;
+  font-weight: normal;
+}
+.shortcut-settings-row textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.shortcut-settings-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

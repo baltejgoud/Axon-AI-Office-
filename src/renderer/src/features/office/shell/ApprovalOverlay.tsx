@@ -7,6 +7,7 @@ import { useToolRisks } from '../../../chat/useToolRisk';
 import { QuestionCard } from '../../../ui/QuestionCard';
 import { diffStats } from '../workspace/work';
 import type { ToolApprovalRequest } from '../../../../../shared/types';
+import { riskSummary } from '../../../../../shared/toolRisk';
 
 export function ApprovalOverlay() {
   const pending = useApp((s) => s.pendingApprovals);
@@ -17,6 +18,7 @@ export function ApprovalOverlay() {
   const current = requests.find((r) => r.id === selectedRequest) ?? requests[0];
   const labels = useToolRisks(requests.map((r) => r.toolName));
   const risks = new Map(requests.map((r, i) => [r.id, labels[i]]));
+  const steps = requests.filter((r) => !r.question);
   if (fullscreen) return null;
   if (!requests.length) return null;
   const review = (request: ToolApprovalRequest) => {
@@ -34,6 +36,18 @@ export function ApprovalOverlay() {
       aria-label="Pending approvals"
       aria-live="polite"
     >
+      {steps.length > 1 && (
+        <div className="office-approval-card" role="group" aria-label="Decide on all waiting steps">
+          <strong>{steps.length} steps need your OK</strong>
+          <p>{riskSummary(steps.map((r) => risks.get(r.id)!))}</p>
+          <div className="office-approval-actions">
+            <button onClick={() => steps.forEach((r) => decideApproval(r, false))}>Reject all</button>
+            <button onClick={() => steps.forEach((r) => decideApproval(r, true))}>
+              Approve all ({steps.length})
+            </button>
+          </div>
+        </div>
+      )}
       {requests.length > 1 && (
         <div className="approval-queue">
           <strong>{requests.length} requests need you</strong>

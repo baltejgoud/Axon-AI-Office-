@@ -78,7 +78,8 @@ import { ToolRegistry, missingArguments } from './tools/registry';
 import { WEB_TOOL_DEFINITIONS, createWebTools, webExcerptBytes } from './tools/web';
 import { checkedWebAccess, isWebKeyProvider, normalWebAccess, webKeySecret, type WebKeyProvider } from '../shared/webAccess';
 import { ProcessManager, localAddress } from './tools/processes';
-import { FILE_SAVERS, PermissionManager, type PermissionScope } from './security/permissions';
+import { FILE_CHANGERS, PermissionManager, type PermissionScope } from './security/permissions';
+import { planDelete, planMove } from './tools/fileOps';
 import { requestHistory, requestSize } from './history';
 import { ToolOutputStore, ContextTelemetry } from './context-artifacts';
 import { ContextBudgetPlanner, ContextCapacityError, countTokens, checkpoint, redactContext, isContextOverflow, MEMORY_TOOLS, searchConversation, toolExcerpt, selectTools, DISCOVER_TOOLS } from './context';
@@ -86,7 +87,8 @@ import { type ContextUsage } from '../shared/context-usage';
 import { costOf, formatUsd, modelOf, runEstimateTokens } from '../shared/cost';
 import { buildUsageReport } from './usage-report';
 import { AuditLog } from './audit/log';
-import { Checkpoints, hashText } from './audit/checkpoints';
+import { Checkpoints, hashText, type Checkpoint } from './audit/checkpoints';
+import { blockedUndo, toolOfPoint, undoLine, undoNewestFirst } from './audit/fileUndo';
 import type { ToolHandlerResult } from './tools/registry';
 import {
   auditSubject,
@@ -100,6 +102,7 @@ import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
 import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
 import { ASK_USER } from '../shared/askUser';
+import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
@@ -936,6 +939,7 @@ export class Service {
       );
   }
   async settingsSave(s: Parameters<PlatformAPI['settingsSave']>[0]): Promise<void> {
+    const savedPrompts = checkedSavedPrompts(s.savedPrompts);
     if (
       !['dark', 'light', 'system'].includes(s.theme) ||
       !Number.isInteger(s.defaultMaxTokens) ||
@@ -980,6 +984,7 @@ export class Service {
       }
     this.state.settings = {
       ...s,
+      savedPrompts,
       allowShellExecution: Boolean(s.allowShellExecution),
       shellAllowlist: s.shellAllowlist || [],
       sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
@@ -1092,10 +1097,14 @@ export class Service {
   async revertChange(toolCallId: string): Promise<void> {
     const point = await this.checkpoints.get(text(toolCallId, 200));
     if (!point) throw new Error("This change can't be undone any more (only the last 500 are kept).");
-    if (point.existed && point.before === undefined)
+    if (point.existed && point.before === undefined && point.kind !== 'move')
       throw new Error("Axon couldn't keep this file's previous version (it's over 1 MB or not text).");
     if (!this.project.root || resolve(this.project.root) !== resolve(point.root))
       throw new Error(`Open ${point.root} to undo this change.`);
+    if (point.kind) {
+      await this.revertFileOps([point]);
+      return;
+    }
     let current: string | null = null;
     try {
       current = await this.project.read(point.path);
@@ -1151,7 +1160,8 @@ export class Service {
       throw new Error('Nothing to undo.');
     const ids = [...new Set(toolCallIds.map((id) => text(id, 200)))];
     const points = (await Promise.all(ids.map((id) => this.checkpoints.get(id)))).filter(
-      (point): point is NonNullable<typeof point> => !!point && !(point.existed && point.before === undefined)
+      (point): point is NonNullable<typeof point> =>
+        !!point && (point.kind === 'move' || !(point.existed && point.before === undefined))
     );
     let skipped = ids.length - points.length;
     if (!points.length) throw new Error("These changes can't be undone any more.");
@@ -1159,6 +1169,8 @@ export class Service {
     if (roots.size > 1) throw new Error('These changes were made in different folders; undo them one at a time.');
     if (!this.project.root || resolve(this.project.root) !== [...roots][0])
       throw new Error(`Open ${points[0].root} to undo these changes.`);
+    // A task that deleted or moved files is undone newest change first, so each file ends up where it was.
+    if (points.some((point) => point.kind)) return this.revertFileOps(points, skipped);
     // Per file: the first save holds the version to put back; the last says what the task left there.
     const byPath = new Map<string, { first: (typeof points)[number]; last: (typeof points)[number]; all: typeof points }>();
     for (const point of [...points].sort((a, b) => a.savedAt - b.savedAt)) {
@@ -1233,6 +1245,68 @@ export class Service {
     }
     await this.repo.save();
     return { undone, skipped };
+  }
+
+  /**
+   * Undo for changes that include a deleted or moved file (alone, or among a task's saves): the newest
+   * change is taken back first, after one confirmation with Cancel as the default. A move never goes
+   * back over another file; a deleted file's name taken by a newer file is warned about first.
+   */
+  private async revertFileOps(points: Checkpoint[], skipped = 0): Promise<{ undone: number; skipped: number }> {
+    // Newest first; changes saved in the same moment keep the order they were given in, reversed.
+    const ordered = [...points].reverse().sort((a, b) => b.savedAt - a.savedAt);
+    const alone = ordered.length === 1;
+    if (alone) {
+      const blocked = await blockedUndo(this.project, ordered[0]);
+      if (blocked) throw new Error(blocked);
+    }
+    const chat = this.state.conversations.find((c) => c.id === ordered[0].conversationId);
+    const who = coworkerById(chat?.agentId)?.name ?? 'the assistant';
+    let taken = false;
+    for (const point of ordered) if (point.kind === 'delete' && (await this.project.exists(point.path))) taken = true;
+    const first = ordered[0];
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      message: !alone
+        ? `Undo all of ${who}'s changes from this task?`
+        : first.kind === 'delete'
+          ? `Undo ${who}'s deletion of ${first.path}?`
+          : `Undo ${who}'s move of ${first.path}?`,
+      detail: [
+        alone ? undoLine(first).replace(/^• /, '') : `${ordered.length} changes are taken back, newest first:`,
+        ...(alone ? [] : [ordered.slice(0, 8).map(undoLine).join('\n'), ...(ordered.length > 8 ? [`…and ${ordered.length - 8} more`] : [])]),
+        taken ? "Something with a deleted file's name is there now: bringing the file back replaces it." : '',
+        skipped ? `${skipped} change${skipped === 1 ? " can't" : "s can't"} be undone any more and stay as they are.` : ''
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      buttons: ['Cancel', alone ? 'Undo change' : 'Undo all'],
+      defaultId: 0,
+      cancelId: 0
+    });
+    if (choice.response !== 1) throw new Error('Undo cancelled.');
+    const { done, failed } = await undoNewestFirst(this.project, ordered);
+    // One change that could not be put back says why; several are counted.
+    if (alone && failed.length) throw failed[0].error;
+    for (const point of done) {
+      const call = this.repo
+        .conversationMessages(point.conversationId)
+        .find((m) => m.toolCalls?.some((c) => c.id === point.toolCallId))
+        ?.toolCalls?.find((c) => c.id === point.toolCallId);
+      if (call?.change) call.change.revertedAt = Date.now();
+      this.audit.record({
+        conversationId: point.conversationId,
+        actor: { kind: 'you', name: 'You' },
+        tool: toolOfPoint(point),
+        subject: point.kind === 'move' ? `${point.path} → ${point.movedTo}` : point.path,
+        decision: 'reverted',
+        toolCallId: point.toolCallId,
+        detail: point.kind === 'move' ? 'Moved the file back.' : point.kind === 'delete' ? 'Brought the deleted file back.' : 'Put back the previous version.'
+      });
+      await this.checkpoints.remove(point.toolCallId);
+    }
+    await this.repo.save();
+    return { undone: done.length, skipped: skipped + failed.length };
   }
 
   /** The planner adds a to-do. Same checks as the receptionist's tools. */
@@ -1827,7 +1901,9 @@ export class Service {
     root = this.project.root!
   ): Promise<void> {
     const previous = result.previous!;
-    if (previous.existed && previous.content === null) {
+    // A move keeps no text: it goes back by moving. A write whose old text couldn't be read can't be undone.
+    const op = result.undoAs;
+    if (!op && previous.existed && previous.content === null) {
       result.change!.undo = 'unreadable';
       return;
     }
@@ -1835,10 +1911,11 @@ export class Service {
       toolCallId: tc.id,
       conversationId,
       root,
-      path: String(args.path),
+      path: op?.path ?? String(args.path),
       existed: previous.existed,
       ...(previous.content !== null ? { before: previous.content } : {}),
-      afterHash: hashText(result.written ?? String(args.content))
+      afterHash: hashText(result.written ?? String(args.content)),
+      ...(op ? { kind: op.kind, ...(op.movedTo !== undefined ? { movedTo: op.movedTo } : {}) } : {})
     });
     if (kept) result.change!.undo = 'kept';
   }
@@ -2014,7 +2091,7 @@ export class Service {
     const blocker = this.rewriteBlocker(text(id, 100));
     if (blocker) throw new Error(blocker);
     const messages = this.repo.conversationMessages(id);
-    const plan = planEdit(messages, text(messageId, 100), input);
+    const plan = planEdit(messages, text(messageId, 100), input, this.state.conversations.find((c) => c.id === id)?.agentId);
     // The new message carries the original's pictures, as it carries its document blocks.
     const pictures = (messages.find((m) => m.id === plan.rewrite.fromId)?.attachments ?? []).filter((a) => a.kind === 'image');
     return this.startRun(id, plan.input, plan.content, pictures, {}, plan.rewrite);
@@ -2552,6 +2629,23 @@ export class Service {
             });
           this.supervisor.update(supervised.runId, { status: 'working', activeTool: tc.name });
           running();
+          // Destructive operations only start once their Undo record is on disk.
+          let fileOpKept = false;
+          if (tc.name === 'delete_file' || tc.name === 'move_file') {
+            const plan = tc.name === 'delete_file'
+              ? await planDelete(runProject, parsedArgs.path)
+              : await planMove(runProject, parsedArgs.from, parsedArgs.to);
+            if ('error' in plan) { answer(tc, { content: plan.error, isError: true }, 'skipped'); continue; }
+            const point = 'before' in plan
+              ? { kind: 'delete' as const, path: plan.path, before: plan.before }
+              : { kind: 'move' as const, path: plan.from, movedTo: plan.to };
+            fileOpKept = await this.checkpoints.save({ toolCallId: tc.id, conversationId: id,
+              root: runProject.root!, existed: true, afterHash: hashText(''), ...point });
+            if (!fileOpKept) {
+              answer(tc, { content: 'Could not keep an Undo record. The file was left alone.', isError: true }, 'skipped');
+              continue;
+            }
+          }
           const result = await toolImpl.execute(parsedArgs, {
             project: runProject,
             allowShell: scope.allowShell,
@@ -2574,8 +2668,11 @@ export class Service {
                 { conversationId: id, name: actor.name }
               )
           });
-          if (
-            FILE_SAVERS.has(tc.name) &&
+          if (fileOpKept) {
+            if (result.isError) await this.checkpoints.remove(tc.id);
+            else if (result.change) result.change.undo = 'kept';
+          } else if (
+            FILE_CHANGERS.has(tc.name) &&
             result.previous &&
             result.change &&
             !result.isError &&
@@ -2584,7 +2681,7 @@ export class Service {
             await this.keepCheckpoint(id, tc, parsedArgs, result, runProject.root!);
           const notes = [
             check.bySession ? 'Allowed for this session' : check.byTask ? 'Allowed for this task' : '',
-            FILE_SAVERS.has(tc.name) && result.change && result.change.undo !== 'kept'
+            FILE_CHANGERS.has(tc.name) && result.change && result.change.undo !== 'kept'
               ? "Can't be undone"
               : ''
           ].filter(Boolean);

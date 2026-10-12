@@ -1,4 +1,4 @@
-import { lstat, realpath, readdir, readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { lstat, realpath, readdir, readFile, writeFile, mkdir, unlink, rename } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, extname } from 'node:path';
 import { execFile } from 'node:child_process';
 const excluded = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.next', 'vendor', '.venv', '.ssh', '.aws']);
@@ -102,6 +102,32 @@ export class Project {
     const target = await this.safe(path);
     if ((await lstat(target)).isDirectory()) throw new Error('Only files can be removed.');
     await unlink(target);
+  }
+  /**
+   * Moves or renames a file inside the project, never over another file (only a change of letter case
+   * on the same file is let through) and never a folder. Folders missing on the way are made. Both
+   * ends get the same checks as writing a file there.
+   */
+  async move(from: string, to: string): Promise<void> {
+    const source = await this.safe(from);
+    if (!(await lstat(source)).isFile()) throw new Error('Only files can be moved.');
+    const target = await this.safe(to, true);
+    if (source === target) throw new Error('The file is already there.');
+    const here = await lstat(source, { bigint: true });
+    const there = await lstat(target, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (there) {
+      // Another name for the same file on a case-insensitive disk (Readme.md to README.md) is a rename, not an overwrite.
+      const sameFile = here.ino !== 0n && here.ino === there.ino && here.dev === there.dev;
+      if (!sameFile || source.toLowerCase() !== target.toLowerCase()) throw new Error('Something is already at that path.');
+    }
+    await mkdir(dirname(target), { recursive: true });
+    // Checked again now the folders exist, as a write does, so nothing was swapped for a link in between.
+    await this.safe(from);
+    await this.safe(to, true);
+    await rename(source, target);
   }
   async write(path: string, text: string): Promise<void> {
     if (text.length > 1_000_000) throw new Error('File too large.');

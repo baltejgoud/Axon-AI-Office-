@@ -57,6 +57,8 @@ export interface AuditQuery {
   limit?: number;
 }
 
+/** The tools whose successful calls are changes to your files. */
+const CHANGING_TOOLS = new Set(['write_file', 'edit_file', 'delete_file', 'move_file']);
 const ASKED = new Set<AuditDecision>(['approved', 'approved-session', 'approved-task', 'rejected', 'timed-out', 'withdrawn']);
 const REFUSED = new Set<AuditDecision>(['denied', 'rejected', 'timed-out', 'skipped']);
 
@@ -64,7 +66,7 @@ const REFUSED = new Set<AuditDecision>(['denied', 'rejected', 'timed-out', 'skip
 export function inGroup(entry: AuditEntry, group: AuditGroup = 'all'): boolean {
   if (group === 'asked') return ASKED.has(entry.decision);
   if (group === 'refused') return REFUSED.has(entry.decision);
-  if (group === 'changes') return entry.decision === 'reverted' || ((entry.tool === 'write_file' || entry.tool === 'edit_file') && entry.result === 'ok');
+  if (group === 'changes') return entry.decision === 'reverted' || (CHANGING_TOOLS.has(entry.tool) && entry.result === 'ok');
   return true;
 }
 
@@ -94,7 +96,10 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
     case 'read_file':
     case 'write_file':
     case 'edit_file':
+    case 'delete_file':
       return clip(str(args.path));
+    case 'move_file':
+      return clip(`${str(args.from)} → ${str(args.to)}`);
     case 'list_files':
       return clip(str(args.directory ?? args.directoryPath ?? args.path) || '.');
     case 'search_code':

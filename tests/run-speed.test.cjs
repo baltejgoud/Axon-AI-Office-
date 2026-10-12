@@ -204,6 +204,7 @@ test('the Chief of Staff gets the house rules, no project map, read-only files a
   assert.ok(!seen.system.includes('Project Structure'), 'no map to go exploring');
   assert.deepEqual(seen.tools, [
     'ask_colleague',
+    'ask_user',
     'call_team_meeting',
     'file_context',
     'find_people',

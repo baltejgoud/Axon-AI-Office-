@@ -5,6 +5,7 @@ import type { BackupSummary, PlatformState } from '../shared/platform';
 import type { Message } from '../shared/types';
 import { everyone } from '../shared/connectors';
 import { DEFAULT_WEB_ACCESS, normalWebAccess } from '../shared/webAccess';
+import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { JsonStore } from './infra/store';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
@@ -55,6 +56,7 @@ export function initialState(): PlatformState {
       dataDirectoryNote: '',
       keepInTray: true,
       startWithWindows: false,
+      savedPrompts: [],
       webAccess: { ...DEFAULT_WEB_ACCESS }
     },
     mcpServers: [],
@@ -367,6 +369,8 @@ export class Repository {
     state.runs = Array.isArray(state.runs) ? state.runs : [];
     state.agentMessages = Array.isArray(state.agentMessages) ? state.agentMessages : [];
     if (state.settings) {
+      try { state.settings.savedPrompts = checkedSavedPrompts(state.settings.savedPrompts); }
+      catch { state.settings.savedPrompts = []; }
       state.settings.keepInTray ??= true;
       state.settings.startWithWindows ??= false;
       // Web access arrived with the web tools (2026-10): older saves get it on, with DuckDuckGo.

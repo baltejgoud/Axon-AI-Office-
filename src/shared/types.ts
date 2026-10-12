@@ -298,6 +298,7 @@ export interface KnowledgeSearchHit {
 /* --------------------------------- Settings ----------------------------------- */
 
 export interface Settings {
+  savedPrompts?: import('./savedPrompts').SavedPrompt[];
   providerConcurrency?: Record<string, number>;
   teamConcurrency?: number;
   autoFitCredits?: boolean;

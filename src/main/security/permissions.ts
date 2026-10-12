@@ -31,10 +31,14 @@ interface PendingApproval {
   resolve: (outcome: ApprovalOutcome) => void;
 }
 
-/** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run. */
-const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit']);
+/** The tools that delete or move a file. They always ask, never under a blanket grant, and check every path they name. */
+export const FILE_OPS = new Set(['delete_file', 'move_file']);
+/** Tools whose "always allow" covers only the exact call approved: a blanket grant would let any command run, or any file go. */
+const EXACT_GRANTS = new Set(['run_command', 'start_process', 'git_commit', ...FILE_OPS]);
 /** The tools that save files. They share one "save files without asking" grant, and the folder check. */
 export const FILE_SAVERS = new Set(['write_file', 'edit_file']);
+/** Every tool that changes a file in a way Undo can reverse. */
+export const FILE_CHANGERS = new Set([...FILE_SAVERS, ...FILE_OPS]);
 /** The name a tool's session grant is kept under. */
 const grantName = (toolName: string) => (FILE_SAVERS.has(toolName) ? 'write_file' : toolName);
 /** What a grant for this call covers: the exact call for commands, else the tool. */
@@ -92,6 +96,18 @@ export class PermissionManager {
     // A connector tool you turned off stays off, whatever was allowed before.
     const connector = this.connectorRule?.(toolName) ?? null;
     if (connector === 'off') return { action: 'deny', reason: 'This tool is turned off in Settings → Connectors.' };
+
+    // Deleting or moving a file: every path it names must be inside this run's folders, checked before any
+    // grant, so no grant can reach outside them. It always asks, whatever the default policy says; only a
+    // grant for this exact call (the same path, or the same from and to) skips the question.
+    if (FILE_OPS.has(toolName)) {
+      if (!roots.length) return { action: 'deny', reason: 'There is no project folder open to work in.' };
+      for (const p of toolName === 'move_file' ? [args.from, args.to] : [args.path]) {
+        if (p !== undefined && p !== null && !this.isPathWithinRoots(String(p), roots))
+          return { action: 'deny', reason: `Path "${p}" is outside allowed workspace roots.` };
+      }
+      return this.sessionGrants.has(grantKey(toolName, args)) ? { action: 'allow', bySession: true } : { action: 'ask' };
+    }
 
     // 1. Session-level grant check
     if (this.sessionGrants.has(`${toolName}:${JSON.stringify(args)}`) || this.sessionGrants.has(`${grantName(toolName)}:*`)) {

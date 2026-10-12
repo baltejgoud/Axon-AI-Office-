@@ -73,6 +73,7 @@ export async function askYou(host: AskHost, input: AskInput): Promise<{ content:
   // Stopping the run withdraws the question, so a late answer can't reach a run that has ended.
   const withdraw = () => host.permissions.withdraw(request.id);
   signal.addEventListener('abort', withdraw, { once: true });
+  if (signal.aborted) withdraw();
   await outcome;
   signal.removeEventListener('abort', withdraw);
   host.supervisor.update(input.runId, { status: 'working', activeTool: undefined });

@@ -9,9 +9,11 @@ import {
   IconSearch,
   IconTerminal,
   IconTool,
+  IconTrash,
   IconWorld
 } from '../../../ui';
 import { useOfficeStore } from '../store/officeStore';
+import { UndoChange } from '../workspace/WorkViews';
 import {
   baseName,
   commandLine,
@@ -62,14 +64,21 @@ export function WorkSummary({
         ? { label: 'Waiting for your OK', tone: 'waiting' }
         : step.state === 'running'
           ? {
-              label: step.name === 'write_file' || step.name === 'edit_file' ? 'Saving…' : 'Running…',
+              label:
+                step.name === 'write_file' || step.name === 'edit_file'
+                  ? 'Saving…'
+                  : step.name === 'delete_file'
+                    ? 'Deleting…'
+                    : step.name === 'move_file'
+                      ? 'Moving…'
+                      : 'Running…',
               tone: 'running'
             }
           : step.state === 'failed'
             ? { label: failed, tone: 'failed' }
             : { label: done, tone: 'done' };
 
-  const { files, commands, looked, pages, tools } = summary;
+  const { files, commands, looked, pages, tools, fileOps } = summary;
   const title = runTitle(summary, live);
   const reads = looked.filter((s) => s.name === 'read_file');
   const searches = looked.filter((s) => s.name === 'search_code');
@@ -122,6 +131,42 @@ export function WorkSummary({
                 </span>
               )}
             </Row>
+          );
+        })}
+        {fileOps.map((step) => {
+          // A deleted or moved file: its own row, with its own Undo beside it.
+          const deleting = step.name === 'delete_file';
+          const { label, tone } = state(step, deleting ? 'Deleted' : 'Moved', deleting ? 'Not deleted' : 'Not moved');
+          const from = stepPath(step);
+          const to = String(step.args.to ?? '').replace(/\\/g, '/');
+          return (
+            <div className="work-summary-op" key={step.id}>
+              <Row
+                icon={deleting ? <IconTrash size={14} /> : <IconFileText size={14} />}
+                onClick={() => show(step)}
+                tone={tone}
+                label={label}
+              >
+                {deleting ? (
+                  <>
+                    <span className="work-summary-name is-deleted">{baseName(from)}</span>
+                    <span className="work-summary-dir">
+                      {from.slice(0, from.length - baseName(from).length).replace(/\/$/, '')}
+                    </span>
+                    {step.change && step.change.removed > 0 && (
+                      <span className="work-summary-stat">
+                        <span className="del">−{step.change.removed}</span>
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <code className="work-summary-command">
+                    {from} → {to}
+                  </code>
+                )}
+              </Row>
+              {!step.change?.revertedAt && <UndoChange step={step} />}
+            </div>
           );
         })}
         {commands.map((step) => {

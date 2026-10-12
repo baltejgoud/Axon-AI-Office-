@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../../state';
 import { draftFor, saveDraft, useOfficeStore } from '../store/officeStore';
@@ -8,6 +16,9 @@ import { FolderPicker } from './FolderPicker';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
 import { recallStep, sentTexts } from './recall';
+import { composerToken, mentionChoices, withMentions, type ComposerToken } from './composerMenu';
+import { BUILTIN_PROMPTS, checkedSavedPrompts } from '../../../../../shared/savedPrompts';
+import './composerMenu.css';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
@@ -33,7 +44,9 @@ interface AgentComposerProps {
 
 /** An error from main as plain words, without Electron's "Error invoking remote method" wrapper. */
 const plainError = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : fallback;
+  error instanceof Error
+    ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+    : fallback;
 
 export function AgentComposer({ agentId }: AgentComposerProps) {
   const { data, model, patch } = useApp();
@@ -43,6 +56,86 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
   // The box opens with whatever was left unsent for this coworker.
   const [input, setInput] = useState(() => draftFor(agentId));
+  const [token, setToken] = useState<ComposerToken | null>(null);
+  const [menuIndex, setMenuIndex] = useState(0);
+  const [savingShortcut, setSavingShortcut] = useState(false);
+  const [shortcutName, setShortcutName] = useState('');
+  const [shortcutError, setShortcutError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const shortcutInput = useRef<HTMLInputElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const savedPrompts = data?.settings.savedPrompts ?? [];
+  const menuItems =
+    token?.kind === 'mention'
+      ? mentionChoices(token.query, OFFICE_AGENTS, agentId).map((a) => ({
+          key: a.id,
+          label: a.name,
+          detail: a.department,
+          text: `@${a.name} `
+        }))
+      : token?.kind === 'shortcut'
+        ? [
+            ...savedPrompts,
+            ...BUILTIN_PROMPTS.filter((p) => !savedPrompts.some((s) => s.name.toLowerCase() === p.name))
+          ]
+            .filter((p) => p.name.toLowerCase().startsWith(token.query.toLowerCase()))
+            .slice(0, 8)
+            .map((p) => ({ key: p.name, label: `/${p.name}`, detail: p.text, text: p.text }))
+        : [];
+  const updateMenu = (text: string, caret: number) => {
+    const next = composerToken(text, caret);
+    const completedMention =
+      next?.kind === 'mention' &&
+      OFFICE_AGENTS.some((a) => next.query.toLowerCase().startsWith(`${a.name.toLowerCase()} `));
+    setToken(completedMention ? null : next);
+    setMenuIndex(0);
+  };
+  const insertMenuItem = (index: number) => {
+    const item = menuItems[index];
+    if (!token || !item) return;
+    const next = input.slice(0, token.start) + item.text + input.slice(token.end);
+    const caret = token.start + item.text.length;
+    setInput(next);
+    setToken(null);
+    recalled.current = { index: -1, text: '' };
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(caret, caret);
+    });
+  };
+  useEffect(() => {
+    if (savingShortcut) shortcutInput.current?.focus();
+  }, [savingShortcut]);
+  useEffect(() => {
+    if (!token) return;
+    const close = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menu.current?.contains(event.target) &&
+        event.target !== box.current
+      )
+        setToken(null);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [token]);
+  const saveShortcut = async () => {
+    if (!data || saving) return;
+    setSaving(true);
+    setShortcutError('');
+    try {
+      const prompts = checkedSavedPrompts([...savedPrompts, { name: shortcutName, text: input }]);
+      await window.axon.settingsSave({ ...useApp.getState().data!.settings, savedPrompts: prompts });
+      await useApp.getState().refresh();
+      setSavingShortcut(false);
+      setShortcutName('');
+      box.current?.focus();
+    } catch (error) {
+      setShortcutError(plainError(error, 'Could not save the shortcut.'));
+    } finally {
+      setSaving(false);
+    }
+  };
   /** The message Up last brought back: its place in what you sent (steps back from the newest) and its text. */
   const recalled = useRef({ index: -1, text: '' });
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -251,7 +344,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             ? pastedName(file.type, new Date(), ++pictures)
             : file.name || 'Attachment';
         if (file.size === 0) notes.push(`${name} is empty.`);
-        else if (file.size > MAX_UPLOAD_BYTES) notes.push(`${name} is over 20 MB, which is too big to attach.`);
+        else if (file.size > MAX_UPLOAD_BYTES)
+          notes.push(`${name} is over 20 MB, which is too big to attach.`);
         else
           try {
             const attached = await window.axon.attachData(name, new Uint8Array(await file.arrayBuffer()));
@@ -263,7 +357,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       }
       setAdding(false);
       setAttachNote(notes.join(' '));
-      if (added.length) pushActivity(agentId, { type: 'file', title: 'Files attached', detail: added.join(', ') });
+      if (added.length)
+        pushActivity(agentId, { type: 'file', title: 'Files attached', detail: added.join(', ') });
     });
   };
 
@@ -294,7 +389,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       if (!withFiles(e)) return;
       e.preventDefault();
       depth++;
-      setDropping({ box: panel.getBoundingClientRect(), host: panel.closest('.office-container') ?? document.body });
+      setDropping({
+        box: panel.getBoundingClientRect(),
+        host: panel.closest('.office-container') ?? document.body
+      });
     };
     const over = (e: Event) => {
       if (!withFiles(e)) return;
@@ -358,7 +456,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     try {
       await window.axon.chatSend(
         conversation.id,
-        withFileContext(textToSend, useOfficeStore.getState().pendingFiles[agentId] ?? []),
+        withFileContext(
+          withMentions(textToSend, OFFICE_AGENTS, agentId),
+          useOfficeStore.getState().pendingFiles[agentId] ?? []
+        ),
         attachIds
       );
       useOfficeStore.getState().clearFiles(agentId);
@@ -375,6 +476,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   };
 
   const handleSend = async (text = input) => {
+    setToken(null);
     // Files can go on their own: a pasted screenshot needs no words.
     const textToSend = text.trim() || (attachments.length ? filesOnlyText(attachments) : '');
     if (!textToSend || !agent) return;
@@ -451,7 +553,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
       await window.axon.chatSend(
         convId,
-        withFileContext(textToSend, useOfficeStore.getState().pendingFiles[agentId] ?? []),
+        withFileContext(
+          withMentions(textToSend, OFFICE_AGENTS, agentId),
+          useOfficeStore.getState().pendingFiles[agentId] ?? []
+        ),
         attachIds
       );
       useOfficeStore.getState().clearFiles(agentId);
@@ -495,6 +600,22 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (token && !dictating && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setToken(null);
+        return;
+      }
+      if (menuItems.length && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(e.key) && !e.shiftKey) {
+        e.preventDefault();
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown')
+          setMenuIndex((menuIndex + (e.key === 'ArrowDown' ? 1 : -1) + menuItems.length) % menuItems.length);
+        else insertMenuItem(menuIndex);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       // While you speak, Enter finishes the recording; nothing is sent until the words are in.
@@ -527,7 +648,12 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           <div
             className="drop-overlay"
             aria-hidden="true"
-            style={{ left: dropping.box.left, top: dropping.box.top, width: dropping.box.width, height: dropping.box.height }}
+            style={{
+              left: dropping.box.left,
+              top: dropping.box.top,
+              width: dropping.box.width,
+              height: dropping.box.height
+            }}
           >
             <div className="drop-overlay-card">
               <IconPaperclip size={22} />
@@ -608,6 +734,34 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
       )}
 
       <div className="composer-input-wrapper" onKeyDown={handleDictationKeys}>
+        {token && !dictating && (
+          <div className="composer-menu" ref={menu}>
+            <div
+              id={`composer-menu-${agentId}`}
+              role="listbox"
+              aria-label={token.kind === 'mention' ? 'Mention a colleague' : 'Prompt shortcuts'}
+            >
+              {menuItems.map((item, i) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === menuIndex}
+                  id={`composer-option-${agentId}-${i}`}
+                  key={item.key}
+                  tabIndex={-1}
+                  className={i === menuIndex ? 'selected' : ''}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insertMenuItem(i)}
+                >
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+            {!menuItems.length && <p role="status">No matches</p>}
+            <small>↑ ↓ to choose · Enter or Tab to insert · Esc to close</small>
+          </div>
+        )}
         <textarea
           ref={box}
           aria-label={`Give ${agent?.name ?? 'this agent'} a task`}
@@ -625,16 +779,41 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                     : `Give ${agent?.name || 'this agent'} a task...`
           }
           value={input}
+          aria-haspopup="listbox"
+          aria-controls={token && !dictating ? `composer-menu-${agentId}` : undefined}
+          aria-activedescendant={
+            token && !dictating && menuItems.length ? `composer-option-${agentId}-${menuIndex}` : undefined
+          }
           disabled={sending && !conversation}
           onChange={(e) => {
             recalled.current = { index: -1, text: '' };
             setInput(e.target.value);
+            updateMenu(e.target.value, e.target.selectionStart);
+          }}
+          onClick={(e) => updateMenu(e.currentTarget.value, e.currentTarget.selectionStart)}
+          onBlur={() => setToken(null)}
+          onKeyUp={(e) => {
+            if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key))
+              updateMenu(e.currentTarget.value, e.currentTarget.selectionStart);
           }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
         />
 
         <div className="composer-actions-row">
+          <button
+            type="button"
+            className="btn-icon-subtle"
+            aria-label="Prompt shortcuts"
+            title="Prompt shortcuts"
+            onClick={() => {
+              setToken({ kind: 'shortcut', start: 0, end: 0, query: '' });
+              setMenuIndex(0);
+              box.current?.focus();
+            }}
+          >
+            /
+          </button>
           <button
             type="button"
             className="btn-icon-subtle"
@@ -720,7 +899,9 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                     className="composer-btn-send"
                     title={running ? 'Send now; they read it after this step (Enter)' : 'Send task (Enter)'}
                     aria-label={running ? 'Send for their next step' : 'Send task'}
-                    disabled={(!input.trim() && !attachments.length) || (sending && !conversation) || dictating}
+                    disabled={
+                      (!input.trim() && !attachments.length) || (sending && !conversation) || dictating
+                    }
                     onClick={() => void handleSend()}
                   >
                     <IconSend size={15} />
@@ -731,6 +912,53 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           </span>
         </div>
       </div>
+      {input.trim() && !savingShortcut && (
+        <button
+          type="button"
+          className="composer-save-shortcut"
+          onClick={() => {
+            setToken(null);
+            setSavingShortcut(true);
+          }}
+        >
+          Save what’s in the box as a shortcut…
+        </button>
+      )}
+      {savingShortcut && (
+        <form
+          className="composer-shortcut-save"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveShortcut();
+          }}
+        >
+          <label>
+            Shortcut name
+            <input
+              ref={shortcutInput}
+              value={shortcutName}
+              maxLength={40}
+              placeholder="e.g. weekly-update"
+              onChange={(e) => setShortcutName(e.target.value)}
+              disabled={saving}
+            />
+          </label>
+          <button type="submit" disabled={saving || !shortcutName.trim() || !input.trim()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setSavingShortcut(false);
+              box.current?.focus();
+            }}
+          >
+            Cancel
+          </button>
+          {shortcutError && <p role="alert">{shortcutError}</p>}
+        </form>
+      )}
     </div>
   );
 }

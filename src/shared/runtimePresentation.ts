@@ -35,6 +35,10 @@ export function activitySentence(entry: AuditEntry): string {
     case 'write_file':
     case 'edit_file':
       return `Modified ${path}${entry.change ? ` (+${entry.change.added} −${entry.change.removed})` : ''}`;
+    case 'delete_file':
+      return `Deleted ${path}`;
+    case 'move_file':
+      return `Moved ${path}`;
     case 'run_command':
       return entry.result === 'ok' ? 'Completed a terminal command.' : 'Requested a terminal command.';
     case 'start_process':
@@ -62,6 +66,8 @@ export function runStage(run: AgentRun): string {
     if (run.activeTool === 'read_file' || run.activeTool === 'list_files' || run.activeTool === 'search_code')
       return 'Reading project files';
     if (run.activeTool === 'run_command' || run.activeTool === 'start_process') return 'Running command';
+    if (run.activeTool === 'delete_file') return 'Deleting a file';
+    if (run.activeTool === 'move_file') return 'Moving a file';
     if (run.activeTool === 'find_skills' || run.activeTool === 'load_skill') return 'Reading up on the task';
     if (run.activeTool === 'web_search') return 'Searching the web';
     if (run.activeTool === 'read_webpage') return 'Reading a web page';

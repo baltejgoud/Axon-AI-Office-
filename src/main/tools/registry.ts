@@ -6,6 +6,7 @@ import type { FileChange, ToolDefinition } from '../../shared/types';
 import { SEARCH_HITS, type Project } from '../project';
 import { createUnifiedDiff, fileChange } from './diff';
 import { applyUniqueEdit } from './editFile';
+import { deletePreview, movePreview, planDelete, planMove } from './fileOps';
 import { assessWrite, preserveTrailingNewline } from './writeGuard';
 import type { ProcessManager } from './processes';
 
@@ -94,6 +95,8 @@ export interface ToolHandlerResult {
   previous?: { existed: boolean; content: string | null };
   /** What a write left in the file, so undo can tell whether it changed since. */
   written?: string;
+  /** A delete or a move (with `previous` and `change`): what Undo must reverse. `path` is where the file was. */
+  undoAs?: { kind: 'delete' | 'move'; path: string; movedTo?: string };
   preview?: {
     type: 'diff' | 'command' | 'generic';
     content: string;
@@ -296,7 +299,7 @@ export class ToolRegistry {
       definition: {
         name: 'write_file',
         description:
-          'Create a new file, or replace a whole file with the complete content you send. To change part of an existing file, use edit_file instead: a whole-file write must repeat every line you are not changing, exactly.',
+          'Create a new file, or replace a whole file with the complete content you send. To change part of an existing file, use edit_file instead: a whole-file write must repeat every line you are not changing, exactly. To remove a file you made (a scratch file, say) use delete_file; to rename or move one use move_file. Both ask the user first.',
         parameters: {
           type: 'object',
           properties: {
@@ -710,6 +713,89 @@ export class ToolRegistry {
           return { content: result };
         } catch (err: any) {
           return { content: `Subagent failed: ${err.message}`, isError: true };
+        }
+      }
+    });
+
+    // 10. delete_file and move_file: last in the list, so the tools a coworker already got by default keep their places.
+    // Both always ask, and Undo puts the file back (see the permissions and the checkpoints).
+    this.register({
+      definition: {
+        name: 'delete_file',
+        description:
+          'Delete one file from the project, such as a scratch or temporary file you made. The user is always asked first and can undo it. Single files only: not folders, and nothing inside .git. To rename or move a file, use move_file instead of deleting and rewriting it.',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string', description: 'Relative path of the file to delete' } },
+          required: ['path']
+        }
+      },
+      validate: async (args, ctx) => {
+        const plan = await planDelete(ctx.project, args.path);
+        return 'error' in plan ? plan.error : null;
+      },
+      preparePreview: async (args, ctx) => {
+        const plan = await planDelete(ctx.project, args.path);
+        return 'error' in plan
+          ? { type: 'generic', content: plan.error, path: String(args.path) }
+          : { type: 'generic', content: deletePreview(plan), path: plan.path };
+      },
+      execute: async (args, ctx) => {
+        try {
+          // Checked again now, so what runs is what was shown.
+          const plan = await planDelete(ctx.project, args.path);
+          if ('error' in plan) return { content: plan.error, isError: true };
+          await ctx.project.remove(plan.path);
+          return {
+            content: `Deleted ${plan.path} (${plan.lines} ${plan.lines === 1 ? 'line' : 'lines'}).`,
+            change: { added: 0, removed: plan.lines, created: false },
+            previous: { existed: true, content: plan.before },
+            written: '',
+            undoAs: { kind: 'delete', path: plan.path }
+          };
+        } catch (err: any) {
+          return { content: `Error deleting file: ${err.message}`, isError: true };
+        }
+      }
+    });
+    this.register({
+      definition: {
+        name: 'move_file',
+        description:
+          'Rename a file, or move it to another folder in the project; folders it needs are made. It never replaces a file that is already there. The user is always asked first and can undo it. Single files only, nothing inside .git.',
+        parameters: {
+          type: 'object',
+          properties: {
+            from: { type: 'string', description: 'Relative path of the file as it is now' },
+            to: { type: 'string', description: 'Relative path it should have afterwards, including the file name' }
+          },
+          required: ['from', 'to']
+        }
+      },
+      validate: async (args, ctx) => {
+        const plan = await planMove(ctx.project, args.from, args.to);
+        return 'error' in plan ? plan.error : null;
+      },
+      preparePreview: async (args, ctx) => {
+        const plan = await planMove(ctx.project, args.from, args.to);
+        return 'error' in plan
+          ? { type: 'generic', content: plan.error, path: String(args.from) }
+          : { type: 'generic', content: movePreview(plan), path: `${plan.from} → ${plan.to}` };
+      },
+      execute: async (args, ctx) => {
+        try {
+          const plan = await planMove(ctx.project, args.from, args.to);
+          if ('error' in plan) return { content: plan.error, isError: true };
+          await ctx.project.move(plan.from, plan.to);
+          return {
+            content: `${plan.rename ? 'Renamed' : 'Moved'} ${plan.from} to ${plan.to}.`,
+            change: { added: 0, removed: 0, created: false },
+            previous: { existed: true, content: null },
+            written: '',
+            undoAs: { kind: 'move', path: plan.from, movedTo: plan.to }
+          };
+        } catch (err: any) {
+          return { content: `Error moving file: ${err.message}`, isError: true };
         }
       }
     });

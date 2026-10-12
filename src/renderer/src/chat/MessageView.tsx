@@ -161,6 +161,7 @@ export function MessageView({
   renderToolCall?: (call: ToolCall) => ReactNode;
 }) {
   const [thoughtOpen, setThoughtOpen] = useState(false);
+  const waiting = useApp((s) => Object.values(s.pendingApprovals).find((r) => r.messageId === m.id));
   const [copied, setCopied] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   const copyable = m.role === 'assistant' && Boolean(m.content) && !m.streaming;
@@ -250,16 +251,22 @@ export function MessageView({
           </span>
           {m.streaming && (
             <span className="message-status">
-              <span className="thinking-dots" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-              {m.toolCalls?.some((call) => toolPresentation(call).status === 'running')
-                ? 'Working'
-                : m.thought && !m.content
-                  ? 'Thinking'
-                  : 'Writing'}
+              {!waiting && (
+                <span className="thinking-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              )}
+              {waiting
+                ? waiting.question
+                  ? 'Waiting for your answer'
+                  : 'Waiting for your OK'
+                : m.toolCalls?.some((call) => toolPresentation(call).status === 'running')
+                  ? 'Working'
+                  : m.thought && !m.content
+                    ? 'Thinking'
+                    : 'Writing'}
             </span>
           )}
         </div>
@@ -333,7 +340,8 @@ export function MessageView({
             <MessageMarkdown headingIds>
               {m.role === 'user'
                 ? shownText
-                : m.content || (m.streaming ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
+                : m.content ||
+                  (m.streaming && !waiting ? (m.thought ? 'Generating response…' : 'Thinking…') : '')}
             </MessageMarkdown>
           </div>
         )}

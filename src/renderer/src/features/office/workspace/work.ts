@@ -249,8 +249,11 @@ export const baseName = (path: string) =>
 /** Whether a call is work shown on the surface (and summed up in the side panel), not office business. */
 export const isWorkCall = (call: ToolCall, at: number): boolean => stepOf(call, at) !== null;
 
-/** The file a code step is on, with forward slashes. */
-export const stepPath = (step: WorkStep): string => String(step.args.path ?? '').replace(/\\/g, '/');
+/** The file a code step is on, with forward slashes (a move: the file's old path). */
+export const stepPath = (step: WorkStep): string => String(step.args.path ?? step.args.from ?? '').replace(/\\/g, '/');
+
+/** Deleting or moving a file: the summary lists these as changes of their own, with Undo. */
+export const isFileOp = (name: string): boolean => name === 'delete_file' || name === 'move_file';
 
 /**
  * A thread cut into runs: each of your messages starts one, and the coworker's replies and work up
@@ -306,6 +309,8 @@ export interface RunSummary {
   looked: WorkStep[];
   pages: WorkStep[];
   tools: WorkStep[];
+  /** Files deleted or moved, or asked to be. */
+  fileOps: WorkStep[];
 }
 
 /**
@@ -345,7 +350,8 @@ export function runSummary(
     ),
     looked: steps.filter((s) => s.name === 'read_file' || s.kind === 'files'),
     pages: steps.filter((s) => s.kind === 'browser'),
-    tools: steps.filter((s) => s.kind === 'tool')
+    tools: steps.filter((s) => s.kind === 'tool' && !isFileOp(s.name)),
+    fileOps: steps.filter((s) => isFileOp(s.name))
   };
 }
 
@@ -398,10 +404,17 @@ const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? on
  * such as "Changed 2 files, ran 1 command" (at most two things, the most telling first).
  */
 export function runTitle(summary: RunSummary, live: boolean): string {
-  const { files, commands, pages, tools, looked } = summary;
-  if (live) return files.length ? `Working on ${count(files.length, 'file')}…` : 'Working…';
+  const { files, commands, pages, tools, looked, fileOps = [] } = summary;
+  if (live) {
+    const touched = files.length + fileOps.length;
+    return touched ? `Working on ${count(touched, 'file')}…` : 'Working…';
+  }
+  const deleted = fileOps.filter((s) => s.name === 'delete_file').length;
+  const moved = fileOps.length - deleted;
   const parts = [
     files.length && `changed ${count(files.length, 'file')}`,
+    deleted && `deleted ${count(deleted, 'file')}`,
+    moved && `moved ${count(moved, 'file')}`,
     commands.length && `ran ${count(commands.length, 'command')}`,
     pages.length && `viewed ${count(pages.length, 'page')}`,
     tools.length && `used ${count(tools.length, 'tool')}`
