@@ -97,6 +97,12 @@ export function App() {
       if (event.channel === 'chat' && event.rewritten) {
         useRewrites.getState().bump(event.conversationId);
         void perform(refresh);
+  }
+
+      // Dashboards arrive whole after every change, like teams.
+      if (event.channel === 'dashboards') {
+        const current = useApp.getState().data;
+        if (current) useApp.getState().patch({ data: { ...current, dashboards: event.dashboards } });
         return;
       }
       // Messages waiting for a coworker's next step: shown above their message box, nothing else to update.

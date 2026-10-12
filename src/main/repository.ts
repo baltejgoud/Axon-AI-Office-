@@ -63,7 +63,8 @@ export function initialState(): PlatformState {
     mcpServers: [],
     tasks: [],
     reception: {},
-    teams: []
+    teams: [],
+    dashboards: []
   };
 }
 
@@ -367,6 +368,8 @@ export class Repository {
     state.teams = Array.isArray(state.teams) ? state.teams : [];
     // The team chat arrived later (2026-10): older teams start with an empty one.
     migrateChannels(state.teams);
+    // Dashboards arrived with show_dashboard (2026-10).
+    state.dashboards = Array.isArray(state.dashboards) ? state.dashboards : [];
     // Runtime schema v1 is additive; older conversations and audit records are retained.
     state.runtimeVersion = 1;
     state.runs = Array.isArray(state.runs) ? state.runs : [];

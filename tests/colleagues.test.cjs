@@ -69,15 +69,16 @@ test('toolsFor: coworkers can always ask a colleague; file tools still need a fo
   assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry })), [
     'ask_colleague',
     'find_skills',
-    'load_skill'
+    'load_skill', 'show_dashboard'
   ]);
   // Your own chats look up skills too, but have no colleagues to ask.
-  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), ['find_skills', 'load_skill']);
+  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry })), ['find_skills', 'load_skill', 'show_dashboard']);
   assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: true, registry })), [
     'dispatch_subagent',
     'find_skills',
     'load_skill',
     'read_file',
+    'show_dashboard',
     'write_file'
   ]);
   assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: true, registry })), [
@@ -85,6 +86,7 @@ test('toolsFor: coworkers can always ask a colleague; file tools still need a fo
     'find_skills',
     'load_skill',
     'read_file',
+    'show_dashboard',
     'write_file'
   ]);
 });

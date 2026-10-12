@@ -106,6 +106,7 @@ import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { checkedPreferences, preferenceBlock } from '../shared/coworkerPreferences';
 import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
+import { SHOW_DASHBOARD, publishDashboard } from './dashboards';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
 import { Reminders, TICK_MS, type Notice } from './reminders';
@@ -1777,6 +1778,25 @@ export class Service {
     if (!kept.length) return;
     chat.pictureFiles = [...new Set([...(chat.pictureFiles ?? []), ...kept.map((picture) => basename(picture.path))])];
   }
+
+  /** Deletes a dashboard after asking; false when you cancelled or it is already gone. */
+  async dashboardDelete(id: string): Promise<boolean> {
+    const dashboard = this.state.dashboards.find((d) => d.id === text(id, 100));
+    if (!dashboard) return false;
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      message: `Delete the dashboard "${dashboard.title}"?`,
+      detail: 'The conversation it came from stays as it is.',
+      buttons: ['Cancel', 'Delete'],
+      defaultId: 0,
+      cancelId: 0
+    });
+    if (choice.response !== 1) return false;
+    this.state.dashboards = this.state.dashboards.filter((d) => d.id !== dashboard.id);
+    this.emit({ channel: 'dashboards', dashboards: this.state.dashboards });
+    await this.repo.save();
+    return true;
+  }
   /**
    * What a run of this conversation starts from: its history, connectors, folders and system prompt.
    * Sending uses it, and so does the context meter before anything is sent (with no input, so no
@@ -2546,6 +2566,23 @@ export class Service {
             else
               answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             await this.repo.save();
+            continue;
+          }
+
+          // A dashboard: kept with the dashboards and shown in the window, never the tool registry.
+          if (tc.name === SHOW_DASHBOARD.name) {
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action === 'allow') {
+              const shown = publishDashboard(
+                this.state.dashboards,
+                { args: parsedArgs, conversationId: id, agentId: chat.agentId, toolCallId: tc.id },
+                { id: () => this.repo.id(), now: Date.now() }
+              );
+              answer(tc, { content: shown.content, isError: shown.isError }, 'allowed');
+              if (shown.dashboard) {
+                this.emit({ channel: 'dashboards', dashboards: this.state.dashboards });
+                await this.repo.save();
+              }
+            } else answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
             continue;
           }
 

@@ -30,12 +30,13 @@ const readCollapsed = () => {
 };
 
 /**
- * One slim rail over the office: how the team is doing, with Activity & results and Company
- * operations beside it. It folds down to the status alone.
+ * One slim rail over the office: how the team is doing, with Activity & results, Company
+ * operations and Dashboards beside it. It folds down to the status alone.
  */
 export function GlobalWork() {
   const runs = useApp((s) => s.data?.runs);
   const teams = useApp((s) => s.data?.teams);
+  const dashboards = useApp((s) => s.data?.dashboards?.length ?? 0);
   const open = useOfficeStore((s) => s.activityHistoryOpen);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const active = (runs ?? []).filter((r) => ACTIVE_RUN_STATUSES.has(r.status));
@@ -76,6 +77,13 @@ export function GlobalWork() {
             onClick={() => useOfficeStore.getState().openOverlay('company')}
           >
             Company operations
+          </button>
+          <button
+            className="office-history-link"
+            title="Data your coworkers gathered, as charts, tables and lists"
+            onClick={() => useOfficeStore.getState().openDashboard()}
+          >
+            Dashboards{dashboards ? ` (${dashboards})` : ''}
           </button>
         </>
       )}

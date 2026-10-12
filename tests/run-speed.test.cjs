@@ -219,7 +219,8 @@ test('the Chief of Staff gets the house rules, no project map, read-only files a
     'retrieve_conversation_turns',
     'search_code',
     'search_conversation_history',
-    'web_search'
+    'web_search',
+    'show_dashboard'
   ]);
   assert.equal(seen.quick, true);
 

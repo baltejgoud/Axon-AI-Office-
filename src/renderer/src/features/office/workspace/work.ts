@@ -37,7 +37,8 @@ const OFFICE_TOOLS = new Set([
   'dispatch_subagent',
   'find_people',
   'call_team_meeting',
-  'message_team'
+  'message_team',
+  'show_dashboard'
 ]);
 
 /** Connected tools that drive or read a web page. */

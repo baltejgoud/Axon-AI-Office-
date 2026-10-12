@@ -11,7 +11,8 @@ export function Overlay({
   onClose,
   children,
   wide = false,
-  flush = false
+  flush = false,
+  className = ''
 }: {
   title: string;
   onClose: () => void;
@@ -19,6 +20,8 @@ export function Overlay({
   wide?: boolean;
   /** The content lays itself out edge to edge and scrolls its own parts; the sheet keeps one height. */
   flush?: boolean;
+  /** A sheet that sizes itself, e.g. the wider Dashboards sheet. */
+  className?: string;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -52,7 +55,7 @@ export function Overlay({
     <div className="office-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={panel}
-        className={`office-overlay-panel ${wide ? 'wide' : ''} ${flush ? 'flush' : ''}`}
+        className={`office-overlay-panel ${wide ? 'wide' : ''} ${flush ? 'flush' : ''} ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

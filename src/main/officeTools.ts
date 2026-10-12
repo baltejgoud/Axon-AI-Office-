@@ -4,6 +4,7 @@ import { ASK_USER_TOOL } from '../shared/askUser';
 import { WEB_TOOL_NAMES } from '../shared/webAccess';
 import { ASK_COLLEAGUE } from './colleagues';
 import { FIND_SKILLS, LOAD_SKILL } from './skills';
+import { SHOW_DASHBOARD } from './dashboards';
 import { PLANNER_TOOLS } from './tasks/tools';
 import { MESSAGE_TEAM, TEAM_LEADS, TEAM_TOOLS } from './team/tools';
 import { WEB_TOOL_DEFINITIONS } from './tools/web';
@@ -75,6 +76,8 @@ export function toolsFor(input: {
   if (input.agentId && TEAM_LEADS.has(input.agentId)) tools.push(...TEAM_TOOLS);
   if (input.webAccess) tools.push(...WEB_TOOL_DEFINITIONS);
   if (coworker && input.teamChat) tools.push(MESSAGE_TEAM);
+  // Anyone can show what they gathered as a dashboard: it only displays, so no folder is needed.
+  tools.push(SHOW_DASHBOARD);
   tools.push(...(input.connectorTools ?? []));
   return tools;
 }

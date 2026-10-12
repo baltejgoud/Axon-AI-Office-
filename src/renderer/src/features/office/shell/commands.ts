@@ -18,6 +18,7 @@ export type OfficeCommand = { id: string; label: string; detail: string } & (
         | 'work'
         | 'history'
         | 'company'
+        | 'dashboards'
         | 'welcome';
     }
   | { kind: 'ask'; prompt: string }
@@ -26,6 +27,13 @@ export type OfficeCommand = { id: string; label: string; detail: string } & (
 );
 const actions: OfficeCommand[] = [
   { id: 'company', kind: 'action', action: 'company', label: 'Open company operations', detail: 'Company documents, task briefs, teams and reports' },
+  {
+    id: 'dashboards',
+    kind: 'action',
+    action: 'dashboards',
+    label: 'Open dashboards',
+    detail: 'Data your coworkers gathered, as charts, tables and lists'
+  },
   {
     id: 'history',
     kind: 'action',

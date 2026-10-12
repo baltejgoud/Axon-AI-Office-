@@ -667,6 +667,11 @@ export type StreamEvent =
       channel: 'teams';
       teams: Team[];
     }
+  | {
+      /** Every dashboard, after any change. */
+      channel: 'dashboards';
+      dashboards: import('./dashboards').Dashboard[];
+    }
   | ({
       /** A notification or the tray asks the office to show someone. */
       channel: 'focus';

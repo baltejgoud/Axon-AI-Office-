@@ -131,6 +131,8 @@ export class PermissionManager {
     if (TEAM_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // Messaging a teammate only adds to the team's chat.
     if (toolName === MESSAGE_TEAM.name) return { action: 'allow' };
+    // A dashboard only displays what the coworker gathered; it touches nothing else.
+    if (toolName === 'show_dashboard') return { action: 'allow' };
 
     // 2. Path containment check
     if (['read_file', 'list_files', 'file_context', 'get_symbol'].includes(toolName) || FILE_SAVERS.has(toolName)) {
