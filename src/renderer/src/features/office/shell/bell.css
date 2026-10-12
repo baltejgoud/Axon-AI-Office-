@@ -1,0 +1,186 @@
+/* The notification bell in the office's top bar, and the list it opens. */
+.office-bell {
+  position: relative;
+  flex: none;
+}
+.office-container .office-view-controls .office-bell > button {
+  position: relative;
+}
+.office-bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid var(--office-paper);
+  border-radius: 9px;
+  box-sizing: content-box;
+  background: #d64550;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.office-bell-panel {
+  position: absolute;
+  top: calc(var(--office-control) + 8px);
+  right: 0;
+  z-index: 40;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(70vh, 480px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--office-border);
+  border-radius: 14px;
+  background: var(--office-paper);
+  box-shadow: var(--office-shadow);
+  color: var(--office-ink);
+  text-align: left;
+}
+.office-bell-panel:focus {
+  outline: none;
+}
+.office-bell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--office-border);
+  font-size: 13px;
+}
+/* The top bar's round icon buttons style every button inside it; the list's own buttons undo that. */
+.office-container .office-bell-panel button {
+  display: block;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--office-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.office-container .office-bell-panel .office-bell-all {
+  padding: 4px 8px;
+  color: var(--office-blue);
+  font-size: 12px;
+  font-weight: 600;
+}
+.office-container .office-bell-panel .office-bell-all:hover:not(:disabled) {
+  background: var(--office-soft);
+}
+.office-container .office-bell-panel .office-bell-all:disabled {
+  color: var(--office-muted);
+  cursor: default;
+  opacity: 0.7;
+}
+.office-bell-list {
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.office-container .office-bell-panel .office-bell-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+}
+.office-container .office-bell-panel .office-bell-row:hover {
+  background: var(--office-soft);
+}
+.office-bell-row:focus-visible,
+.office-bell-all:focus-visible {
+  outline: 2px solid var(--office-blue);
+  outline-offset: -2px;
+}
+.office-bell-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--office-muted);
+}
+.office-bell-row.is-unread .office-bell-dot {
+  border-color: transparent;
+  background: var(--office-blue);
+}
+.office-bell-row.is-approval.is-unread .office-bell-dot,
+.office-bell-row.is-question.is-unread .office-bell-dot,
+.office-bell-row.is-plan.is-unread .office-bell-dot,
+.office-bell-row.is-stopped.is-unread .office-bell-dot {
+  background: #d99a14;
+}
+.office-bell-row.is-finished.is-unread .office-bell-dot,
+.office-bell-row.is-report.is-unread .office-bell-dot {
+  background: #1ca47d;
+}
+.office-bell-row.is-failed.is-unread .office-bell-dot {
+  background: #d64550;
+}
+.office-bell-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.office-bell-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  font-size: 12px;
+}
+.office-bell-line strong {
+  font-weight: 600;
+}
+.office-bell-row:not(.is-unread) .office-bell-line strong {
+  font-weight: 500;
+}
+.office-bell-title {
+  color: var(--office-muted);
+}
+.office-bell-what {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--office-ink);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.office-bell-when {
+  color: var(--office-muted);
+  font-size: 11px;
+}
+.office-bell-empty {
+  margin: 0;
+  padding: 22px 18px;
+  color: var(--office-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .office-bell-panel {
+    animation: office-bell-in 0.12s ease-out;
+  }
+}
+@keyframes office-bell-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

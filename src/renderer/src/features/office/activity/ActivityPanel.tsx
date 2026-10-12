@@ -34,6 +34,7 @@ import { Briefing } from './Briefing';
 import { ConnectorRow } from './ConnectorRow';
 import { ContextChip } from './ContextChip';
 import { latestRun } from '../lifecycle';
+import { waitingStatus } from '../waiting';
 import { LifecycleBadge } from '../shell/LifecycleBadge';
 
 /** The panel's two presets, besides dragging its edge: wide to read in, narrow to watch the office. */
@@ -102,9 +103,7 @@ export function ActivityPanel() {
   const conversation = activeThread(conversations, agent.id, runtime);
   const run = conversation ? latestRun(data?.runs ?? [], agent.id, conversation.id) : undefined;
   const pending = useApp((s) => s.pendingApprovals);
-  const runStatus = Object.values(pending).some((r) => r.conversationId === conversation?.id)
-    ? 'waiting_for_approval'
-    : run?.status;
+  const runStatus = waitingStatus(Object.values(pending), conversation?.id) ?? run?.status;
   const threads = agentThreads(conversations, agent.id);
   const messages = data?.messages.filter((m) => m.conversationId === conversation?.id) ?? [];
   const assistant = [...messages].reverse().find((m) => m.role === 'assistant');

@@ -467,6 +467,13 @@ export type StreamDelta =
   | { type: 'tool_call'; id: string; name: string; arguments: string }
   | { type: 'usage'; usage: ChatUsage };
 
+/** A question a coworker put to you (the `ask_user` tool): the words, the choices, and whether you may write your own answer. */
+export interface AskedQuestion {
+  text: string;
+  options: string[];
+  allowOther: boolean;
+}
+
 export interface ToolApprovalRequest {
   id: string;
   conversationId: ID;
@@ -479,6 +486,10 @@ export interface ToolApprovalRequest {
     content: string;
     path?: string;
   };
+  /** When it began to wait. */
+  createdAt?: number;
+  /** Set when this is a question for you rather than a step to approve. */
+  question?: AskedQuestion;
 }
 
 export interface ToolApprovalDecision {
@@ -487,6 +498,8 @@ export interface ToolApprovalDecision {
   alwaysAllowSession?: boolean;
   /** Allow this tool again without asking, in this conversation, until its current run ends. */
   allowForTask?: boolean;
+  /** For a question: the choice you picked or the words you typed. Empty or missing means you skipped it. */
+  answer?: string;
 }
 
 /* ----------------------------------- Tasks ------------------------------------ */

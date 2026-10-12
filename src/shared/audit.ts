@@ -113,6 +113,8 @@ export function auditSubject(tool: string, args: Record<string, unknown>): strin
       return clip(str(args.message));
     case 'ask_colleague':
       return clip(`${str(args.colleague)}: ${str(args.question)}`);
+    case 'ask_user':
+      return clip(str(args.question));
     case 'load_skill':
       return clip(str(args.id));
     case 'dispatch_subagent':

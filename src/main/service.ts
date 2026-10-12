@@ -99,6 +99,8 @@ import { MCPClientManager } from './mcp/client-manager';
 import { TaskStore } from './tasks/store';
 import { TaskTracker } from './tasks/tracker';
 import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } from './colleagues';
+import { ASK_USER } from '../shared/askUser';
+import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { PLANNER_TOOL_NAMES, runPlannerTool, validateTaskInput, withReminderReset } from './tasks/tools';
 import { briefing, dayKey, plannerNow, type Briefing } from '../shared/planner';
@@ -1635,7 +1637,7 @@ export class Service {
     const context = await this.runContext(chat, '');
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: context.roots.length > 0,
       registry: this.tools.getDefinitions().filter(t => !this.mcp.isConnectorTool(t.name)), connectorTools: context.connectors.tools,
-      webAccess: this.webAccess.enabled });
+      webAccess: this.webAccess.enabled, askUser: true });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const plan = new ContextBudgetPlanner().compile({ model: chat.modelId, system: context.system,
@@ -1785,7 +1787,7 @@ export class Service {
       conversationRoot: chat.projectRoot, projectRoot: this.project.root });
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: roots.length > 0,
       registry: this.tools.getDefinitions().filter(tool => !this.mcp.isConnectorTool(tool.name)),
-      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools, webAccess: this.webAccess.enabled });
+      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools, webAccess: this.webAccess.enabled, askUser: true });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const tools = selectTools(catalog, history.findLast(m => m.role === 'user')?.content ?? '');
@@ -1862,7 +1864,9 @@ export class Service {
     /** The pictures your new message carries (an edit brings the original's); a plain retry brings none, its message already holds them. */
     pictures: Attachment[],
     /** A retry or edit starts from the first `count` saved messages; `resend` adds `content` as a new turn after them. */
-    keep?: { count: number; resend: boolean }
+    keep?: { count: number; resend: boolean },
+    /** A team member's task runs without you watching: it decides and says what it chose, rather than asking. */
+    unattended = false
   ) {
     const { history: saved, connectors, roots, system, contextSections } = await this.runContext(chat, input);
     const history = keep ? saved.slice(0, keep.count) : saved;
@@ -1880,7 +1884,8 @@ export class Service {
       hasFolder: roots.length > 0,
       registry: this.tools.getDefinitions().filter((tool) => !this.mcp.isConnectorTool(tool.name)),
       connectorTools: connectors.tools,
-      webAccess: this.webAccess.enabled
+      webAccess: this.webAccess.enabled,
+      askUser: !unattended
     });
     toolCatalog.push(...MEMORY_TOOLS);
     if (toolCatalog.length > 20) toolCatalog.push(DISCOVER_TOOLS);
@@ -2059,7 +2064,7 @@ export class Service {
     let prepared: Awaited<ReturnType<Service['prepareRun']>>;
     try {
       await this.supervisor.acquire(supervised.runId);
-      prepared = await this.prepareRun(chat, provider, input, content, pictures, keep);
+      prepared = await this.prepareRun(chat, provider, input, content, pictures, keep, Boolean(options.teamId));
       // Read for this run just above; from now on they stay with the conversation. An edit's pictures already
       // stay with it (they came from the message it replaces), so there is nothing to move for them.
       if (!rewrite) this.keptPictures(chat, await this.files.keep(pictures));
@@ -2388,6 +2393,23 @@ export class Service {
               );
             else
               answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
+            continue;
+          }
+
+          // A coworker asking you a question: the run waits for your answer, as it waits for an approval.
+          if (tc.name === ASK_USER && offered.has(tc.name)) {
+            if (this.permissions.check({ toolName: tc.name, args: parsedArgs }, scope).action !== 'allow') {
+              answer(tc, { content: 'Tool execution denied by security policy.', isError: true }, 'denied');
+              continue;
+            }
+            const reply = await askYou(
+              { permissions: this.permissions, supervisor: this.supervisor, tracker: this.tracker, audit: this.audit,
+                shell: this.shell, emit: (event) => this.emit(event) },
+              { conversationId: id, agentId: chat.agentId, messageId: activeAssistant.id, runId: supervised.runId,
+                call: tc, args: parsedArgs, signal: controller.signal, actor }
+            );
+            if (!reply) break;
+            answer(tc, reply, reply.isError ? 'skipped' : 'allowed');
             continue;
           }
 

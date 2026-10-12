@@ -3,7 +3,8 @@ import { TEAM_TOOL_NAMES } from '../team/tools';
 import { WEB_TOOL_NAMES } from '../../shared/webAccess';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
-import type { McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
+import { ASK_USER, cleanAnswer } from '../../shared/askUser';
+import type { AskedQuestion, McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
 
 export type PermissionAction = 'allow' | 'ask' | 'deny';
 
@@ -45,6 +46,8 @@ export class PermissionManager {
   /** "Allow for this task": grants for one conversation's current run, by conversation, gone when it ends. */
   private readonly taskGrants = new Map<string, Set<string>>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
+  /** What you answered a question with, until the run that asked takes it. */
+  private readonly answers = new Map<string, string>();
   /** How a connector's tool is treated; null for tools that aren't a connector's. */
   private connectorRule: ((toolName: string) => McpToolPolicy | null) | null = null;
 
@@ -99,6 +102,8 @@ export class PermissionManager {
 
     // Asking a colleague touches nothing on disk; the colleague's own tools are checked one by one.
     if (toolName === 'ask_colleague') return { action: 'allow' };
+    // Asking you a question touches nothing; the card is how it reaches you.
+    if (toolName === ASK_USER) return { action: 'allow' };
     // Looking up and reading a skill return bundled instructions and touch nothing.
     if (toolName === 'find_skills' || toolName === 'load_skill') return { action: 'allow' };
     // Searching the web and reading public pages only read; private addresses are refused where the connection is made.
@@ -148,6 +153,8 @@ export class PermissionManager {
     toolName: string;
     args: Record<string, any>;
     preview?: ToolApprovalRequest['preview'];
+    /** A question for you rather than a step to approve. */
+    question?: AskedQuestion;
   }): { request: ToolApprovalRequest; promise: Promise<boolean>; outcome: Promise<ApprovalOutcome> } {
     const id = randomUUID();
     const request: ToolApprovalRequest = {
@@ -157,7 +164,9 @@ export class PermissionManager {
       toolCallId: params.toolCallId,
       toolName: params.toolName,
       arguments: params.args,
-      preview: params.preview
+      preview: params.preview,
+      createdAt: Date.now(),
+      ...(params.question ? { question: params.question } : {})
     };
 
     let settle: (outcome: ApprovalOutcome) => void = () => {};
@@ -177,6 +186,14 @@ export class PermissionManager {
   }
 
   resolveApproval(decision: ToolApprovalDecision): boolean {
+    const asked = this.pendingApprovals.get(decision.requestId)?.request;
+    if (asked?.question) {
+      // A question is answered with words, never approved: no grant is made, and an "approve" with nothing
+      // said (an Approve all that reached it) is a skip.
+      const answer = decision.approved ? cleanAnswer(decision.answer) : '';
+      if (answer) this.answers.set(decision.requestId, answer);
+      return this.settle(decision.requestId, answer ? 'approved' : 'rejected');
+    }
     return this.settle(decision.requestId,
       !decision.approved
         ? 'rejected'
@@ -185,6 +202,13 @@ export class PermissionManager {
           : decision.allowForTask
             ? 'approved-task'
             : 'approved');
+  }
+
+  /** What you answered a question with, once; undefined when you skipped it or it was withdrawn. */
+  takeAnswer(requestId: string): string | undefined {
+    const answer = this.answers.get(requestId);
+    this.answers.delete(requestId);
+    return answer;
   }
 
   /** The run that asked has stopped: the request is answered as withdrawn and leaves the pending list. */
@@ -220,5 +244,6 @@ export class PermissionManager {
     this.taskGrants.clear();
     for (const pending of this.pendingApprovals.values()) pending.resolve('withdrawn');
     this.pendingApprovals.clear();
+    this.answers.clear();
   }
 }

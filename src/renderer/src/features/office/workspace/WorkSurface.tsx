@@ -3,6 +3,7 @@ import { LiveTerminal } from './LiveTerminal';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useApp } from '../../../state';
 import { latestRun } from '../lifecycle';
+import { waitingStatus } from '../waiting';
 import { LifecycleBadge } from '../shell/LifecycleBadge';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import {
@@ -72,9 +73,7 @@ export function WorkSurface({
   const approvals = useApp((s) => s.pendingApprovals);
   const runs = useApp((s) => s.data?.runs);
   const run = latestRun(runs ?? [], agentId, conversationId);
-  const lifecycleStatus = Object.values(approvals).some((r) => r.conversationId === conversationId)
-    ? 'waiting_for_approval'
-    : run?.status;
+  const lifecycleStatus = waitingStatus(Object.values(approvals), conversationId) ?? run?.status;
   const requests: Requests = useMemo(
     () => new Map(Object.values(approvals).map((request) => [request.toolCallId, request])),
     [approvals]

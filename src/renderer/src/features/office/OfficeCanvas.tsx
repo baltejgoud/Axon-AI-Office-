@@ -25,11 +25,13 @@ import { ColleagueSummary } from './ColleagueSummary';
 import { OfficeDirectory } from './OfficeDirectory';
 import { DistrictChips } from './shell/DistrictChips';
 import { AccountButton } from './shell/AccountButton';
+import { NotificationBell } from './shell/NotificationBell';
 import { DepartmentMenu, type DepartmentChoice } from './shell/DepartmentMenu';
 import { Minimap } from './shell/Minimap';
 import { SceneLabels, markerKey, taggedPeople } from './shell/SceneLabels';
 import { TeamStrip } from './shell/TeamStrip';
 import { WaitingPill } from './shell/WaitingPill';
+import { waitingStatus } from './waiting';
 import { SHORTCUT_KEY } from './workspace/WorkViews';
 import { departmentFrame, districtAt, districtFrame, labelTier } from './shell/framing';
 import type { Vec2, ZoneId } from './simulation/types';
@@ -354,7 +356,7 @@ export function OfficeCanvas({
   const thread = activeThread(conversations ?? [], selected.id, agentRuntime[selected.id]);
   const selectedRun = thread ? latestRun(runs ?? [], selected.id, thread.id) : undefined;
   const pendingRequest = Object.values(approvals).find((r) => r.conversationId === thread?.id);
-  const selectedStatus = pendingRequest ? 'waiting_for_approval' : selectedRun?.status;
+  const selectedStatus = waitingStatus(Object.values(approvals), thread?.id) ?? selectedRun?.status;
   const latestResponse = useMemo(
     () =>
       [...(messages ?? [])]
@@ -476,7 +478,8 @@ export function OfficeCanvas({
       <div className="coworker-actions">
         <button
           onClick={() => {
-            if (pendingRequest && thread) {
+            // A step goes to its work; a question is answered in the conversation.
+            if (pendingRequest && thread && !pendingRequest.question) {
               const office = useOfficeStore.getState();
               office.closeCoworkerCard();
               office.focusWork(thread.id, pendingRequest.toolCallId);
@@ -534,6 +537,7 @@ export function OfficeCanvas({
           >
             <IconScan size={16} />
           </button>
+          <NotificationBell />
           <AccountButton />
           <details className="office-apps">
             <summary aria-label="Apps menu">

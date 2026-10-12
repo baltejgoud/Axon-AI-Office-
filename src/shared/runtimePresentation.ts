@@ -41,6 +41,8 @@ export function activitySentence(entry: AuditEntry): string {
       return 'Started a background process.';
     case 'ask_colleague':
       return 'Asked a colleague for help.';
+    case 'ask_user':
+      return `Asked you: ${path}`;
     case 'call_team_meeting':
       return 'Gathered a team to plan the work.';
     case 'find_skills':
@@ -54,7 +56,8 @@ export function activitySentence(entry: AuditEntry): string {
 export function runStage(run: AgentRun): string {
   if (run.status === 'queued') return 'Waiting for provider capacity';
   if (run.status === 'waiting_for_agent') return run.summary ?? 'Waiting for colleague';
-  if (run.status === 'waiting_for_approval') return 'Waiting for your approval';
+  if (run.status === 'waiting_for_approval')
+    return run.activeTool === 'ask_user' ? 'Waiting for your answer' : 'Waiting for your approval';
   if (run.status === 'working') {
     if (run.activeTool === 'read_file' || run.activeTool === 'list_files' || run.activeTool === 'search_code')
       return 'Reading project files';

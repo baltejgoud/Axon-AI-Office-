@@ -10,6 +10,7 @@ import { RetryRow } from '../../../chat/RetryRow';
 import { useRewrites } from '../../../chat/rewrites';
 import { filesChangedAfter, isTeamTask, writtenByYou } from '../../../../../shared/rewrite';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
+import { AskedCard } from './AskedCard';
 import { ColleagueCard } from './ColleagueCard';
 import { PlannerToolCard } from './PlannerToolCard';
 import { TeamCard } from './TeamCard';
@@ -52,6 +53,8 @@ function RunCost({ cost }: { cost: ConversationCost }) {
 const officeToolCard = (call: ToolCall, at: number) =>
   call.name === 'ask_colleague' ? (
     <ColleagueCard call={call} />
+  ) : call.name === 'ask_user' ? (
+    <AskedCard call={call} />
   ) : call.name === 'call_team_meeting' ? (
     <TeamCard call={call} />
   ) : call.name === 'find_people' ? (

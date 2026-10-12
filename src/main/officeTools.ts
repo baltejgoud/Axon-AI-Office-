@@ -1,5 +1,6 @@
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 import type { ToolDefinition } from '../shared/types';
+import { ASK_USER_TOOL } from '../shared/askUser';
 import { WEB_TOOL_NAMES } from '../shared/webAccess';
 import { ASK_COLLEAGUE } from './colleagues';
 import { FIND_SKILLS, LOAD_SKILL } from './skills';
@@ -34,7 +35,8 @@ export function runRoots(input: {
  * The tools a conversation offers the model. File tools still need a folder; connector tools come
  * with the coworker (or your own chats) and don't, and neither do the web tools: with web access on,
  * everyone (every coworker, and your own chats) can search the web and read pages, folder or not.
- * Every coworker can ask a colleague, and coworkers do that instead of dispatching sub-agents.
+ * Every coworker can ask a colleague, and coworkers do that instead of dispatching sub-agents. Where
+ * someone is there to answer (`askUser`), they can ask you too.
  * Everyone but the receptionist, your own chats included, can look up skills and read them. The
  * receptionist also keeps the planner.
  */
@@ -46,6 +48,11 @@ export function toolsFor(input: {
   connectorTools?: ToolDefinition[];
   /** Web access is on (Settings → Web access). Off or absent: no web tools, whatever the registry holds. */
   webAccess?: boolean;
+  /**
+   * The run can stop and ask you a question (`ask_user`). Set for a coworker's or your own chat; left off
+   * for an unattended run (a team member's task), which decides and says what it chose.
+   */
+  askUser?: boolean;
 }): ToolDefinition[] {
   const coworker = coworkerById(input.agentId);
   // Leads delegate: they read for context, and their team writes and runs things.
@@ -59,6 +66,7 @@ export function toolsFor(input: {
       )
     : [];
   if (coworker) tools.push(ASK_COLLEAGUE);
+  if (input.askUser) tools.push(ASK_USER_TOOL);
   if (input.agentId !== RECEPTIONIST_ID) tools.push(FIND_SKILLS, LOAD_SKILL);
   if (input.agentId === RECEPTIONIST_ID) tools.push(...PLANNER_TOOLS);
   // The Chief of Staff and the Ops Coordinator can find people and gather a team.

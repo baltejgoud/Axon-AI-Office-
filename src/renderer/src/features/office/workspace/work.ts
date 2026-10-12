@@ -25,6 +25,7 @@ export const WORK_TABS: readonly { kind: WorkKind; label: string }[] = [
 /** Asking a colleague, finding and reading a skill, the planner, memory and helpers happen in the office, not on a surface. */
 const OFFICE_TOOLS = new Set([
   'ask_colleague',
+  'ask_user',
   'find_skills',
   'load_skill',
   'add_task',

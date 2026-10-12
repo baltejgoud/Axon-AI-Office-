@@ -4,6 +4,8 @@ import { Button, IconCheck, IconClose, IconShieldAlert, IconTerminal } from './i
 import { DiffLines } from './DiffLines';
 import { diffRows, diffStats } from '../features/office/workspace/work';
 import { toolPresentation } from '../chat/workPresentation';
+import { useToolRisk } from '../chat/useToolRisk';
+import { RiskLabel } from './RiskLabel';
 
 const SHORTCUT = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 
@@ -19,6 +21,7 @@ export function ApprovalCard({
   onDecision: (approved: boolean, grant?: 'task' | 'session') => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const risk = useToolRisk(request.toolName);
 
   const handle = (approved: boolean, grant?: 'task' | 'session') => {
     setSubmitting(true);
@@ -43,6 +46,7 @@ export function ApprovalCard({
             <IconShieldAlert size={16} />
           </span>
           <strong>Needs your OK</strong>
+          <RiskLabel risk={risk} />
           <span className="approval-summary" title={summary}>
             {summary}
           </span>

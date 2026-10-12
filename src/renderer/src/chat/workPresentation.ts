@@ -1,5 +1,6 @@
 import type { ToolCall } from '../../../shared/types';
 import { hostOf, skillLabel } from '../../../shared/runtimePresentation';
+import { questionOf } from '../../../shared/askUser';
 
 const LABELS: Record<string, string> = {
   find_skills: 'Look for skills',
@@ -36,9 +37,15 @@ const statusOf = (call: ToolCall): CallStatus =>
 
 export function toolPresentation(call: ToolCall) {
   const args = argsOf(call);
-  const target = [args.path, args.command, args.url, args.query].find((v) => typeof v === 'string');
+  let target = [args.path, args.command, args.url, args.query].find((v) => typeof v === 'string');
   const status = statusOf(call);
   let label = LABELS[call.name] ?? call.name.replace(/_/g, ' ');
+  // A question to you: "Asked you: ..." with the words of the question.
+  if (call.name === 'ask_user') {
+    const words = questionOf(call.arguments);
+    label = `${status === 'running' ? 'Asking you' : 'Asked you'}${words ? `: ${words.slice(0, 120)}` : ''}`;
+    target = '';
+  }
   // The web: what was searched for, and which site was read (its address is the target).
   if (call.name === 'web_search') label = status === 'running' ? 'Searching the web' : 'Searched the web';
   else if (call.name === 'read_webpage' && typeof args.url === 'string' && args.url)
