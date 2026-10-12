@@ -106,6 +106,9 @@ interface OfficeStoreState {
   compose: (agentId: string, text: string, send?: boolean) => void;
   /** The model each coworker last used (`providerId::modelId`): their next conversation starts with it. */
   agentModels: Record<string, string>;
+  /** Unsent text in each coworker's message box, kept when you switch to someone else or close the panel. */
+  drafts: Record<string, string>;
+  setDraft: (agentId: string, text: string) => void;
   /** The conversation panel: its width in CSS pixels and the side it docks to, kept across restarts. */
   drawer: { width: number; side: 'left' | 'right' };
   setDrawer: (drawer: Partial<{ width: number; side: 'left' | 'right' }>) => void;
@@ -178,6 +181,20 @@ function readAgentModels(): Record<string, string> {
     return saved && typeof saved === 'object' && !Array.isArray(saved)
       ? Object.fromEntries(Object.entries(saved).filter(([, v]) => typeof v === 'string')) as Record<string, string>
       : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Unsent message-box text per coworker, kept on this computer across restarts. */
+const DRAFTS_KEY = 'axon.composer.drafts';
+function readDrafts(): Record<string, string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? '{}');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {};
+    return Object.fromEntries(
+      Object.entries(saved).filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    ) as Record<string, string>;
   } catch {
     return {};
   }
@@ -264,6 +281,20 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   composeRequest: null,
   compose: (agentId, text, send) => set({ composeRequest: { agentId, text, send } }),
   agentModels: readAgentModels(),
+  drafts: readDrafts(),
+  setDraft: (agentId, text) => {
+    const current = get().drafts;
+    if ((current[agentId] ?? '') === text) return;
+    const drafts = { ...current };
+    if (text.trim() === '') delete drafts[agentId];
+    else drafts[agentId] = text;
+    set({ drafts });
+    try {
+      localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+    } catch {
+      // Kept for this session only.
+    }
+  },
   drawer: readDrawer(),
   setDrawer: (change) => {
     const next = { ...get().drawer, ...change };

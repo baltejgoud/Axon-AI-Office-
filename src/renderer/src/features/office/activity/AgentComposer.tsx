@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../../state';
 import { useOfficeStore } from '../store/officeStore';
@@ -7,6 +7,7 @@ import { IconPaperclip, IconSend, IconStop, IconClose, IconFileText, IconLoader 
 import { FolderPicker } from './FolderPicker';
 import { ModelPicker } from '../../../chat/ModelPicker';
 import { activeThread } from './thread';
+import { recallStep, sentTexts } from './recall';
 import { LIBRARY_RESIDENTS, syncOfficeLibrary } from '../library';
 import { withFileContext } from './fileContext';
 import { RECEPTIONIST_ID } from '../../../../../shared/coworkers';
@@ -40,7 +41,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     useOfficeStore();
   const handed = useOfficeStore((s) => s.pendingFiles[agentId]) ?? [];
 
-  const [input, setInput] = useState('');
+  // The box opens with whatever was left unsent for this coworker.
+  const [input, setInput] = useState(() => useOfficeStore.getState().drafts[agentId] ?? '');
+  /** The message Up last brought back: its place in what you sent (steps back from the newest) and its text. */
+  const recalled = useRef({ index: -1, text: '' });
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
   /** What is attached right now, for batches of pasted or dropped files that arrive while another is still being read. */
   const held = useRef<AttachedFile[]>([]);
@@ -83,9 +87,20 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     });
   }, [request, agentId]);
 
+  // Whatever is in the box is kept for this coworker, so it comes back when you return; sending empties it.
+  useEffect(() => {
+    useOfficeStore.getState().setDraft(agentId, input);
+  }, [agentId, input]);
+
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);
   const runtime = agentRuntime[agentId];
   const conversation = activeThread(data?.conversations ?? [], agentId, runtime);
+  const conversationId = conversation?.id;
+  // What you sent in this conversation, for Up to bring back (the newest messages the app holds).
+  const sent = useMemo(
+    () => sentTexts((data?.messages ?? []).filter((m) => m.conversationId === conversationId)),
+    [data?.messages, conversationId]
+  );
   // A run is going while its reply streams, while it waits on your OK, or while this box's send is out.
   const running =
     sending ||
@@ -456,6 +471,29 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     }
   };
 
+  /**
+   * Up in an empty box brings back what you last sent, and each further Up goes one message back. Down
+   * comes forward, and past the newest the box is empty again. Typing starts over.
+   */
+  const handleRecall = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const up = e.key === 'ArrowUp';
+    const last = recalled.current;
+    const recalling = last.index >= 0 && input === last.text;
+    if (!recalling && (!up || input !== '')) return;
+    // A recalled message over several lines: the arrows move the cursor through it first.
+    if (recalling) {
+      const el = e.currentTarget;
+      const beyondCaret = up ? el.value.slice(0, el.selectionStart) : el.value.slice(el.selectionEnd);
+      if (beyondCaret.includes('\n')) return;
+    }
+    const step = recallStep(sent, recalling ? last.index : -1, up ? 'up' : 'down');
+    if (!recalling && step.index < 0) return;
+    e.preventDefault();
+    recalled.current = step;
+    setInput(step.text);
+    requestAnimationFrame(() => box.current?.setSelectionRange(step.text.length, step.text.length));
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -465,6 +503,16 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
     } else if (e.key === 'Escape' && running && !input && !dictating) {
       e.preventDefault();
       handleStop();
+    } else if (
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !e.metaKey &&
+      !e.nativeEvent.isComposing &&
+      !dictating
+    ) {
+      handleRecall(e);
     }
   };
 
@@ -578,7 +626,10 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
           }
           value={input}
           disabled={sending && !conversation}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            recalled.current = { index: -1, text: '' };
+            setInput(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
         />
