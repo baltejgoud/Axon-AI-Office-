@@ -135,7 +135,7 @@ export class PermissionManager {
     if (toolName === 'show_dashboard') return { action: 'allow' };
 
     // 2. Path containment check
-    if (['read_file', 'list_files', 'file_context', 'get_symbol'].includes(toolName) || FILE_SAVERS.has(toolName)) {
+    if (['read_file', 'list_files', 'file_context', 'get_symbol', 'create_document'].includes(toolName) || FILE_SAVERS.has(toolName)) {
       const p = args.path || args.directory || args.directoryPath;
       if (p && roots.length > 0 && !this.isPathWithinRoots(String(p), roots)) {
         return { action: 'deny', reason: `Path "${p}" is outside allowed workspace roots.` };

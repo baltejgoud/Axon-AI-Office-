@@ -49,6 +49,7 @@ export function TeamCard({ call }: { call: ToolCall }) {
 export function TeamBody({ team }: { team: Team }) {
   const patch = useApp((s) => s.patch);
   const [busy, setBusy] = useState(false);
+  const [reviewer, setReviewer] = useState(team.reviewerId ?? 'qa-engineer');
   const act = async (action: (id: string) => Promise<void>) => {
     setBusy(true);
     try {
@@ -69,6 +70,8 @@ export function TeamBody({ team }: { team: Team }) {
         <span className={`team-chip is-${team.status}`}>{TEAM_WORDS[team.status]}</span>
       </header>
       <p className="team-goal">{team.goal}</p>
+      {team.status==='planned'&&<label className="team-reviewer">Review before the lead reports<select className="input" aria-label="Team reviewer" value={reviewer} onChange={e=>setReviewer(e.target.value)}><option value="">No reviewer</option>{OFFICE_AGENTS.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>}
+      {team.review&&<section className="team-review"><strong>{nameOf(team.review.reviewerId)}’s review</strong>{team.review.checks.map(c=><p key={c.taskId}>{c.taskId}: {c.complete?'Verified':c.blockers.join(' ')}</p>)}<button onClick={()=>useOfficeStore.getState().focusOn({agentId:team.review!.reviewerId,conversationId:team.review!.conversationId})}>Read review</button></section>}
       <ul className="team-people" aria-label="Who is in the team">
         {team.attendees.map((id) => {
           const spoke = team.minutes.find((m) => m.coworkerId === id);
@@ -126,7 +129,7 @@ export function TeamBody({ team }: { team: Team }) {
             <button className="team-button" disabled={busy} onClick={() => void act(window.axon.teamDiscard)}>
               Discard
             </button>
-            <button className="team-button primary" disabled={busy} onClick={() => void act(window.axon.teamStart)}>
+            <button className="team-button primary" disabled={busy} onClick={() => void act(async(id)=>{await window.axon.teamReviewer(id,reviewer||null);await window.axon.teamStart(id);})}>
               Start the work
             </button>
           </>

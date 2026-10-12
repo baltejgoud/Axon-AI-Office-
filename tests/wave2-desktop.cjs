@@ -24,7 +24,9 @@ const server = http.createServer((request, response) => {
     const user = payload.messages.findLast((m) => m.role === 'user')?.content ?? '';
     const last = payload.messages.at(-1);
     const asking = typeof user === 'string' && user.includes('ask-fixture') && last?.role !== 'tool';
-    const delta = asking ? { tool_calls: [{ index: 0, id: 'question-fixture', type: 'function', function: { name: 'ask_user', arguments: JSON.stringify({ question: 'Which format should I use?', options: ['Brief', 'Detailed'] }) } }] }
+    const bulk = typeof user === 'string' && user.includes('bulk-fixture') && last?.role !== 'tool';
+    const delta = bulk ? {tool_calls:[{index:0,id:'pref-fixture',type:'function',function:{name:'remember_preference',arguments:JSON.stringify({preference:'Use concise paragraphs.'})}}]}
+      : asking ? { tool_calls: [{ index: 0, id: 'question-fixture', type: 'function', function: { name: 'ask_user', arguments: JSON.stringify({ question: 'Which format should I use?', options: ['Brief', 'Detailed'] }) } }] }
       : { content: 'Finished. Would you like me to draft the email?' };
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     response.end(`data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: [DONE]\n\n`);
@@ -39,7 +41,7 @@ server.listen(0, '127.0.0.1', () => {
     messages: [{ id: 'u1', conversationId: 'wave2', role: 'user', content: 'Check our launch', createdAt: now - 9000 }, { id: 'a1', conversationId: 'wave2', role: 'assistant', content: 'Ready. Would you like me to draft the email? I can also compare pricing.', createdAt: now - 8000 }] };
   fs.mkdirSync(path.join(profile, 'data/db'), { recursive: true });
   fs.writeFileSync(path.join(profile, 'data/db/platform-v1.json'), JSON.stringify(state));
-  require(path.join(repo, 'out/main/index.js'));
+  require(path.join(repo, process.env.AXON_TEST_PACKAGED==='1'?'dist/win-unpacked/resources/app.asar/out/main/index.js':'out/main/index.js'));
 });
 const timeout = setTimeout(() => { console.error('TIMEOUT'); app.exit(1); }, 120000);
 app.on('browser-window-created', (_, win) => {
@@ -138,8 +140,29 @@ app.on('web-contents-created', (_, contents) => {
       await evaluate(`document.querySelector('#settings-tab-shortcuts').click()`);
       await waitFor(`!!document.querySelector('[aria-label="Name for /weekly"]')`, 'shortcut settings');
       await snap('shortcut-settings');
+      await evaluate(`document.querySelector('#settings-tab-jobs').click()`);
+      await waitFor(`!!document.querySelector('.jobs-info')`, 'recurring work settings');
+      await evaluate(`document.querySelector('.jobs-info button').click()`);
+      await waitFor(`!!document.querySelector('.job-editor')`, 'job form');
+      await type('.job-editor textarea','Draft the weekly report',true);
+      await snap('recurring-job-editor');
+      await evaluate(`document.querySelector('.job-editor').requestSubmit()`);
+      await waitFor(`!!document.querySelector('.job-row') && !document.querySelector('.job-editor')`, 'job saved');
+      await evaluate(`[...document.querySelectorAll('.job-row button')].find(b=>b.textContent==='Run now').click()`);
+      await waitFor(`document.querySelector('.job-row')?.textContent.includes('completed')`, 'scheduled job completes');
+      assert.ok(await evaluate(`document.querySelector('.job-row').textContent.includes('Open result')`));
+      await snap('recurring-job-result');
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+      await evaluate(`(async()=>{const a=await window.axon.chatCreate('fixture','fixture',null,'designer',undefined,null,'You are the Designer.');const b=await window.axon.chatCreate('fixture','fixture',null,'research-analyst',undefined,null,'You are the Research Analyst.');window.bulkRuns=Promise.all([window.axon.chatSend(a.id,'bulk-fixture: remember I prefer concise paragraphs',[]),window.axon.chatSend(b.id,'bulk-fixture: remember I prefer concise paragraphs',[])]);})()`);
+      await waitFor(`[...document.querySelectorAll('.approval-overlay button')].some(b=>b.textContent==='Approve all (2)')`, 'two real pending approvals');
+      await snap('bulk-approvals');
+      await evaluate(`[...document.querySelectorAll('.approval-overlay button')].find(b=>b.textContent==='Approve all (2)').click()`);
+      await evaluate(`window.bulkRuns`);
+      const approved=await evaluate(`window.axon.snapshot()`);
+      assert.equal(approved.settings.coworkerPreferences.designer,'Use concise paragraphs.');
+      assert.equal(approved.settings.coworkerPreferences['research-analyst'],'Use concise paragraphs.');
       console.log('WAVE 2 DESKTOP PASSED:', theme);
-    } catch (error) { failed = true; console.error(error); await snap('failure').catch(() => {}); }
+    } catch (error) { failed = true; console.error(error); console.error('RUNS',await evaluate(`window.axon.snapshot().then(s=>s.runs.map(r=>({agent:r.agentId,status:r.status,error:r.error})))`)); console.error('MODEL REQUESTS',requests.map(r=>({user:r.messages.findLast(m=>m.role==='user')?.content,tools:(r.tools??[]).map(t=>t.function.name)}))); await snap('failure').catch(() => {}); }
     finally { clearTimeout(timeout); server.close(); app.exit(failed ? 1 : 0); }
   });
 });

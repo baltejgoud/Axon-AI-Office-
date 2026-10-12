@@ -298,6 +298,7 @@ export interface KnowledgeSearchHit {
 /* --------------------------------- Settings ----------------------------------- */
 
 export interface Settings {
+  scheduledJobs?: import('./scheduledJobs').ScheduledJob[];
   coworkerPreferences?: Record<string, string>;
   savedPrompts?: import('./savedPrompts').SavedPrompt[];
   providerConcurrency?: Record<string, number>;
@@ -578,6 +579,8 @@ export interface TeamPost {
 
 /** A team a lead gathered: the meeting, the plan you approve, the work, and the report. */
 export interface Team {
+  reviewerId?: string;
+  review?: { reviewerId: string; conversationId: string; checks: { taskId: string; complete: boolean; blockers: string[] }[]; completedAt?: number };
   /** Company context shared by the meeting and all task owners. */
   context?: string;
   /** What teammates said to each other while they worked, oldest first; teams from before this had none. */

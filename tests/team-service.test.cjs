@@ -612,3 +612,25 @@ test('message_team outside a team is refused plainly, and starts nothing', async
   assert.match(toolAnswer(repo, dev.id, 'x1').error, /not on a team that is working/);
   assert.equal(repo.state.teams.length, 0);
 });
+
+test('a named reviewer checks tasks before the lead reports and saves an inspectable conversation',async(t)=>{
+  const {service,repo,team}=await planned(t);
+  await service.teamReviewer(team.id,'qa-engineer');let checks=0;
+  owners(t,{t1:(_s,_r,emit)=>finish(emit,'API done.'),t2:(_s,_r,emit)=>finish(emit,'Form done.'),other:(req,emit)=>{assert.ok(req.system.includes('Review whether the assigned business task'));checks++;return finish(emit,'{"complete":true,"blockers":[]}');}});
+  await service.teamStart(team.id);await waitFor(()=>team.status==='done','reviewed team');
+  assert.equal(checks,2);assert.equal(team.review.checks.length,2);assert.ok(repo.state.conversations.some(c=>c.id===team.review.conversationId&&c.agentId==='qa-engineer'));
+});
+
+test('reviewer rejection invalidates completed dependent work so Retry rebuilds it',async(t)=>{
+  const {service,team}=await planned(t);await service.teamReviewer(team.id,'qa-engineer');let checks=0;
+  owners(t,{t1:(_s,_r,emit)=>finish(emit,'API done.'),t2:(_s,_r,emit)=>finish(emit,'Form done.'),other:(_req,emit)=>finish(emit,++checks===1?'{"complete":false,"blockers":["Missing test"]}':'{"complete":true,"blockers":[]}')});
+  await service.teamStart(team.id);await waitFor(()=>team.status==='failed','review rejected');
+  assert.equal(team.plan.assignments[0].status,'failed');assert.equal(team.plan.assignments[1].status,'blocked');assert.equal(team.report,undefined);
+});
+
+test('Stop in the reviewer conversation aborts its model and prevents a final report',async(t)=>{
+  const {service,team}=await planned(t);await service.teamReviewer(team.id,'qa-engineer');const waiting=gate();let signal;
+  owners(t,{t1:(_s,_r,emit)=>finish(emit,'API done.'),t2:(_s,_r,emit)=>finish(emit,'Form done.'),other:async(req)=>{signal=req.signal;waiting.open();await until(new Promise(()=>{}),req.signal);return {toolCalls:[]};}});
+  await service.teamStart(team.id);await until(waiting.promise);service.chatStop(team.review.conversationId);
+  await waitFor(()=>team.status==='failed','cancelled review');assert.equal(signal.aborted,true);assert.equal(team.report,undefined);
+});

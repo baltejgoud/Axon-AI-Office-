@@ -55,6 +55,7 @@ const server = http.createServer((request, response) => {
     const last = parsed.messages?.[parsed.messages.length - 1];
     const tools = (parsed.tools ?? []).map((t) => t.function?.name);
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    if(system.includes('Review whether the assigned business task')) return sse(response,text(JSON.stringify({complete:true,blockers:[]})));
     if (tools.includes('propose_plan')) return sse(response, call('plan1', 'propose_plan', PLAN));
     if (system.includes('has called a team meeting')) {
       await meetingHeld;

@@ -49,6 +49,7 @@ import { ConnectorsSection } from './settings/ConnectorsSection';
 import { ConnectorDialog } from './settings/ConnectorDialog';
 import { WebAccessSection } from './settings/WebAccessSection';
 import { ShortcutsSection } from './settings/ShortcutsSection';
+import { JobsSection } from './settings/JobsSection';
 import { UsageSection } from './settings/UsageSection';
 import { ActivitySection } from './settings/ActivitySection';
 import { RestorePoints } from './settings/RestorePoints';
@@ -56,6 +57,7 @@ import { useOfficeStore } from './features/office/store/officeStore';
 import { DEFAULT_VOICE, SPEECH_LANGUAGES, chosenEngine, speechEngines } from '../../shared/speech';
 
 type Section =
+  | 'jobs'
   | 'shortcuts'
   | 'accounts'
   | 'models'
@@ -69,6 +71,7 @@ type Section =
   | 'skills'
   | 'privacy';
 const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIconProps> }[] = [
+  { id: 'jobs', label: 'Recurring work', icon: IconHistory },
   { id: 'shortcuts', label: 'Shortcuts', icon: IconCompose },
   { id: 'accounts', label: 'Accounts', icon: IconUser },
   { id: 'models', label: 'Models & API keys', icon: IconSparkle },
@@ -212,6 +215,7 @@ export function SettingsPanel() {
         )}
         {section === 'web' && <WebAccessSection />}
         {section === 'shortcuts' && <ShortcutsSection />}
+        {section === 'jobs' && <JobsSection />}
         {section === 'appearance' && <AppearanceSection />}
         {section === 'system' && <SystemSection />}
         {section === 'skills' && <SkillsSection />}

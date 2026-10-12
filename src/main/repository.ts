@@ -6,6 +6,8 @@ import type { Message } from '../shared/types';
 import { everyone } from '../shared/connectors';
 import { DEFAULT_WEB_ACCESS, normalWebAccess } from '../shared/webAccess';
 import { checkedSavedPrompts } from '../shared/savedPrompts';
+import { checkedPreferences } from '../shared/coworkerPreferences';
+import { checkedJobs } from '../shared/scheduledJobs';
 import { JsonStore } from './infra/store';
 import { migrateChannels } from './team/channel';
 import { randomUUID } from 'node:crypto';
@@ -375,6 +377,8 @@ export class Repository {
     state.runs = Array.isArray(state.runs) ? state.runs : [];
     state.agentMessages = Array.isArray(state.agentMessages) ? state.agentMessages : [];
     if (state.settings) {
+      try { state.settings.coworkerPreferences=checkedPreferences(state.settings.coworkerPreferences); }catch {state.settings.coworkerPreferences={};}
+      try { state.settings.scheduledJobs=checkedJobs(state.settings.scheduledJobs,state.settings.scheduledJobs).map(j=>j.status==='running'?{...j,status:'interrupted',error:'Interrupted by application exit.'}:j); }catch {state.settings.scheduledJobs=[];}
       try { state.settings.savedPrompts = checkedSavedPrompts(state.settings.savedPrompts); }
       catch { state.settings.savedPrompts = []; }
       state.settings.keepInTray ??= true;

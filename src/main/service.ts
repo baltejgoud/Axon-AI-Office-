@@ -5,8 +5,8 @@ import { AgentMessageBus } from './runtime/messages';
 import { TerminalService, defaultShell, executableAvailability } from './runtime/terminal';
 import { ProviderRuntimeManager, providerProblem } from './runtime/providers';
 import { app, dialog, shell } from 'electron';
-import { basename, join, resolve } from 'node:path';
-import { readFile, writeFile } from 'node:fs/promises';
+import { basename, join, resolve, dirname, extname } from 'node:path';
+import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
 import { Attachments, isPicture } from './attachments';
 import type { AttachedFile } from '../shared/attach';
 import type {
@@ -104,6 +104,8 @@ import { ASK_COLLEAGUE, LIMIT_REACHED, MAX_ASKS, consult, resolveColleague } fro
 import { ASK_USER } from '../shared/askUser';
 import { checkedSavedPrompts } from '../shared/savedPrompts';
 import { checkedPreferences, preferenceBlock } from '../shared/coworkerPreferences';
+import { documentBytes, checkedSheets, sheetPreview, type DocumentFormat, type DocumentSheet } from './documents';
+import { checkedJobs, dueSlot, type ScheduledJob } from '../shared/scheduledJobs';
 import { askYou } from './askYou';
 import { READ_ONLY_TOOLS, runRoots, toolsFor } from './officeTools';
 import { SHOW_DASHBOARD, publishDashboard } from './dashboards';
@@ -358,6 +360,8 @@ export class Service {
   readonly teams: TeamRunner;
   private readonly semanticScheduler = new SemanticCheckpointScheduler();
   private teamSave: NodeJS.Timeout | null = null;
+  private jobsTimer: NodeJS.Timeout | null = null;
+  private shuttingDown = false;
 
   constructor(
     readonly repo: Repository,
@@ -419,6 +423,17 @@ export class Service {
     // Searching the web and reading pages, while Settings → Web access is on (see tools/web.ts).
     for (const tool of createWebTools({ settings: () => this.webAccess, key: (provider) => this.webKey(provider) }))
       this.tools.register(tool);
+    this.tools.register({
+      definition: {name:'create_document',description:'Create a new Word (.docx), PDF (.pdf) or Excel (.xlsx) file inside the project, after user approval. Use Markdown content; Excel may also take sheets with rows of text, numbers, booleans or {formula: "SUM(A2:A5)"}. Existing files are never replaced.',parameters:{type:'object',properties:{path:{type:'string'},title:{type:'string'},content:{type:'string'},sheets:{type:'array',items:{type:'object'}}},required:['path','content']}},
+      validate: async (args,ctx) => {try { const target=await ctx.project.safe(String(args.path),true,true); if(!/\.(docx|pdf|xlsx)$/i.test(target))return 'Use a .docx, .pdf or .xlsx file name.'; if(await stat(target).then(()=>true,()=>false))return 'That file already exists. Choose a new name.'; if(typeof args.content!=='string'||args.content.length>1_000_000)return 'Document content must be text under 1 MB.'; checkedSheets(args.sheets); if(args.title!==undefined&&(typeof args.title!=='string'||args.title.length>200))return 'Use a title under 200 characters.'; return null; }catch(e){return String(e);}},
+      preparePreview: async (args)=>({type:'generic',path:String(args.path),content:`Create ${args.path}\n\n${String(args.content).slice(0,2000)}\n\n${sheetPreview(args.sheets)}`}),
+      execute: async (args,ctx) => {try {const target=await ctx.project.safe(String(args.path),true,true); const format=extname(target).slice(1).toLowerCase() as DocumentFormat; const bytes=await documentBytes(format,String(args.title??basename(target)),args.content,args.sheets as DocumentSheet[]|undefined); if(ctx.signal?.aborted)return {content:'Stopped before saving.',isError:true}; await mkdir(dirname(target),{recursive:true}); await ctx.project.safe(String(args.path),true,true); await writeFile(target,bytes,{flag:'wx'});return {content:`Created ${args.path} (${bytes.length} bytes).`};}catch(e){return {content:String(e),isError:true};}}
+    });
+    this.tools.register({definition:{name:'remember_preference',description:'Propose a durable preference for this coworker after user approval. Only remember a preference the user explicitly stated, never inferred personal facts. Existing preferences are kept; the user can edit or remove them on the coworker profile.',parameters:{type:'object',properties:{preference:{type:'string'}},required:['preference']}},
+      validate:async(args)=>typeof args.preference!=='string'||!args.preference.trim()||args.preference.length>1000?'Use a stated preference under 1,000 characters.':null,
+      preparePreview:async(args)=>({type:'generic',content:`Remember for this coworker:\n${args.preference}`}),
+      execute:async(args,ctx)=>{const agentId=this.state.conversations.find(c=>c.id===ctx.conversationId)?.agentId;if(!agentId||!coworkerById(agentId))return {content:'This conversation is not a coworker profile.',isError:true};const current=this.state.settings.coworkerPreferences?.[agentId]??'';const next=current.split('\n').includes(args.preference.trim())?current:[current,args.preference.trim()].filter(Boolean).join('\n');if(next.length>4000)return {content:'The preferences are full. Edit them on the profile.',isError:true};this.state.settings.coworkerPreferences=checkedPreferences({...this.state.settings.coworkerPreferences,[agentId]:next});await this.repo.save();return {content:'Preference saved. You can edit or remove it on the coworker profile.'};}
+    });
     this.tasks = new TaskStore(
       this.state,
       () => this.repo.id(),
@@ -469,6 +484,7 @@ export class Service {
       work: (team, assignment, started, signal) => this.teamWork(team, assignment, started, signal),
       stopWork: (conversationId) => this.chatStop(conversationId),
       report: (team, signal) => writeReport(team, this.teamModel(team, signal)),
+      review: (team, signal) => this.reviewTeam(team, signal),
       finished: (team) => {
         const lead = coworkerById(team.leadId);
         if (lead && this.shell && !this.shell.windowFocused())
@@ -638,6 +654,87 @@ export class Service {
     this.shell = shell;
     shell.applySettings(this.state.settings);
     this.reminders.startup();
+    if(!this.jobsTimer) { this.jobsTimer=setInterval(()=>void this.runScheduledJobs(Date.now()).catch(()=>{}),15000); this.jobsTimer.unref?.(); }
+    void this.runScheduledJobs(Date.now()).catch(()=>{});
+  }
+  /** Claim a due minute durably, then launch work without blocking the next scheduler tick. */
+  async runScheduledJobs(now: number): Promise<void> {
+    if(this.shuttingDown)return;
+    for(const job of this.state.settings.scheduledJobs??[]) {
+      const slot=dueSlot(job,now); if(!slot)continue;
+      job.lastSlot=slot; job.lastRunAt=now; job.status='running'; job.error=undefined;
+      try {await this.repo.save(); void this.executeScheduledJob(job).catch(()=>{});}
+      catch(e){job.status='failed';job.error=String(e);}
+    }
+  }
+  async jobRun(id: string): Promise<void> {
+    if(this.shuttingDown)throw new Error('Axon is closing.');
+    const job=this.state.settings.scheduledJobs?.find(j=>j.id===id);
+    if(!job)throw new Error('Job not found.');
+    if(job.status==='running')throw new Error('This job is already running.');
+    job.lastRunAt=Date.now();job.status='running';job.error=undefined;await this.repo.save();
+    void this.executeScheduledJob(job).catch(()=>{});
+  }
+  async teamReviewer(id: string, reviewerId: string | null): Promise<void> {
+    const team=this.state.teams.find(t=>t.id===text(id,100));
+    if(!team||team.status!=='planned')throw new Error('Choose the reviewer before starting the plan.');
+    if(reviewerId&&!coworkerById(reviewerId))throw new Error('Unknown reviewer.');
+    team.reviewerId=reviewerId??undefined;this.teams.changed(team.id);await this.repo.save();
+  }
+  private async reviewTeam(team: Team, signal: AbortSignal): Promise<boolean> {
+    const reviewer=coworkerById(team.reviewerId)!;
+    const leadChat=this.state.conversations.find(c=>c.id===team.conversationId);
+    const chat=await this.chatCreate(team.providerId,team.modelId,leadChat?.workspaceId??null,reviewer.id,{roleIds:reviewer.roleIds,skillIds:[]},leadChat?.projectRoot??null,reviewer.systemPrompt);
+    chat.title=`Review: ${team.goal.slice(0,55)}`;
+    team.review={reviewerId:reviewer.id,conversationId:chat.id,checks:[]};this.teams.changed(team.id);
+    const reviewController=new AbortController();
+    const abortReview=()=>reviewController.abort(signal.reason);
+    if(signal.aborted)abortReview();else signal.addEventListener('abort',abortReview,{once:true});
+    const reviewSignal=AbortSignal.any([signal,reviewController.signal]);
+    const run=this.supervisor.start({conversationId:chat.id,agentId:reviewer.id,teamId:team.id,taskId:'review',projectId:leadChat?.projectRoot??this.project.root??undefined,parentRunId:this.teamRun(team.id)?.runId,summary:'Reviewing the team’s deliverables'},reviewController);
+    const model=this.teamModel(team,reviewSignal), originalStream=model.stream;
+    model.stream=async(provider,key,request,onChunk)=>{
+      this.repo.appendMessages({id:this.repo.id(),conversationId:chat.id,role:'user',content:request.messages.map(m=>m.content).join('\n\n'),createdAt:Date.now()});
+      let answer='';const result=await originalStream(provider,key,{...request,system:reviewer.systemPrompt+'\n\n'+preferenceBlock(this.state.settings.coworkerPreferences?.[reviewer.id])+'\n\n'+request.system},(chunk,delta)=>{if(delta?.type!=='thought')answer+=chunk;onChunk(chunk,delta);});
+      this.repo.appendMessages({id:this.repo.id(),conversationId:chat.id,role:'assistant',content:answer,createdAt:Date.now()});return result;
+    };
+    const project=new Project();project.root=leadChat?.projectRoot??this.project.root;
+    try {
+      await this.supervisor.acquire(run.runId);
+      for(const assignment of team.plan?.assignments??[]) {
+        reviewSignal.throwIfAborted();
+        const messages=assignment.conversationId?this.repo.conversationMessages(assignment.conversationId):[];
+        const calls=messages.flatMap(m=>m.toolCalls??[]);
+        let evidence=calls.map(c=>`${c.name}: ${c.arguments}\n${c.error??c.result??'No recorded result'}`).join('\n\n');
+        for(const path of assignment.files) {try{const document=/\.(pdf|docx|xlsx)$/i.test(path); const body=document?await this.parsers.extract(await project.safe(path,false,true)):await project.read(path);evidence+=`\nFile ${path}:\n${body.slice(0,8000)}`;}catch{evidence+=`\nFile ${path}: could not read; do not assume its content.`;}}
+        const verdict=await reviewCompletion(assignment,messages.findLast(m=>m.role==='assistant')?.content??assignment.result??'',evidence,model);
+        team.review.checks.push({taskId:assignment.id,...verdict});
+        if(!verdict.complete){assignment.status='failed';assignment.note=verdict.blockers.join(' ');assignment.retryNote=assignment.note;}
+        this.teams.changed(team.id);
+      }
+      team.review.completedAt=Date.now();const okay=team.review.checks.every(c=>c.complete);
+      if(!okay) {
+        const stale=new Set(team.plan!.assignments.filter(a=>a.status==='failed').map(a=>a.id));
+        let changed=true;while(changed){changed=false;for(const a of team.plan!.assignments)if(!stale.has(a.id)&&a.dependsOn.some(d=>stale.has(d))){stale.add(a.id);a.status='blocked';a.note='An upstream deliverable failed review; rebuild after correction.';a.retryNote=a.note;changed=true;}}
+      }
+      this.supervisor.finish(run.runId,okay?'completed':'failed',okay?undefined:'Missing deliverables found by reviewer');await this.repo.save();return okay;
+    }catch(e){this.supervisor.finish(run.runId,reviewSignal.aborted?'canceled':'failed',String(e));throw e;}
+    finally{signal.removeEventListener('abort',abortReview);}
+  }
+  private async executeScheduledJob(job: ScheduledJob): Promise<void> {
+    const config={...job};
+    try {
+      if(this.shuttingDown)throw new Error('Axon is closing.');
+      const owner=coworkerById(config.agentId)!;
+      const chat=await this.chatCreate(config.providerId,config.modelId,null,owner.id,{roleIds:owner.roleIds,skillIds:[]},null,owner.systemPrompt);
+      chat.title=config.name;job.conversationId=chat.id;await this.repo.save();
+      if(this.shuttingDown)throw new Error('Axon is closing.');
+      await this.chatSend(chat.id,config.prompt,[],{unattended:true});
+      const run=this.supervisor.latest(chat.id);
+      job.status=run?.status==='completed'?'completed':'failed';job.error=run?.error??(job.status==='failed'?'The job ended without completion.':undefined);
+    } catch(e){job.status='failed';job.error=e instanceof Error?e.message:String(e);}
+    await this.repo.save();
+    this.shell?.notify({title:`${job.name}: ${job.status==='completed'?'finished':'needs attention'}`,body:job.error??'Open the conversation to read the result.',target:{agentId:job.agentId,conversationId:job.conversationId}});
   }
   /** True the first time the window closes to the tray, so the user is told once. */
   firstTrayClose(): boolean {
@@ -951,6 +1048,9 @@ export class Service {
       );
   }
   async settingsSave(s: Parameters<PlatformAPI['settingsSave']>[0]): Promise<void> {
+    const scheduledJobs = checkedJobs(s.scheduledJobs, this.state.settings.scheduledJobs);
+    if(this.state.settings.scheduledJobs?.some(j=>j.status==='running'&&!scheduledJobs.some(n=>n.id===j.id)))throw new Error('Stop the running job in its conversation before deleting it.');
+    for (const job of scheduledJobs) if(job.enabled&&!this.state.providers.some(p=>p.enabled&&p.id===job.providerId&&p.models.some(m=>m.id===job.modelId))) throw new Error('Choose an enabled model for the recurring job.');
     const coworkerPreferences = checkedPreferences(s.coworkerPreferences);
     const savedPrompts = checkedSavedPrompts(s.savedPrompts);
     if (
@@ -999,6 +1099,7 @@ export class Service {
       ...s,
       savedPrompts,
       coworkerPreferences,
+      scheduledJobs: scheduledJobs.map(j=>{const current=this.state.settings.scheduledJobs?.find(c=>c.id===j.id);return current?Object.assign(current,j):j;}),
       allowShellExecution: Boolean(s.allowShellExecution),
       shellAllowlist: s.shellAllowlist || [],
       sendCrashDiagnostics: Boolean(s.sendCrashDiagnostics),
@@ -1095,12 +1196,17 @@ export class Service {
     const file = await dialog.showSaveDialog({
       defaultPath: join(where, /\.(md|txt)$/i.test(base) ? base : `${base}.md`),
       filters: [
+        { name: 'Word document', extensions: ['docx'] },
+        { name: 'PDF', extensions: ['pdf'] },
+        { name: 'Excel workbook', extensions: ['xlsx'] },
         { name: 'Markdown', extensions: ['md'] },
         { name: 'Text', extensions: ['txt'] }
       ]
     });
     if (file.canceled || !file.filePath) return null;
-    await writeFile(file.filePath, text(content, 5_000_000));
+    const format = extname(file.filePath).slice(1).toLowerCase();
+    if (!['md','txt','docx','pdf','xlsx'].includes(format)) throw new Error('Choose Word, PDF, Excel, Markdown or text.');
+    await writeFile(file.filePath, await documentBytes(format as DocumentFormat, base.replace(/\.[^.]+$/, ''), text(content, 1_000_000)));
     return file.filePath;
   }
   /**
@@ -2059,7 +2165,7 @@ export class Service {
     id: string,
     input: string,
     attachmentIds: string[],
-    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string } = {}
+    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string; unattended?: boolean } = {}
   ): Promise<void> {
     text(input, 60000);
     if (!input.trim()) throw new Error('Message cannot be empty.');
@@ -2091,7 +2197,7 @@ export class Service {
     input: string,
     content: string,
     pictures: Attachment[],
-    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string }
+    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string; unattended?: boolean }
   ): Promise<void> {
     // Already working: the message waits for their next step (or their next run), instead of being lost.
     if (this.runs.has(id)) {
@@ -2149,7 +2255,7 @@ export class Service {
     content: string,
     /** The pictures your new message carries: those you attached, or on an edit the original's. A retry brings none. */
     pictures: Attachment[],
-    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string },
+    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string; unattended?: boolean },
     rewrite?: Rewrite
   ): Promise<void> {
     const chat = this.state.conversations.find((c) => c.id === id);
@@ -2182,7 +2288,7 @@ export class Service {
     let prepared: Awaited<ReturnType<Service['prepareRun']>>;
     try {
       await this.supervisor.acquire(supervised.runId);
-      prepared = await this.prepareRun(chat, provider, input, content, pictures, keep, Boolean(options.teamId));
+      prepared = await this.prepareRun(chat, provider, input, content, pictures, keep, Boolean(options.teamId || options.unattended));
       // Read for this run just above; from now on they stay with the conversation. An edit's pictures already
       // stay with it (they came from the message it replaces), so there is nothing to move for them.
       if (!rewrite) this.keptPictures(chat, await this.files.keep(pictures));
@@ -3006,7 +3112,7 @@ export class Service {
       };
     asks.questions?.add(questionKey);
     asks.count++;
-    const colleague = found.coworker;
+    const colleague = {...found.coworker,systemPrompt:found.coworker.systemPrompt+'\n\n'+preferenceBlock(this.state.settings.coworkerPreferences?.[found.coworker.id])};
     const helper: AuditActor = {
       kind: 'colleague',
       id: colleague.id,
@@ -3298,7 +3404,7 @@ export class Service {
     const report = {
       task: assignment.title, status: 'done' as const, summary: (last?.content ?? '').slice(0, SUMMARY_LIMIT),
       decisions: checkpoint([requestHistory(workerMessages)]).facts.filter(f => f.kind === 'decision').map(f => f.text).slice(0, 20),
-      filesChanged: [...new Set(calls.filter(call => call.change).map(call => String(toolArgs(call.arguments)?.path ?? '')).filter(Boolean))],
+      filesChanged: [...new Set(calls.filter(call => call.change || call.name==='create_document'&&call.result!==undefined).map(call => String(toolArgs(call.arguments)?.path ?? '')).filter(Boolean))],
       tests: calls.filter(call => /command/.test(call.name) && /test|check|lint/.test(String(toolArgs(call.arguments)?.command ?? '')))
         .map(call => `${toolArgs(call.arguments)?.command}: ${call.error ?? call.result ?? 'No result'}`.slice(0, 1000)).slice(0, 10),
       blockers: workerMessages.filter(m => m.error).map(m => m.error!).slice(0, 10),
@@ -3755,6 +3861,9 @@ export class Service {
     this.stopTicking();
   }
   shutdown(): void {
+    this.shuttingDown=true;
+    this.stopAll();
+    if(this.jobsTimer)clearInterval(this.jobsTimer);
     this.semanticScheduler.dispose();
     if (this.teamSave) clearTimeout(this.teamSave);
     this.processes.stopAll();

@@ -257,6 +257,7 @@ export interface PlatformAPI {
    * `folder` when given; the saved path, or null when cancelled.
    */
   documentSave(name: string, content: string, folder?: string | null): Promise<string | null>;
+  jobRun(id: string): Promise<void>;
   /** Undoes a coworker's saved write after asking; rejects with "Undo cancelled." on Cancel. */
   revertChange(toolCallId: string): Promise<void>;
   /** "Undo all": a task's file changes, after one confirmation; how many were undone and left as they are. */
@@ -280,6 +281,7 @@ export interface PlatformAPI {
   knowledgeImportFolder(): Promise<{ imported: number; skipped: number; truncated: boolean } | null>;
   /** A plan waiting for you: start the work. */
   teamStart(id: string): Promise<void>;
+  teamReviewer(id: string, reviewerId: string | null): Promise<void>;
   /** Stops a team's meeting or every owner still working. */
   teamStop(id: string): Promise<void>;
   /** Drops a plan you don't want. */

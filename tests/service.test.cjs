@@ -82,6 +82,40 @@ const mockModel = (t, respond) => {
   providersModule.streamChat = respond;
 };
 
+test('a recurring job claims its local slot once and runs unattended with saved preferences',async(t)=>{
+  const {dir,repo,service}=makeService();addProvider(repo);t.after(async()=>{service.shutdown();await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  repo.state.settings.coworkerPreferences={designer:'Use short sentences.'};
+  repo.state.settings.scheduledJobs=[{id:'j',name:'Weekly draft',agentId:'designer',providerId:'p1',modelId:'m1',prompt:'Draft the update',days:[1],time:'09:00',timezone:'Asia/Kolkata',enabled:true}];
+  let calls=0;mockModel(t,async(_p,_k,req,onChunk)=>{calls++;assert.ok(req.system.includes('Use short sentences.'));assert.ok(!req.tools.some(t=>t.name==='ask_user'));onChunk('The weekly update is ready.');return {toolCalls:[]};});
+  const now=Date.parse('2026-10-12T03:30:00Z');await service.runScheduledJobs(now);await service.runScheduledJobs(now+10000);
+  for(let i=0;i<200&&repo.state.settings.scheduledJobs[0].status==='running';i++)await new Promise(r=>setTimeout(r,10));
+  const job=repo.state.settings.scheduledJobs[0];assert.equal(job.status,'completed');assert.ok(job.conversationId);assert.equal(calls,1);
+  await service.runScheduledJobs(now+20000);assert.equal(calls,1);
+});
+
+test('a persisted scheduled launch cannot start after shutdown',async(t)=>{
+  const {dir,repo,service}=makeService();addProvider(repo);
+  t.after(async()=>{await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  repo.state.settings.scheduledJobs=[{id:'j',name:'Weekly',agentId:'designer',providerId:'p1',modelId:'m1',prompt:'Draft',days:[1],time:'09:00',timezone:'Asia/Kolkata',enabled:true}];
+  let release;const saved=repo.save.bind(repo);repo.save=()=>new Promise(r=>{release=()=>saved().then(r);});
+  let calls=0;mockModel(t,async()=>{calls++;return {toolCalls:[]};});
+  const launch=service.runScheduledJobs(Date.parse('2026-10-12T03:30:00Z'));
+  service.shutdown();repo.save=saved;await release();await launch;
+  await new Promise(r=>setTimeout(r,30));assert.equal(calls,0);assert.equal(repo.state.conversations.length,0);
+});
+
+test('document generation is approved before writing and never overwrites an existing file',async(t)=>{
+  const events=[];const {dir,repo,service}=makeService(e=>events.push(e));addProvider(repo);
+  const folder=path.join(dir,'project');fs.mkdirSync(folder);await service.project.choose(folder);
+  t.after(async()=>{service.shutdown();await repo.store.flushAll();fs.rmSync(dir,{recursive:true,force:true});});
+  const chat=await coworkerChat(service);let calls=0;mockModel(t,async(_p,_k,_req,onChunk)=>{if(++calls===1)return {toolCalls:[{id:'doc1',name:'create_document',arguments:JSON.stringify({path:'report.docx',title:'Launch report',content:'# Results\nThe launch is ready.'})}]};onChunk('Created the Word report.');return {toolCalls:[]};});
+  const run=service.chatSend(chat.id,'Create a Word report',[]);let request;
+  for(let i=0;i<200&&!request;i++){request=events.find(e=>e.approvalRequired)?.approvalRequired;if(!request)await new Promise(r=>setTimeout(r,10));}
+  assert.ok(request);assert.equal(fs.existsSync(path.join(folder,'report.docx')),false);await service.toolApprove({requestId:request.id,approved:true});await run;
+  assert.equal(fs.readFileSync(path.join(folder,'report.docx')).subarray(0,2).toString(),'PK');
+  assert.match(await service.tools.get('create_document').validate({path:'report.docx',content:'x'},{project:service.project,allowShell:false}),/already exists/);
+});
+
 test('chatSelectionSet rejects unknown ids and caps at 50', async (t) => {
   const { dir, repo, service } = makeService();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -390,7 +424,7 @@ test('a coworker asks colleagues: three answer, the fourth is turned away, and h
   await service.chatSend(chat.id, 'Build the settings page', []);
   assert.deepEqual(
     offered,
-    ['ask_colleague', 'ask_user', 'find_skills', 'load_skill', 'web_search', 'read_webpage', 'show_dashboard', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
+    ['ask_colleague', 'ask_user', 'find_skills', 'load_skill', 'web_search', 'read_webpage', 'show_dashboard', 'remember_preference', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output'],
     'no folder: a colleague, skills, the web and scoped memory retrieval'
   );
   assert.equal(consults, 3);
@@ -585,7 +619,7 @@ test('the receptionist keeps the planner with her own tools, knowing the date', 
     if (calls === 1) {
       assert.deepEqual(
         req.tools.map((tool) => tool.name),
-        ['ask_colleague', 'ask_user', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'web_search', 'read_webpage', 'show_dashboard', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
+        ['ask_colleague', 'ask_user', 'add_task', 'list_tasks', 'update_task', 'complete_task', 'web_search', 'read_webpage', 'show_dashboard', 'remember_preference', 'read_attachment', 'search_conversation_history', 'retrieve_conversation_turns', 'read_tool_output']
       );
       assert.match(
         req.system,

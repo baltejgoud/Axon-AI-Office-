@@ -27,7 +27,7 @@ const READS = new Set([
   'read_webpage'
 ]);
 /** Tools that save, change or remove something on this computer. */
-const CHANGES_FILES = new Set(['write_file', 'edit_file', 'git_commit', 'update_memory']);
+const CHANGES_FILES = new Set(['write_file', 'edit_file', 'create_document', 'git_commit', 'update_memory']);
 /** Tools that run something in a terminal. */
 const COMMANDS = new Set(['run_command', 'start_process', 'stop_process']);
 /** A tool whose name says it removes or moves things (a connector's, or one added later). */

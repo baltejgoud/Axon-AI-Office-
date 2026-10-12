@@ -44,6 +44,7 @@ export interface TeamRunnerDeps {
   stopWork: (conversationId: string) => void;
   /** The lead's report once everything is done. */
   report: (team: Team, signal: AbortSignal) => Promise<string>;
+  review?: (team: Team, signal: AbortSignal) => Promise<boolean>;
   /** The team is done (for a notification). */
   finished?: (team: Team) => void;
 }
@@ -251,6 +252,10 @@ export class TeamRunner {
     const controller = new AbortController();
     this.calls.set(team.id, controller);
     try {
+      if(team.reviewerId && this.deps.review && !await this.deps.review(team,controller.signal)) {
+        if(!controller.signal.aborted)this.fail(team,'The reviewer found missing work. Open the review, then Retry to correct it.');
+        return;
+      }
       const report = (await this.deps.report(team, controller.signal)).trim();
       if (!report) throw new Error('The lead returned an empty report.');
       team.report = report;

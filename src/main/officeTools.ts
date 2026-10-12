@@ -63,7 +63,7 @@ export function toolsFor(input: {
   const tools = input.hasFolder
     ? input.registry.filter(
         (tool) =>
-          !WEB_TOOL_NAMES.has(tool.name) &&
+          !WEB_TOOL_NAMES.has(tool.name) && tool.name!=='remember_preference' &&
           !(coworker && tool.name === 'dispatch_subagent') &&
           (!lead || READ_ONLY_TOOLS.includes(tool.name))
       )
@@ -78,6 +78,7 @@ export function toolsFor(input: {
   if (coworker && input.teamChat) tools.push(MESSAGE_TEAM);
   // Anyone can show what they gathered as a dashboard: it only displays, so no folder is needed.
   tools.push(SHOW_DASHBOARD);
+  if(coworker)tools.push(...input.registry.filter(t=>t.name==='remember_preference'));
   tools.push(...(input.connectorTools ?? []));
   return tools;
 }

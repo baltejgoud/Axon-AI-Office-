@@ -821,9 +821,9 @@ test('web tools are offered with or without a folder, to everyone, and hidden wh
   }
   // Nothing else about the lists changes.
   const skills = ['find_skills', 'load_skill'];
-  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry: [], webAccess: true })), ['ask_colleague', ...skills, ...web]);
-  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry: [], webAccess: true })), [...skills, ...web]);
-  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry: [], webAccess: false })), ['ask_colleague', ...skills]);
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry: [], webAccess: true })), ['ask_colleague', ...skills, ...web, 'show_dashboard']);
+  assert.deepEqual(names(office.toolsFor({ agentId: undefined, hasFolder: false, registry: [], webAccess: true })), [...skills, ...web, 'show_dashboard']);
+  assert.deepEqual(names(office.toolsFor({ agentId: 'frontend-developer', hasFolder: false, registry: [], webAccess: false })), ['ask_colleague', ...skills, 'show_dashboard']);
   // Descriptions carry the words a short tool list is matched on.
   for (const tool of web.map((name) => office.toolsFor({ agentId: undefined, hasFolder: false, registry: [], webAccess: true }).find((t) => t.name === name))) {
     const text = `${tool.name} ${tool.description}`.toLowerCase();

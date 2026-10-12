@@ -451,7 +451,7 @@ export function Conversation({
                         <MessageView
                           message={m}
                           authorName={agentName}
-                          renderToolCall={(call) => officeToolCard(call, m.createdAt)}
+                          renderToolCall={(call) => call.name==='ask_colleague'?<ColleagueCard call={call} askerId={conversation?.agentId} history={shown.filter(message=>message.createdAt<=m.createdAt).flatMap(message=>message.toolCalls??[])} />:officeToolCard(call, m.createdAt)}
                           onContinue={i === lastEnd && !live ? onContinue : undefined}
                           onEdit={
                             editable

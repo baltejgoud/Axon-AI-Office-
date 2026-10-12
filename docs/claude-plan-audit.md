@@ -1,5 +1,7 @@
 # Claude implementation-plan audit — 12 October 2026
 
+**Completion update:** The user resumed the remaining work, including the paused team features. See [claude-plan-completion.md](claude-plan-completion.md) for the delivered implementation and final verification. The audit below preserves the earlier baseline.
+
 Compared Claude's original 29-item proposal and T0–T13 execution table from session `ac586233-4cb5-4edc-ab6e-d107c5954c48` with `feat/improvements` at `508dea9`, branch history and the preserved worktrees. This is a source audit; no new implementation or live-provider checks were performed.
 
 ## Outstanding work

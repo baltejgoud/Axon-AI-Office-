@@ -760,6 +760,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
             </div>
             {!menuItems.length && <p role="status">No matches</p>}
             <small>↑ ↓ to choose · Enter or Tab to insert · Esc to close</small>
+            {token.kind==='shortcut'&&input.trim()&&!input.startsWith('/')&&<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>{setToken(null);setSavingShortcut(true);}}>Save what’s in the box as a shortcut…</button>}
           </div>
         )}
         <textarea

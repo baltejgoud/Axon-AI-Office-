@@ -188,8 +188,8 @@ test('runSkillTool answers both tools from the catalog', () => {
 
 test('everyone but the receptionist is offered find_skills and load_skill, in their own chats too', () => {
   const names = (agentId) => toolsFor({ agentId, hasFolder: false, registry: [] }).map((tool) => tool.name);
-  assert.deepEqual(names('frontend-developer'), ['ask_colleague', 'find_skills', 'load_skill']);
-  assert.deepEqual(names(undefined), ['find_skills', 'load_skill'], 'your own chats');
+  assert.deepEqual(names('frontend-developer'), ['ask_colleague', 'find_skills', 'load_skill', 'show_dashboard']);
+  assert.deepEqual(names(undefined), ['find_skills', 'load_skill', 'show_dashboard'], 'your own chats');
   for (const c of COWORKERS) {
     const offered = names(c.id);
     assert.equal(offered.includes('find_skills'), c.id !== RECEPTIONIST_ID, c.id);

@@ -24,7 +24,7 @@ function representative(files: string[], limit: number): string {
   return first.concat(rest).slice(0, limit).join('\n');
 }
 export function allowedName(name: string): boolean {
-  return !excluded.has(name) && !/^\.env($|\.)/i.test(name) && !/\.(pem|key|pfx|p12|exe|dll|zip|png|jpg|jpeg|gif|ico|mp4|pdf|docx|xlsx)$/i.test(name);
+  return !excluded.has(name.toLowerCase()) && !/^\.env($|\.)/i.test(name) && !/\.(pem|key|pfx|p12|exe|dll|zip|png|jpg|jpeg|gif|ico|mp4|pdf|docx|xlsx)$/i.test(name);
 }
 export function within(root: string, path: string): boolean {
   const rel = relative(root, path); return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
@@ -34,18 +34,21 @@ export class Project {
   /** Set when a listing stopped at a cap, so a caller can say so instead of looking empty. */
   listTruncated: boolean = false;
   async choose(path: string): Promise<void> { this.root = await realpath(path); }
-  async safe(path: string, create = false): Promise<string> {
+  async safe(path: string, create = false, document = false): Promise<string> {
     if (!this.root) throw new Error('Choose a project first.');
     const target = resolve(this.root, path);
     if (!within(this.root, target) || target === this.root || path.includes(':')) throw new Error('Path outside project.');
     const parts = relative(this.root, target).split(/[\\/]/);
-    if (parts.some(p => !allowedName(p))) throw new Error('Sensitive or unsupported path.');
+    if (parts.some((p,i) => !(document && i===parts.length-1 && !/^\.env($|\.)/i.test(p) && /\.(docx|pdf|xlsx)$/i.test(p)) && !allowedName(p))) throw new Error('Sensitive or unsupported path.');
     let current = this.root;
     for (const part of parts) {
       current = resolve(current, part);
       try {
         const stat = await lstat(current);
-        if (stat.isSymbolicLink() || !within(this.root, await realpath(current))) throw new Error('Symbolic links and junctions are not permitted.');
+        const real=await realpath(current);
+        if (stat.isSymbolicLink() || !within(this.root, real)) throw new Error('Symbolic links and junctions are not permitted.');
+        if(relative(this.root,real).split(/[\\/]/).some(p=>p.toLowerCase()==='.git'))throw new Error('The .git folder holds the project history and cannot be changed.');
+        if(relative(this.root,real).split(/[\\/]/).some(p=>excluded.has(p.toLowerCase())||/^\.env($|\.)/i.test(p)))throw new Error('Sensitive or unsupported path.');
       } catch (error) { if (create && (error as NodeJS.ErrnoException).code === 'ENOENT') break; throw error; }
     }
     return target;
