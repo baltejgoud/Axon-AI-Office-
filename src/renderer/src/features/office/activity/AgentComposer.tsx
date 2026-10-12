@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../../state';
-import { useOfficeStore } from '../store/officeStore';
+import { draftFor, saveDraft, useOfficeStore } from '../store/officeStore';
 import { OFFICE_AGENTS } from '../data/officeAgents';
 import { IconPaperclip, IconSend, IconStop, IconClose, IconFileText, IconLoader } from '../../../ui';
 import { FolderPicker } from './FolderPicker';
@@ -42,7 +42,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   const handed = useOfficeStore((s) => s.pendingFiles[agentId]) ?? [];
 
   // The box opens with whatever was left unsent for this coworker.
-  const [input, setInput] = useState(() => useOfficeStore.getState().drafts[agentId] ?? '');
+  const [input, setInput] = useState(() => draftFor(agentId));
   /** The message Up last brought back: its place in what you sent (steps back from the newest) and its text. */
   const recalled = useRef({ index: -1, text: '' });
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -89,7 +89,7 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
 
   // Whatever is in the box is kept for this coworker, so it comes back when you return; sending empties it.
   useEffect(() => {
-    useOfficeStore.getState().setDraft(agentId, input);
+    saveDraft(agentId, input);
   }, [agentId, input]);
 
   const agent = OFFICE_AGENTS.find((a) => a.id === agentId);

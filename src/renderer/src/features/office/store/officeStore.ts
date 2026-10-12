@@ -106,9 +106,6 @@ interface OfficeStoreState {
   compose: (agentId: string, text: string, send?: boolean) => void;
   /** The model each coworker last used (`providerId::modelId`): their next conversation starts with it. */
   agentModels: Record<string, string>;
-  /** Unsent text in each coworker's message box, kept when you switch to someone else or close the panel. */
-  drafts: Record<string, string>;
-  setDraft: (agentId: string, text: string) => void;
   /** The conversation panel: its width in CSS pixels and the side it docks to, kept across restarts. */
   drawer: { width: number; side: 'left' | 'right' };
   setDrawer: (drawer: Partial<{ width: number; side: 'left' | 'right' }>) => void;
@@ -200,6 +197,36 @@ function readDrafts(): Record<string, string> {
   }
 }
 
+/*
+ * Drafts live outside the store on purpose: they change with every key you press, and the office
+ * canvas re-renders on any store change. Saving to disk waits until you pause.
+ */
+const drafts: Record<string, string> = readDrafts();
+let draftsSave: ReturnType<typeof setTimeout> | undefined;
+
+/** Unsent text in a coworker's message box, kept when you switch to someone else or close the panel. */
+export const draftFor = (agentId: string): string => drafts[agentId] ?? '';
+
+export function saveDraft(agentId: string, text: string): void {
+  if ((drafts[agentId] ?? '') === text) return;
+  if (text.trim() === '') delete drafts[agentId];
+  else drafts[agentId] = text;
+  clearTimeout(draftsSave);
+  draftsSave = setTimeout(writeDrafts, 400);
+}
+
+function writeDrafts(): void {
+  clearTimeout(draftsSave);
+  draftsSave = undefined;
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  } catch {
+    // Kept for this session only.
+  }
+}
+// Closing the window doesn't wait for the pause.
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => draftsSave && writeDrafts());
+
 /** The conversation panel's size: 480 by default, from narrow (360) to wide (960). */
 export const DRAWER_WIDTH = { initial: 480, min: 360, max: 960 };
 const DRAWER_KEY = 'axon.drawer';
@@ -281,20 +308,6 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
   composeRequest: null,
   compose: (agentId, text, send) => set({ composeRequest: { agentId, text, send } }),
   agentModels: readAgentModels(),
-  drafts: readDrafts(),
-  setDraft: (agentId, text) => {
-    const current = get().drafts;
-    if ((current[agentId] ?? '') === text) return;
-    const drafts = { ...current };
-    if (text.trim() === '') delete drafts[agentId];
-    else drafts[agentId] = text;
-    set({ drafts });
-    try {
-      localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-    } catch {
-      // Kept for this session only.
-    }
-  },
   drawer: readDrawer(),
   setDrawer: (change) => {
     const next = { ...get().drawer, ...change };
