@@ -6,6 +6,9 @@ import { createPortal } from 'react-dom';
 import type { Conversation as Thread, Message, ToolCall } from '../../../../../shared/types';
 import { perform, useApp } from '../../../state';
 import { MessageView, visibleUserText } from '../../../chat/MessageView';
+import { RetryRow } from '../../../chat/RetryRow';
+import { useRewrites } from '../../../chat/rewrites';
+import { filesChangedAfter, isTeamTask, writtenByYou } from '../../../../../shared/rewrite';
 import { PendingApprovals } from '../../../chat/PendingApprovals';
 import { ColleagueCard } from './ColleagueCard';
 import { PlannerToolCard } from './PlannerToolCard';
@@ -132,6 +135,8 @@ export function Conversation({
   const [historyReady, setHistoryReady] = useState(false);
   const list = useRef<VirtuosoHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
+  /** Changes when a retry or an edit cuts this conversation back: the history loaded so far is out of date. */
+  const rewrites = useRewrites((s) => s.epochs[conversation?.id ?? ''] ?? 0);
   useEffect(() => {
     let disposed = false;
     historyEpoch.current++;
@@ -159,7 +164,7 @@ export function Conversation({
     return () => {
       disposed = true;
     };
-  }, [conversation?.id]);
+  }, [conversation?.id, rewrites]);
   const loadEarlier = async () => {
     if (!conversation || nextBefore === undefined || loadingHistory) return;
     setLoadingHistory(true);
@@ -256,6 +261,63 @@ export function Conversation({
   );
   const lastEnd = shown.length - 1;
   const live = working || pending > 0;
+
+  // Retry and Edit rewrite the thread, so they wait until nothing is running, and never touch a team member's task.
+  const teams = useApp((s) => s.data?.teams);
+  const [rewriting, setRewriting] = useState(false);
+  const rewritable =
+    Boolean(conversation) &&
+    !isTeamTask(teams ?? [], conversation?.id ?? '') &&
+    !live &&
+    !rewriting &&
+    !activeRun &&
+    !shown.some((m) => m.streaming);
+  const lastUserAt = shown.findLastIndex((m) => m.role === 'user');
+  const lastShownAt = shown.findLastIndex((m) => !onlyWork(m));
+  /** Under the last finished reply to something you wrote yourself. */
+  const retryAt =
+    rewritable &&
+    lastUserAt >= 0 &&
+    lastUserAt < lastShownAt &&
+    shown[lastShownAt].role === 'assistant' &&
+    writtenByYou(shown[lastUserAt]) &&
+    shown[lastUserAt].id !== 'pending-task'
+      ? lastShownAt
+      : -1;
+  /** Cuts the thread back and runs it again; false when it was refused (the error is on screen). */
+  const rewrite = async (
+    start: (conversationId: string) => Promise<void>,
+    words: string
+  ): Promise<boolean> => {
+    if (!conversation) return false;
+    let accepted = true;
+    setRewriting(true);
+    // The same footing as a send: the answer arrives in the chat, for the words just sent.
+    if (conversation.agentId) {
+      useOfficeStore.getState().setLastResponse(conversation.agentId, '');
+      useOfficeStore.getState().setAgentTask(conversation.agentId, words);
+    }
+    await perform(async () => {
+      try {
+        await start(conversation.id);
+      } catch (error) {
+        accepted = false;
+        throw error;
+      }
+    });
+    setRewriting(false);
+    return accepted;
+  };
+  const retry = () => {
+    const asked = shown[lastUserAt];
+    if (asked) void rewrite((id) => window.axon.chatRetry(id), visibleUserText(asked.content));
+  };
+  const editNote = (at: number) => {
+    if (!shown.slice(at + 1).some((m) => m.role === 'assistant')) return undefined;
+    return filesChangedAfter(shown, at + 1) > 0
+      ? 'Replies after this message will be replaced. Files your coworkers changed stay changed — use Undo to roll them back.'
+      : 'Replies after this message will be replaced.';
+  };
   const end = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
 
@@ -361,6 +423,7 @@ export function Conversation({
                 itemContent={(i, m) => {
                   const steps = summaries.get(i);
                   const cost = i === lastEnd && live ? undefined : runCosts.get(i);
+                  const editable = rewritable && writtenByYou(m) && m.id !== 'pending-task';
                   return (
                     <Fragment key={m.id}>
                       {!onlyWork(m) && (
@@ -369,6 +432,12 @@ export function Conversation({
                           authorName={agentName}
                           renderToolCall={(call) => officeToolCard(call, m.createdAt)}
                           onContinue={i === lastEnd && !live ? onContinue : undefined}
+                          onEdit={
+                            editable
+                              ? (words) => rewrite((id) => window.axon.chatEdit(id, m.id, words), words)
+                              : undefined
+                          }
+                          editNote={editable ? editNote(i) : undefined}
                           folder={conversation?.projectRoot}
                         />
                       )}
@@ -380,6 +449,9 @@ export function Conversation({
                         />
                       )}
                       {cost && <RunCost cost={cost} />}
+                      {i === retryAt && (
+                        <RetryRow filesChanged={filesChangedAfter(shown, lastUserAt + 1)} onRetry={retry} />
+                      )}
                     </Fragment>
                   );
                 }}

@@ -609,6 +609,8 @@ export type StreamEvent =
       estimate?: RunEstimate;
       /** Messages you sent while the run was going, waiting for its next step; empty once it has read them. */
       queued?: string[];
+      /** A retry or an edit cut the conversation back: what the window has of it is out of date, read it again. */
+      rewritten?: boolean;
     }
   | {
       /** Every task record, after any change. */

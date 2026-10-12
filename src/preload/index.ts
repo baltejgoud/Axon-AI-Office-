@@ -42,6 +42,8 @@ const api: PlatformAPI = {
   chatDelete: invoke('chatDelete'),
   chatSearch: invoke('chatSearch'),
   chatSend: invoke('chatSend'),
+  chatRetry: invoke('chatRetry'),
+  chatEdit: invoke('chatEdit'),
   chatStop: invoke('chatStop'),
   chatNotifyWhenDone: invoke('chatNotifyWhenDone'),
   toolApprove: invoke('toolApprove'),

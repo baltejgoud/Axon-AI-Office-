@@ -134,6 +134,8 @@ import { AUDIO_MAX_BYTES, SPEECH_TIMEOUT_MS, cleanVoice, transcribe } from './sp
 import { PROMPT_MAX, chosenEngine } from '../shared/speech';
 import { RepeatGuard } from './runGuards';
 import { OPEN_TEAM, interruptTeams } from './team/plan';
+import { keptCount, planEdit, planRetry, type Rewrite } from './rewrite';
+import { isTeamTask } from '../shared/rewrite';
 import {
   FIND_PEOPLE,
   GOAL_LIMIT,
@@ -1786,8 +1788,16 @@ export class Service {
   }
 
   /** What a run needs before its first call: its context, tools, folders, and the request so far. */
-  private async prepareRun(chat: Conversation, provider: ProviderConfig, input: string, content: string) {
-    const { history, connectors, roots, system, contextSections } = await this.runContext(chat, input);
+  private async prepareRun(
+    chat: Conversation,
+    provider: ProviderConfig,
+    input: string,
+    content: string,
+    /** A retry or edit starts from the first `count` saved messages; `resend` adds `content` as a new turn after them. */
+    keep?: { count: number; resend: boolean }
+  ) {
+    const { history: saved, connectors, roots, system, contextSections } = await this.runContext(chat, input);
+    const history = keep ? saved.slice(0, keep.count) : saved;
     /** This run's folders and shell setting; other runs keep their own. */
     const scope: PermissionScope = { roots, allowShell: Boolean(this.state.settings.allowShellExecution) };
     const toolCatalog = toolsFor({
@@ -1802,7 +1812,7 @@ export class Service {
     /** What this run offers; a connector tool outside it is refused even if the model names it. */
     const offered = new Set(availableTools.map((tool) => tool.name));
     // Every call keeps its result and trimming drops whole turns, so the history is always one providers accept.
-    const requests = [...requestHistory(history), { role: 'user' as const, content }];
+    const requests = [...requestHistory(history), ...(keep && !keep.resend ? [] : [{ role: 'user' as const, content }])];
     const model = contextModel(provider, chat.modelId);
     const maxTokens = Math.min(outputLimit(chat.modelId, this.state.settings.defaultMaxTokens), model?.maxOutputTokens ?? Infinity);
     return {
@@ -1870,10 +1880,60 @@ export class Service {
       });
       return;
     }
+    return this.startRun(id, input, content, options);
+  }
+
+  /** Why a conversation's history can't be rewritten right now, in words for the person asking; nothing when it can. */
+  private rewriteBlocker(id: string): string | undefined {
+    if (!this.state.conversations.some((c) => c.id === id)) return 'Conversation not found.';
+    if (
+      this.runs.has(id) ||
+      this.supervisor.active(id).length ||
+      this.state.teams.some((t) => t.conversationId === id && OPEN_TEAM.has(t.status))
+    )
+      return 'They are still working on this. Stop them or wait until they finish, then try again.';
+    if (this.permissions.pending().some((request) => request.conversationId === id))
+      return 'They are waiting for your OK on a step. Answer that first, then try again.';
+    if (this.queued.get(id)?.length) return 'A message you sent is waiting for them. Wait until they have read it.';
+    if (isTeamTask(this.state.teams, id))
+      return "This is a team member's task, so its messages stay as the lead wrote them. Ask the lead to try again instead.";
+    return undefined;
+  }
+  /** Retry: the last message you sent stays, the replies after it are replaced by a fresh answer. */
+  async chatRetry(id: string): Promise<void> {
+    const blocker = this.rewriteBlocker(text(id, 100));
+    if (blocker) throw new Error(blocker);
+    const plan = planRetry(this.repo.conversationMessages(id));
+    return this.startRun(id, plan.input, plan.content, {}, plan.rewrite);
+  }
+  /** Edit: your earlier message gets new words; it and everything after it are replaced, and it is sent again. */
+  async chatEdit(id: string, messageId: string, input: string): Promise<void> {
+    text(input, 60000);
+    if (!input.trim()) throw new Error('Message cannot be empty.');
+    const blocker = this.rewriteBlocker(text(id, 100));
+    if (blocker) throw new Error(blocker);
+    const plan = planEdit(this.repo.conversationMessages(id), text(messageId, 100), input);
+    return this.startRun(id, plan.input, plan.content, {}, plan.rewrite);
+  }
+
+  /**
+   * One run of a conversation. A send adds your message and runs; a retry or an edit (`rewrite`) first
+   * cuts the conversation back, and only once the run is certain to start, so a failure to start never
+   * costs the replies it was meant to replace.
+   */
+  private async startRun(
+    id: string,
+    input: string,
+    content: string,
+    options: { from?: string; parentRunId?: string; teamId?: string; taskId?: string },
+    rewrite?: Rewrite
+  ): Promise<void> {
     const chat = this.state.conversations.find((c) => c.id === id);
     const provider = this.state.providers.find((p) => p.id === chat?.providerId && p.enabled);
     if (!chat || !provider || !provider.models.some((m) => m.id === chat.modelId))
       throw new Error('Conversation model is unavailable. Start a chat with an enabled model.');
+    /** A rewrite starts from the saved messages before the cut (a retry's last message of yours included). */
+    const keep = rewrite && { count: keptCount(this.repo.conversationMessages(id), rewrite), resend: rewrite.inclusive };
     // The run is claimed before anything is awaited, so a second message sent meanwhile waits for it.
     const controller = new AbortController();
     this.runs.set(id, controller);
@@ -1898,7 +1958,7 @@ export class Service {
     let prepared: Awaited<ReturnType<Service['prepareRun']>>;
     try {
       await this.supervisor.acquire(supervised.runId);
-      prepared = await this.prepareRun(chat, provider, input, content);
+      prepared = await this.prepareRun(chat, provider, input, content, keep);
     } catch (error) {
       this.runs.delete(id);
       this.supervisor.finish(
@@ -1921,6 +1981,16 @@ export class Service {
       this.runs.delete(id);
       return;
     }
+    // A retry or edit cuts the conversation back only now: the run is certain to start, and nothing is awaited from here to its first message.
+    if (rewrite) {
+      try {
+        this.repo.truncateMessages(id, rewrite.fromId, rewrite);
+      } catch (error) {
+        this.runs.delete(id);
+        this.supervisor.finish(supervised.runId, 'failed', providerProblem(error));
+        throw error;
+      }
+    }
     this.supervisor.update(supervised.runId, { status: 'working' });
     this.tracker.runStarted(chat, input);
 
@@ -1937,17 +2007,19 @@ export class Service {
     };
     if (connectors.leftOut.length)
       activeAssistant.notice = `Left out ${namesList(connectors.leftOut)}: too many tools for one request. Turn some tools off in Settings → Connectors.`;
-    this.repo.appendMessages(
-      {
-        id: this.repo.id(),
-        conversationId: id,
-        role: 'user',
-        content,
-        createdAt: Date.now(),
-        ...(options.from ? { from: text(options.from, 80) } : {})
-      },
-      activeAssistant
-    );
+    // A retry keeps the message it answers; everything else sends yours as a new turn.
+    const yours: Message[] = keep && !keep.resend ? [] : [{
+      id: this.repo.id(),
+      conversationId: id,
+      role: 'user',
+      content,
+      createdAt: Date.now(),
+      ...(options.from ? { from: text(options.from, 80) } : {})
+    }];
+    this.repo.appendMessages(...yours, activeAssistant);
+    // The window still shows what was cut away: tell it to read the conversation again.
+    if (rewrite)
+      this.emit({ channel: 'chat', conversationId: id, messageId: activeAssistant.id, rewritten: true, streaming: true, done: false });
     if (chat.title === 'New conversation' && this.state.settings.autoTitleConversations)
       chat.title = input.slice(0, 65);
     chat.updatedAt = Date.now();
