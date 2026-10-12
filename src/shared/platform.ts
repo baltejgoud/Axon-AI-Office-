@@ -1,4 +1,5 @@
 import type { AgentRun, AgentMessage, TerminalSession } from './runtime';
+import type { AttachedFile } from './attach';
 import type {
   ClaudeRateLimits,
   ProviderConfig,
@@ -256,7 +257,14 @@ export interface PlatformAPI {
   /** "Undo all": a task's file changes, after one confirmation; how many were undone and left as they are. */
   revertChanges(toolCallIds: string[]): Promise<{ undone: number; skipped: number }>;
   toolApprove(decision: ToolApprovalDecision): Promise<void>;
-  attach(): Promise<{ id: string; name: string }[]>;
+  /** Choose files to go with your next message. Pictures come with a small `data:` URL preview. */
+  attach(): Promise<AttachedFile[]>;
+  /**
+   * A file pasted or dropped into the chat box, as its bytes (at most 20 MB) and the name it had.
+   * Main never reads a path the window names: it keeps its own copy under a name it makes up, and
+   * the name given is only a label.
+   */
+  attachData(name: string, bytes: Uint8Array): Promise<AttachedFile>;
   /** Voice typing: a composer recording as text, by the engine Settings → Voice picks. `prompt` names what you're likely to say. */
   speechTranscribe(audio: ArrayBuffer, mime: string, prompt: string): Promise<string>;
   readToolArtifact(conversationId: string, toolCallId: string, offset?: number): Promise<{ content: string; nextOffset?: number; total: number }>;

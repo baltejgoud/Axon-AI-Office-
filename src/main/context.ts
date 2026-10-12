@@ -1,10 +1,13 @@
-import { tokenCounter } from './tokenizers';
+import { PICTURE_TOKENS, countable, tokenCounter } from './tokenizers';
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import type { ChatRequest, ChatRequestMessage, ModelSpec, ToolDefinition } from '../shared/types';
 import { WEB_RESULT_BYTES, WEB_TOOL_NAMES } from '../shared/webAccess';
-/** Conservative byte-token upper estimate when a provider tokenizer is unavailable. */
-export const countTokens = (value: unknown): number => Buffer.byteLength(typeof value === 'string' ? value : JSON.stringify(value) ?? '', 'utf8') + 8;
+/** Conservative byte-token upper estimate when a provider tokenizer is unavailable. Pictures count by number, not by their bytes. */
+export const countTokens = (value: unknown): number => {
+  const { text, pictures } = countable(value);
+  return Buffer.byteLength(text, 'utf8') + 8 + pictures * PICTURE_TOKENS;
+};
 export interface MemoryFact { kind: 'constraint' | 'decision' | 'goal' | 'rejected' | 'completed' | 'active' | 'question' | 'blocker' | 'file' | 'artifact' | 'command' | 'test' | 'external' | 'handoff'; text: string; sourceTurn: number; sourceMessageId?: string }
 export interface ConversationCheckpoint {
   checkpointId: string; sourceTurns: number[]; facts: MemoryFact[];

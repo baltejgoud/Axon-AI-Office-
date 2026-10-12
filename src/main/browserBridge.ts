@@ -4,8 +4,13 @@ import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StreamEvent } from '../shared/types';
+import { MAX_UPLOAD_BYTES } from '../shared/attach';
 
 export const browserBridgeFile = join(tmpdir(), 'axon-browser-bridge.json');
+
+/** What one call may carry; a pasted or dropped file crosses as base64 text, so its call may be bigger. */
+const BODY_LIMIT = 2_200_000;
+const UPLOAD_BODY_LIMIT = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 10_000;
 
 /** Explicit development opt-in. Only the local Vite proxy receives the session secret. */
 export async function startBrowserBridge(
@@ -33,17 +38,24 @@ export async function startBrowserBridge(
       return;
     }
     try {
-      let body = '';
+      const chunks: Buffer[] = [];
+      let size = 0;
       for await (const chunk of req) {
-        body += chunk;
-        if (Buffer.byteLength(body) > 2200000) throw new Error('Request too large.');
+        size += chunk.length;
+        if (size > UPLOAD_BODY_LIMIT) throw new Error('Request too large.');
+        chunks.push(chunk);
       }
-      const { method, args } = JSON.parse(body);
+      const { method, args } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (!methods.includes(method) || !Array.isArray(args)) throw new Error('Invalid request.');
-      const values = args.map((value: unknown) =>
-        value && typeof value === 'object' && Object.keys(value).length === 1 &&
-        '__axonUndefined' in value && value.__axonUndefined === true ? undefined : value
-      );
+      if (method !== 'attachData' && size > BODY_LIMIT) throw new Error('Request too large.');
+      const values = args.map((value: unknown) => {
+        if (!value || typeof value !== 'object' || Object.keys(value).length !== 1) return value;
+        if ('__axonUndefined' in value && value.__axonUndefined === true) return undefined;
+        // A file's bytes, sent as base64 text.
+        if (method === 'attachData' && '__axonBytes' in value && typeof value.__axonBytes === 'string')
+          return new Uint8Array(Buffer.from(value.__axonBytes, 'base64'));
+        return value;
+      });
       const result = await invoke(method, values);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ result }));

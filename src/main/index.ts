@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session, dialog, screen, nativeImage, type
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PathService } from './infra/paths';
+import { ipcPayloadTooLarge } from './ipc-limits';
 import { Vault } from './infra/vault';
 import { Repository } from './repository';
 import { Service } from './service';
@@ -78,6 +79,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'revertChanges',
   'toolApprove',
   'attach',
+  'attachData',
   'speechTranscribe',
   'knowledgeImport',
   'knowledgeImportFolder',
@@ -268,7 +270,7 @@ else {
               event.senderFrame.url.split('#')[0] !== `${expected.replace(/\/$/, '')}/`)
           )
             throw new Error('Untrusted IPC sender.');
-          if (JSON.stringify(args).length > 2200000) throw new Error('IPC payload too large.');
+          if (ipcPayloadTooLarge(method, args)) throw new Error('IPC payload too large.');
           const fn = service[method] as (...values: unknown[]) => unknown;
           return fn.apply(service, args);
         });
