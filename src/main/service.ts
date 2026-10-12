@@ -5,7 +5,7 @@ import { AgentMessageBus } from './runtime/messages';
 import { TerminalService, defaultShell, executableAvailability } from './runtime/terminal';
 import { ProviderRuntimeManager, providerProblem } from './runtime/providers';
 import { app, dialog, shell } from 'electron';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Attachments, isPicture } from './attachments';
 import type { AttachedFile } from '../shared/attach';
@@ -1672,14 +1672,21 @@ export class Service {
       this.state.teams.some((t) => t.conversationId === id && OPEN_TEAM.has(t.status))
     )
       return false;
+    const chat = this.state.conversations.find((c) => c.id === id);
     const pictures = this.repo.conversationMessages(id).flatMap((m) => m.attachments ?? []).filter((a) => a.kind === 'image');
     this.state.conversations = this.state.conversations.filter((c) => c.id !== id);
     this.repo.deleteMessages(id);
     this.notifyWhenDone.delete(id);
     await this.repo.save();
-    // Its pictures go with it.
+    // Its pictures go with it: those its messages carry, and every one it ever kept, even those a retry or edit cut away.
     await this.files.remove(pictures);
+    await this.files.removeFiles(chat?.pictureFiles ?? []);
     return true;
+  }
+  /** Notes the picture files a conversation has kept, so deleting it removes every one of them. */
+  private keptPictures(chat: Conversation, kept: readonly Attachment[]): void {
+    if (!kept.length) return;
+    chat.pictureFiles = [...new Set([...(chat.pictureFiles ?? []), ...kept.map((picture) => basename(picture.path))])];
   }
   /**
    * What a run of this conversation starts from: its history, connectors, folders and system prompt.
@@ -2055,7 +2062,7 @@ export class Service {
       prepared = await this.prepareRun(chat, provider, input, content, pictures, keep);
       // Read for this run just above; from now on they stay with the conversation. An edit's pictures already
       // stay with it (they came from the message it replaces), so there is nothing to move for them.
-      if (!rewrite) await this.files.keep(pictures);
+      if (!rewrite) this.keptPictures(chat, await this.files.keep(pictures));
     } catch (error) {
       this.runs.delete(id);
       this.supervisor.finish(
@@ -2586,6 +2593,7 @@ export class Service {
         for (const sent of this.takeQueued(id, activeAssistant.id)) {
           // A picture that has gone from disk since is left out; the message still reaches them.
           const kept = await this.files.keep(sent.pictures).catch(() => [] as Attachment[]);
+          this.keptPictures(chat, kept);
           this.repo.appendMessages({
             id: this.repo.id(),
             conversationId: id,

@@ -201,6 +201,8 @@ export interface Conversation {
   memoryNeedsCheckpoint?: boolean;
   memoryCorrections?: Record<string, string>;
   attachmentRefs?: { id: string; name: string }[];
+  /** Every picture file ever sent in this conversation (file names), so deleting it removes them all, even ones whose messages a retry or edit cut away. */
+  pictureFiles?: string[];
 }
 
 /* -------------------------------- Workspaces ---------------------------------- */

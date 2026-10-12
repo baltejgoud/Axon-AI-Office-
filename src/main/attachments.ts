@@ -178,6 +178,15 @@ export class Attachments {
   async remove(pictures: readonly Attachment[]): Promise<void> {
     await Promise.all(pictures.map(picture => rm(this.fileOf(picture), { force: true })));
   }
+
+  /** Deletes files by the names they were kept under. Only the last part of a name is used, so nothing outside the folder can be reached. */
+  async removeFiles(names: readonly string[]): Promise<void> {
+    await Promise.all(names.map(name => {
+      const file = typeof name === 'string' ? basename(name) : '';
+      if (!file || file === '.' || file === '..') return;
+      return rm(join(this.dir, file), { force: true });
+    }));
+  }
 }
 
 /** The first bytes of a file, enough to tell a picture. */

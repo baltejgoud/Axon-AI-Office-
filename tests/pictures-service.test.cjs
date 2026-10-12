@@ -409,3 +409,60 @@ test('editing a message whose picture file has gone still sends the new words', 
   assert.equal(sent[1].at(-1).images, undefined, 'nothing to send for a picture that is gone');
   assert.equal(repo.conversationMessages(chat.id).at(-1).error, undefined);
 });
+
+/* ------------------------ deleting removes every picture it ever kept ------------------------ */
+
+test('deleting a conversation removes every picture sent in it, even one an edit cut away', async (t) => {
+  fakeCodec(t);
+  const { repo, service, store } = setup(t);
+  const first = await service.attachData('first.png', new Uint8Array(tinyPng));
+  const second = await service.attachData('second.png', new Uint8Array(tinyPng));
+  mockModel(t, numbered);
+  const chat = await service.chatCreate('p1', 'm1', null);
+  await service.chatSend(chat.id, 'One', [first.id]);
+  await service.chatSend(chat.id, 'Two', [second.id]);
+  const [firstPicture] = repo.conversationMessages(chat.id).filter((m) => m.role === 'user')[0].attachments;
+  const [secondPicture] = repo.conversationMessages(chat.id).filter((m) => m.role === 'user')[1].attachments;
+
+  // Editing the first message cuts the second one away with its picture; the picture file stays on disk.
+  await service.chatEdit(chat.id, repo.conversationMessages(chat.id).find((m) => m.role === 'user').id, 'One, again');
+  assert.deepEqual(repo.conversationMessages(chat.id).filter((m) => m.role === 'user').map((m) => m.content), ['One, again']);
+  assert.ok(fs.existsSync(secondPicture.path), 'the cut picture file is still there, for restore points');
+  // Every picture file the conversation ever kept is noted, cut away or not.
+  assert.deepEqual(repo.state.conversations.find((c) => c.id === chat.id).pictureFiles, [path.basename(firstPicture.path), path.basename(secondPicture.path)]);
+
+  assert.equal(await service.chatDelete(chat.id), true);
+  assert.equal(fs.existsSync(firstPicture.path), false);
+  assert.equal(fs.existsSync(secondPicture.path), false, 'the picture an edit cut away goes too');
+  assert.deepEqual(fs.readdirSync(store).filter((name) => name !== 'waiting'), []);
+});
+
+test('a stored picture name cannot reach outside the pictures folder when a conversation is deleted', async (t) => {
+  fakeCodec(t);
+  const { repo, service, store } = setup(t);
+  const attached = await service.attachData('keep.png', new Uint8Array(tinyPng));
+  mockModel(t, answer('Ok.'));
+  const chat = await service.chatCreate('p1', 'm1', null);
+  await service.chatSend(chat.id, 'Keep this', [attached.id]);
+  // A file just outside the folder, which a name like these would reach if it were trusted.
+  const outside = path.join(store, '..', 'evil.png');
+  fs.writeFileSync(outside, 'not yours');
+  repo.state.conversations.find((c) => c.id === chat.id).pictureFiles = ['..\\evil.png', '../evil.png', '..', ''];
+
+  assert.equal(await service.chatDelete(chat.id), true);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'not yours');
+  assert.ok(fs.existsSync(store), 'the folder itself is still there');
+});
+
+test('a conversation saved before pictureFiles existed still deletes its pictures', async (t) => {
+  fakeCodec(t);
+  const { repo, service } = setup(t);
+  const attached = await service.attachData('old.png', new Uint8Array(tinyPng));
+  mockModel(t, answer('Ok.'));
+  const chat = await service.chatCreate('p1', 'm1', null);
+  await service.chatSend(chat.id, 'Keep this', [attached.id]);
+  const kept = repo.state.messages.find((m) => m.role === 'user').attachments[0].path;
+  delete repo.state.conversations.find((c) => c.id === chat.id).pictureFiles;
+  assert.equal(await service.chatDelete(chat.id), true);
+  assert.equal(fs.existsSync(kept), false);
+});
