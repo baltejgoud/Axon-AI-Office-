@@ -66,6 +66,10 @@
   color: inherit;
   opacity: 0.85;
 }
+/* A tag carrying a question's words wraps them inside its width, selected or not. */
+.office-container .office-scene-labels .office-person-label.talking {
+  white-space: normal;
+}
 /* Needs you has the dot the others already had (blue pulse, green glow, red). */
 .office-container .office-scene-labels .person-status.waiting {
   background: #d99a14;

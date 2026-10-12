@@ -423,6 +423,22 @@ test('each head shows the one thing worth reading, and a visit puts words over b
   assert.equal(strong.designer.kind, 'failed');
 });
 
+test('a question is two talking markers, whose words go on their name tags; other markers do not', () => {
+  const names = { [FRONT]: 'Frontend Developer', [BACK]: 'Backend Developer' };
+  const got = markersFor({
+    statuses: { [FRONT]: 'working', [BACK]: 'working', [WRITER]: 'waiting' },
+    beacons: { [WRITER]: 'needs' },
+    visits: [{ visitor: FRONT, host: BACK }],
+    nameOf: (id) => names[id]
+  });
+  assert.equal(presence.isTalk(got[FRONT].kind), true);
+  assert.equal(presence.isTalk(got[BACK].kind), true);
+  assert.equal(presence.isTalk(got[WRITER].kind), false);
+  assert.equal(presence.isTalk('needs'), false);
+  assert.equal(presence.isTalk('done'), false);
+  assert.equal(presence.isTalk(undefined), false);
+});
+
 test('there is a limit on badges drawn, and the quiet working dots go first', () => {
   const statuses = {};
   for (let i = 0; i < presence.MAX_MARKERS + 25; i++) statuses[`p${i}`] = 'working';
