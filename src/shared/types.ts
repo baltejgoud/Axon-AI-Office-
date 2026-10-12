@@ -7,6 +7,7 @@ import type { ContextUsage } from './context-usage';
 import type { RunEstimate } from './cost';
 import type { MeetingRoomId } from './rooms';
 import type { VoiceSettings } from './speech';
+import type { WebAccessSettings } from './webAccess';
 
 export type ID = string;
 
@@ -324,6 +325,8 @@ export interface Settings {
   taskSpendLimit?: number;
   /** The welcome guide was finished or skipped; it doesn't open by itself again. */
   welcomeDone?: boolean;
+  /** Whether coworkers may search the web and read pages, and the search service they use. Absent in older saves: on, DuckDuckGo. */
+  webAccess?: WebAccessSettings;
 }
 
 /* ------------------------------------ MCP ------------------------------------- */

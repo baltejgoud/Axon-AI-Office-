@@ -34,6 +34,7 @@ const api: PlatformAPI = {
   connectorSignInCancel: invoke('connectorSignInCancel'),
   connectorSignOut: invoke('connectorSignOut'),
   connectorAppSave: invoke('connectorAppSave'),
+  webKeySave: invoke('webKeySave'),
   chatCreate: invoke('chatCreate'),
   getConversationCost: invoke('getConversationCost'),
   chatHistoryPage: invoke('chatHistoryPage'),

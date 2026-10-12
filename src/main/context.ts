@@ -2,6 +2,7 @@ import { tokenCounter } from './tokenizers';
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import type { ChatRequest, ChatRequestMessage, ModelSpec, ToolDefinition } from '../shared/types';
+import { WEB_RESULT_BYTES, WEB_TOOL_NAMES } from '../shared/webAccess';
 /** Conservative byte-token upper estimate when a provider tokenizer is unavailable. */
 export const countTokens = (value: unknown): number => Buffer.byteLength(typeof value === 'string' ? value : JSON.stringify(value) ?? '', 'utf8') + 8;
 export interface MemoryFact { kind: 'constraint' | 'decision' | 'goal' | 'rejected' | 'completed' | 'active' | 'question' | 'blocker' | 'file' | 'artifact' | 'command' | 'test' | 'external' | 'handoff'; text: string; sourceTurn: number; sourceMessageId?: string }
@@ -88,9 +89,11 @@ export class ContextBudgetPlanner {
     const recent = aggressive ? 2 : Math.max(1, Math.min(32, Math.floor(model?.recentContextTurns ?? 8)));
     const resultCount = groups.at(-1)?.filter(m => m.role === 'tool').length ?? 1;
     const resultBudget = Math.min(4096, Math.max(512, Math.floor(Math.max(1024, available) * .25 / Math.max(1, resultCount))));
+    // A page or a list of search results is bounded already and is no use as a four-kilobyte excerpt.
+    const webBudget = Math.min(WEB_RESULT_BYTES, Math.max(resultBudget, Math.min(24_000, Math.floor(Math.max(1024, available) * .5 / Math.max(1, resultCount)))));
     const completedToolRefs: string[] = [];
     const kept = groups.slice(-recent).map(group => group.map(message => message.role === 'tool'
-      ? { ...message, content: toolExcerpt(message.content, message.sourceMessageId ?? message.toolCallId ?? '', resultBudget) }
+      ? { ...message, content: toolExcerpt(message.content, message.sourceMessageId ?? message.toolCallId ?? '', WEB_TOOL_NAMES.has(message.name ?? '') ? webBudget : resultBudget) }
       : message.role === 'user' ? { ...message, content: attachmentExcerpt(message.content, message.sourceMessageId) } : message));
     const cold = groups.slice(0, Math.max(0, groups.length - recent));
     const makeMemory = () => {

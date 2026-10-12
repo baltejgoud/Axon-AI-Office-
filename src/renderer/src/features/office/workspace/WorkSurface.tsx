@@ -220,6 +220,8 @@ function describe(step: WorkStep, waiting: boolean, work: Work, processes: Proce
     }
     case 'search_code':
       return `${running ? 'Searching' : 'Searched'} for “${String(step.args.query ?? '')}”`;
+    case 'web_search':
+      return `${running ? 'Searching the web' : failed ? 'Couldn’t search the web' : 'Searched the web'} for “${String(step.args.query ?? '')}”`;
     case 'run_command':
     case 'git_commit': {
       const line = commandLine(step);

@@ -1,3 +1,4 @@
+import { WEB_TOOL_NAMES } from '../shared/webAccess';
 import { READ_ONLY_TOOLS } from './officeTools';
 
 /**
@@ -14,7 +15,7 @@ export function capToolResult(content: string, limit = TOOL_RESULT_LIMIT): strin
 }
 
 /** Lookups that change nothing, so running one again with the same input can only return the same. */
-const LOOKUPS: ReadonlySet<string> = new Set([...READ_ONLY_TOOLS, 'find_people']);
+const LOOKUPS: ReadonlySet<string> = new Set([...READ_ONLY_TOOLS, 'find_people', ...WEB_TOOL_NAMES]);
 
 /** Arguments in one form whatever their key order, so the same lookup is recognised. */
 function canonical(value: unknown): string {
