@@ -12,6 +12,12 @@ export interface AttachedFile {
   thumbnail?: string;
 }
 
+/** The words that go with files sent on their own, so a message is never empty. */
+export function filesOnlyText(files: readonly Pick<AttachedFile, 'thumbnail'>[]): string {
+  const kind = files.every((file) => file.thumbnail) ? 'picture' : 'file';
+  return `(See the attached ${kind}${files.length === 1 ? '' : 's'}.)`;
+}
+
 const PICTURE_EXTENSION: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 /**

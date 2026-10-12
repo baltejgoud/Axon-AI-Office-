@@ -14,7 +14,14 @@ import { ContextMeter } from '../../../chat/ContextMeter';
 import { DictationButton } from '../../../chat/DictationButton';
 import { useDictation } from '../../../chat/useDictation';
 import { chosenEngine, insertDictation, speechPrompt } from '../../../../../shared/speech';
-import { MAX_ATTACHMENTS, MAX_UPLOAD_BYTES, isClipboardName, pastedName, type AttachedFile } from '../../../../../shared/attach';
+import {
+  MAX_ATTACHMENTS,
+  MAX_UPLOAD_BYTES,
+  filesOnlyText,
+  isClipboardName,
+  pastedName,
+  type AttachedFile
+} from '../../../../../shared/attach';
 
 /** The tallest the message box grows as you type before it scrolls. */
 const MAX_BOX = 160;
@@ -353,7 +360,8 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
   };
 
   const handleSend = async (text = input) => {
-    const textToSend = text.trim();
+    // Files can go on their own: a pasted screenshot needs no words.
+    const textToSend = text.trim() || (attachments.length ? filesOnlyText(attachments) : '');
     if (!textToSend || !agent) return;
     if (running) {
       if (conversation) await handleQueue(textToSend);
@@ -655,13 +663,13 @@ export function AgentComposer({ agentId }: AgentComposerProps) {
                     <span>Stop</span>
                   </button>
                 )}
-                {(!running || input.trim()) && (
+                {(!running || input.trim() || attachments.length > 0) && (
                   <button
                     type="button"
                     className="composer-btn-send"
                     title={running ? 'Send now; they read it after this step (Enter)' : 'Send task (Enter)'}
                     aria-label={running ? 'Send for their next step' : 'Send task'}
-                    disabled={!input.trim() || (sending && !conversation) || dictating}
+                    disabled={(!input.trim() && !attachments.length) || (sending && !conversation) || dictating}
                     onClick={() => void handleSend()}
                   >
                     <IconSend size={15} />

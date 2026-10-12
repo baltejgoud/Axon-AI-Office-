@@ -20,7 +20,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Attachments, displayName, storedName, MAX_PICTURES_SENT } = require('../src/main/attachments.ts');
 const { ipcPayloadTooLarge } = require('../src/main/ipc-limits.ts');
-const { MAX_UPLOAD_BYTES, pastedName, isClipboardName, asBytes } = require('../src/shared/attach.ts');
+const { MAX_UPLOAD_BYTES, pastedName, isClipboardName, asBytes, filesOnlyText } = require('../src/shared/attach.ts');
 
 /** A 1x1 PNG, and Electron's image codec as preparing one uses it (the real one is checked in attach-desktop.cjs). */
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
@@ -272,4 +272,11 @@ test('nothing waiting survives a restart', async (t) => {
   new Attachments(store, { id: () => 'x', extract: async () => '', keepText() {} });
   assert.equal(fs.existsSync(path.join(store, 'waiting')), false);
   assert.ok(dir);
+});
+
+test('files sent on their own carry a short line instead of an empty message', () => {
+  assert.equal(filesOnlyText([{ thumbnail: 'data:x' }]), '(See the attached picture.)');
+  assert.equal(filesOnlyText([{ thumbnail: 'data:x' }, { thumbnail: 'data:y' }]), '(See the attached pictures.)');
+  assert.equal(filesOnlyText([{}]), '(See the attached file.)');
+  assert.equal(filesOnlyText([{ thumbnail: 'data:x' }, {}]), '(See the attached files.)');
 });
