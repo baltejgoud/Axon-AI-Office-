@@ -85,6 +85,7 @@ export class OfficeAgentCharacter {
   private selected = false;
   private hovered = false;
   private working = false;
+  private handRaised = false;
   private glanceUntil = 0;
   private nextBlink = 0;
   private waveUntil = 0;
@@ -151,6 +152,11 @@ export class OfficeAgentCharacter {
     this.working = value;
   }
 
+  /** Needs you: a hand goes up at the desk (see `update`). */
+  setHandRaised(value: boolean): void {
+    this.handRaised = value;
+  }
+
   /** World point just above the head, for the floating name label. */
   labelPoint(target: THREE.Vector3): THREE.Vector3 {
     this.rig.head.getWorldPosition(target);
@@ -201,6 +207,11 @@ export class OfficeAgentCharacter {
     // A friendly wave when you pick someone.
     if (!reducedMotion && time < this.waveUntil && view.behavior !== 'walking') {
       target.armR = { fwd: 0.35, out: 2.35, bend: 0.85 + 0.45 * Math.sin(time * 13) };
+    }
+    // Needs you: the right hand goes up, straight, with a gentle sway (still under reduced motion).
+    // The left hand keeps to the desk. A cup in that hand stays where it is.
+    if (this.handRaised && view.behavior !== 'walking' && view.heldItem !== 'cup') {
+      target.armR = { fwd: 0.12, out: 2.85, bend: 0.22 + (reducedMotion ? 0 : 0.1 * Math.sin(time * 2.4)) };
     }
     easePose(this.pose, target, 1 - Math.exp(-18 * dt));
     applyPose(this.rig, this.pose);

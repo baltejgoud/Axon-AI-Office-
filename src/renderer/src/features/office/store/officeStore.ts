@@ -4,6 +4,7 @@ import type { HandedFile } from '../activity/fileContext';
 import type { FocusTarget, TaskItem } from '../../../../../shared/types';
 import type { Briefing } from '../../../../../shared/planner';
 import { statusesFromTasks, type Team } from '../tasks';
+import type { Beacon } from '../presence';
 import { DEFAULT_WORK_SPLIT, clampWorkSplit } from '../workspace/work';
 
 export interface AgentActivity {
@@ -45,6 +46,12 @@ interface OfficeStoreState {
 
   selectAgent: (id: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
+  /**
+   * Everyone's status and badge as worked out from the runs, in one update (anyone not listed is
+   * idle). The badges are the amber "needs you", the green tick and the red failure over a head.
+   */
+  applyPresence: (statuses: Readonly<Record<string, AgentStatus>>, beacons: Readonly<Record<string, Beacon>>) => void;
+  beacons: Record<string, Beacon>;
   /** Everyone with a task record looks the way their newest work record says. */
   syncTaskStatuses: (tasks: readonly TaskItem[]) => void;
   setAgentTask: (agentId: string, task: string) => void;
@@ -314,6 +321,24 @@ export const useOfficeStore = create<OfficeStoreState>((set, get) => ({
         [agentId]: { ...current, status }
       }
     });
+  },
+
+  beacons: {},
+
+  applyPresence: (statuses, beacons) => {
+    const runtime = get().agentRuntime;
+    let next: Record<string, AgentRuntime> | null = null;
+    for (const id of Object.keys(runtime)) {
+      const status = statuses[id] ?? 'idle';
+      if (runtime[id].status === status) continue;
+      next ??= { ...runtime };
+      next[id] = { ...runtime[id], status };
+    }
+    const held = get().beacons;
+    const same =
+      Object.keys(beacons).length === Object.keys(held).length &&
+      Object.entries(beacons).every(([id, beacon]) => held[id] === beacon);
+    if (next || !same) set({ ...(next && { agentRuntime: next }), ...(!same && { beacons: { ...beacons } }) });
   },
 
   syncTaskStatuses: (tasks) => {

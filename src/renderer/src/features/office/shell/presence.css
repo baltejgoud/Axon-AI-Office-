@@ -1,0 +1,272 @@
+/*
+ * Reading the office from across the room: name tags tinted by what the person is doing, and the
+ * badges and speech bubbles over heads. Every colour pair is one the status badges already use, so
+ * a tag, a badge and the activity list say the same thing in both themes. The scene positions these
+ * (see OfficeScene.placeMarkers); nothing here moves on its own except calm one-off pulses, and the
+ * container's reduced-motion rule turns those off.
+ */
+
+/* ---------------------------------------------------------------- name tags */
+
+/*
+ * Working is blue, needs-you is amber, done is green, failed is red. Only the top, right and bottom
+ * edges take the colour: the left edge stays their team's. Each selector is long on purpose so it
+ * wins over the older tag rules wherever the stylesheets load.
+ */
+.office-container .office-scene-labels .office-person-label.is-working {
+  background: #edf2ff;
+  color: #2a4fc4;
+  border-top-color: #c3d2ff;
+  border-right-color: #c3d2ff;
+  border-bottom-color: #c3d2ff;
+}
+.office-container .office-scene-labels .office-person-label.is-waiting {
+  background: #fff6da;
+  color: #8e5c08;
+  border-top-color: #f1d58a;
+  border-right-color: #f1d58a;
+  border-bottom-color: #f1d58a;
+}
+.office-container .office-scene-labels .office-person-label.is-completed {
+  background: #e6f5ec;
+  color: #187859;
+  border-top-color: #b4dec5;
+  border-right-color: #b4dec5;
+  border-bottom-color: #b4dec5;
+}
+.office-container .office-scene-labels .office-person-label.is-error {
+  background: #fff0f1;
+  color: #bb3344;
+  border-top-color: #f2c1c7;
+  border-right-color: #f2c1c7;
+  border-bottom-color: #f2c1c7;
+}
+/* The selected tag keeps its blue selection edge and glow; only its fill and ink follow the state. */
+.office-container .office-scene-labels .office-person-label.selected.is-working {
+  background: #e6edff;
+  color: #2a4fc4;
+}
+.office-container .office-scene-labels .office-person-label.selected.is-waiting {
+  background: #fff6da;
+  color: #8e5c08;
+}
+.office-container .office-scene-labels .office-person-label.selected.is-completed {
+  background: #e6f5ec;
+  color: #187859;
+}
+.office-container .office-scene-labels .office-person-label.selected.is-error {
+  background: #fff0f1;
+  color: #bb3344;
+}
+/* The status line under a selected name reads in the tag's own ink, a little softer. */
+.office-container .office-scene-labels .office-person-label.is-working .person-label-detail small,
+.office-container .office-scene-labels .office-person-label.is-waiting .person-label-detail small,
+.office-container .office-scene-labels .office-person-label.is-completed .person-label-detail small,
+.office-container .office-scene-labels .office-person-label.is-error .person-label-detail small {
+  color: inherit;
+  opacity: 0.85;
+}
+/* Needs you has the dot the others already had (blue pulse, green glow, red). */
+.office-container .office-scene-labels .person-status.waiting {
+  background: #d99a14;
+  box-shadow: 0 0 0 3px #d99a1433;
+  animation: office-pulse 1.5s infinite;
+}
+
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.is-working {
+  background: #22335a;
+  color: #9db7ff;
+  border-top-color: #3a528c;
+  border-right-color: #3a528c;
+  border-bottom-color: #3a528c;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.is-waiting {
+  background: #3b2e12;
+  color: #fcd34d;
+  border-top-color: #6b5316;
+  border-right-color: #6b5316;
+  border-bottom-color: #6b5316;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.is-completed {
+  background: #133a2e;
+  color: #6ee7b7;
+  border-top-color: #1f6b52;
+  border-right-color: #1f6b52;
+  border-bottom-color: #1f6b52;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.is-error {
+  background: #3f1d26;
+  color: #fda4af;
+  border-top-color: #7a3340;
+  border-right-color: #7a3340;
+  border-bottom-color: #7a3340;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.selected.is-working {
+  background: #22335a;
+  color: #9db7ff;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.selected.is-waiting {
+  background: #3b2e12;
+  color: #fcd34d;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.selected.is-completed {
+  background: #133a2e;
+  color: #6ee7b7;
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label.selected.is-error {
+  background: #3f1d26;
+  color: #fda4af;
+}
+/* The team colour on the left edge also holds in the dark theme, where the older rule recoloured it. */
+[data-theme='dark'] .office-container .office-scene-labels .office-person-label:not(.selected) {
+  border-left-color: var(--agent-color);
+}
+
+/* ---------------------------------------------------------------- badges and bubbles */
+
+.office-container .office-scene-labels .office-beacon,
+.office-container .office-scene-labels .office-bubble {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  /* The scene shows each one once it has put it over its person. */
+  visibility: hidden;
+}
+
+.office-container .office-scene-labels .office-beacon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--office-paper, #fff);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px #1e2b4a40;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+}
+/* Needs you: amber with dark ink, a slow ring that grows and fades. */
+.office-container .office-scene-labels .office-beacon.needs {
+  background: #fbbf24;
+  color: #3d2600;
+  animation: office-needs-ring 2.4s ease-in-out infinite;
+}
+/* Just finished: a green tick that pops in, rings once or twice, and fades after about three seconds. */
+.office-container .office-scene-labels .office-beacon.done {
+  background: #15803d;
+  color: #fff;
+  font-size: 13px;
+  animation: office-tick 3s ease-out both;
+}
+.office-container .office-scene-labels .office-beacon.done::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid #22c55e;
+  border-radius: 50%;
+  opacity: 0;
+  animation: office-ripple 1.1s ease-out 0.15s 2 both;
+}
+/* Ran into a problem: red for a few seconds (the name tag stays red). */
+.office-container .office-scene-labels .office-beacon.failed {
+  background: #dc2626;
+  color: #fff;
+  font-size: 17px;
+}
+/* Working: only a small dot that breathes, for when the name tag (which has its own) isn't up. */
+.office-container .office-scene-labels .office-beacon.working {
+  width: 11px;
+  height: 11px;
+  border-width: 2px;
+  background: #3867f6;
+  animation: office-pulse 1.5s infinite;
+}
+
+.office-container .office-scene-labels .office-bubble {
+  width: max-content;
+  max-width: 200px;
+  padding: 3px 9px;
+  border: 1px solid var(--office-border, #dfe6f1);
+  border-radius: 11px;
+  background: var(--office-paper, #fff);
+  box-shadow: 0 3px 10px #23385826;
+  color: var(--office-ink, #16233b);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+}
+/* A small tail pointing down at the person it belongs to. */
+.office-container .office-scene-labels .office-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid var(--office-border, #dfe6f1);
+  border-bottom: 1px solid var(--office-border, #dfe6f1);
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+.office-container .office-scene-labels .office-bubble.asking {
+  border-color: #b8c9ff;
+}
+.office-container .office-scene-labels .office-bubble.asking::after {
+  border-color: #b8c9ff;
+}
+.office-container .office-scene-labels .office-bubble.answering {
+  color: var(--office-muted, #67758e);
+}
+[data-theme='dark'] .office-container .office-scene-labels .office-bubble.asking,
+[data-theme='dark'] .office-container .office-scene-labels .office-bubble.asking::after {
+  border-color: #3a528c;
+}
+
+@keyframes office-needs-ring {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 8px #1e2b4a40,
+      0 0 0 0 #fbbf2480;
+  }
+  50% {
+    box-shadow:
+      0 2px 8px #1e2b4a40,
+      0 0 0 7px #fbbf2400;
+  }
+}
+@keyframes office-tick {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes office-ripple {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}

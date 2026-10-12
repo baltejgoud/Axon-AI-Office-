@@ -427,21 +427,26 @@ export class OfficeSimulation {
   }
 
   /**
-   * A colleague walks over to someone's desk to help with their task, and stays until `endHelp`.
-   * Real work, so it is not held back by the away budget; refused with reduced motion, while the
-   * helper has a task of their own, or when someone already stands at that desk.
+   * A colleague walks over to someone's desk to ask them something (or to help with their task),
+   * and stays until `endHelp`. The visitor may be on a task of their own: someone waiting for a
+   * colleague's answer gets up to ask in person, and goes straight back to the task afterwards.
+   * Real work, so it is not held back by the away budget. Refused (false) with reduced motion, when
+   * either of them is with a team in its room, or when someone already stands at that desk, so
+   * ask again later.
    */
-  startHelp(helperId: string, hostId: string): boolean {
-    const helper = this.agents.get(helperId);
+  startHelp(visitorId: string, hostId: string): boolean {
+    const helper = this.agents.get(visitorId);
     const host = this.agents.get(hostId);
-    if (!helper || !host || helper === host || this.reducedMotion || helper.onTask) return false;
+    if (!helper || !host || helper === host || this.reducedMotion) return false;
     if (helper.plan.kind === 'help' && helper.visitHostId === host.id) return true;
+    if (this.withTeam(helper) || this.withTeam(host)) return false;
     const spot = `visit-${host.home}`;
     if (!this.hasRoom(spot, helper)) return false;
     this.cancelPlan(helper);
     this.reserve(helper, spot);
     helper.visitHostId = host.id;
-    helper.visitorSpeaks = true;
+    // They open: the visitor asks first, then listens.
+    helper.visitorSpeaks = false;
     helper.turnUntil = 0;
     const carry: Step[] = helper.profile.prop ? [{ type: 'hold', item: helper.profile.prop }] : [];
     this.setPlan(helper, {
@@ -451,12 +456,12 @@ export class OfficeSimulation {
     return true;
   }
 
-  /** The help is over: back to their own desk. */
-  endHelp(helperId: string): void {
-    const helper = this.agents.get(helperId);
+  /** The visit is over: back to their own desk, and to their task if they have one. */
+  endHelp(visitorId: string): void {
+    const helper = this.agents.get(visitorId);
     if (!helper || helper.plan.kind !== 'help') return;
     this.cancelPlan(helper);
-    this.setPlan(helper, this.deskPlan(helper, helper.rng.range(20, 60)));
+    this.setPlan(helper, helper.onTask ? this.taskPlan(helper) : this.deskPlan(helper, helper.rng.range(20, 60)));
   }
 
   /**
@@ -1692,6 +1697,13 @@ export class OfficeSimulation {
       } else if (partner && agent.sit < 0.05 && agent.motion.kind === 'still') {
         target = yawTowards(agent.position, partner.position);
         rate = 4;
+      } else if (agent.sit > 0.9 && agent.motion.kind === 'still') {
+        // Someone at the desk to talk: turn in the chair part of the way towards them.
+        const visitor = this.visitorOf(agent);
+        if (visitor) {
+          target = wrapAngle(target + wrapAngle(yawTowards(agent.position, visitor.position) - target) * 0.4);
+          rate = 3;
+        }
       }
     }
     if (target === null) return;

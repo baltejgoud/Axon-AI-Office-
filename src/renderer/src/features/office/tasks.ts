@@ -12,9 +12,8 @@ import type { TaskItem, ToolCall } from '../../../../shared/types';
 import type { AgentStatus } from './data/officeAgents';
 
 /**
- * The office's view of the task records: whose board a task goes on, what each board shows, how
- * people look while they work, and which colleagues are over helping someone. Pure, so it can be
- * tested without a scene.
+ * The office's view of the task records: whose board a task goes on, what each board shows and how
+ * people look while they work. Pure, so it can be tested without a scene.
  */
 
 /** A board's team: a department, or one of the core team's rooms. */
@@ -30,7 +29,8 @@ const CORE_TEAMS: Readonly<Record<string, Team>> = {
   'marketing-strategist': 'Lounge',
   'files-agent': 'Files room'
 };
-const APPROVAL = 'Waiting for your approval';
+/** The note on a work record while its run waits for you to approve a step. */
+export const APPROVAL = 'Waiting for your approval';
 
 export function teamOf(coworkerId: string | undefined): Team | null {
   if (!coworkerId || coworkerId === RECEPTIONIST_ID) return null;
@@ -86,27 +86,7 @@ export function statusesFromTasks(tasks: readonly TaskItem[]): Record<string, Ag
   return statuses;
 }
 
-/**
- * Colleagues who should be at someone's desk: while their answer is being written, and for the rest
- * of the run that asked.
- */
-export function activeHelp(tasks: readonly TaskItem[]): { helper: string; host: string }[] {
-  const pairs = new Map<string, { helper: string; host: string }>();
-  for (const help of tasks) {
-    if (help.kind !== 'help' || !help.coworkerId || !help.forCoworkerId) continue;
-    const work = tasks.find((task) => task.kind === 'work' && task.conversationId === help.conversationId);
-    const runGoing =
-      !!work &&
-      (work.status === 'working' || work.status === 'attention') &&
-      (work.runStartedAt ?? 0) <= help.createdAt;
-    if (help.status === 'working' || runGoing)
-      pairs.set(`${help.coworkerId}>${help.forCoworkerId}`, {
-        helper: help.coworkerId,
-        host: help.forCoworkerId
-      });
-  }
-  return [...pairs.values()];
-}
+// Who walks over to whom while a colleague answers a question lives in ./visits.
 
 export interface ColleagueCall {
   /** The name asked for, or the colleague's id once they answered. */

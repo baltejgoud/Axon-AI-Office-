@@ -1,4 +1,3 @@
-import { ACTIVE_RUN_STATUSES } from '../../../../shared/runtime';
 import './office.css';
 import { useEffect, type CSSProperties } from 'react';
 import { useApp } from '../../state';
@@ -8,6 +7,7 @@ import './office-first.css';
 import './polish.css';
 import { Overlay } from './shell/Overlay';
 import { useOfficeStore } from './store/officeStore';
+import { derivePresence } from './presence';
 import { SettingsPanel } from '../../Settings';
 import { Knowledge } from '../../Knowledge';
 import { CompanyOperations } from './company/CompanyOperations';
@@ -36,28 +36,33 @@ export function OfficePage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  // People look the way their task records say, including runs started before this window opened.
+  // People look the way their runs say, including runs started before this window opened: working,
+  // needing you, just finished (for a short while after, so the celebration and the green strip
+  // can show), or failed. A badge or the finished status that runs out by itself is looked at again
+  // when it does.
   const tasks = useApp((s) => s.data?.tasks);
   const runs = useApp((s) => s.data?.runs);
+  const conversations = useApp((s) => s.data?.conversations);
+  const approvals = useApp((s) => s.pendingApprovals);
   useEffect(() => {
-    const office = useOfficeStore.getState();
-    if (!runs) office.syncTaskStatuses(tasks ?? []);
-    if (runs)
-      for (const id of Object.keys(office.agentRuntime)) {
-        const current = runs.filter((r) => r.agentId === id && ACTIVE_RUN_STATUSES.has(r.status));
-        const run = current.at(-1);
-        office.setAgentStatus(
-          id,
-          run
-            ? run.status.startsWith('waiting') || run.status === 'queued'
-              ? 'waiting'
-              : 'working'
-            : runs.filter((r) => r.agentId === id).at(-1)?.status === 'failed'
-              ? 'error'
-              : 'idle'
-        );
-      }
-  }, [tasks, runs]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const apply = () => {
+      const office = useOfficeStore.getState();
+      if (!runs) return office.syncTaskStatuses(tasks ?? []);
+      const presence = derivePresence({
+        agentIds: Object.keys(office.agentRuntime),
+        runs,
+        tasks: tasks ?? [],
+        conversations: conversations ?? [],
+        approvals: Object.values(approvals),
+        now: Date.now()
+      });
+      office.applyPresence(presence.statuses, presence.beacons);
+      if (presence.nextChange !== null) timer = setTimeout(apply, Math.max(50, presence.nextChange - Date.now() + 25));
+    };
+    apply();
+    return () => clearTimeout(timer);
+  }, [tasks, runs, conversations, approvals]);
   // Someone's first start: the welcome guide opens by itself (once; Ctrl+K brings it back).
   const welcome = useApp((s) => firstStart(s.data));
   useEffect(() => {
