@@ -34,6 +34,7 @@ import type {
 } from './scm';
 import type { ContextUsage } from './context-usage';
 import type { AuditEntry, AuditQuery } from './audit';
+import type { WebKeyProvider } from './webAccess';
 export interface PlatformState {
   version: 1;
   runtimeVersion?: 1;
@@ -63,6 +64,8 @@ export interface Snapshot extends Omit<PlatformState, 'chunks'> {
   mcpServers: MCPServerConfig[];
   /** Catalog connectors that have an OAuth app to sign in with: this build's, or your own. */
   connectorApps: string[];
+  /** The search services that have a key saved. The keys themselves never leave the main process. */
+  webKeys: WebKeyProvider[];
   projectRoot?: string | null;
   /** Tool calls waiting for the user, so a reopened window can still answer them. */
   pendingApprovals: ToolApprovalRequest[];
@@ -204,6 +207,8 @@ export interface PlatformAPI {
   connectorSignOut(id: string): Promise<void>;
   /** Your own OAuth app for a connector this build has none for. */
   connectorAppSave(catalogId: string, clientId: string, clientSecret?: string): Promise<void>;
+  /** Saves a web search service's key in the system key store; an empty key removes it. */
+  webKeySave(provider: WebKeyProvider, key: string): Promise<void>;
   chatCreate(
     providerId: string,
     modelId: string,

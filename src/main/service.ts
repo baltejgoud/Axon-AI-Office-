@@ -71,6 +71,8 @@ import { SKILL_TOOL_NAMES, catalog, hasSkill, runSkillTool, skillBodies, skillIn
 import { roles, hasRole, roleProfiles } from './roles';
 import { HOUSE_RULES, dedupe, rolesBlock, skillIndexBlock, skillsBlock } from './prompt';
 import { ToolRegistry, missingArguments } from './tools/registry';
+import { WEB_TOOL_DEFINITIONS, createWebTools, webExcerptBytes } from './tools/web';
+import { checkedWebAccess, isWebKeyProvider, normalWebAccess, webKeySecret, type WebKeyProvider } from '../shared/webAccess';
 import { ProcessManager, localAddress } from './tools/processes';
 import { FILE_SAVERS, PermissionManager, type PermissionScope } from './security/permissions';
 import { requestHistory, requestSize } from './history';
@@ -382,6 +384,9 @@ export class Service {
         })
     });
     this.permissions.setConnectorRule((name) => this.connectorAction(name));
+    // Searching the web and reading pages, while Settings → Web access is on (see tools/web.ts).
+    for (const tool of createWebTools({ settings: () => this.webAccess, key: (provider) => this.webKey(provider) }))
+      this.tools.register(tool);
     this.tasks = new TaskStore(
       this.state,
       () => this.repo.id(),
@@ -644,6 +649,7 @@ export class Service {
           ? !!this.accountApp(entry.accountApp)
           : clientFromEnv(entry.clientIdEnv, entry.clientSecretEnv) || this.vault.has(appSecret(entry.id))
       ).map((entry) => entry.id),
+      webKeys: (['brave', 'tavily'] as const).filter((provider) => this.vault.has(webKeySecret(provider))),
       projectRoot: this.project.root,
       pendingApprovals: this.permissions.pending(),
       processes: this.processes.list(),
@@ -965,10 +971,31 @@ export class Service {
       voice: cleanVoice(s.voice),
       quickReplies: s.quickReplies !== false,
       taskSpendLimit: s.taskSpendLimit ? Math.round(s.taskSpendLimit * 100) / 100 : undefined,
-      welcomeDone: s.welcomeDone === true || undefined
+      welcomeDone: s.welcomeDone === true || undefined,
+      webAccess: s.webAccess === undefined ? this.webAccess : checkedWebAccess(s.webAccess)
     };
     await this.repo.save();
     this.shell?.applySettings(this.state.settings);
+  }
+  /** Whether coworkers may use the web, and which search service they search with. */
+  private get webAccess() {
+    return normalWebAccess(this.state.settings.webAccess);
+  }
+  /** A search service's saved key, cleaned; null when none is saved (or the key store can't be read). */
+  private webKey(provider: WebKeyProvider): string | null {
+    try {
+      const saved = this.vault.get(webKeySecret(provider));
+      return saved ? cleanApiKey(saved) : null;
+    } catch {
+      return null;
+    }
+  }
+  /** Settings → Web access: a search service's key goes to the system key store; an empty one removes it. */
+  async webKeySave(provider: WebKeyProvider, key: string): Promise<void> {
+    if (!isWebKeyProvider(provider)) throw new Error('Choose Brave Search or Tavily.');
+    const secret = this.typedKey(key);
+    if (secret) this.vault.set(webKeySecret(provider), secret);
+    else this.vault.remove(webKeySecret(provider));
   }
   /** Settings → Usage: tokens and (for models you priced) dollars, added up from every reply's reported usage. */
   usageReport(): UsageReport {
@@ -1592,7 +1619,8 @@ export class Service {
     if (!chat || !provider) throw new Error('Conversation model is unavailable.');
     const context = await this.runContext(chat, '');
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: context.roots.length > 0,
-      registry: this.tools.getDefinitions().filter(t => !this.mcp.isConnectorTool(t.name)), connectorTools: context.connectors.tools });
+      registry: this.tools.getDefinitions().filter(t => !this.mcp.isConnectorTool(t.name)), connectorTools: context.connectors.tools,
+      webAccess: this.webAccess.enabled });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const plan = new ContextBudgetPlanner().compile({ model: chat.modelId, system: context.system,
@@ -1732,7 +1760,7 @@ export class Service {
       conversationRoot: chat.projectRoot, projectRoot: this.project.root });
     const catalog = toolsFor({ agentId: chat.agentId, hasFolder: roots.length > 0,
       registry: this.tools.getDefinitions().filter(tool => !this.mcp.isConnectorTool(tool.name)),
-      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools });
+      connectorTools: this.connectorToolsFor(coworkerById(chat.agentId)).tools, webAccess: this.webAccess.enabled });
     catalog.push(...MEMORY_TOOLS);
     if (catalog.length > 20) catalog.push(DISCOVER_TOOLS);
     const tools = selectTools(catalog, history.findLast(m => m.role === 'user')?.content ?? '');
@@ -1807,7 +1835,8 @@ export class Service {
       agentId: chat.agentId,
       hasFolder: roots.length > 0,
       registry: this.tools.getDefinitions().filter((tool) => !this.mcp.isConnectorTool(tool.name)),
-      connectorTools: connectors.tools
+      connectorTools: connectors.tools,
+      webAccess: this.webAccess.enabled
     });
     toolCatalog.push(...MEMORY_TOOLS);
     if (toolCatalog.length > 20) toolCatalog.push(DISCOVER_TOOLS);
@@ -1981,8 +2010,12 @@ export class Service {
       note?: string
     ): void => {
       const toolMessageId = this.repo.id();
-      // A skill is only any use read whole, so it isn't cut down to an excerpt like a long command's output.
-      const outcome = { ...full, content: full.whole ? full.content : toolExcerpt(full.content, toolMessageId) };
+      // A skill is only any use read whole, so it isn't cut down to an excerpt like a long command's output;
+      // a web page gets a larger excerpt than other tools' output.
+      const outcome = {
+        ...full,
+        content: full.whole ? full.content : toolExcerpt(full.content, toolMessageId, webExcerptBytes(tc.name))
+      };
       const archived = outcome.content !== full.content;
       if (archived) this.toolOutputs.put(toolMessageId, full.content);
       if (!outcome.isError) lookups.remember(tc.name, toolArgs(tc.arguments));
@@ -2571,6 +2604,8 @@ export class Service {
         ...(scope.roots.length
           ? this.tools.getDefinitions().filter((tool) => READ_ONLY_TOOLS.includes(tool.name))
           : []),
+        // The web, while it is on: a colleague researching for someone looks things up like anyone.
+        ...(this.webAccess.enabled ? WEB_TOOL_DEFINITIONS : []),
         // The colleague's own connectors, for looking things up only.
         ...this.connectorToolsFor(colleague).tools.filter(
           (tool) => this.connectorAction(tool.name) === 'allow'

@@ -1,9 +1,11 @@
 import { RECEPTIONIST_ID, coworkerById } from '../shared/coworkers';
 import type { ToolDefinition } from '../shared/types';
+import { WEB_TOOL_NAMES } from '../shared/webAccess';
 import { ASK_COLLEAGUE } from './colleagues';
 import { FIND_SKILLS, LOAD_SKILL } from './skills';
 import { PLANNER_TOOLS } from './tasks/tools';
 import { TEAM_LEADS, TEAM_TOOLS } from './team/tools';
+import { WEB_TOOL_DEFINITIONS } from './tools/web';
 
 /** What a colleague may use to look something up; nothing that changes a file or runs a command. */
 export const READ_ONLY_TOOLS: readonly string[] = ['read_file', 'list_files', 'search_code', 'file_context', 'get_symbol'];
@@ -30,9 +32,11 @@ export function runRoots(input: {
 
 /**
  * The tools a conversation offers the model. File tools still need a folder; connector tools come
- * with the coworker (or your own chats) and don't. Every coworker can ask a colleague, and coworkers
- * do that instead of dispatching sub-agents. Everyone but the receptionist, your own chats included,
- * can look up skills and read them. The receptionist keeps to her planner.
+ * with the coworker (or your own chats) and don't, and neither do the web tools: with web access on,
+ * everyone (every coworker, and your own chats) can search the web and read pages, folder or not.
+ * Every coworker can ask a colleague, and coworkers do that instead of dispatching sub-agents.
+ * Everyone but the receptionist, your own chats included, can look up skills and read them. The
+ * receptionist also keeps the planner.
  */
 export function toolsFor(input: {
   agentId?: string;
@@ -40,13 +44,18 @@ export function toolsFor(input: {
   registry: ToolDefinition[];
   /** The run's connector tools, already chosen for its coworker. */
   connectorTools?: ToolDefinition[];
+  /** Web access is on (Settings → Web access). Off or absent: no web tools, whatever the registry holds. */
+  webAccess?: boolean;
 }): ToolDefinition[] {
   const coworker = coworkerById(input.agentId);
   // Leads delegate: they read for context, and their team writes and runs things.
   const lead = !!input.agentId && TEAM_LEADS.has(input.agentId);
   const tools = input.hasFolder
     ? input.registry.filter(
-        (tool) => !(coworker && tool.name === 'dispatch_subagent') && (!lead || READ_ONLY_TOOLS.includes(tool.name))
+        (tool) =>
+          !WEB_TOOL_NAMES.has(tool.name) &&
+          !(coworker && tool.name === 'dispatch_subagent') &&
+          (!lead || READ_ONLY_TOOLS.includes(tool.name))
       )
     : [];
   if (coworker) tools.push(ASK_COLLEAGUE);
@@ -54,6 +63,7 @@ export function toolsFor(input: {
   if (input.agentId === RECEPTIONIST_ID) tools.push(...PLANNER_TOOLS);
   // The Chief of Staff and the Ops Coordinator can find people and gather a team.
   if (input.agentId && TEAM_LEADS.has(input.agentId)) tools.push(...TEAM_TOOLS);
+  if (input.webAccess) tools.push(...WEB_TOOL_DEFINITIONS);
   tools.push(...(input.connectorTools ?? []));
   return tools;
 }

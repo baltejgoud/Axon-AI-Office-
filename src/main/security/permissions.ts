@@ -1,5 +1,6 @@
 import { PLANNER_TOOL_NAMES } from '../tasks/tools';
 import { TEAM_TOOL_NAMES } from '../team/tools';
+import { WEB_TOOL_NAMES } from '../../shared/webAccess';
 import { randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
 import type { McpToolPolicy, ToolApprovalRequest, ToolApprovalDecision } from '../../shared/types';
@@ -100,6 +101,9 @@ export class PermissionManager {
     if (toolName === 'ask_colleague') return { action: 'allow' };
     // Looking up and reading a skill return bundled instructions and touch nothing.
     if (toolName === 'find_skills' || toolName === 'load_skill') return { action: 'allow' };
+    // Searching the web and reading public pages only read; private addresses are refused where the connection is made.
+    // Whether web access is on is the tools' own check, made when they run.
+    if (WEB_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // The receptionist's planner tools only touch the task records.
     if (PLANNER_TOOL_NAMES.has(toolName)) return { action: 'allow' };
     // Finding people and calling a meeting only read; the plan waits for you before anything is done.

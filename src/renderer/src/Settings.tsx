@@ -22,6 +22,7 @@ import {
   IconSparkle,
   IconTrash,
   IconUser,
+  IconWorld,
   Kbd,
   type AppIconProps
 } from './ui';
@@ -46,6 +47,7 @@ import { ModelIcon } from './settings/ModelIcon';
 import { AccountsSection } from './settings/AccountsSection';
 import { ConnectorsSection } from './settings/ConnectorsSection';
 import { ConnectorDialog } from './settings/ConnectorDialog';
+import { WebAccessSection } from './settings/WebAccessSection';
 import { UsageSection } from './settings/UsageSection';
 import { ActivitySection } from './settings/ActivitySection';
 import { RestorePoints } from './settings/RestorePoints';
@@ -59,6 +61,7 @@ type Section =
   | 'usage'
   | 'activity'
   | 'tools'
+  | 'web'
   | 'appearance'
   | 'system'
   | 'skills'
@@ -70,6 +73,7 @@ const SECTIONS: readonly { id: Section; label: string; icon: ComponentType<AppIc
   { id: 'usage', label: 'Usage', icon: IconChartBar },
   { id: 'activity', label: 'Activity log', icon: IconHistory },
   { id: 'tools', label: 'Connectors', icon: IconPlug },
+  { id: 'web', label: 'Web access', icon: IconWorld },
   { id: 'appearance', label: 'Appearance', icon: IconPalette },
   { id: 'system', label: 'System', icon: IconMonitor },
   { id: 'skills', label: 'Skills & roles', icon: IconBook },
@@ -203,6 +207,7 @@ export function SettingsPanel() {
         {section === 'tools' && (
           <ConnectorsSection onCustom={() => setMcpServer(blankMcp())} onManage={setManaged} />
         )}
+        {section === 'web' && <WebAccessSection />}
         {section === 'appearance' && <AppearanceSection />}
         {section === 'system' && <SystemSection />}
         {section === 'skills' && <SkillsSection />}
@@ -788,6 +793,10 @@ function PrivacySection() {
               encryption to protect them.
             </li>
             <li>Messages, attachments and library passages go only to the model provider you choose.</li>
+            <li>
+              With web access on, the words a coworker searches for go to your search service, and the pages
+              they open are requested from those sites. Private networks are never reached.
+            </li>
             <li>No telemetry or tracking. Nothing runs on a schedule.</li>
             <li>Writing to project files asks you first; sensitive files and symbolic links are blocked.</li>
           </ul>

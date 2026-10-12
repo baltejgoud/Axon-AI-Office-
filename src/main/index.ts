@@ -50,6 +50,7 @@ const methods: (keyof Omit<PlatformAPI, 'onStream'>)[] = [
   'connectorSignInCancel',
   'connectorSignOut',
   'connectorAppSave',
+  'webKeySave',
   'chatCreate',
   'getConversationCost',
   'chatHistoryPage',

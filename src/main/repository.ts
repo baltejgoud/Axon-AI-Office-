@@ -2,6 +2,7 @@ import { MessagePages, type MessagePageRef } from './message-pages';
 import { searchEntries, type SearchEntry } from './conversation-search';
 import type { BackupSummary, PlatformState } from '../shared/platform';
 import { everyone } from '../shared/connectors';
+import { DEFAULT_WEB_ACCESS, normalWebAccess } from '../shared/webAccess';
 import { JsonStore } from './infra/store';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
@@ -51,7 +52,8 @@ export function initialState(): PlatformState {
       sendCrashDiagnostics: false,
       dataDirectoryNote: '',
       keepInTray: true,
-      startWithWindows: false
+      startWithWindows: false,
+      webAccess: { ...DEFAULT_WEB_ACCESS }
     },
     mcpServers: [],
     tasks: [],
@@ -330,6 +332,8 @@ export class Repository {
     if (state.settings) {
       state.settings.keepInTray ??= true;
       state.settings.startWithWindows ??= false;
+      // Web access arrived with the web tools (2026-10): older saves get it on, with DuckDuckGo.
+      state.settings.webAccess = normalWebAccess(state.settings.webAccess);
     }
     const codeWs = state.workspaces?.find((w) => w.id === 'code');
     if (codeWs && codeWs.name === 'Code') {

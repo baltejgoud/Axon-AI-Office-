@@ -558,6 +558,25 @@
   color: var(--text-tertiary);
 }
 
+/* ---------- Web access ---------- */
+.web-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.web-key .input {
+  flex: 1;
+  min-width: 0;
+}
+.web-key-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
 /* ---------- Provider dialog ---------- */
 .provider-section {
   display: flex;
